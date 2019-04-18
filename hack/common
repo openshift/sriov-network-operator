@@ -1,0 +1,36 @@
+#!/bin/bash
+if [ -n "${DEBUG:-}" ]; then
+    set -x
+fi
+
+alias oc=${OC:-oc}
+
+repo_dir="$(dirname $0)/.."
+
+ADMIN_USER=${ADMIN_USER:-kubeadmin}
+ADMIN_PSWD=${ADMIN_USER:-admin123}
+REMOTE_REGISTRY=${REMOTE_REGISTRY:-false}
+NAMESPACE=${NAMESPACE:-"sriov-network-operator"}
+
+if [ $REMOTE_REGISTRY = false ] ; then
+    : # skip
+else
+    registry_namespace=openshift-image-registry
+    registry_svc=image-registry
+    registry_host=$registry_svc.$registry_namespace.svc
+    if ! oc get namespace $registry_namespace ; then
+        registry_namespace=default
+        registry_svc=docker-registry
+        # use ip instead of host
+        registry_host=$(oc get svc $registry_svc -n $registry_namespace -o jsonpath={.spec.clusterIP})
+    fi
+
+    registry_port=$(oc get svc $registry_svc -n $registry_namespace -o jsonpath={.spec.ports[0].port})
+    if [ $registry_namespace = openshift-image-registry ] ; then
+        # takes pod name in 4.0
+        port_fwd_obj=$( oc get pods -n $registry_namespace | awk '/^image-registry-/ {print $1}' )
+    else
+        # takes service in 3.11
+        port_fwd_obj="service/$registry_svc"
+    fi
+fi
