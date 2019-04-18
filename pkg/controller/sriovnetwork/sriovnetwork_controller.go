@@ -1,0 +1,175 @@
+package sriovnetwork
+
+import (
+	"context"
+
+	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	netattdefv1 "github.com/pliurh/sriov-network-operator/pkg/apis/k8s/v1"
+
+	corev1 "k8s.io/api/core/v1"
+	"encoding/json"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	"sigs.k8s.io/controller-runtime/pkg/source"
+	sriov "github.com/intel/sriov-cni/pkg/types"
+)
+
+const (
+	CNI_TYPE = "sriov"
+	CNI_VERSION = "0.3.1"
+)
+
+var log = logf.Log.WithName("controller_sriovnetwork")
+
+/**
+* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
+* business logic.  Delete these comments after modifying this file.*
+ */
+
+// Add creates a new SriovNetwork Controller and adds it to the Manager. The Manager will set fields on the Controller
+// and Start it when the Manager is Started.
+func Add(mgr manager.Manager) error {
+	return add(mgr, newReconciler(mgr))
+}
+
+// newReconciler returns a new reconcile.Reconciler
+func newReconciler(mgr manager.Manager) reconcile.Reconciler {
+	return &ReconcileSriovNetwork{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+}
+
+// add adds a new Controller to mgr with r as the reconcile.Reconciler
+func add(mgr manager.Manager, r reconcile.Reconciler) error {
+	// Create a new controller
+	c, err := controller.New("sriovnetwork-controller", mgr, controller.Options{Reconciler: r})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to primary resource SriovNetwork
+	err = c.Watch(&source.Kind{Type: &sriovnetworkv1.SriovNetwork{}}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		return err
+	}
+
+	// TODO(user): Modify this to be the types you create that are owned by the primary resource
+	// Watch for changes to secondary resource Pods and requeue the owner SriovNetwork
+	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetwork{},
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+var _ reconcile.Reconciler = &ReconcileSriovNetwork{}
+
+// ReconcileSriovNetwork reconciles a SriovNetwork object
+type ReconcileSriovNetwork struct {
+	// This client, initialized using mgr.Client() above, is a split client
+	// that reads objects from the cache and writes to the apiserver
+	client client.Client
+	scheme *runtime.Scheme
+}
+
+// Reconcile reads that state of the cluster for a SriovNetwork object and makes changes based on the state read
+// and what is in the SriovNetwork.Spec
+// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
+// a Pod as an example
+// Note:
+// The Controller will requeue the Request to be processed again if the returned error is non-nil or
+// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
+func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.Result, error) {
+	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
+	reqLogger.Info("Reconciling SriovNetwork")
+
+	// Fetch the SriovNetwork instance
+	instance := &sriovnetworkv1.SriovNetwork{}
+	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return reconcile.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return reconcile.Result{}, err
+	}
+	netAttDef, err := newNetAttDef(instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Set SriovNetwork instance as the owner and controller
+	if err := controllerutil.SetControllerReference(instance, netAttDef, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Check if this NetworkAttachmentDefinition already exists
+	found := &netattdefv1.NetworkAttachmentDefinition{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		reqLogger.Info("Creating a new NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+		err = r.client.Create(context.TODO(), netAttDef)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// NetworkAttachmentDefinition created successfully - don't requeue
+		return reconcile.Result{}, nil
+	} else if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// NetworkAttachmentDefinition already exists - don't requeue
+	reqLogger.Info("Skip reconcile: NetworkAttachmentDefinition already exists", "Namespace", found.Namespace, "Name", found.Name)
+	return reconcile.Result{}, nil
+}
+
+// newNetAttDef returns a NetworkAttachmentDefinition CR with the same name/namespace as the cr
+func newNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*netattdefv1.NetworkAttachmentDefinition, error) {
+	annotations := make(map[string]string) 
+	annotations["k8s.v1.cni.cncf.io/resourceName"] = "openshift.io/" + cr.Spec.ResourceName
+
+	config, err := newSriovCniConfigString(cr)
+	if err != nil {
+		return nil, err
+	}
+	return &netattdefv1.NetworkAttachmentDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Name,
+			Namespace: cr.Namespace,
+			Annotations: annotations,
+		},
+		Spec: netattdefv1.NetworkAttachmentDefinitionSpec{
+			Config: config,
+		},
+	}, nil
+}
+
+func newSriovCniConfigString(cr *sriovnetworkv1.SriovNetwork) (string, error) {
+	config := sriov.NetConf{}
+	config.Name = "sriov"
+	config.Type = CNI_TYPE
+	config.CNIVersion = CNI_VERSION
+	config.Vlan = cr.Spec.Vlan
+	config.IPAM = cr.Spec.IPAM
+
+	result, err := json.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+	return string(result), nil
+}

@@ -1,0 +1,7 @@
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: example-sriovnetworknodepolicy
+spec:
+  # Add fields here
+  size: 3
