@@ -15,7 +15,8 @@ type SriovNetworkSpec struct {
 	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
 	ResourceName string `json:"resourceName"`
 	IPAM         Ipam   `json:"ipam,omitempty"`
-	Vlan         int    `json:"vlan"`
+	Vlan         int    `json:"vlan,omitempty"`
+	DPDKMode     bool   `json:"DPDKMode,omitempty"`
 }
 
 // Ipam defines the desired state of IPAM

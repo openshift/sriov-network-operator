@@ -6,7 +6,6 @@ import (
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	netattdefv1 "github.com/pliurh/sriov-network-operator/pkg/apis/k8s/v1"
 
-	corev1 "k8s.io/api/core/v1"
 	"encoding/json"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,9 +59,8 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner SriovNetwork
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
+	// Watch for changes to secondary resource NetworkAttachmentDefinition and requeue the owner SriovNetwork
+	err = c.Watch(&source.Kind{Type: &netattdefv1.NetworkAttachmentDefinition{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &sriovnetworkv1.SriovNetwork{},
 	})
