@@ -13,7 +13,20 @@ type SriovNetworkNodePolicySpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
+	ResourceName string `json:"resourceName"`
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	Priority    int `json:"priority,omitempty"`
+	Mtu         int `json:"mtu,omitempty"`
+	NumVfs      int `json:"numVfs"`
+    NicSelector SriovNetworkNicSelector `json:"nicSelector"`
+	DeviceType string `json:"deviceType,omitempty"`
 }
+
+type SriovNetworkNicSelector struct {
+	Vendor      string   `json:"vendor,omitempty"`
+	LinkSpeed   string   `json:"linkSpeed,omitempty"`
+	RootDevices []string `json:"rootDevices,omitempty"`
+} 
 
 // SriovNetworkNodePolicyStatus defines the observed state of SriovNetworkNodePolicy
 // +k8s:openapi-gen=true

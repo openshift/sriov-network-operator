@@ -45,7 +45,6 @@ spec:
               type: integer
           required:
           - resourceName
-          - vlan
           type: object
         status:
           type: object

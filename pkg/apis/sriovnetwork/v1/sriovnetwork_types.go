@@ -16,7 +16,6 @@ type SriovNetworkSpec struct {
 	ResourceName string `json:"resourceName"`
 	IPAM         Ipam   `json:"ipam,omitempty"`
 	Vlan         int    `json:"vlan,omitempty"`
-	DPDKMode     bool   `json:"DPDKMode,omitempty"`
 }
 
 // Ipam defines the desired state of IPAM

@@ -2,6 +2,17 @@ apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
   name: example-sriovnetworknodepolicy
+  namespace: sriov-network-operator
 spec:
-  # Add fields here
-  size: 3
+  resourceName: ‘intel-nics’
+  nodeSelector:
+    feature.node.kubernetes.io/sriov-capable: true
+  priority: 99
+  mtu: 9000
+  numVfs: 16
+  nicSelector:
+    vendor: 'intel'
+    linkSpeed: '100G'
+    rootDevices: ['02:00.1',]
+  deviceType: ‘netdevice’
+

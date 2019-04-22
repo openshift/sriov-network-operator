@@ -1,0 +1,53 @@
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: sriov-device-plugin
+  namespace: openshift-sriov
+  annotations:
+    kubernetes.io/description: |
+      This daemon set launches the SR-IOV network device plugin on each node.
+    release.openshift.io/version: "{{.ReleaseVersion}}"
+spec:
+  selector:
+    matchLabels:
+      app: sriov-device-plugin
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: sriov-device-plugin
+        component: network
+        type: infra
+        openshift.io/component: network
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      serviceAccountName: sriov-device-plugin
+      containers:
+      - name: sriov-device-plugin
+        image: {{.SRIOVDevicePluginImage}}
+        args:
+        - --log-level=10
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: devicesock
+          mountPath: /var/lib/kubelet/
+          readOnly: false
+        - name: net
+          mountPath: /sys/class/net
+          readOnly: true
+      volumes:
+        - name: devicesock
+          hostPath:
+            path: /var/lib/kubelet/
+        - name: net
+          hostPath:
+            path: /sys/class/net

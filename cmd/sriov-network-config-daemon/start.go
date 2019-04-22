@@ -43,13 +43,4 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		}
 		startOpts.nodeName = name
 	}
-
-	// Ensure that the rootMount exists
-	if _, err := os.Stat(startOpts.rootMount); err != nil {
-		if os.IsNotExist(err) {
-			glog.Fatalf("rootMount %s does not exist", startOpts.rootMount)
-		}
-		glog.Fatalf("Unable to verify rootMount %s exists: %s", startOpts.rootMount, err)
-	}
-
 }

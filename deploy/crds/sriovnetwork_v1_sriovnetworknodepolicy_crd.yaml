@@ -28,6 +28,43 @@ spec:
         metadata:
           type: object
         spec:
+          properties:
+            deviceType:
+              type: string
+            mtu:
+              format: int64
+              type: integer
+            nicSelector:
+              properties:
+                linkSpeed:
+                  type: string
+                rootDevices:
+                  items:
+                    type: string
+                  type: array
+                vendor:
+                  type: string
+              type: object
+            nodeSelector:
+              additionalProperties:
+                type: string
+              type: object
+            numVfs:
+              format: int64
+              type: integer
+            priority:
+              format: int64
+              type: integer
+            resourceName:
+              description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                Important: Run "operator-sdk generate k8s" to regenerate code after
+                modifying this file Add custom validation using kubebuilder tags:
+                https://book.kubebuilder.io/beyond_basics/generating_crd.html'
+              type: string
+          required:
+          - resourceName
+          - numVfs
+          - nicSelector
           type: object
         status:
           type: object
