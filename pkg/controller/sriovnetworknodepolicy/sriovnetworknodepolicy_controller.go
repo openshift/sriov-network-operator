@@ -100,21 +100,8 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling SriovNetworkNodePolicy")
 
-	// Fetch the SriovNetworkNodePolicy instances
-	policyList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
-	err := r.client.List(context.TODO(), &client.ListOptions{}, policyList)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			return reconcile.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: NAMESPACE,}, defaultPolicy)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: NAMESPACE,}, defaultPolicy)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("Creating a default SriovNetworkNodePolicy to lunch the SR-IoV Daemons")
@@ -129,7 +116,21 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 		return reconcile.Result{}, err
 	}
 
-	// Render new DaemonSet objects
+	// Fetch the SriovNetworkNodePolicyList
+	policyList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
+	err = r.client.List(context.TODO(), &client.ListOptions{}, policyList)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Return and don't requeue
+			return reconcile.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return reconcile.Result{}, err
+	}
+
+	// Render DaemonSet objects
 	objs, err := renderObjsForCR()
 	if err != nil {
 		reqLogger.Error(err, "Failed to render SR-IoV manifests")
@@ -137,7 +138,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	}
 
 	for _, obj := range objs {
-		err = r.syncObject(defaultPolicy, policyList,obj)
+		err = r.syncObject(defaultPolicy, policyList, obj)
 		if err != nil {
 			reqLogger.Error(err, "Couldn't sync SR-IoV objects")
 			return reconcile.Result{}, err
@@ -243,7 +244,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncNamespace(cr *sriovnetworkv1.SriovN
 
 func (r *ReconcileSriovNetworkNodePolicy)syncDaemonSet(cr *sriovnetworkv1.SriovNetworkNodePolicy, l *sriovnetworkv1.SriovNetworkNodePolicyList, in *appsv1.DaemonSet) error{
 	logger := log.WithName("syncDaemonSet")
-	logger.Info("Start to sync DaemonSet", "Name", in.Name)
+	logger.Info("Start to sync DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
 	var err error
 
 	if err = setDsNodeAffinity(l, in); err != nil {
@@ -258,6 +259,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncDaemonSet(cr *sriovnetworkv1.SriovN
 		if errors.IsNotFound(err) {
 			err = r.client.Create(context.TODO(), in)
 			if err != nil {
+				logger.Info("DaemonSet not found", "Namespace", in.Namespace, "Name", in.Name)
 				return fmt.Errorf("Couldn't create DaemonSet: %v", err)
 			}
 			logger.Info("Created DaemonSet for", in.Namespace, in.Name)
@@ -275,10 +277,12 @@ func (r *ReconcileSriovNetworkNodePolicy)syncDaemonSet(cr *sriovnetworkv1.SriovN
 }
 
 func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1.DaemonSet) error {
-	terms := ds.Spec.Template.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
-	
+	terms := []corev1.NodeSelectorTerm{}
 	for _, p := range pl.Items {
 		nodeSelector := corev1.NodeSelectorTerm{}
+		if len(p.Spec.NodeSelector) == 0 {
+			continue
+		}
 		for k, v := range p.Spec.NodeSelector {
 			expressions := []corev1.NodeSelectorRequirement{}
 			exp :=  corev1.NodeSelectorRequirement{
@@ -293,11 +297,21 @@ func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1
 		}
 		terms = append(terms, nodeSelector)
 	}
+
+	ds.Spec.Template.Spec.Affinity = &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: terms,
+			},
+		},
+	}
 	return nil
 }
 
 // renderDsForCR returns a busybox pod with the same name/namespace as the cr
 func renderObjsForCR() ([]*uns.Unstructured, error) {
+	logger := log.WithName("renderObjsForCR")
+	logger.Info("Start to sync objects")
 	var err error
 	objs := []*uns.Unstructured{}
 

@@ -121,23 +121,11 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref common.Refer
 							Format:      "",
 						},
 					},
-					"nodeSelector": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
-							AdditionalProperties: &spec.SchemaOrBool{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Type:   []string{"string"},
-										Format: "",
-									},
-								},
-							},
-						},
-					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
+							Description: "NodeSelector map[string]string `json:\"nodeSelector,omitempty\"`",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"mtu": {

@@ -1,12 +1,13 @@
+---
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
-  name: example-sriovnetworknodepolicy
+  name: policy-1
   namespace: sriov-network-operator
 spec:
   resourceName: ‘intel-nics’
   nodeSelector:
-    feature.node.kubernetes.io/sriov-capable: true
+    feature.node.kubernetes.io/sriov-capable: "true"
   priority: 99
   mtu: 9000
   numVfs: 16
@@ -16,3 +17,21 @@ spec:
     rootDevices: ['02:00.1',]
   deviceType: ‘netdevice’
 
+---
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: policy-2
+  namespace: sriov-network-operator
+spec:
+  resourceName: ‘intel-nics’
+  nodeSelector:
+    feature.node.kubernetes.io/sriov: "false"
+  priority: 99
+  mtu: 9000
+  numVfs: 16
+  nicSelector:
+    vendor: 'intel'
+    linkSpeed: '100G'
+    rootDevices: ['02:00.1',]
+  deviceType: ‘netdevice’
