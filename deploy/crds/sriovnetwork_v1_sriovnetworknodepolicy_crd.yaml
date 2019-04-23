@@ -45,11 +45,14 @@ spec:
                 vendor:
                   type: string
               type: object
+            nodeSelector:
+              additionalProperties:
+                type: string
+              type: object
             numVfs:
               format: int64
               type: integer
             priority:
-              description: NodeSelector map[string]string `json:"nodeSelector,omitempty"`
               format: int64
               type: integer
             resourceName:
