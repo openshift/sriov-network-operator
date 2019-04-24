@@ -46,6 +46,7 @@ rules:
   resources:
   - '*'
   - sriovnetworknodepolicies
+  - sriovnetworknodestates
   verbs:
   - '*'
 - apiGroups:

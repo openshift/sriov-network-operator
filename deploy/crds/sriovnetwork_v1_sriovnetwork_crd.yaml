@@ -30,10 +30,7 @@ spec:
         spec:
           properties:
             ipam:
-              properties:
-                type:
-                  type: string
-              type: object
+              type: string
             resourceName:
               description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                 Important: Run "operator-sdk generate k8s" to regenerate code after

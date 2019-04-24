@@ -1,0 +1,7 @@
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodeState
+metadata:
+  name: example-sriovnetworknodestate
+spec:
+  # Add fields here
+  size: 3

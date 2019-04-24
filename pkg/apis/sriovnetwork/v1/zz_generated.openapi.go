@@ -17,6 +17,9 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicy":       schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicy(ref),
 		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicySpec":   schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref),
 		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicyStatus": schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicyStatus(ref),
+		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeState":        schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeState(ref),
+		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateSpec":    schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateSpec(ref),
+		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateStatus":  schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateStatus(ref),
 		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkSpec":             schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref),
 		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkStatus":           schema_pkg_apis_sriovnetwork_v1_SriovNetworkStatus(ref),
 	}
@@ -184,6 +187,101 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicyStatus(ref common.Ref
 	}
 }
 
+func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeState(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SriovNetworkNodeState is the Schema for the sriovnetworknodestates API",
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateSpec", "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState",
+				Properties: map[string]spec.Schema{
+					"interfaces": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.Interface"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.Interface"},
+	}
+}
+
+func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState",
+				Properties: map[string]spec.Schema{
+					"interfaces": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.InterfaceExt"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.InterfaceExt"},
+	}
+}
+
 func schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -199,7 +297,8 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref common.ReferenceCallba
 					},
 					"ipam": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.Ipam"),
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"vlan": {
@@ -212,8 +311,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref common.ReferenceCallba
 				Required: []string{"resourceName"},
 			},
 		},
-		Dependencies: []string{
-			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.Ipam"},
+		Dependencies: []string{},
 	}
 }
 

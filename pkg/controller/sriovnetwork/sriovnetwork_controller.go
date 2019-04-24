@@ -2,15 +2,19 @@ package sriovnetwork
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
-	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	netattdefv1 "github.com/pliurh/sriov-network-operator/pkg/apis/k8s/v1"
+	render "github.com/pliurh/sriov-network-operator/pkg/render"
+	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 
 	"encoding/json"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -19,12 +23,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	sriov "github.com/intel/sriov-cni/pkg/types"
+	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 const (
-	CNI_TYPE = "sriov"
-	CNI_VERSION = "0.3.1"
+	MANIFESTS_PATH = "./bindata/manifests/cni-config"
 )
 
 var log = logf.Log.WithName("controller_sriovnetwork")
@@ -105,7 +108,13 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-	netAttDef, err := newNetAttDef(instance)
+	raw, err := renderNetAttDef(instance)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+	scheme := kscheme.Scheme
+	err = scheme.Convert(raw, netAttDef, nil)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -118,17 +127,24 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	// Check if this NetworkAttachmentDefinition already exists
 	found := &netattdefv1.NetworkAttachmentDefinition{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
-		err = r.client.Create(context.TODO(), netAttDef)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			reqLogger.Info("Creating a new NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+			err = r.client.Create(context.TODO(), netAttDef)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+		// NetworkAttachmentDefinition created successfully - don't requeue
+		return reconcile.Result{}, err
+	} else {
+		reqLogger.Info("SriovNetworkNodeState already exists, updating")
+		found.Spec = netAttDef.Spec
+		err = r.client.Update(context.TODO(), found)
 		if err != nil {
+			reqLogger.Error(err, "Couldn't update SriovNetworkNodeState", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 			return reconcile.Result{}, err
 		}
-
-		// NetworkAttachmentDefinition created successfully - don't requeue
-		return reconcile.Result{}, nil
-	} else if err != nil {
-		return reconcile.Result{}, err
 	}
 
 	// NetworkAttachmentDefinition already exists - don't requeue
@@ -136,38 +152,63 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	return reconcile.Result{}, nil
 }
 
-// newNetAttDef returns a NetworkAttachmentDefinition CR with the same name/namespace as the cr
-func newNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*netattdefv1.NetworkAttachmentDefinition, error) {
-	annotations := make(map[string]string) 
-	annotations["k8s.v1.cni.cncf.io/resourceName"] = "openshift.io/" + cr.Spec.ResourceName
+// // newNetAttDef returns a NetworkAttachmentDefinition CR with the same name/namespace as the cr
+// func newNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*netattdefv1.NetworkAttachmentDefinition, error) {
+// 	annotations := make(map[string]string) 
+// 	annotations["k8s.v1.cni.cncf.io/resourceName"] = "openshift.io/" + cr.Spec.ResourceName
 
-	config, err := newSriovCniConfigString(cr)
+// 	config, err := newSriovCniConfigString(cr)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return &netattdefv1.NetworkAttachmentDefinition{
+// 		ObjectMeta: metav1.ObjectMeta{
+// 			Name:      cr.Name,
+// 			Namespace: cr.Namespace,
+// 			Annotations: annotations,
+// 		},
+// 		Spec: netattdefv1.NetworkAttachmentDefinitionSpec{
+// 			Config: config,
+// 		},
+// 	}, nil
+// }
+
+// func newSriovCniConfigString(cr *sriovnetworkv1.SriovNetwork) (string, error) {
+// 	config := sriovCniConf{}
+// 	config.Name = "sriov"
+// 	config.Type = CNI_TYPE
+// 	config.CNIVersion = CNI_VERSION
+// 	config.Vlan = cr.Spec.Vlan
+
+// 	result, err := json.Marshal(config)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	return string(result), nil
+// }
+
+// renderDsForCR returns a busybox pod with the same name/namespace as the cr
+func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error) {
+	logger := log.WithName("renderNetAttDef")
+	logger.Info("Start to render SRIOV CNI NetworkAttachementDefinition")
+	var err error
+	objs := []*uns.Unstructured{}
+
+	// render RawCNIConfig manifests
+	data := render.MakeRenderData()
+	data.Data["SriovNetworkName"] = cr.Name
+	data.Data["SriovNetworkNamespace"] = cr.Namespace
+	data.Data["SriovCniResourceName"] = cr.Spec.ResourceName
+	data.Data["SriovCniVlan"] = cr.Spec.Vlan
+	data.Data["SriovCniIpam"] = "\"ipam\":"+strings.Join(strings.Fields(cr.Spec.IPAM),"")
+
+	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {
 		return nil, err
 	}
-	return &netattdefv1.NetworkAttachmentDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name,
-			Namespace: cr.Namespace,
-			Annotations: annotations,
-		},
-		Spec: netattdefv1.NetworkAttachmentDefinitionSpec{
-			Config: config,
-		},
-	}, nil
-}
-
-func newSriovCniConfigString(cr *sriovnetworkv1.SriovNetwork) (string, error) {
-	config := sriov.NetConf{}
-	config.Name = "sriov"
-	config.Type = CNI_TYPE
-	config.CNIVersion = CNI_VERSION
-	config.Vlan = cr.Spec.Vlan
-	config.IPAM = cr.Spec.IPAM
-
-	result, err := json.Marshal(config)
-	if err != nil {
-		return "", err
+	for _, obj := range objs {
+		raw, _:= json.Marshal(obj)
+		fmt.Printf("manifest %s\n", raw)
 	}
-	return string(result), nil
+	return objs[0], nil
 }

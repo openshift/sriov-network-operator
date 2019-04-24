@@ -14,14 +14,14 @@ type SriovNetworkSpec struct {
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
 	ResourceName string `json:"resourceName"`
-	IPAM         Ipam   `json:"ipam,omitempty"`
+	IPAM         string `json:"ipam,omitempty"`
 	Vlan         int    `json:"vlan,omitempty"`
 }
 
-// Ipam defines the desired state of IPAM
-type Ipam struct {
-	Type string `json:"type,omitempty"`
-}
+// // Ipam defines the desired state of IPAM
+// type Ipam struct {
+// 	Type string `json:"type,omitempty"`
+// }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork
 // +k8s:openapi-gen=true

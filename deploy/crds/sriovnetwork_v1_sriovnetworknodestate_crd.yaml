@@ -1,0 +1,107 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: sriovnetworknodestates.sriovnetwork.openshift.io
+spec:
+  group: sriovnetwork.openshift.io
+  names:
+    kind: SriovNetworkNodeState
+    listKind: SriovNetworkNodeStateList
+    plural: sriovnetworknodestates
+    singular: sriovnetworknodestate
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          properties:
+            interfaces:
+              items:
+                properties:
+                  Mtu:
+                    format: int64
+                    type: integer
+                  deviceType:
+                    type: string
+                  name:
+                    type: string
+                  numVfs:
+                    format: int64
+                    type: integer
+                  resourceName:
+                    type: string
+                required:
+                - name
+                - resourceName
+                type: object
+              type: array
+          type: object
+        status:
+          properties:
+            interfaces:
+              items:
+                properties:
+                  Mtu:
+                    format: int64
+                    type: integer
+                  Vfs:
+                    properties:
+                      Vlan:
+                        format: int64
+                        type: integer
+                      assigned:
+                        type: string
+                      kernelDriver:
+                        type: string
+                      mac:
+                        type: string
+                      "no":
+                        format: int64
+                        type: integer
+                      pciAddress:
+                        type: string
+                    type: object
+                  deviceType:
+                    type: string
+                  kernelDriver:
+                    type: string
+                  linkSpeed:
+                    type: string
+                  name:
+                    type: string
+                  numVfs:
+                    format: int64
+                    type: integer
+                  pciAddress:
+                    type: string
+                  resourceName:
+                    type: string
+                  vendor:
+                    type: string
+                required:
+                - name
+                - resourceName
+                - pciAddress
+                - kernelDriver
+                type: object
+              type: array
+          type: object
+  version: v1
+  versions:
+  - name: v1
+    served: true
+    storage: true
