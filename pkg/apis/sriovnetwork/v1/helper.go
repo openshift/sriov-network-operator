@@ -2,7 +2,10 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
+
+var log = logf.Log.WithName("sriovnetwork")
 
 type ByPriority []SriovNetworkNodePolicy
 
@@ -26,6 +29,7 @@ func (p *SriovNetworkNodePolicy) Selected(node *corev1.Node) bool{
 		}
 		return false
 	}
+	log.Info("Selectd ", "node", node.Name)
 	return true
 }
 
@@ -41,11 +45,35 @@ func in_array(val string, array []string) bool{
 // Apply policy to SriovNetworkNodeState CR
 func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 	s := p.Spec.NicSelector
+	if s.Vendor == "" && s.LinkSpeed =="" && len(s.RootDevices) ==0 {
+		// Empty NicSelector match none
+		return
+	}
+	interfaces := []Interface{}
 	for _, iface := range state.Status.Interfaces {
-		if in_array(iface.PciAddress, s.RootDevices) && iface.LinkSpeed == s.LinkSpeed && iface.Vendor == s.Vendor {
-			iface.Mtu = p.Spec.Mtu
-			iface.NumVfs = p.Spec.NumVfs
-			iface.ResourceName = p.Spec.ResourceName
+		if  s.Selected(&iface){
+			log.Info("Update interface", "name", iface.Name)
+			interfaces = append(interfaces, Interface{
+				Name: iface.Name,
+				Mtu: p.Spec.Mtu,
+				NumVfs: p.Spec.NumVfs,
+				ResourceName: p.Spec.ResourceName,
+			})
 		}
 	}
+	state.Spec.Interfaces = interfaces
+}
+
+func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool{
+	switch {
+	case s.Name != iface.Name:
+		return false
+	case s.Vendor != iface.Vendor:
+		return false
+	case s.LinkSpeed != s.LinkSpeed:
+		return false
+	case len(s.RootDevices)>0 && !in_array(iface.PciAddress, s.RootDevices):
+		return false
+	}
+	return true
 }

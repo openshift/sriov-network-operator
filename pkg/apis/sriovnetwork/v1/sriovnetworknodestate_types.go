@@ -17,7 +17,7 @@ type Interface struct {
 	Name           string `json:"name"`
 	ResourceName   string `json:"resourceName"`
 	NumVfs         int `json:"numVfs,omitempty"`
-	Mtu            int `json:"Mtu,omitempty"`
+	Mtu            int `json:"mtu,omitempty"`
 	DeviceType     string `json:"deviceType,omitempty"`
 }
 

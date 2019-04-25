@@ -38,6 +38,8 @@ spec:
               properties:
                 linkSpeed:
                   type: string
+                name:
+                  type: string
                 rootDevices:
                   items:
                     type: string

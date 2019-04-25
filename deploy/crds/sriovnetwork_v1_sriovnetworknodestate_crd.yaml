@@ -32,11 +32,11 @@ spec:
             interfaces:
               items:
                 properties:
-                  Mtu:
-                    format: int64
-                    type: integer
                   deviceType:
                     type: string
+                  mtu:
+                    format: int64
+                    type: integer
                   name:
                     type: string
                   numVfs:
@@ -55,9 +55,6 @@ spec:
             interfaces:
               items:
                 properties:
-                  Mtu:
-                    format: int64
-                    type: integer
                   Vfs:
                     properties:
                       Vlan:
@@ -81,6 +78,9 @@ spec:
                     type: string
                   linkSpeed:
                     type: string
+                  mtu:
+                    format: int64
+                    type: integer
                   name:
                     type: string
                   numVfs:

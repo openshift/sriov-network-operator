@@ -162,35 +162,20 @@ func (r *ReconcileSriovNetworkNodePolicy)syncAllSriovNetworkNodeStates(dp *sriov
 		logger.Info("Error reading the object")
 		return err
 	}
-	logger.Info("Render SriovNetworkNodeState CR")
-	nodeStates := make(map[string]*sriovnetworkv1.SriovNetworkNodeState)
-	for _, node := range nodeList.Items {
-		logger.Info("Render SriovNetworkNodeState CR", "name", node.Name)
-		ns := &sriovnetworkv1.SriovNetworkNodeState{}
-		ns.Name = node.Name
-		ns.Namespace = NAMESPACE
-		nodeStates[node.Name] = ns
-		j, _:= json.Marshal(nodeStates[node.Name])
-		fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
-	}
 
 	// Sort the policies with priority, higher priority ones will overwrite the lowers
 	sort.Sort(sriovnetworkv1.ByPriority(pl.Items))
 
-	for _, p := range pl.Items {
-		for _, node := range nodeList.Items{
-			if p.Selected(&node){
-				if len(nodeStates[node.Name].Status.Interfaces) == 0 {
-					continue
-				} else {
-					p.Apply(nodeStates[node.Name])
-				}
-			}
-		}
-	}
-
-	for _, ns := range nodeStates {
-		if err = r.syncSriovNetworkNodeState(dp, ns); err != nil {
+	// nodeStates := make(map[string]*sriovnetworkv1.SriovNetworkNodeState)
+	for _, node := range nodeList.Items {
+		logger.Info("Sync SriovNetworkNodeState CR", "name", node.Name)
+		ns := &sriovnetworkv1.SriovNetworkNodeState{}
+		ns.Name = node.Name
+		ns.Namespace = NAMESPACE
+		// nodeStates[node.Name] = ns
+		j, _:= json.Marshal(ns)
+		fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
+		if err = r.syncSriovNetworkNodeState(dp, pl, ns, &node); err != nil {
 			logger.Error(err, "Fail to sync SriovNetworkNodeState", "name", ns.Name)
 			return err
 		}
@@ -199,7 +184,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncAllSriovNetworkNodeStates(dp *sriov
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *sriovnetworkv1.SriovNetworkNodeState) error{
+func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) error{
 	logger := log.WithName("syncSriovNetworkNodeState")
 	logger.Info("Start to sync SriovNetworkNodeState", "Name", in.Name)
 
@@ -211,9 +196,6 @@ func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetw
 	if err != nil {
 		logger.Info("Fail to get SriovNetworkNodeState", "namespace", in.Namespace, "name", in.Name)
 		if errors.IsNotFound(err) {
-			j, _:= json.Marshal(in)
-			fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
-			
 			err = r.client.Create(context.TODO(), in)
 			if err != nil {
 				return fmt.Errorf("Couldn't create SriovNetworkNodeState: %v", err)
@@ -225,6 +207,34 @@ func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetw
 	} else {
 		logger.Info("SriovNetworkNodeState already exists, updating")
 		found.Spec = in.Spec
+		for _, p := range pl.Items {
+			fmt.Printf("evaluate policy %s for node %s\n", p.Name, node.Name)
+			if p.Selected(node){
+				if len(found.Status.Interfaces) == 0 {
+					continue
+				} else {
+					fmt.Printf("apply policy %s for node %s\n", p.Name, node.Name)
+					p.Apply(found)
+				}
+			}
+		}
+		// j, _:= json.Marshal(found)
+		// fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
+		// test := sriovnetworkv1.InterfaceExt{
+		// 	Interface: sriovnetworkv1.Interface {
+		// 		Name: "test",
+		// 		ResourceName: "test",
+		// 	},
+		// 	Vendor: "intel",
+		// 	LinkSpeed: "100G",
+		// 	PciAddress: "02:00.1",
+		// 	KernelDriver: "test",
+		// }
+		// found.Status.Interfaces = []sriovnetworkv1.InterfaceExt{test,}
+		// r.client.Status().Update(context.TODO(),found)
+		// if err != nil {
+		// 	logger.Error(err, "Couldn't update SriovNetworkNodeState status")
+		// }
 		err = r.client.Update(context.TODO(), found)
 		if err != nil {
 			return fmt.Errorf("Couldn't update SriovNetworkNodeState: %v", err)

@@ -152,41 +152,6 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	return reconcile.Result{}, nil
 }
 
-// // newNetAttDef returns a NetworkAttachmentDefinition CR with the same name/namespace as the cr
-// func newNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*netattdefv1.NetworkAttachmentDefinition, error) {
-// 	annotations := make(map[string]string) 
-// 	annotations["k8s.v1.cni.cncf.io/resourceName"] = "openshift.io/" + cr.Spec.ResourceName
-
-// 	config, err := newSriovCniConfigString(cr)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return &netattdefv1.NetworkAttachmentDefinition{
-// 		ObjectMeta: metav1.ObjectMeta{
-// 			Name:      cr.Name,
-// 			Namespace: cr.Namespace,
-// 			Annotations: annotations,
-// 		},
-// 		Spec: netattdefv1.NetworkAttachmentDefinitionSpec{
-// 			Config: config,
-// 		},
-// 	}, nil
-// }
-
-// func newSriovCniConfigString(cr *sriovnetworkv1.SriovNetwork) (string, error) {
-// 	config := sriovCniConf{}
-// 	config.Name = "sriov"
-// 	config.Type = CNI_TYPE
-// 	config.CNIVersion = CNI_VERSION
-// 	config.Vlan = cr.Spec.Vlan
-
-// 	result, err := json.Marshal(config)
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	return string(result), nil
-// }
-
 // renderDsForCR returns a busybox pod with the same name/namespace as the cr
 func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error) {
 	logger := log.WithName("renderNetAttDef")
