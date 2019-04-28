@@ -27,6 +27,7 @@ type InterfaceExt struct {
 	LinkSpeed string `json:"linkSpeed,omitempty"`
 	PciAddress     string `json:"pciAddress"`
 	KernelDriver   string `json:"kernelDriver"`
+	TotalVfs int `json:"totalvfs"`
 	VF VirutalFunction `json:"Vfs,omitempty"`
 }
 
@@ -45,6 +46,7 @@ type SriovNetworkNodeStateStatus struct {
 	Interfaces  []InterfaceExt `json:"interfaces,omitempty"`
 }
 
+// +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SriovNetworkNodeState is the Schema for the sriovnetworknodestates API

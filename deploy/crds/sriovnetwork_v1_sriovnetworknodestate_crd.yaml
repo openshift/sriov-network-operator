@@ -90,6 +90,9 @@ spec:
                     type: string
                   resourceName:
                     type: string
+                  totalvfs:
+                    format: int64
+                    type: integer
                   vendor:
                     type: string
                 required:
@@ -97,6 +100,7 @@ spec:
                 - resourceName
                 - pciAddress
                 - kernelDriver
+                - totalvfs
                 type: object
               type: array
           type: object

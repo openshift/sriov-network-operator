@@ -1,0 +1,41 @@
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: sriov-network-config-daemon
+  namespace: sriov-network-operator
+  # annotations:
+  #   release.openshift.io/version: "{{.ReleaseVersion}}"
+spec:
+  selector:
+    matchLabels:
+      app: sriov-network-config-daemon
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: sriov-network-config-daemon
+        component: network
+        type: infra
+        openshift.io/component: network
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+      tolerations:
+      - operator: Exists
+      serviceAccountName: sriov-network-operator
+      containers:
+      - name: sriov-network-config-daemon
+        image: sriov-network-config-daemon:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        args:
+          - "start"
+        env:
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName

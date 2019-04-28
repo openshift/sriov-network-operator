@@ -112,14 +112,6 @@
   version = "v0.2.0"
 
 [[projects]]
-  digest = "1:99e9360e885f193c8e132e97eb47e1e58ecbde308b2ff089cd5d2bbf8d7ee68d"
-  name = "github.com/containernetworking/cni"
-  packages = ["pkg/types"]
-  pruneopts = "NT"
-  revision = "a7885cb6f8ab03fba07852ded351e4f5e7a112bf"
-  version = "v0.6.0"
-
-[[projects]]
   digest = "1:0c4193043b1a33c7f9ba4ea42b8af2c09bb3d51970212d42e4dac8aa217b4ca5"
   name = "github.com/coreos/prometheus-operator"
   packages = [
@@ -158,6 +150,14 @@
   pruneopts = "NT"
   revision = "b9bbc5664f49b6deec52393bd68f39830687a347"
   version = "v2.9.3"
+
+[[projects]]
+  digest = "1:820227d03dc661d34f837f3704626d2837dbfbf9f0ec8fdf1f58e683dc5f56fc"
+  name = "github.com/evanphx/json-patch"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "72bf35d0ff611848c1dc9df0f976c81192392fa5"
+  version = "v4.1.0"
 
 [[projects]]
   digest = "1:81466b4218bf6adddac2572a30ac733a9255919bc2f470b4827a317bd4ee1756"
@@ -382,15 +382,12 @@
   version = "v1.0"
 
 [[projects]]
-  digest = "1:092adbbdec985f07a41dae59d613b06a1b1c32ee005c85f8ee822796932c91ee"
-  name = "github.com/intel/sriov-cni"
-  packages = [
-    "pkg/dpdk",
-    "pkg/types",
-  ]
+  digest = "1:feb2b843f688344835edf0f6c167b15fcc74fb954fd5e0dbbfc7f034821207dd"
+  name = "github.com/intel/sriov-network-device-plugin"
+  packages = ["pkg/utils"]
   pruneopts = "NT"
-  revision = "14476a2f365233196f4b430788e04df917917c62"
-  version = "v1.1.0"
+  revision = "8ca5c9b795468ec13ecf7e8b6c30b887b91f72b5"
+  version = "v2.0.0"
 
 [[projects]]
   digest = "1:f5b9328966ccea0970b1d15075698eff0ddb3e75889560aad2e9f76b289b536a"
@@ -874,6 +871,14 @@
   version = "v0.9.1"
 
 [[projects]]
+  digest = "1:d74ba1aea6244ead12e4f16d5f61a15ced9a2f2d1cae2021fbb76088b27e7afa"
+  name = "gopkg.in/ini.v1"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "c85607071cf08ca1adaf48319cd1aa322e81d8c1"
+  version = "v1.42.0"
+
+[[projects]]
   digest = "1:18108594151654e9e696b27b181b953f9a90b16bf14d253dd1b397b025a1487f"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -988,6 +993,7 @@
   name = "k8s.io/client-go"
   packages = [
     "discovery",
+    "discovery/fake",
     "dynamic",
     "kubernetes",
     "kubernetes/scheme",
@@ -1036,6 +1042,7 @@
     "rest",
     "rest/watch",
     "restmapper",
+    "testing",
     "third_party/forked/golang/template",
     "tools/auth",
     "tools/cache",
@@ -1199,7 +1206,7 @@
     "github.com/blang/semver",
     "github.com/go-openapi/spec",
     "github.com/golang/glog",
-    "github.com/intel/sriov-cni/pkg/types",
+    "github.com/intel/sriov-network-device-plugin/pkg/utils",
     "github.com/onsi/gomega",
     "github.com/operator-framework/operator-sdk/pkg/k8sutil",
     "github.com/operator-framework/operator-sdk/pkg/leader",
@@ -1209,17 +1216,31 @@
     "github.com/pkg/errors",
     "github.com/spf13/cobra",
     "github.com/spf13/pflag",
+    "gopkg.in/ini.v1",
     "k8s.io/api/apps/v1",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured",
+    "k8s.io/apimachinery/pkg/labels",
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
+    "k8s.io/apimachinery/pkg/runtime/serializer",
     "k8s.io/apimachinery/pkg/types",
+    "k8s.io/apimachinery/pkg/util/runtime",
+    "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/apimachinery/pkg/util/yaml",
+    "k8s.io/apimachinery/pkg/watch",
+    "k8s.io/client-go/discovery",
+    "k8s.io/client-go/discovery/fake",
+    "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth",
+    "k8s.io/client-go/rest",
+    "k8s.io/client-go/testing",
+    "k8s.io/client-go/tools/cache",
+    "k8s.io/client-go/util/flowcontrol",
+    "k8s.io/client-go/util/retry",
     "k8s.io/code-generator/cmd/client-gen",
     "k8s.io/code-generator/cmd/conversion-gen",
     "k8s.io/code-generator/cmd/deepcopy-gen",
