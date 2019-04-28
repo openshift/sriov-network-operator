@@ -22,7 +22,9 @@ type Interface struct {
 }
 
 type InterfaceExt struct {
-	Interface `json:",inline"`
+	Name           string `json:"name"`
+	NumVfs         int `json:"numVfs,omitempty"`
+	Mtu            int `json:"mtu,omitempty"`
 	Vendor string `json:"vendor,omitempty"`
 	LinkSpeed string `json:"linkSpeed,omitempty"`
 	PciAddress     string `json:"pciAddress"`

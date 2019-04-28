@@ -72,8 +72,6 @@ spec:
                       pciAddress:
                         type: string
                     type: object
-                  deviceType:
-                    type: string
                   kernelDriver:
                     type: string
                   linkSpeed:
@@ -88,8 +86,6 @@ spec:
                     type: integer
                   pciAddress:
                     type: string
-                  resourceName:
-                    type: string
                   totalvfs:
                     format: int64
                     type: integer
@@ -97,7 +93,6 @@ spec:
                     type: string
                 required:
                 - name
-                - resourceName
                 - pciAddress
                 - kernelDriver
                 - totalvfs

@@ -8,7 +8,7 @@ import (
 	// "os"
 	"path/filepath"
 	// "regexp"
-	// "strconv"
+	"strconv"
 	// "strings"
 
 	"gopkg.in/ini.v1"
@@ -21,10 +21,11 @@ import (
 const (
 	sysBusPci = "/sys/bus/pci/devices"
 	sysClassNet = "/sys/class/net"
-	deviceUevent = "device/uevent"
-	deviceVendor = "device/vendor"
-	speed = "speed"
-
+	deviceUeventFile = "device/uevent"
+	deviceVendorFile = "device/vendor"
+	speedFile = "speed"
+	mtuFile = "mtu"
+	numVfsFile = "device/sriov_numvfs"
 	totalVfFile      = "sriov_totalvfs"
 	configuredVfFile = "sriov_numvfs"
 )
@@ -44,11 +45,26 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			continue
 		}
 		if totalVfs := utils.GetSriovVFcapacity(pciAddr); totalVfs > 0 {
-			vendorFilePath := filepath.Join(sysClassNet, iface.Name, deviceVendor)
+			vendorFilePath := filepath.Join(sysClassNet, iface.Name, deviceVendorFile)
 			vendorID, err := ioutil.ReadFile(vendorFilePath)
 			if err != nil {
 				continue
 			}
+
+			numVfsFilePath := filepath.Join(sysClassNet, iface.Name, numVfsFile)
+			vfs, err := ioutil.ReadFile(numVfsFilePath)
+			numVfs, err := strconv.Atoi(string(bytes.TrimSpace(vfs)))
+			if err != nil {
+				continue
+			}
+
+			mtuFilePath := filepath.Join(sysClassNet, iface.Name, mtuFile)
+			m, err := ioutil.ReadFile(mtuFilePath)
+			mtu, err := strconv.Atoi(string(bytes.TrimSpace(m)))
+			if err != nil {
+				continue
+			}
+
 			vendorID = bytes.TrimSpace(vendorID)
 			var vendorName string
 			switch string(vendorID) {
@@ -58,7 +74,7 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 				vendorName = "Mellanox"
 			}
 
-			speedFilePath := filepath.Join(sysClassNet, iface.Name, speed)
+			speedFilePath := filepath.Join(sysClassNet, iface.Name, speedFile)
 			s, err := ioutil.ReadFile(speedFilePath)
 			if err != nil {
 				continue
@@ -66,14 +82,14 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			s = bytes.TrimSpace(s)
 
 			pfList = append(pfList, sriovnetworkv1.InterfaceExt{
-				Interface: sriovnetworkv1.Interface{
-					Name: iface.Name,
-				},
+				Name: iface.Name,
 				PciAddress: pciAddr,
 				KernelDriver: driver,
 				Vendor: vendorName,
 				LinkSpeed: string(s),
 				TotalVfs: totalVfs,
+				NumVfs: numVfs,
+				Mtu: mtu,
 			})
 		}
 	}
@@ -81,7 +97,7 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 }
 
 func getPciAddrAndDriverWithName (name string) (string, string) {
-	ueventFilePath := filepath.Join(sysClassNet, name, deviceUevent)
+	ueventFilePath := filepath.Join(sysClassNet, name, deviceUeventFile)
 	cfg, err := ini.Load(ueventFilePath)
 	if err != nil {
 		return "", ""
