@@ -38,16 +38,17 @@ func (nm *NodeStateStatusWriter) Run(stop <-chan struct{}) {
 		case <-stop:
 			return
 		default:
-			if err := getNicStatus(nm); err != nil {
+			if err := pollNicStatus(nm); err != nil {
 				continue
 			}
 			setNodeStateStatus(nm.client, nm.node, nm.status)
+			time.Sleep(30*time.Second)
 		}
 	}
 }
 
-func getNicStatus(nm *NodeStateStatusWriter) error {
-	glog.Info("getNicStatus")
+func pollNicStatus(nm *NodeStateStatusWriter) error {
+	glog.Info("pollNicStatus")
 	iface, err:= DiscoverSriovDevices()
 	if err != nil {
 		return err

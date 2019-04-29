@@ -5,7 +5,7 @@ import (
 	// "fmt"
 	"io/ioutil"
 	"net"
-	// "os"
+	"os"
 	"path/filepath"
 	// "regexp"
 	"strconv"
@@ -103,4 +103,59 @@ func getPciAddrAndDriverWithName (name string) (string, string) {
 		return "", ""
 	}
 	return cfg.Section("").Key("PCI_SLOT_NAME").String(), cfg.Section("").Key("DRIVER").String()
+}
+
+func syncNodeState(nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+	var err error
+	for _, ifaceStatus := range nodeState.Status.Interfaces {
+		if err = resetSriovDevice(ifaceStatus.Name); err != nil {
+			return err
+		}
+		for _, iface := range nodeState.Spec.Interfaces {
+			if iface.Name == ifaceStatus.Name {
+				if err = configSriovDevice(&iface); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func configSriovDevice(iface *sriovnetworkv1.Interface) error {
+	switch {
+	case iface.NumVfs > 0: 
+		numVfsFilePath := filepath.Join(sysClassNet, iface.Name, numVfsFile)
+		bs := []byte(strconv.Itoa(iface.NumVfs))
+		err := ioutil.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
+		if err != nil {
+			return err
+		}
+		err = ioutil.WriteFile(numVfsFilePath, bs, os.ModeAppend)
+		if err != nil {
+			return err
+		}
+	case iface.Mtu > 0:
+		mtuFilePath := filepath.Join(sysClassNet, iface.Name, mtuFile)
+		bs := []byte(strconv.Itoa(iface.Mtu))
+		err := ioutil.WriteFile(mtuFilePath, bs, os.ModeAppend)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func resetSriovDevice(ifaceName string) error {
+	numVfsFilePath := filepath.Join(sysClassNet, ifaceName, numVfsFile)
+	err := ioutil.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
+	if err != nil {
+		return err
+	}
+	mtuFilePath := filepath.Join(sysClassNet, ifaceName, mtuFile)
+	err = ioutil.WriteFile(mtuFilePath, []byte("1500"), os.ModeAppend)
+	if err != nil {
+		return err
+	}
+	return nil
 }

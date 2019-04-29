@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"os"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/pliurh/sriov-network-operator/pkg/daemon"
@@ -59,26 +58,6 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	exitCh := make(chan error)
 	defer close(exitCh)
 
-	// var dn *daemon.Daemon
-	// var ctx *common.ControllerContext
-
-	// cb, err := common.NewClientBuilder(startOpts.kubeconfig)
-	// if err != nil {
-	// 	glog.Fatalf("failed to initialize ClientBuilder: %v", err)
-	// }
-	// ctx = common.CreateControllerContext(cb, stopCh, componentName)
-	// // create the daemon instance. this also initializes kube client items
-	// // which need to come from the container and not the chroot.
-	// dn, err = daemon.New(
-	// 	startOpts.nodeName,
-	// 	exitCh,
-	// 	stopCh,
-	// )
-	// if err != nil {
-	// 	glog.Fatalf("failed to initialize daemon: %v", err)
-	// }
-
-
 	var config *rest.Config
 	var err error
 	kubeconfig := os.Getenv("KUBECONFIG")
@@ -92,20 +71,20 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		}
 	}
 	clientset := snclientset.NewForConfigOrDie(config)
+
 	glog.Info("starting node writer")
 	nodeWriter := daemon.NewNodeStateStatusWriter(clientset,startOpts.nodeName)
 	go nodeWriter.Run(stopCh)
 
-	for {
-		time.Sleep(300)
-	}
 	glog.Info("Starting SriovNetworkConfigDaemon")
-	defer glog.Info("Shutting down SriovConfigDaemon")
-
-
-
-	// err = dn.Run(stopCh, exitCh)
-	// if err != nil {
-	// 	glog.Fatalf("failed to run: %v", err)
-	// }
+	err = daemon.New(
+		startOpts.nodeName,
+		clientset,
+		exitCh,
+		stopCh,
+	).Run()
+	if err != nil {
+		glog.Fatalf("failed to run daemon: %v", err)
+	}
+	defer glog.Info("Shutting down SriovNetworkConfigDaemon")
 }
