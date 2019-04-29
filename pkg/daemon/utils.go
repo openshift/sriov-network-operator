@@ -13,7 +13,6 @@ import (
 
 	"gopkg.in/ini.v1"
 	"github.com/golang/glog"
-	"github.com/intel/sriov-network-device-plugin/pkg/utils"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 
 )
@@ -26,8 +25,7 @@ const (
 	speedFile = "speed"
 	mtuFile = "mtu"
 	numVfsFile = "device/sriov_numvfs"
-	totalVfFile      = "sriov_totalvfs"
-	configuredVfFile = "sriov_numvfs"
+	totalVfFile = "device/sriov_totalvfs"
 )
 
 func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
@@ -39,12 +37,21 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 	}
 
 	for _, iface := range interfaces {
-		glog.Infof("Interface %s\n", iface.Name)
 		pciAddr, driver := getPciAddrAndDriverWithName(iface.Name)
 		if pciAddr == "" && driver == ""{
 			continue
 		}
-		if totalVfs := utils.GetSriovVFcapacity(pciAddr); totalVfs > 0 {
+		totalVfFilePath := filepath.Join(sysClassNet, iface.Name, totalVfFile)
+		vfs, err := ioutil.ReadFile(totalVfFilePath)
+		if err != nil {
+			continue
+		}
+		vfs = bytes.TrimSpace(vfs)
+		totalVfs, err := strconv.Atoi(string(vfs))
+		if err != nil {
+			continue
+		}
+		if totalVfs > 0 {
 			vendorFilePath := filepath.Join(sysClassNet, iface.Name, deviceVendorFile)
 			vendorID, err := ioutil.ReadFile(vendorFilePath)
 			if err != nil {
@@ -53,6 +60,9 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 
 			numVfsFilePath := filepath.Join(sysClassNet, iface.Name, numVfsFile)
 			vfs, err := ioutil.ReadFile(numVfsFilePath)
+			if err != nil {
+				continue
+			}
 			numVfs, err := strconv.Atoi(string(bytes.TrimSpace(vfs)))
 			if err != nil {
 				continue
@@ -60,6 +70,9 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 
 			mtuFilePath := filepath.Join(sysClassNet, iface.Name, mtuFile)
 			m, err := ioutil.ReadFile(mtuFilePath)
+			if err != nil {
+				continue
+			}
 			mtu, err := strconv.Atoi(string(bytes.TrimSpace(m)))
 			if err != nil {
 				continue
