@@ -8,8 +8,10 @@ import (
 	"github.com/pliurh/sriov-network-operator/pkg/daemon"
 	"github.com/pliurh/sriov-network-operator/pkg/version"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/pliurh/sriov-network-operator/pkg/client/clientset/versioned"
 )
 
@@ -66,10 +68,14 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	} else {
 		// creates the in-cluster config
 		config, err = rest.InClusterConfig()
-		if err != nil {
-			panic(err.Error())
-		}
 	}
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	sriovnetworkv1.AddToScheme(scheme.Scheme)
+	
 	clientset := snclientset.NewForConfigOrDie(config)
 
 	glog.Info("starting node writer")

@@ -11,21 +11,20 @@ import (
 	"strconv"
 	// "strings"
 
-	"gopkg.in/ini.v1"
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-
+	"gopkg.in/ini.v1"
 )
 
 const (
-	sysBusPci = "/sys/bus/pci/devices"
-	sysClassNet = "/sys/class/net"
+	sysBusPci        = "/sys/bus/pci/devices"
+	sysClassNet      = "/sys/class/net"
 	deviceUeventFile = "device/uevent"
 	deviceVendorFile = "device/vendor"
-	speedFile = "speed"
-	mtuFile = "mtu"
-	numVfsFile = "device/sriov_numvfs"
-	totalVfFile = "device/sriov_totalvfs"
+	speedFile        = "speed"
+	mtuFile          = "mtu"
+	numVfsFile       = "device/sriov_numvfs"
+	totalVfFile      = "device/sriov_totalvfs"
 )
 
 func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
@@ -38,7 +37,7 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 
 	for _, iface := range interfaces {
 		pciAddr, driver := getPciAddrAndDriverWithName(iface.Name)
-		if pciAddr == "" && driver == ""{
+		if pciAddr == "" && driver == "" {
 			continue
 		}
 		totalVfFilePath := filepath.Join(sysClassNet, iface.Name, totalVfFile)
@@ -95,21 +94,21 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			s = bytes.TrimSpace(s)
 
 			pfList = append(pfList, sriovnetworkv1.InterfaceExt{
-				Name: iface.Name,
-				PciAddress: pciAddr,
+				Name:         iface.Name,
+				PciAddress:   pciAddr,
 				KernelDriver: driver,
-				Vendor: vendorName,
-				LinkSpeed: string(s),
-				TotalVfs: totalVfs,
-				NumVfs: numVfs,
-				Mtu: mtu,
+				Vendor:       vendorName,
+				LinkSpeed:    string(s),
+				TotalVfs:     totalVfs,
+				NumVfs:       numVfs,
+				Mtu:          mtu,
 			})
 		}
 	}
 	return pfList, nil
 }
 
-func getPciAddrAndDriverWithName (name string) (string, string) {
+func getPciAddrAndDriverWithName(name string) (string, string) {
 	ueventFilePath := filepath.Join(sysClassNet, name, deviceUeventFile)
 	cfg, err := ini.Load(ueventFilePath)
 	if err != nil {
@@ -121,23 +120,40 @@ func getPciAddrAndDriverWithName (name string) (string, string) {
 func syncNodeState(nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	var err error
 	for _, ifaceStatus := range nodeState.Status.Interfaces {
-		if err = resetSriovDevice(ifaceStatus.Name); err != nil {
-			return err
-		}
+		configured := false
 		for _, iface := range nodeState.Spec.Interfaces {
 			if iface.Name == ifaceStatus.Name {
+				configured = true
+				if !needUpdate(&iface, &ifaceStatus) {
+					break
+				}
 				if err = configSriovDevice(&iface); err != nil {
 					return err
 				}
+				break
+			}
+		}
+		if !configured {
+			if err = resetSriovDevice(ifaceStatus.Name); err != nil {
+				return err
 			}
 		}
 	}
 	return nil
 }
 
-func configSriovDevice(iface *sriovnetworkv1.Interface) error {
+func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
 	switch {
-	case iface.NumVfs > 0: 
+	case iface.Mtu != ifaceStatus.Mtu:
+		return true
+	case iface.NumVfs != ifaceStatus.NumVfs:
+		return true
+	}
+	return false
+}
+
+func configSriovDevice(iface *sriovnetworkv1.Interface) error {
+	if iface.NumVfs > 0 {
 		numVfsFilePath := filepath.Join(sysClassNet, iface.Name, numVfsFile)
 		bs := []byte(strconv.Itoa(iface.NumVfs))
 		err := ioutil.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
@@ -148,7 +164,8 @@ func configSriovDevice(iface *sriovnetworkv1.Interface) error {
 		if err != nil {
 			return err
 		}
-	case iface.Mtu > 0:
+	}
+	if iface.Mtu > 0 {
 		mtuFilePath := filepath.Join(sysClassNet, iface.Name, mtuFile)
 		bs := []byte(strconv.Itoa(iface.Mtu))
 		err := ioutil.WriteFile(mtuFilePath, bs, os.ModeAppend)
