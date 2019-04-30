@@ -208,6 +208,9 @@ func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetw
 		logger.Info("SriovNetworkNodeState already exists, updating")
 		found.Spec = in.Spec
 		for _, p := range pl.Items {
+			if p.Name == "default" {
+				continue
+			}
 			fmt.Printf("evaluate policy %s for node %s\n", p.Name, node.Name)
 			if p.Selected(node){
 				if len(found.Status.Interfaces) == 0 {

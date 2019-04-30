@@ -45,7 +45,7 @@ func in_array(val string, array []string) bool{
 // Apply policy to SriovNetworkNodeState CR
 func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 	s := p.Spec.NicSelector
-	if s.Vendor == "" && s.LinkSpeed =="" && len(s.RootDevices) ==0 {
+	if s.Name == "" && s.Vendor == "" && s.LinkSpeed == "" && len(s.RootDevices) == 0 {
 		// Empty NicSelector match none
 		return
 	}
@@ -65,14 +65,16 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 }
 
 func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool{
-	switch {
-	case s.Name != iface.Name:
+	if s.Name != "" && s.Name != iface.Name {
 		return false
-	case s.Vendor != iface.Vendor:
+	}
+	if s.Vendor != "" && s.Vendor != iface.Vendor {
 		return false
-	case s.LinkSpeed != s.LinkSpeed:
+	}
+	if s.LinkSpeed !="" && s.LinkSpeed != iface.LinkSpeed {
 		return false
-	case len(s.RootDevices)>0 && !in_array(iface.PciAddress, s.RootDevices):
+	}
+	if len(s.RootDevices)>0 && !in_array(iface.PciAddress, s.RootDevices) {
 		return false
 	}
 	return true
