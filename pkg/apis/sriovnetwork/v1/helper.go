@@ -54,10 +54,9 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 		if  s.Selected(&iface){
 			log.Info("Update interface", "name", iface.Name)
 			interfaces = append(interfaces, Interface{
-				Name: iface.Name,
+				PciAddress: iface.PciAddress,
 				Mtu: p.Spec.Mtu,
 				NumVfs: p.Spec.NumVfs,
-				ResourceName: p.Spec.ResourceName,
 			})
 		}
 	}

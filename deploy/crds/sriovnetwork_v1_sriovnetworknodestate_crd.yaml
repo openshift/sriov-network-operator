@@ -37,16 +37,13 @@ spec:
                   mtu:
                     format: int64
                     type: integer
-                  name:
-                    type: string
                   numVfs:
                     format: int64
                     type: integer
-                  resourceName:
+                  pciAddress:
                     type: string
                 required:
-                - name
-                - resourceName
+                - pciAddress
                 type: object
               type: array
           type: object
@@ -56,23 +53,31 @@ spec:
               items:
                 properties:
                   Vfs:
-                    properties:
-                      Vlan:
-                        format: int64
-                        type: integer
-                      assigned:
-                        type: string
-                      kernelDriver:
-                        type: string
-                      mac:
-                        type: string
-                      "no":
-                        format: int64
-                        type: integer
-                      pciAddress:
-                        type: string
-                    type: object
-                  kernelDriver:
+                    items:
+                      properties:
+                        Vlan:
+                          format: int64
+                          type: integer
+                        assigned:
+                          type: string
+                        deviceID:
+                          type: string
+                        driver:
+                          type: string
+                        mac:
+                          type: string
+                        "no":
+                          format: int64
+                          type: integer
+                        pciAddress:
+                          type: string
+                        vendor:
+                          type: string
+                      type: object
+                    type: array
+                  deviceID:
+                    type: string
+                  driver:
                     type: string
                   linkSpeed:
                     type: string
@@ -92,10 +97,7 @@ spec:
                   vendor:
                     type: string
                 required:
-                - name
                 - pciAddress
-                - kernelDriver
-                - totalvfs
                 type: object
               type: array
           type: object

@@ -14,31 +14,33 @@ type SriovNetworkNodeStateSpec struct {
 }
 
 type Interface struct {
-	Name           string `json:"name"`
-	ResourceName   string `json:"resourceName"`
+	PciAddress     string `json:"pciAddress"`
 	NumVfs         int `json:"numVfs,omitempty"`
 	Mtu            int `json:"mtu,omitempty"`
 	DeviceType     string `json:"deviceType,omitempty"`
 }
 
 type InterfaceExt struct {
-	Name           string `json:"name"`
+	Name           string `json:"name,omitempty"`
 	NumVfs         int `json:"numVfs,omitempty"`
 	Mtu            int `json:"mtu,omitempty"`
 	Vendor string `json:"vendor,omitempty"`
+	DeviceID  string `json:"deviceID,omitempty"`
 	LinkSpeed string `json:"linkSpeed,omitempty"`
 	PciAddress     string `json:"pciAddress"`
-	KernelDriver   string `json:"kernelDriver"`
-	TotalVfs int `json:"totalvfs"`
-	VF VirutalFunction `json:"Vfs,omitempty"`
+	Driver   string `json:"driver,omitempty"`
+	TotalVfs int `json:"totalvfs,omitempty"`
+	VFs []VirutalFunction `json:"Vfs,omitempty"`
 }
 
 type VirutalFunction struct {
 	No           int      `json:"no,omitempty"`
 	Mac          string      `json:"mac,omitempty"`
 	Assigned     string      `json:"assigned,omitempty"`
-	KernelDriver string      `json:"kernelDriver,omitempty"`
+	Driver string      `json:"driver,omitempty"`
 	PciAddress   string      `json:"pciAddress,omitempty"`
+	Vendor string `json:"vendor,omitempty"`
+	DeviceID  string `json:"deviceID,omitempty"`
 	Vlan         int         `json:"Vlan,omitempty"`
 }
 

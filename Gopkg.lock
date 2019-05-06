@@ -382,12 +382,20 @@
   version = "v1.0"
 
 [[projects]]
-  digest = "1:feb2b843f688344835edf0f6c167b15fcc74fb954fd5e0dbbfc7f034821207dd"
-  name = "github.com/intel/sriov-network-device-plugin"
-  packages = ["pkg/utils"]
+  digest = "1:08e60c1225d3bae57e16847a99f447127a9ffe2e56593a13cf2b72aef5d21ee5"
+  name = "github.com/jaypipes/ghw"
+  packages = ["."]
   pruneopts = "NT"
-  revision = "8ca5c9b795468ec13ecf7e8b6c30b887b91f72b5"
-  version = "v2.0.0"
+  revision = "032dfb1f8cb2b9b5c0e894855833e23ff1fe24a9"
+  version = "0.3"
+
+[[projects]]
+  digest = "1:c3d6588f3da60be2fc16e8f3d3b3d1670a5c523508a568bb6501cfbc3666b4c8"
+  name = "github.com/jaypipes/pcidb"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "141a53e65d4ad43fdbd2760c714344da88f24adb"
+  version = "0.3"
 
 [[projects]]
   digest = "1:f5b9328966ccea0970b1d15075698eff0ddb3e75889560aad2e9f76b289b536a"
@@ -432,6 +440,14 @@
   pruneopts = "NT"
   revision = "c12348ce28de40eed0136aa2b644d0ee0650e56c"
   version = "v1.0.1"
+
+[[projects]]
+  digest = "1:f9f72e583aaacf1d1ac5d6121abd4afd3c690baa9e14e1d009df26bf831ba347"
+  name = "github.com/mitchellh/go-homedir"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "af06845cf3004701891bf4fdb884bfe4920b3727"
+  version = "v1.1.0"
 
 [[projects]]
   digest = "1:2f42fa12d6911c7b7659738758631bec870b7e9b4c6be5444f963cdcfccc191f"
@@ -887,6 +903,14 @@
   version = "v2.2.2"
 
 [[projects]]
+  digest = "1:5f008b347e33e4f8cef72a85f3302a6c737b6fe03757921e4e5b68b75d4f024e"
+  name = "howett.net/plist"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "591f970eefbbeb04d7b37f334a0c4c3256e32876"
+  source = "github.com/DHowett/go-plist"
+
+[[projects]]
   digest = "1:6fa82ea248029bbbdddade20c06ab177ff6e485e5e45e48b045707415b7efd34"
   name = "k8s.io/api"
   packages = [
@@ -1206,7 +1230,7 @@
     "github.com/blang/semver",
     "github.com/go-openapi/spec",
     "github.com/golang/glog",
-    "github.com/intel/sriov-network-device-plugin/pkg/utils",
+    "github.com/jaypipes/ghw",
     "github.com/onsi/gomega",
     "github.com/operator-framework/operator-sdk/pkg/k8sutil",
     "github.com/operator-framework/operator-sdk/pkg/leader",
@@ -1239,6 +1263,7 @@
     "k8s.io/client-go/rest",
     "k8s.io/client-go/testing",
     "k8s.io/client-go/tools/cache",
+    "k8s.io/client-go/tools/clientcmd",
     "k8s.io/client-go/util/flowcontrol",
     "k8s.io/client-go/util/retry",
     "k8s.io/code-generator/cmd/client-gen",
