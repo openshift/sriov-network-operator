@@ -10,11 +10,10 @@ spec:
     feature.node.kubernetes.io/sriov-capable: "true"
   priority: 99
   mtu: 9000
-  numVfs: 16
+  numVfs: 6
   nicSelector:
     vendor: 'intel'
-    linkSpeed: '100G'
-    rootDevices: ['02:00.1',]
+    rootDevices: ['0000:86:00.1',]
   deviceType: ‘netdevice’
 
 ---
@@ -32,6 +31,5 @@ spec:
   numVfs: 16
   nicSelector:
     vendor: 'intel'
-    linkSpeed: '100G'
     rootDevices: ['02:00.1',]
   deviceType: ‘netdevice’

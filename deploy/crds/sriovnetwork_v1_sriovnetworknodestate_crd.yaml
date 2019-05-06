@@ -66,6 +66,9 @@ spec:
                           type: string
                         mac:
                           type: string
+                        mtu:
+                          format: int64
+                          type: integer
                         "no":
                           format: int64
                           type: integer

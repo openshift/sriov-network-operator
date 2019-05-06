@@ -23,9 +23,8 @@ type SriovNetworkNodePolicySpec struct {
 }
 
 type SriovNetworkNicSelector struct {
-	Name      string   `json:"name,omitempty"`
 	Vendor      string   `json:"vendor,omitempty"`
-	LinkSpeed   string   `json:"linkSpeed,omitempty"`
+	DeviceID    string   `json:"deviceID,omitempty"`
 	RootDevices []string `json:"rootDevices,omitempty"`
 } 
 

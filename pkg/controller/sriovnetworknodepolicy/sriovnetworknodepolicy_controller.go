@@ -221,23 +221,6 @@ func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetw
 				}
 			}
 		}
-		// j, _:= json.Marshal(found)
-		// fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
-		// test := sriovnetworkv1.InterfaceExt{
-		// 	Interface: sriovnetworkv1.Interface {
-		// 		Name: "test",
-		// 		ResourceName: "test",
-		// 	},
-		// 	Vendor: "intel",
-		// 	LinkSpeed: "100G",
-		// 	PciAddress: "02:00.1",
-		// 	KernelDriver: "test",
-		// }
-		// found.Status.Interfaces = []sriovnetworkv1.InterfaceExt{test,}
-		// r.client.Status().Update(context.TODO(),found)
-		// if err != nil {
-		// 	logger.Error(err, "Couldn't update SriovNetworkNodeState status")
-		// }
 		err = r.client.Update(context.TODO(), found)
 		if err != nil {
 			return fmt.Errorf("Couldn't update SriovNetworkNodeState: %v", err)
