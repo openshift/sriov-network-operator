@@ -33,7 +33,7 @@ func (p *SriovNetworkNodePolicy) Selected(node *corev1.Node) bool{
 	return true
 }
 
-func in_array(val string, array []string) bool{
+func StringInArray(val string, array []string) bool{
     for i := range array {
         if array[i] == val{
             return true
@@ -70,7 +70,7 @@ func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool{
 	if s.DeviceID !="" && s.DeviceID != iface.DeviceID {
 		return false
 	}
-	if len(s.RootDevices)>0 && !in_array(iface.PciAddress, s.RootDevices) {
+	if len(s.RootDevices)>0 && !StringInArray(iface.PciAddress, s.RootDevices) {
 		return false
 	}
 	return true

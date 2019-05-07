@@ -227,7 +227,9 @@
   digest = "1:0b39706cfa32c1ba9e14435b5844d04aef81b60f44b6077e61e0607d56692603"
   name = "github.com/gogo/protobuf"
   packages = [
+    "gogoproto",
     "proto",
+    "protoc-gen-gogo/descriptor",
     "sortkeys",
   ]
   pruneopts = "NT"
@@ -380,6 +382,17 @@
   pruneopts = "NT"
   revision = "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75"
   version = "v1.0"
+
+[[projects]]
+  branch = "feature/device_selectors"
+  digest = "1:0d93dad832f1667549f366af9403b7254a889435b69ef4a173222e7187fd5cd3"
+  name = "github.com/intel/sriov-network-device-plugin"
+  packages = [
+    "pkg/types",
+    "pkg/utils",
+  ]
+  pruneopts = "NT"
+  revision = "4f3dd248f051c5e9b368dabdc0f4a9ce12b1a007"
 
 [[projects]]
   digest = "1:08e60c1225d3bae57e16847a99f447127a9ffe2e56593a13cf2b72aef5d21ee5"
@@ -887,14 +900,6 @@
   version = "v0.9.1"
 
 [[projects]]
-  digest = "1:d74ba1aea6244ead12e4f16d5f61a15ced9a2f2d1cae2021fbb76088b27e7afa"
-  name = "gopkg.in/ini.v1"
-  packages = ["."]
-  pruneopts = "NT"
-  revision = "c85607071cf08ca1adaf48319cd1aa322e81d8c1"
-  version = "v1.42.0"
-
-[[projects]]
   digest = "1:18108594151654e9e696b27b181b953f9a90b16bf14d253dd1b397b025a1487f"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -1162,6 +1167,14 @@
   revision = "0cf8f7e6ed1d2e3d47d02e3b6e559369af24d803"
 
 [[projects]]
+  digest = "1:3ebe988ad44fe2c12e13098222c040512f6a50f9b02855ca3346c9b3662924e3"
+  name = "k8s.io/kubernetes"
+  packages = ["pkg/kubelet/apis/deviceplugin/v1beta1"]
+  pruneopts = "NT"
+  revision = "b7394102d6ef778017f2ca4046abbaa23b88c290"
+  version = "v1.14.1"
+
+[[projects]]
   digest = "1:06035489efbd51ccface65fc878ceeb849aba05b2f9443c8993f363fc96e80ac"
   name = "sigs.k8s.io/controller-runtime"
   packages = [
@@ -1230,6 +1243,8 @@
     "github.com/blang/semver",
     "github.com/go-openapi/spec",
     "github.com/golang/glog",
+    "github.com/intel/sriov-network-device-plugin/pkg/types",
+    "github.com/intel/sriov-network-device-plugin/pkg/utils",
     "github.com/jaypipes/ghw",
     "github.com/onsi/gomega",
     "github.com/operator-framework/operator-sdk/pkg/k8sutil",
@@ -1240,7 +1255,6 @@
     "github.com/pkg/errors",
     "github.com/spf13/cobra",
     "github.com/spf13/pflag",
-    "gopkg.in/ini.v1",
     "k8s.io/api/apps/v1",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/errors",
