@@ -40,7 +40,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	flag.Parse()
 
 	// To help debugging, immediately log version
-	glog.Infof("Version: %+v", version.Version)
+	glog.V(2).Infof("Version: %+v", version.Version)
 
 	if startOpts.nodeName == "" {
 		name, ok := os.LookupEnv("NODE_NAME")
@@ -78,11 +78,11 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	
 	clientset := snclientset.NewForConfigOrDie(config)
 
-	glog.Info("starting node writer")
+	glog.V(0).Info("starting node writer")
 	nodeWriter := daemon.NewNodeStateStatusWriter(clientset,startOpts.nodeName)
 	go nodeWriter.Run(stopCh)
 
-	glog.Info("Starting SriovNetworkConfigDaemon")
+	glog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(
 		startOpts.nodeName,
 		clientset,
@@ -92,5 +92,5 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	if err != nil {
 		glog.Fatalf("failed to run daemon: %v", err)
 	}
-	defer glog.Info("Shutting down SriovNetworkConfigDaemon")
+	defer glog.V(0).Info("Shutting down SriovNetworkConfigDaemon")
 }

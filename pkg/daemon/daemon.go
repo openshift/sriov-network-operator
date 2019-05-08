@@ -51,6 +51,7 @@ func New(
 }
 
 func (dn *Daemon) Run() error {
+	glog.V(0).Info("Run(): start daemon")
 	// Only watch own SriovNetworkNodeState CR
 	informerFactory := sninformer.NewSharedInformerFactoryWithOptions(dn.client,
 		time.Second*30,
@@ -71,7 +72,7 @@ func (dn *Daemon) Run() error {
 	for {
 		select {
 		case <-dn.stopCh:
-			glog.Infof("stop Daemon")
+			glog.V(0).Info("stop daemon")
 			return nil
 		default:
 			time.Sleep(2 * time.Second)
@@ -83,8 +84,8 @@ func nodeStateAddHandler(obj interface{}) {
 	// "k8s.io/apimachinery/pkg/apis/meta/v1" provides an Object
 	// interface that allows us to get metadata easily
 	nodeState := obj.(*sriovnetworkv1.SriovNetworkNodeState)
-	glog.Infof("nodeStateChangeHandler(): New SriovNetworkNodeState Added to Store: %s", nodeState.GetName())
-	glog.Infof("nodeStateAddHandler(): sync %s", nodeState.GetName())
+	glog.V(2).Infof("nodeStateChangeHandler(): New SriovNetworkNodeState Added to Store: %s", nodeState.GetName())
+	glog.V(2).Infof("nodeStateAddHandler(): sync %s", nodeState.GetName())
 	if err:= syncNodeState(nodeState); err != nil{
 		glog.Warningf("nodeStateChangeHandler(): Failed to sync nodeState")
 		return
@@ -95,10 +96,10 @@ func nodeStateChangeHandler(old, new interface {}) {
 	newState := new.(*sriovnetworkv1.SriovNetworkNodeState)
 	oldState := old.(*sriovnetworkv1.SriovNetworkNodeState)
 	if reflect.DeepEqual(newState.Spec.Interfaces, oldState.Spec.Interfaces){
-		glog.Infof("nodeStateChangeHandler(): Interface not changed")
+		glog.V(2).Infof("nodeStateChangeHandler(): Interface not changed")
 		return
 	}
-	glog.Infof("nodeStateChangeHandler(): sync %s", newState.GetName())
+	glog.V(2).Infof("nodeStateChangeHandler(): sync %s", newState.GetName())
 	if err:= syncNodeState(newState); err != nil{
 		glog.Warningf("nodeStateChangeHandler(): Failed to sync newNodeState")
 		return

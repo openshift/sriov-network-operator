@@ -32,10 +32,11 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string) *NodeStateStatu
 // Run reads from the writer channel and sets the node annotation. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
 func (nm *NodeStateStatusWriter) Run(stop <-chan struct{}) {
-	glog.Info("writer run")
+	glog.V(0).Info("Run(): start writer")
 	for {
 		select {
 		case <-stop:
+			glog.V(0).Info("Run(): stop writer")
 			return
 		default:
 			if err := pollNicStatus(nm); err != nil {
@@ -48,7 +49,7 @@ func (nm *NodeStateStatusWriter) Run(stop <-chan struct{}) {
 }
 
 func pollNicStatus(nm *NodeStateStatusWriter) error {
-	glog.Info("pollNicStatus")
+	glog.V(2).Info("pollNicStatus()")
 	iface, err:= DiscoverSriovDevices()
 	if err != nil {
 		return err

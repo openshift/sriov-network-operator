@@ -25,7 +25,7 @@ const (
 )
 
 func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
-	glog.Info("DiscoverSriovDevices")
+	glog.V(0).Info("DiscoverSriovDevices")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
 	pci, err := ghw.PCI()
@@ -100,7 +100,7 @@ func syncNodeState(nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
 				if !needUpdate(&iface, &ifaceStatus) {
-					glog.Infof("syncNodeState(): no need update interface %s", iface.PciAddress)
+					glog.V(2).Infof("syncNodeState(): no need update interface %s", iface.PciAddress)
 					break
 				}
 				if err = configSriovDevice(&iface); err != nil {
@@ -129,7 +129,7 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 }
 
 func configSriovDevice(iface *sriovnetworkv1.Interface) error {
-	glog.Infof("configSriovDevice(): config interface %s with %v", iface.PciAddress, iface)
+	glog.V(2).Infof("configSriovDevice(): config interface %s with %v", iface.PciAddress, iface)
 	if iface.NumVfs > 0 {
 		err := setSriovNumVfs(iface.PciAddress, iface.NumVfs)
 		if err != nil {
@@ -161,7 +161,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface) error {
 }
 
 func setSriovNumVfs(pciAddr string, numVfs int) error {
-	glog.Infof("setSriovNumVfs(): set NumVfs for device %s", pciAddr)
+	glog.V(2).Infof("setSriovNumVfs(): set NumVfs for device %s", pciAddr)
 	numVfsFilePath := filepath.Join(sysBusPci, pciAddr, numVfsFile)
 	bs := []byte(strconv.Itoa(numVfs))
 	err := ioutil.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
@@ -178,7 +178,7 @@ func setSriovNumVfs(pciAddr string, numVfs int) error {
 }
 
 func setNetdevMTU(pciAddr string, mtu int) error {
-	glog.Infof("setNetdevMTU(): set MTU for device %s", pciAddr)
+	glog.V(2).Infof("setNetdevMTU(): set MTU for device %s", pciAddr)
 	ifaceName, err:= dputils.GetNetNames(pciAddr)
 	if err != nil {
 		glog.Errorf("setNetdevMTU(): fail to get interface name for %s, ERR: %s", pciAddr, err)
@@ -196,7 +196,7 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 }
 
 func getNetdevMTU(pciAddr string) int {
-	glog.Infof("getNetdevMTU(): get MTU for device %s", pciAddr)
+	glog.V(2).Infof("getNetdevMTU(): get MTU for device %s", pciAddr)
 	ifaceName, err:= dputils.GetNetNames(pciAddr)
 	if err != nil {
 		return 0
@@ -217,7 +217,7 @@ func getNetdevMTU(pciAddr string) int {
 }
 
 func resetSriovDevice(pciAddr string) error {
-	glog.Infof("resetSriovDevice(): reset sr-iov device %s", pciAddr)
+	glog.V(2).Infof("resetSriovDevice(): reset sr-iov device %s", pciAddr)
 	numVfsFilePath := filepath.Join(sysBusPci, pciAddr, numVfsFile)
 	err := ioutil.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
 	if err != nil {
