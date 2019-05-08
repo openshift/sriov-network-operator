@@ -5,6 +5,26 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
+var DeviceDriverMap = map[string](map[string]string) {
+	"PF": {
+		"1572": "i40e",
+		"1583": "i40e",
+		"158b": "i40e",
+		"37d2": "i40e",
+	},
+	"VF": {
+		"1572": "iavf",
+		"1583": "iavf",
+		"158b": "iavf",
+		"37d2": "iavf",
+		"154c": "iavf",
+	},
+}
+
+var SriovPfVfMap = map[string](string) {
+	"1583": "154c",
+}
+
 var log = logf.Log.WithName("sriovnetwork")
 
 type ByPriority []SriovNetworkNodePolicy
@@ -74,4 +94,13 @@ func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool{
 		return false
 	}
 	return true
+}
+
+func (s *SriovNetworkNodeState) GetInterfaceStateByPciAddress(addr string) *InterfaceExt {
+	for _, iface := range s.Status.Interfaces {
+		if (addr == iface.PciAddress) {
+			return &iface
+		}
+	}
+	return nil
 }

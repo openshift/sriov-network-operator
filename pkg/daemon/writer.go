@@ -29,7 +29,7 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string) *NodeStateStatu
 	}
 }
 
-// Run reads from the writer channel and sets the node annotation. It will
+// Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
 func (nm *NodeStateStatusWriter) Run(stop <-chan struct{}) {
 	glog.V(0).Info("Run(): start writer")

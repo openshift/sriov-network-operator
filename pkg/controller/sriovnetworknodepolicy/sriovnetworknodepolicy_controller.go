@@ -31,18 +31,7 @@ import (
 )
 
 var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
-var driverMap = map[string](map[string]string) {
-	"8086": {
-		"1572": "i40e",
-		"1583": "i40e",
-		"37d2": "i40e",
-		"154c": "iavf",
-	},
-}
 
-var sriovPfVfMap = map[string](string) {
-	"1583": "154c",
-}
 
 // ManifestPaths is the path to the manifest templates
 // bad, but there's no way to pass configuration to the reconciler right now
@@ -522,7 +511,7 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList,
 			}
 			if p.Spec.NicSelector.DeviceID != "" {
 				if p.Spec.NumVfs != 0 {
-					rc.Selectors.Devices = append(rc.Selectors.Devices, sriovPfVfMap[p.Spec.NicSelector.DeviceID])
+					rc.Selectors.Devices = append(rc.Selectors.Devices, sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID])
 				} else {
 					rc.Selectors.Devices = append(rc.Selectors.Devices, p.Spec.NicSelector.DeviceID)
 				}
