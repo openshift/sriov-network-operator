@@ -32,6 +32,8 @@ type Daemon struct {
 
 	// channel used to ensure all spawned goroutines exit when we exit.
 	stopCh <-chan struct{}
+
+	refreshCh chan<- struct{}
 }
 
 var namespace = os.Getenv("NAMESPACE")
@@ -41,12 +43,14 @@ func New(
 	client snclientset.Interface,
 	exitCh chan<- error,
 	stopCh <-chan struct{},
+	refreshCh chan<- struct{},
 ) (*Daemon) {
 	return &Daemon{
 		name: nodeName,
 		client: client,
 		exitCh: exitCh,
 		stopCh: stopCh,
+		refreshCh: refreshCh,
 	}
 }
 
@@ -63,8 +67,8 @@ func (dn *Daemon) Run() error {
 
     informer := informerFactory.Sriovnetwork().V1().SriovNetworkNodeStates().Informer()
     informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-        AddFunc: nodeStateAddHandler,
-		UpdateFunc: nodeStateChangeHandler,
+        AddFunc: dn.nodeStateAddHandler,
+		UpdateFunc: dn.nodeStateChangeHandler,
     })
 
     informer.Run(dn.stopCh)
@@ -72,15 +76,13 @@ func (dn *Daemon) Run() error {
 	for {
 		select {
 		case <-dn.stopCh:
-			glog.V(0).Info("stop daemon")
+			glog.V(0).Info("Run(): stop daemon")
 			return nil
-		default:
-			time.Sleep(2 * time.Second)
 		}
 	}
 }
 
-func nodeStateAddHandler(obj interface{}) {
+func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	// "k8s.io/apimachinery/pkg/apis/meta/v1" provides an Object
 	// interface that allows us to get metadata easily
 	nodeState := obj.(*sriovnetworkv1.SriovNetworkNodeState)
@@ -90,9 +92,10 @@ func nodeStateAddHandler(obj interface{}) {
 		glog.Warningf("nodeStateChangeHandler(): Failed to sync nodeState")
 		return
 	}
+	dn.refreshCh <- struct{}{}
 }
 
-func nodeStateChangeHandler(old, new interface {}) {
+func (dn *Daemon) nodeStateChangeHandler(old, new interface {}) {
 	newState := new.(*sriovnetworkv1.SriovNetworkNodeState)
 	oldState := old.(*sriovnetworkv1.SriovNetworkNodeState)
 	if reflect.DeepEqual(newState.Spec.Interfaces, oldState.Spec.Interfaces){
@@ -104,4 +107,5 @@ func nodeStateChangeHandler(old, new interface {}) {
 		glog.Warningf("nodeStateChangeHandler(): Failed to sync newNodeState")
 		return
 	}
+	dn.refreshCh <- struct{}{}
 }

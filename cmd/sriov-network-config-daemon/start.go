@@ -60,6 +60,9 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	exitCh := make(chan error)
 	defer close(exitCh)
 
+	refreshCh := make(chan struct{})
+	defer close(refreshCh)
+
 	var config *rest.Config
 	var err error
 	kubeconfig := os.Getenv("KUBECONFIG")
@@ -80,7 +83,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	glog.V(0).Info("starting node writer")
 	nodeWriter := daemon.NewNodeStateStatusWriter(clientset,startOpts.nodeName)
-	go nodeWriter.Run(stopCh)
+	go nodeWriter.Run(stopCh, refreshCh)
 
 	glog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(
@@ -88,6 +91,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		clientset,
 		exitCh,
 		stopCh,
+		refreshCh,
 	).Run()
 	if err != nil {
 		glog.Fatalf("failed to run daemon: %v", err)
