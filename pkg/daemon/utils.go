@@ -10,6 +10,7 @@ import (
 	// "regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jaypipes/ghw"
 	"github.com/golang/glog"
@@ -178,6 +179,8 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, nodeState *sriovnetworkv
 			}
 
 			if iface.NumVfs > 0 {
+				// wait 1s for VFs become ready
+				time.Sleep(3 * time.Second)
 				vfs, err:= dputils.GetVFList(iface.PciAddress)
 				if err != nil {
 					glog.Warningf("configSriovDevice(): unable to parse VFs for device %+v %q", iface.PciAddress, err)
@@ -214,6 +217,7 @@ func setSriovNumVfs(pciAddr string, numVfs int) error {
 
 func setNetdevMTU(pciAddr string, mtu int) error {
 	glog.V(2).Infof("setNetdevMTU(): set MTU for device %s", pciAddr)
+
 	ifaceName, err:= dputils.GetNetNames(pciAddr)
 	if err != nil {
 		glog.Warningf("setNetdevMTU(): fail to get interface name for %s: %s", pciAddr, err)
