@@ -220,6 +220,9 @@ func (r *ReconcileSriovNetworkNodePolicy)syncAllSriovNetworkNodeStates(dp *sriov
 
 	for _, node := range nl.Items {
 		logger.Info("Sync SriovNetworkNodeState CR", "name", node.Name)
+		////////////////////////////////
+		// TODO: drain node before sync
+		////////////////////////////////
 		ns := &sriovnetworkv1.SriovNetworkNodeState{}
 		ns.Name = node.Name
 		ns.Namespace = NAMESPACE
@@ -283,14 +286,14 @@ func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetw
 func (r *ReconcileSriovNetworkNodePolicy)syncSriovDaemonObjs(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.WithName("syncSriovDaemonObjs")
 	logger.Info("Start to sync sriov daemons objects")
-	objs, err := renderObjsForCR()
+	objs, err := renderDsForCR()
 	if err != nil {
 		logger.Error(err, "Failed to render SR-IoV manifests")
 		return err
 	}
 	// Sync DaemonSets
 	for _, obj := range objs {
-		err = r.syncObject(dp, pl, obj)
+		err = r.syncDsObject(dp, pl, obj)
 		if err != nil {
 			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
 			return err
@@ -299,9 +302,9 @@ func (r *ReconcileSriovNetworkNodePolicy)syncSriovDaemonObjs(dp *sriovnetworkv1.
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncObject(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, obj *uns.Unstructured) error {
+func (r *ReconcileSriovNetworkNodePolicy)syncDsObject(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, obj *uns.Unstructured) error {
 	var err error
-	logger := log.WithName("syncObjects")
+	logger := log.WithName("syncDsObject")
 	logger.Info("Start to sync Objects")
 	scheme := kscheme.Scheme
 	switch kind := obj.GetKind(); kind {
@@ -458,8 +461,8 @@ func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1
 }
 
 // renderDsForCR returns a busybox pod with the same name/namespace as the cr
-func renderObjsForCR() ([]*uns.Unstructured, error) {
-	logger := log.WithName("renderObjsForCR")
+func renderDsForCR() ([]*uns.Unstructured, error) {
+	logger := log.WithName("renderDsForCR")
 	logger.Info("Start to render objects")
 	var err error
 	objs := []*uns.Unstructured{}

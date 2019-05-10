@@ -49,7 +49,7 @@ func (p *SriovNetworkNodePolicy) Selected(node *corev1.Node) bool{
 		}
 		return false
 	}
-	log.Info("Selectd ", "node", node.Name)
+	log.Info("Selected():", "node", node.Name)
 	return true
 }
 
@@ -77,6 +77,7 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 				PciAddress: iface.PciAddress,
 				Mtu: p.Spec.Mtu,
 				NumVfs: p.Spec.NumVfs,
+				DeviceType: p.Spec.DeviceType,
 			})
 		}
 	}
