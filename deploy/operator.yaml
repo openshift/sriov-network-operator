@@ -32,3 +32,7 @@ spec:
               value: "quay.io/openshift/origin-sriov-network-device-plugin:v4.0.0"
             - name: OPERATOR_NAME
               value: "sriov-network-operator"
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace

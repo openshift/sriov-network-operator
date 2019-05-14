@@ -37,11 +37,12 @@ var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
 // bad, but there's no way to pass configuration to the reconciler right now
 const (
 	MANIFESTS_PATH = "./bindata/manifests/sriov-daemons"
-	NAMESPACE = "sriov-network-operator"
 	DEFAULT_POLICY_NAME = "default"
 	CONFIGMAP_NAME = "device-plugin-config"
 	DP_CONFIG_FILENAME = "config.json"
 )
+
+var Namespace = os.Getenv("NAMESPACE")
 
 // Add creates a new SriovNetworkNodePolicy Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -103,11 +104,11 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	reqLogger.Info("Reconciling SriovNetworkNodePolicy")
 
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: NAMESPACE,}, defaultPolicy)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: Namespace,}, defaultPolicy)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("Creating a default SriovNetworkNodePolicy as owner of objects")
-			defaultPolicy.Namespace = NAMESPACE
+			defaultPolicy.Namespace = Namespace
 			defaultPolicy.Name = DEFAULT_POLICY_NAME
 			err = r.client.Create(context.TODO(), defaultPolicy)
 			if err != nil {
@@ -171,7 +172,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncDevicePluginConfigMap(pl *sriovnetw
 	logger := log.WithName("syncDevicePluginConfigMap")
 	logger.Info("Start to sync device plugin ConfigMap")
 	nsl := &sriovnetworkv1.SriovNetworkNodeStateList{}
-	lo := &client.ListOptions{Namespace:NAMESPACE,}
+	lo := &client.ListOptions{Namespace:Namespace,}
 	err := r.client.List(context.TODO(), lo, nsl)
 	if err != nil {
 		logger.Info("Fail to get SriovNetworkNodeState list")
@@ -188,7 +189,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncDevicePluginConfigMap(pl *sriovnetw
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      CONFIGMAP_NAME,
-			Namespace: NAMESPACE,
+			Namespace: Namespace,
 		},
 		Data: data,
 	}
@@ -225,7 +226,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncAllSriovNetworkNodeStates(dp *sriov
 		////////////////////////////////
 		ns := &sriovnetworkv1.SriovNetworkNodeState{}
 		ns.Name = node.Name
-		ns.Namespace = NAMESPACE
+		ns.Namespace = Namespace
 		// nodeStates[node.Name] = ns
 		j, _:= json.Marshal(ns)
 		fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
