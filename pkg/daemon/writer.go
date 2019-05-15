@@ -1,31 +1,29 @@
 package daemon
 
-import(
+import (
 	"fmt"
 	"time"
-	
+
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/util/retry"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/pliurh/sriov-network-operator/pkg/client/clientset/versioned"
-
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 )
 
-
 type NodeStateStatusWriter struct {
-	client          snclientset.Interface
-	node            string
-	status          sriovnetworkv1.SriovNetworkNodeStateStatus
+	client snclientset.Interface
+	node   string
+	status sriovnetworkv1.SriovNetworkNodeStateStatus
 }
 
 // NewNodeStateStatusWriter Create a new NodeStateStatusWriter
 func NewNodeStateStatusWriter(c snclientset.Interface, n string) *NodeStateStatusWriter {
 	return &NodeStateStatusWriter{
 		client: c,
-		node: n,
+		node:   n,
 	}
 }
 
@@ -43,7 +41,7 @@ func (nm *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan struct
 				continue
 			}
 			setNodeStateStatus(nm.client, nm.node, nm.status)
-		case <-time.After(30*time.Second):
+		case <-time.After(30 * time.Second):
 			if err := pollNicStatus(nm); err != nil {
 				continue
 			}
@@ -54,12 +52,12 @@ func (nm *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan struct
 
 func pollNicStatus(nm *NodeStateStatusWriter) error {
 	glog.V(2).Info("pollNicStatus()")
-	iface, err:= DiscoverSriovDevices()
+	iface, err := DiscoverSriovDevices()
 	if err != nil {
 		return err
 	}
 	nm.status.Interfaces = iface
-	
+
 	return nil
 }
 
@@ -67,7 +65,7 @@ func updateNodeStateStatusRetry(client snclientset.Interface, nodeName string, f
 	var nodeState *sriovnetworkv1.SriovNetworkNodeState
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		n, getErr := getNodeState(client, nodeName)
-		if getErr != nil { 
+		if getErr != nil {
 			return getErr
 		}
 

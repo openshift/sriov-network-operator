@@ -2,20 +2,21 @@ package sriovnetworknodepolicy
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"os"
 	"sort"
 
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	render "github.com/pliurh/sriov-network-operator/pkg/render"
 
+	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
+	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	errs "github.com/pkg/errors"
-	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
@@ -27,19 +28,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
 
-
 // ManifestPaths is the path to the manifest templates
 // bad, but there's no way to pass configuration to the reconciler right now
 const (
-	MANIFESTS_PATH = "./bindata/manifests/sriov-daemons"
+	MANIFESTS_PATH      = "./bindata/manifests/sriov-daemons"
 	DEFAULT_POLICY_NAME = "default"
-	CONFIGMAP_NAME = "device-plugin-config"
-	DP_CONFIG_FILENAME = "config.json"
+	CONFIGMAP_NAME      = "device-plugin-config"
+	DP_CONFIG_FILENAME  = "config.json"
 )
 
 var Namespace = os.Getenv("NAMESPACE")
@@ -104,7 +103,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	reqLogger.Info("Reconciling SriovNetworkNodePolicy")
 
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: Namespace,}, defaultPolicy)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: Namespace}, defaultPolicy)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("Creating a default SriovNetworkNodePolicy as owner of objects")
@@ -136,7 +135,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	nodeList := &corev1.NodeList{}
 	lo := &client.ListOptions{}
 	lbl := make(map[string]string)
-	lbl["node-role.kubernetes.io/worker"]=""
+	lbl["node-role.kubernetes.io/worker"] = ""
 	lo.MatchingLabels(lbl)
 	err = r.client.List(context.TODO(), lo, nodeList)
 	if err != nil {
@@ -168,11 +167,11 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	return reconcile.Result{}, nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncDevicePluginConfigMap(pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
+func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
 	logger := log.WithName("syncDevicePluginConfigMap")
 	logger.Info("Start to sync device plugin ConfigMap")
 	nsl := &sriovnetworkv1.SriovNetworkNodeStateList{}
-	lo := &client.ListOptions{Namespace:Namespace,}
+	lo := &client.ListOptions{Namespace: Namespace}
 	err := r.client.List(context.TODO(), lo, nsl)
 	if err != nil {
 		logger.Info("Fail to get SriovNetworkNodeState list")
@@ -215,7 +214,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncDevicePluginConfigMap(pl *sriovnetw
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncAllSriovNetworkNodeStates(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
+func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
 	logger := log.WithName("syncAllSriovNetworkNodeStates")
 	logger.Info("Start to sync all SriovNetworkNodeState custom resource")
 
@@ -228,7 +227,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncAllSriovNetworkNodeStates(dp *sriov
 		ns.Name = node.Name
 		ns.Namespace = Namespace
 		// nodeStates[node.Name] = ns
-		j, _:= json.Marshal(ns)
+		j, _ := json.Marshal(ns)
 		fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
 		if err := r.syncSriovNetworkNodeState(dp, pl, ns, &node); err != nil {
 			logger.Error(err, "Fail to sync SriovNetworkNodeState", "name", ns.Name)
@@ -239,7 +238,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncAllSriovNetworkNodeStates(dp *sriov
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) error{
+func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) error {
 	logger := log.WithName("syncSriovNetworkNodeState")
 	logger.Info("Start to sync SriovNetworkNodeState", "Name", in.Name)
 
@@ -267,7 +266,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetw
 				continue
 			}
 			fmt.Printf("evaluate policy %s for node %s\n", p.Name, node.Name)
-			if p.Selected(node){
+			if p.Selected(node) {
 				if len(found.Status.Interfaces) == 0 {
 					continue
 				} else {
@@ -284,7 +283,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncSriovNetworkNodeState(cr *sriovnetw
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncSriovDaemonObjs(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
+func (r *ReconcileSriovNetworkNodePolicy) syncSriovDaemonObjs(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.WithName("syncSriovDaemonObjs")
 	logger.Info("Start to sync sriov daemons objects")
 	objs, err := renderDsForCR()
@@ -303,7 +302,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncSriovDaemonObjs(dp *sriovnetworkv1.
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncDsObject(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, obj *uns.Unstructured) error {
+func (r *ReconcileSriovNetworkNodePolicy) syncDsObject(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, obj *uns.Unstructured) error {
 	var err error
 	logger := log.WithName("syncDsObject")
 	logger.Info("Start to sync Objects")
@@ -337,7 +336,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncDsObject(dp *sriovnetworkv1.SriovNe
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncServiceAccount(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.ServiceAccount) error{
+func (r *ReconcileSriovNetworkNodePolicy) syncServiceAccount(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.ServiceAccount) error {
 	logger := log.WithName("syncServiceAccount")
 	logger.Info("Start to sync ServiceAccount", "Name", in.Name)
 
@@ -366,7 +365,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncServiceAccount(cr *sriovnetworkv1.S
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncNamespace(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.Namespace) error{
+func (r *ReconcileSriovNetworkNodePolicy) syncNamespace(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.Namespace) error {
 	logger := log.WithName("syncNamespace")
 	logger.Info("Start to sync Namespaces", "Name", in.Name)
 
@@ -395,7 +394,7 @@ func (r *ReconcileSriovNetworkNodePolicy)syncNamespace(cr *sriovnetworkv1.SriovN
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy)syncDaemonSet(cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *appsv1.DaemonSet) error{
+func (r *ReconcileSriovNetworkNodePolicy) syncDaemonSet(cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *appsv1.DaemonSet) error {
 	logger := log.WithName("syncDaemonSet")
 	logger.Info("Start to sync DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
 	var err error
@@ -438,10 +437,10 @@ func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1
 		}
 		for k, v := range p.Spec.NodeSelector {
 			expressions := []corev1.NodeSelectorRequirement{}
-			exp :=  corev1.NodeSelectorRequirement{
+			exp := corev1.NodeSelectorRequirement{
 				Operator: corev1.NodeSelectorOpIn,
-				Key: k,
-				Values: []string{v},
+				Key:      k,
+				Values:   []string{v},
 			}
 			expressions = append(expressions, exp)
 			nodeSelector = corev1.NodeSelectorTerm{
@@ -475,7 +474,7 @@ func renderDsForCR() ([]*uns.Unstructured, error) {
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {
-		return nil,errs.Wrap(err, "failed to render OpenShiftSRIOV Network manifests")
+		return nil, errs.Wrap(err, "failed to render OpenShiftSRIOV Network manifests")
 	}
 	// for _, obj := range objs {
 	// 	raw, _:= json.Marshal(obj)
@@ -508,7 +507,7 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList,
 					Vendors []string `json:"vendors,omitempty"`
 					Devices []string `json:"devices,omitempty"`
 					Drivers []string `json:"drivers,omitempty"`
-				}{[]string{}, []string{}, []string{},},
+				}{[]string{}, []string{}, []string{}},
 			}
 			if p.Spec.NicSelector.Vendor != "" {
 				rc.Selectors.Vendors = append(rc.Selectors.Vendors, p.Spec.NicSelector.Vendor)

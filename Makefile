@@ -3,6 +3,8 @@ TARGET_DIR=$(CURPATH)/_output
 KUBECONFIG?=$(HOME)/.kube/config
 
 GOBUILD=go build
+GOLIST=go list
+GOFMT=gofmt
 BUILD_GOPATH=$(TARGET_DIR):$(TARGET_DIR)/vendor:$(CURPATH)/cmd
 
 IMAGE_BUILDER_OPTS=
@@ -67,10 +69,10 @@ image: imagebuilder
 	then $(IMAGE_BUILDER) -t $(IMAGE_TAG) . $(IMAGE_BUILDER_OPTS) ; \
 	fi
 
-fmt:
-	@gofmt -l -w cmd && \
-	gofmt -l -w pkg && \
-	gofmt -l -w test
+fmt: ; $(info  running gofmt...) @ ## Run gofmt on all source files
+	@ret=0 && for d in $$($(GOLIST) -f '{{.Dir}}' ./... | grep -v /vendor/); do \
+		$(GOFMT) -l -w $$d/*.go || ret=$$? ; \
+	 done ; exit $$ret
 
 # simplify:
 # 	@gofmt -s -l -w $(SRC)

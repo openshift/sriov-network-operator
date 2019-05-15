@@ -5,7 +5,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-var DeviceDriverMap = map[string](map[string]string) {
+var DeviceDriverMap = map[string](map[string]string){
 	"PF": {
 		"1572": "i40e",
 		"1583": "i40e",
@@ -21,7 +21,7 @@ var DeviceDriverMap = map[string](map[string]string) {
 	},
 }
 
-var SriovPfVfMap = map[string](string) {
+var SriovPfVfMap = map[string](string){
 	"1583": "154c",
 }
 
@@ -42,9 +42,9 @@ func (a ByPriority) Swap(i, j int) {
 }
 
 // Match check if node is selected by NodeSelector
-func (p *SriovNetworkNodePolicy) Selected(node *corev1.Node) bool{
+func (p *SriovNetworkNodePolicy) Selected(node *corev1.Node) bool {
 	for k, v := range p.Spec.NodeSelector {
-		if nv, ok := node.Labels[k]; ok && nv == v{
+		if nv, ok := node.Labels[k]; ok && nv == v {
 			continue
 		}
 		return false
@@ -53,13 +53,13 @@ func (p *SriovNetworkNodePolicy) Selected(node *corev1.Node) bool{
 	return true
 }
 
-func StringInArray(val string, array []string) bool{
-    for i := range array {
-        if array[i] == val{
-            return true
-        }
-    }
-    return false
+func StringInArray(val string, array []string) bool {
+	for i := range array {
+		if array[i] == val {
+			return true
+		}
+	}
+	return false
 }
 
 // Apply policy to SriovNetworkNodeState CR
@@ -71,12 +71,12 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 	}
 	interfaces := []Interface{}
 	for _, iface := range state.Status.Interfaces {
-		if  s.Selected(&iface){
+		if s.Selected(&iface) {
 			log.Info("Update interface", "name", iface.Name)
 			interfaces = append(interfaces, Interface{
 				PciAddress: iface.PciAddress,
-				Mtu: p.Spec.Mtu,
-				NumVfs: p.Spec.NumVfs,
+				Mtu:        p.Spec.Mtu,
+				NumVfs:     p.Spec.NumVfs,
 				DeviceType: p.Spec.DeviceType,
 			})
 		}
@@ -84,14 +84,14 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 	state.Spec.Interfaces = interfaces
 }
 
-func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool{
+func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool {
 	if s.Vendor != "" && s.Vendor != iface.Vendor {
 		return false
 	}
-	if s.DeviceID !="" && s.DeviceID != iface.DeviceID {
+	if s.DeviceID != "" && s.DeviceID != iface.DeviceID {
 		return false
 	}
-	if len(s.RootDevices)>0 && !StringInArray(iface.PciAddress, s.RootDevices) {
+	if len(s.RootDevices) > 0 && !StringInArray(iface.PciAddress, s.RootDevices) {
 		return false
 	}
 	return true
@@ -99,7 +99,7 @@ func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool{
 
 func (s *SriovNetworkNodeState) GetInterfaceStateByPciAddress(addr string) *InterfaceExt {
 	for _, iface := range s.Status.Interfaces {
-		if (addr == iface.PciAddress) {
+		if addr == iface.PciAddress {
 			return &iface
 		}
 	}

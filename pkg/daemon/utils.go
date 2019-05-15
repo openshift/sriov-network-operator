@@ -12,19 +12,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jaypipes/ghw"
 	"github.com/golang/glog"
 	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
+	"github.com/jaypipes/ghw"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 )
 
 const (
-	sysBusPciDevices = "/sys/bus/pci/devices"
-	sysBusPciDrivers = "/sys/bus/pci/drivers"
+	sysBusPciDevices      = "/sys/bus/pci/devices"
+	sysBusPciDrivers      = "/sys/bus/pci/drivers"
 	sysBusPciDriversProbe = "/sys/bus/pci/drivers_probe"
-	sysClassNet      = "/sys/class/net"
-	netClass         = 0x02
-	numVfsFile       = "sriov_numvfs"
+	sysClassNet           = "/sys/class/net"
+	netClass              = 0x02
+	numVfsFile            = "sriov_numvfs"
 )
 
 func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
@@ -54,9 +54,8 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 
 		// TODO: exclude devices used by host system
 
-
 		if dputils.IsSriovVF(device.Address) {
-			continue	
+			continue
 		}
 
 		driver, err := dputils.GetDriverName(device.Address)
@@ -65,10 +64,10 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			continue
 		}
 		iface := sriovnetworkv1.InterfaceExt{
-			PciAddress:   device.Address,
-			Driver:       driver,
-			Vendor:       device.Vendor.ID,
-			DeviceID:     device.Product.ID,
+			PciAddress: device.Address,
+			Driver:     driver,
+			Vendor:     device.Vendor.ID,
+			DeviceID:   device.Product.ID,
 		}
 		if mtu := getNetdevMTU(device.Address); mtu > 0 {
 			iface.Mtu = mtu
@@ -78,7 +77,7 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
 			iface.NumVfs = dputils.GetVFconfigured(device.Address)
 			if dputils.SriovConfigured(device.Address) {
-				vfs, err:= dputils.GetVFList(device.Address)
+				vfs, err := dputils.GetVFList(device.Address)
 				if err != nil {
 					glog.Warningf("DiscoverSriovDevices(): unable to parse VFs for device %+v %q", device, err)
 					continue
@@ -150,7 +149,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, nodeState *sriovnetworkv
 			driver = iface.DeviceType
 		}
 
-		vfs, err:= dputils.GetVFList(iface.PciAddress)
+		vfs, err := dputils.GetVFList(iface.PciAddress)
 		if err != nil {
 			glog.Warningf("configSriovDevice(): unable to parse VFs for device %+v %q", iface.PciAddress, err)
 		}
@@ -159,11 +158,11 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, nodeState *sriovnetworkv
 				if err := BindDefaultDriver(vf); err != nil {
 					glog.Warningf("configSriovDevice(): fail to bind default driver for device %s", vf)
 					return err
-					}
+				}
 			} else {
 				if err := BindDpdkDriver(vf, driver); err != nil {
-				glog.Warningf("configSriovDevice(): fail to bind driver %s for device %s", driver, vf)
-				return err
+					glog.Warningf("configSriovDevice(): fail to bind driver %s for device %s", driver, vf)
+					return err
 				}
 			}
 		}
@@ -171,7 +170,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, nodeState *sriovnetworkv
 
 	if iface.Mtu > 0 {
 		// Only set mtu for type netdevice
-		if iface.DeviceType == "netdevice" || iface.DeviceType == ""{
+		if iface.DeviceType == "netdevice" || iface.DeviceType == "" {
 			err := setNetdevMTU(iface.PciAddress, iface.Mtu)
 			if err != nil {
 				glog.Warningf("configSriovDevice(): fail to set mtu for device %s", iface.PciAddress)
@@ -181,7 +180,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, nodeState *sriovnetworkv
 			if iface.NumVfs > 0 {
 				// wait 1s for VFs become ready
 				time.Sleep(3 * time.Second)
-				vfs, err:= dputils.GetVFList(iface.PciAddress)
+				vfs, err := dputils.GetVFList(iface.PciAddress)
 				if err != nil {
 					glog.Warningf("configSriovDevice(): unable to parse VFs for device %+v %q", iface.PciAddress, err)
 				}
@@ -218,7 +217,7 @@ func setSriovNumVfs(pciAddr string, numVfs int) error {
 func setNetdevMTU(pciAddr string, mtu int) error {
 	glog.V(2).Infof("setNetdevMTU(): set MTU for device %s", pciAddr)
 
-	ifaceName, err:= dputils.GetNetNames(pciAddr)
+	ifaceName, err := dputils.GetNetNames(pciAddr)
 	if err != nil {
 		glog.Warningf("setNetdevMTU(): fail to get interface name for %s: %s", pciAddr, err)
 		return err
@@ -236,7 +235,7 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 
 func getNetdevMTU(pciAddr string) int {
 	glog.V(2).Infof("getNetdevMTU(): get MTU for device %s", pciAddr)
-	ifaceName, err:= dputils.GetNetNames(pciAddr)
+	ifaceName, err := dputils.GetNetNames(pciAddr)
 	if err != nil {
 		return 0
 	}
@@ -247,7 +246,7 @@ func getNetdevMTU(pciAddr string) int {
 		glog.Warningf("getNetdevMTU(): fail to read mtu file %s", mtuFilePath)
 		return 0
 	}
-	mtu, err:= strconv.Atoi(strings.TrimSpace(string(data)))
+	mtu, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
 		glog.Warningf("getNetdevMTU(): fail to convert mtu %s to int", strings.TrimSpace(string(data)))
 		return 0
@@ -262,7 +261,7 @@ func resetSriovDevice(pciAddr string) error {
 	if err != nil {
 		return err
 	}
-	ifaceName, err:= dputils.GetNetNames(pciAddr)
+	ifaceName, err := dputils.GetNetNames(pciAddr)
 	if err != nil {
 		return err
 	}
@@ -275,7 +274,7 @@ func resetSriovDevice(pciAddr string) error {
 	return nil
 }
 
-func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) (sriovnetworkv1.VirutalFunction) {
+func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirutalFunction {
 	driver, err := dputils.GetDriverName(pciAddr)
 	if err != nil {
 		glog.Warningf("getVfInfo(): unable to parse device driver for device %s %q", pciAddr, err)

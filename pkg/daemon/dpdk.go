@@ -31,7 +31,7 @@ func Unbind(pciAddr string) error {
 
 // BindDpdkDriver bind dpdk driver for one device
 // Bind the device given by "pciAddr" to the driver "driver"
-func BindDpdkDriver(pciAddr, driver string) error{
+func BindDpdkDriver(pciAddr, driver string) error {
 	glog.V(2).Infof("BindDpdkDriver(): bind device %s to driver %s", pciAddr, driver)
 
 	if yes, d := hasDriver(pciAddr); yes {
@@ -39,7 +39,7 @@ func BindDpdkDriver(pciAddr, driver string) error{
 			glog.V(2).Infof("BindDpdkDriver(): device %s already bound to driver %s", pciAddr, driver)
 			return nil
 		}
-		
+
 		if err := Unbind(pciAddr); err != nil {
 			return err
 		}
@@ -68,7 +68,7 @@ func BindDpdkDriver(pciAddr, driver string) error{
 
 // BindDefaultDriver bind driver for one device
 // Bind the device given by "pciAddr" to the default driver
-func BindDefaultDriver(pciAddr string) error{
+func BindDefaultDriver(pciAddr string) error {
 	glog.V(2).Infof("BindDefaultDriver(): bind device %s to default driver", pciAddr)
 
 	if yes, d := hasDriver(pciAddr); yes {

@@ -10,45 +10,45 @@ import (
 // SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
 // +k8s:openapi-gen=true
 type SriovNetworkNodeStateSpec struct {
-	Interfaces  []Interface `json:"interfaces,omitempty"`
+	Interfaces []Interface `json:"interfaces,omitempty"`
 }
 
 type Interface struct {
-	PciAddress     string `json:"pciAddress"`
-	NumVfs         int `json:"numVfs,omitempty"`
-	Mtu            int `json:"mtu,omitempty"`
-	DeviceType     string `json:"deviceType,omitempty"`
+	PciAddress string `json:"pciAddress"`
+	NumVfs     int    `json:"numVfs,omitempty"`
+	Mtu        int    `json:"mtu,omitempty"`
+	DeviceType string `json:"deviceType,omitempty"`
 }
 
 type InterfaceExt struct {
-	Name           string `json:"name,omitempty"`
-	NumVfs         int `json:"numVfs,omitempty"`
-	Mtu            int `json:"mtu,omitempty"`
-	Vendor string `json:"vendor,omitempty"`
-	DeviceID  string `json:"deviceID,omitempty"`
-	LinkSpeed string `json:"linkSpeed,omitempty"`
-	PciAddress     string `json:"pciAddress"`
-	Driver   string `json:"driver,omitempty"`
-	TotalVfs int `json:"totalvfs,omitempty"`
-	VFs []VirutalFunction `json:"Vfs,omitempty"`
+	Name       string            `json:"name,omitempty"`
+	NumVfs     int               `json:"numVfs,omitempty"`
+	Mtu        int               `json:"mtu,omitempty"`
+	Vendor     string            `json:"vendor,omitempty"`
+	DeviceID   string            `json:"deviceID,omitempty"`
+	LinkSpeed  string            `json:"linkSpeed,omitempty"`
+	PciAddress string            `json:"pciAddress"`
+	Driver     string            `json:"driver,omitempty"`
+	TotalVfs   int               `json:"totalvfs,omitempty"`
+	VFs        []VirutalFunction `json:"Vfs,omitempty"`
 }
 
 type VirutalFunction struct {
-	No           int      `json:"no,omitempty"`
-	Mac          string      `json:"mac,omitempty"`
-	Assigned     string      `json:"assigned,omitempty"`
-	Driver string      `json:"driver,omitempty"`
-	PciAddress   string      `json:"pciAddress,omitempty"`
-	Vendor string `json:"vendor,omitempty"`
-	DeviceID  string `json:"deviceID,omitempty"`
-	Vlan         int         `json:"Vlan,omitempty"`
-	Mtu            int `json:"mtu,omitempty"`
+	No         int    `json:"no,omitempty"`
+	Mac        string `json:"mac,omitempty"`
+	Assigned   string `json:"assigned,omitempty"`
+	Driver     string `json:"driver,omitempty"`
+	PciAddress string `json:"pciAddress,omitempty"`
+	Vendor     string `json:"vendor,omitempty"`
+	DeviceID   string `json:"deviceID,omitempty"`
+	Vlan       int    `json:"Vlan,omitempty"`
+	Mtu        int    `json:"mtu,omitempty"`
 }
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
 // +k8s:openapi-gen=true
 type SriovNetworkNodeStateStatus struct {
-	Interfaces  []InterfaceExt `json:"interfaces,omitempty"`
+	Interfaces []InterfaceExt `json:"interfaces,omitempty"`
 }
 
 // +genclient

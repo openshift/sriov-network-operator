@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	netattdefv1 "github.com/pliurh/sriov-network-operator/pkg/apis/k8s/v1"
-	render "github.com/pliurh/sriov-network-operator/pkg/render"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	render "github.com/pliurh/sriov-network-operator/pkg/render"
 
 	"encoding/json"
 	"k8s.io/apimachinery/pkg/api/errors"
 	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
@@ -23,7 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 const (
@@ -165,14 +165,14 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 	data.Data["SriovNetworkNamespace"] = cr.Namespace
 	data.Data["SriovCniResourceName"] = cr.Spec.ResourceName
 	data.Data["SriovCniVlan"] = cr.Spec.Vlan
-	data.Data["SriovCniIpam"] = "\"ipam\":"+strings.Join(strings.Fields(cr.Spec.IPAM),"")
+	data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {
 		return nil, err
 	}
 	for _, obj := range objs {
-		raw, _:= json.Marshal(obj)
+		raw, _ := json.Marshal(obj)
 		fmt.Printf("manifest %s\n", raw)
 	}
 	return objs[0], nil
