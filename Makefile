@@ -1,8 +1,7 @@
 CURPATH=$(PWD)
-TARGET_DIR=$(CURPATH)/_output
+TARGET_DIR=$(CURPATH)/build/_output
 KUBECONFIG?=$(HOME)/.kube/config
 
-GOBUILD=go build
 GOLIST=go list
 GOFMT=gofmt
 BUILD_GOPATH=$(TARGET_DIR):$(TARGET_DIR)/vendor:$(CURPATH)/cmd
@@ -20,20 +19,10 @@ MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=sriov-network-operator
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 
-OC?=oc
-
-# These will be provided to the target
-#VERSION := 1.0.0
-#BUILD := `git rev-parse HEAD`
-
-# Use linker flags to provide version/build settings to the target
-#LDFLAGS=-ldflags "-X=main.Version=$(VERSION) -X=main.Build=$(BUILD)"
-
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
-#.PHONY: all build clean install uninstall fmt simplify check run
-.PHONY: all operator-sdk imagebuilder build clean fmt simplify gendeepcopy deploy-setup deploy-image deploy deploy-example test-unit test-e2e undeploy run
+.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test-e2e run
 
 all: build #check install
 
@@ -47,61 +36,38 @@ operator-sdk:
 	  make install ; \
 	fi
 
-imagebuilder:
-	@if [ $${USE_IMAGE_STREAM:-false} = false ] && ! type -p imagebuilder ; \
-	then go get -u github.com/openshift/imagebuilder/cmd/imagebuilder ; \
-	fi
+build: _build-manager _build-sriov-network-config-daemon
 
-build: fmt
-	@mkdir -p $(TARGET_DIR)/src/$(APP_REPO)
-	@cp -ru $(CURPATH)/pkg $(TARGET_DIR)/src/$(APP_REPO)
-	@cp -ru $(CURPATH)/vendor/* $(TARGET_DIR)/src
-	@GOPATH=$(BUILD_GOPATH) $(GOBUILD) $(LDFLAGS) -o $(TARGET) $(MAIN_PKG)
+_build-%:
+	WHAT=$* hack/build-go.sh
 
 run:
-	@operator-sdk up local --kubeconfig=$(KUBECONFIG)
+	hack/run-locally.sh
 
 clean:
 	@rm -rf $(TARGET_DIR)
 
-image: imagebuilder
-	@if [ $${USE_IMAGE_STREAM:-false} = false ] && [ $${SKIP_BUILD:-false} = false ] ; \
-	then $(IMAGE_BUILDER) -t $(IMAGE_TAG) . $(IMAGE_BUILDER_OPTS) ; \
-	fi
+# image: imagebuilder
+# 	@if [ $${USE_IMAGE_STREAM:-false} = false ] && [ $${SKIP_BUILD:-false} = false ] ; \
+# 	then $(IMAGE_BUILDER) -t $(IMAGE_TAG) . $(IMAGE_BUILDER_OPTS) ; \
+# 	fi
 
 fmt: ; $(info  running gofmt...) @ ## Run gofmt on all source files
 	@ret=0 && for d in $$($(GOLIST) -f '{{.Dir}}' ./... | grep -v /vendor/); do \
 		$(GOFMT) -l -w $$d/*.go || ret=$$? ; \
 	 done ; exit $$ret
 
-# simplify:
-# 	@gofmt -s -l -w $(SRC)
-
 gendeepcopy: operator-sdk
 	@operator-sdk generate k8s
+	@operator-sdk generate openapi
 
-deploy-setup:
-	hack/deploy-setup.sh
+# deploy-setup:
+# 	hack/deploy-setup.sh
 
-# deploy-image: image
-# 	hack/deploy-image.sh
+# test-unit:
+# 	@go test -v $(PKGS)
+# test-e2e: operator-sdk
+# 	@operator-sdk test local ./test/e2e
 
-# deploy: deploy-setup deploy-image
-# 	hack/deploy.sh
-
-# deploy-no-build: deploy-setup
-# 	NO_BUILD=true hack/deploy.sh
-
-# deploy-example: deploy
-# 	oc create -n $(NAMESPACE) -f hack/cr.yaml
-
-test-unit:
-	@go test -v $(PKGS)
-test-e2e: operator-sdk
-	@operator-sdk test local ./test/e2e
-
-# deploy-example-no-build: deploy-no-build
-# 	oc create -n $(NAMESPACE) -f hack/cr.yaml
-
-undeploy:
-	hack/undeploy.sh
+# undeploy:
+# 	hack/undeploy.sh
