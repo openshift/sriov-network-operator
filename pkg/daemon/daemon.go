@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"github.com/golang/glog"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	// "k8s.io/client-go/informers"
@@ -23,7 +24,7 @@ type Daemon struct {
 
 	client snclientset.Interface
 	// kubeClient allows interaction with Kubernetes, including the node we are running on.
-	kubeClient kubernetes.Interface
+	kubeClient *kubernetes.Clientset
 
 	nodeState *sriovnetworkv1.SriovNetworkNodeState
 
@@ -34,6 +35,8 @@ type Daemon struct {
 	stopCh <-chan struct{}
 
 	refreshCh chan<- struct{}
+
+	dpReboot bool
 }
 
 var namespace = os.Getenv("NAMESPACE")
@@ -41,6 +44,7 @@ var namespace = os.Getenv("NAMESPACE")
 func New(
 	nodeName string,
 	client snclientset.Interface,
+	kubeClient *kubernetes.Clientset,
 	exitCh chan<- error,
 	stopCh <-chan struct{},
 	refreshCh chan<- struct{},
@@ -48,6 +52,7 @@ func New(
 	return &Daemon{
 		name:      nodeName,
 		client:    client,
+		kubeClient: kubeClient,
 		exitCh:    exitCh,
 		stopCh:    stopCh,
 		refreshCh: refreshCh,
@@ -57,6 +62,7 @@ func New(
 func (dn *Daemon) Run() error {
 	glog.V(0).Info("Run(): start daemon")
 	// Only watch own SriovNetworkNodeState CR
+
 	informerFactory := sninformer.NewSharedInformerFactoryWithOptions(dn.client,
 		time.Second*30,
 		sninformer.WithNamespace(namespace),
@@ -89,7 +95,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	glog.V(2).Infof("nodeStateChangeHandler(): New SriovNetworkNodeState Added to Store: %s", nodeState.GetName())
 	glog.V(2).Infof("nodeStateAddHandler(): sync %s", nodeState.GetName())
 	if err := syncNodeState(nodeState); err != nil {
-		glog.Warningf("nodeStateChangeHandler(): Failed to sync nodeState")
+		glog.Warningf("nodeStateChangeHandler(): Failed to sync nodeState. ERR: %s", err)
 		return
 	}
 	dn.refreshCh <- struct{}{}
@@ -104,8 +110,44 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 	glog.V(2).Infof("nodeStateChangeHandler(): sync %s", newState.GetName())
 	if err := syncNodeState(newState); err != nil {
-		glog.Warningf("nodeStateChangeHandler(): Failed to sync newNodeState")
+		glog.Warningf("nodeStateChangeHandler(): Failed to sync newNodeState. ERR: %s", err)
 		return
 	}
+	if needRestartDevicePlugin(oldState, newState) {
+		glog.V(2).Infof("nodeStateChangeHandler(): Need to restart device plugin pod")
+		pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(metav1.ListOptions{
+			LabelSelector: "app=sriov-device-plugin",
+			FieldSelector: "spec.nodeName=" + dn.name,
+		})
+		if err != nil {
+			glog.Warningf("nodeStateChangeHandler(): Failed to list device plugin pod. ERR: %s", err)
+			return
+		}
+		glog.V(2).Infof("nodeStateChangeHandler(): Found device plugin pod %s", pods.Items[0].GetName())
+		err = dn.kubeClient.CoreV1().Pods(namespace).Delete(pods.Items[0].GetName(), &metav1.DeleteOptions{})
+		if err != nil {
+			glog.Warningf("nodeStateChangeHandler(): Failed to delete device plugin pod. ERR: %s", err)
+			return
+		}
+	}
 	dn.refreshCh <- struct{}{}
+}
+
+func needRestartDevicePlugin(oldState, newState *sriovnetworkv1.SriovNetworkNodeState) bool {
+	var found bool
+	for _, in := range newState.Spec.Interfaces {
+		found = false
+		for _, io := range oldState.Spec.Interfaces {
+			if in.PciAddress == io.PciAddress {
+				found = true
+				if in.NumVfs != io.NumVfs {
+					return true
+				}
+			}
+		}
+		if !found { 
+			return true
+		}
+	}
+	return false
 }

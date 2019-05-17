@@ -10,6 +10,7 @@ import (
 	"github.com/pliurh/sriov-network-operator/pkg/daemon"
 	"github.com/pliurh/sriov-network-operator/pkg/version"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -79,16 +80,18 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	sriovnetworkv1.AddToScheme(scheme.Scheme)
 
-	clientset := snclientset.NewForConfigOrDie(config)
+	snclient := snclientset.NewForConfigOrDie(config)
+	kubeclient := kubernetes.NewForConfigOrDie(config)
 
 	glog.V(0).Info("starting node writer")
-	nodeWriter := daemon.NewNodeStateStatusWriter(clientset, startOpts.nodeName)
+	nodeWriter := daemon.NewNodeStateStatusWriter(snclient, startOpts.nodeName)
 	go nodeWriter.Run(stopCh, refreshCh)
 
 	glog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(
 		startOpts.nodeName,
-		clientset,
+		snclient,
+		kubeclient,
 		exitCh,
 		stopCh,
 		refreshCh,
