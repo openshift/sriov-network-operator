@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"github.com/golang/glog"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	// "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -50,12 +50,12 @@ func New(
 	refreshCh chan<- struct{},
 ) *Daemon {
 	return &Daemon{
-		name:      nodeName,
-		client:    client,
+		name:       nodeName,
+		client:     client,
 		kubeClient: kubeClient,
-		exitCh:    exitCh,
-		stopCh:    stopCh,
-		refreshCh: refreshCh,
+		exitCh:     exitCh,
+		stopCh:     stopCh,
+		refreshCh:  refreshCh,
 	}
 }
 
@@ -63,12 +63,12 @@ func (dn *Daemon) Run() error {
 	glog.V(0).Info("Run(): start daemon")
 	// Only watch own SriovNetworkNodeState CR
 
-	informerFactory := sninformer.NewSharedInformerFactoryWithOptions(dn.client,
+	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
 		time.Second*30,
-		sninformer.WithNamespace(namespace),
-		sninformer.WithTweakListOptions(func(lo *v1.ListOptions) {
+		namespace,
+		func(lo *v1.ListOptions) {
 			lo.FieldSelector = "metadata.name=" + dn.name
-		}),
+		},
 	)
 
 	informer := informerFactory.Sriovnetwork().V1().SriovNetworkNodeStates().Informer()
@@ -145,7 +145,7 @@ func needRestartDevicePlugin(oldState, newState *sriovnetworkv1.SriovNetworkNode
 				}
 			}
 		}
-		if !found { 
+		if !found {
 			return true
 		}
 	}

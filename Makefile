@@ -57,7 +57,7 @@ fmt: ; $(info  running gofmt...) @ ## Run gofmt on all source files
 		$(GOFMT) -l -w $$d/*.go || ret=$$? ; \
 	 done ; exit $$ret
 
-gendeepcopy: operator-sdk
+gencode: operator-sdk
 	@operator-sdk generate k8s
 	@operator-sdk generate openapi
 
@@ -66,8 +66,8 @@ gendeepcopy: operator-sdk
 
 # test-unit:
 # 	@go test -v $(PKGS)
-# test-e2e: operator-sdk
-# 	@operator-sdk test local ./test/e2e
+test-e2e: operator-sdk
+	@operator-sdk test local ./test/e2e --go-test-flags "-v -parallel=2"
 
 # undeploy:
 # 	hack/undeploy.sh

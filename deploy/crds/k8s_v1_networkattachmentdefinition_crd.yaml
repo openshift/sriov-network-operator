@@ -7,8 +7,8 @@ spec:
   names:
     kind: NetworkAttachmentDefinition
     listKind: NetworkAttachmentDefinitionList
-    plural: networkattachmentdefinitions
-    singular: networkattachmentdefinition
+    plural: network-attachment-definitions
+    singular: network-attachment-definition
   scope: Namespaced
   subresources:
     status: {}

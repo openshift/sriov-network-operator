@@ -8,7 +8,11 @@ import (
 	"runtime"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 
 	"github.com/pliurh/sriov-network-operator/pkg/apis"
 	"github.com/pliurh/sriov-network-operator/pkg/controller"
@@ -19,6 +23,7 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/metrics"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
 	"github.com/spf13/pflag"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -113,6 +118,13 @@ func main() {
 		log.Info(err.Error())
 	}
 
+	// Create a default SriovNetworkPolicy
+	err = createDefaultPolicy(cfg)
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+
 	log.Info("Starting the Cmd.")
 
 	// Start the Cmd
@@ -120,4 +132,30 @@ func main() {
 		log.Error(err, "Manager exited non-zero")
 		os.Exit(1)
 	}
+}
+
+func createDefaultPolicy(cfg *rest.Config) error {
+	logger := log.WithName("createDefaultPolicy")
+	c, err := client.New(cfg, client.Options{})
+	if err != nil {
+		return fmt.Errorf("Couldn't create client: %v", err)
+	}
+	policy := &sriovnetworkv1.SriovNetworkNodePolicy{}
+	name := "default"
+	namespace := os.Getenv("NAMESPACE")
+	err = c.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, policy)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("Create a default SriovNetworkNodePolicy")
+			policy.Namespace = namespace
+			policy.Name = name
+			err = c.Create(context.TODO(), policy)
+			if err != nil {
+				return err
+			}
+		}
+		// Error reading the object - requeue the request.
+		return err
+	}
+	return nil
 }

@@ -3,9 +3,9 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: sriov-network-config-daemon
-  namespace: sriov-network-operator
-  # annotations:
-  #   release.openshift.io/version: "{{.ReleaseVersion}}"
+  namespace: {{.Namespace}}
+  annotations:
+    release.openshift.io/version: "{{.ReleaseVersion}}"
 spec:
   selector:
     matchLabels:
@@ -28,7 +28,9 @@ spec:
       serviceAccountName: sriov-network-operator
       containers:
       - name: sriov-network-config-daemon
-        image: sriov-network-config-daemon:latest
+        image: {{.Image}}
+        command:
+          - sriov-network-config-daemon
         imagePullPolicy: IfNotPresent
         securityContext:
           privileged: true
@@ -39,3 +41,7 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: spec.nodeName
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
