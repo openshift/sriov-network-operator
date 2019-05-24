@@ -176,6 +176,14 @@
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:ef6b5f0c2e8e7ebbe6be27c5cb3cac15281ffe319b8676990cdbce1ec92092c2"
+  name = "github.com/go-log/log"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "37e2e1f19306361e1fc152a1839f1236149cb4e4"
+  version = "v0.1.0"
+
+[[projects]]
   digest = "1:d421af4c4fe51d399667d573982d663fe1fa67020a88d3ae43466ebfe8e2b5c9"
   name = "github.com/go-logr/logr"
   packages = ["."]
@@ -514,6 +522,14 @@
   pruneopts = "NT"
   revision = "90e289841c1ed79b7a598a7cd9959750cb5e89e2"
   version = "v1.5.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:f7646c654e93258958dba300641f8f674d5a9ed015c11119793ba1156e2acbe9"
+  name = "github.com/openshift/kubernetes-drain"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "c2e51be1758efa30d71a4d30dc4e2db86b70a4df"
 
 [[projects]]
   branch = "master"
@@ -1281,6 +1297,7 @@
     "github.com/intel/sriov-network-device-plugin/pkg/utils",
     "github.com/jaypipes/ghw",
     "github.com/onsi/gomega",
+    "github.com/openshift/kubernetes-drain",
     "github.com/operator-framework/operator-sdk/pkg/k8sutil",
     "github.com/operator-framework/operator-sdk/pkg/leader",
     "github.com/operator-framework/operator-sdk/pkg/log/zap",

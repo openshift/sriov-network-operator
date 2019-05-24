@@ -267,9 +267,6 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(dp *srio
 
 	for _, node := range nl.Items {
 		logger.Info("Sync SriovNetworkNodeState CR", "name", node.Name)
-		////////////////////////////////
-		// TODO: drain node before sync
-		////////////////////////////////
 		ns := &sriovnetworkv1.SriovNetworkNodeState{}
 		ns.Name = node.Name
 		ns.Namespace = Namespace
