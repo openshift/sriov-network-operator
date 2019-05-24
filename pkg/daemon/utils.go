@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	// "net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	// "regexp"
 	"strconv"
@@ -25,6 +26,7 @@ const (
 	sysClassNet           = "/sys/class/net"
 	netClass              = 0x02
 	numVfsFile            = "sriov_numvfs"
+	scriptsPath           = "bindata/scripts/load-kmod.sh"
 )
 
 func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
@@ -136,6 +138,9 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 func configSriovDevice(iface *sriovnetworkv1.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	glog.V(2).Infof("configSriovDevice(): config interface %s with %v", iface.PciAddress, iface)
 
+	if err := LoadKernelModule("vfio_pci"); err != nil {
+		glog.Warningf("configSriovDevice(): %v", err)
+	}
 	err := setSriovNumVfs(iface.PciAddress, iface.NumVfs)
 	if err != nil {
 		glog.Warningf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
@@ -298,4 +303,14 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirutalF
 		continue
 	}
 	return vf
+}
+
+func LoadKernelModule(name string) error {
+	cmd := exec.Command("/bin/sh", scriptsPath, name)
+	err := cmd.Run()
+	if err != nil {
+		glog.Errorf("LoadKernelModule(): fail to load kernel module %s: %v", name, err)
+		return err
+	}
+	return nil
 }
