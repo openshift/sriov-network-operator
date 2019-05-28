@@ -3,7 +3,6 @@ kind: Role
 metadata:
   creationTimestamp: null
   name: sriov-network-operator
-  namespace: sriov-network-operator
 rules:
 - apiGroups:
   - ""

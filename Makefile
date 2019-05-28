@@ -61,13 +61,13 @@ gencode: operator-sdk
 	@operator-sdk generate k8s
 	@operator-sdk generate openapi
 
-# deploy-setup:
-# 	hack/deploy-setup.sh
+deploy-setup:
+	@EXCLUSIONS=() hack/deploy-setup.sh sriov-network-operator
 
 # test-unit:
 # 	@go test -v $(PKGS)
 test-e2e: operator-sdk
-	@operator-sdk test local ./test/e2e --go-test-flags "-v -parallel=2"
-
-# undeploy:
-# 	hack/undeploy.sh
+	@EXCLUSIONS=() hack/deploy-setup.sh sriov-network-operator && operator-sdk test local ./test/e2e --go-test-flags "-v" --namespace sriov-network-operator --no-setup
+	@hack/undeploy.sh sriov-network-operator
+undeploy:
+	@hack/undeploy.sh sriov-network-operator
