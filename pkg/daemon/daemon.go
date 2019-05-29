@@ -129,7 +129,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 		}
 	} else {
 		if err := drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil); err != nil {
-			glog.Errorf("failed to drain node: %v", err)
+			glog.Errorf("nodeStateChangeHandler(): failed to make node Schedulable: %v", err)
 		}
 	}
 
@@ -161,7 +161,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 			return
 		}
 		if err := drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil); err != nil {
-			glog.Errorf("failed to drain node: %v", err)
+			glog.Errorf("nodeStateChangeHandler(): failed to make node Schedulable: %v", err)
 		}
 	}
 	dn.refreshCh <- struct{}{}

@@ -14,6 +14,10 @@ SR-IOV network is an optional feature of Openshift cluster. To make it work, it 
 - manage configuration of SR-IOV device plugin on host.
 - generate net-att-def CRs for SR-IOV CNI plugin
 
+## Quick Start
+
+For more detail on installing this operator, refer to the [quick-start](doc/quickstart.md) guide.
+
 ## API
 
 The SR-IOV network operator introduces following new CRDs:

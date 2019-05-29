@@ -12,9 +12,9 @@ spec:
   mtu: 9000
   numVfs: 6
   nicSelector:
-    vendor: intel
+    vendor: "8086"
     rootDevices: ['0000:86:00.1',]
-  deviceType: netdevice
+  deviceType: vfio-pci
 
 ---
 apiVersion: sriovnetwork.openshift.io/v1
@@ -30,6 +30,6 @@ spec:
   mtu: 9000
   numVfs: 16
   nicSelector:
-    vendor: intel
+    vendor: "8086"
     rootDevices: ['02:00.1',]
   deviceType: netdevice
