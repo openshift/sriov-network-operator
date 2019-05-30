@@ -1,4 +1,4 @@
-package daemon
+package utils
 
 import (
 	// "bytes"
@@ -96,7 +96,7 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 	return pfList, nil
 }
 
-func syncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
+func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 	var err error
 	for _, ifaceStatus := range newState.Status.Interfaces {
 		configured := false
@@ -138,9 +138,6 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 func configSriovDevice(iface *sriovnetworkv1.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	glog.V(2).Infof("configSriovDevice(): config interface %s with %v", iface.PciAddress, iface)
 
-	if err := LoadKernelModule("vfio_pci"); err != nil {
-		glog.Warningf("configSriovDevice(): %v", err)
-	}
 	err := setSriovNumVfs(iface.PciAddress, iface.NumVfs)
 	if err != nil {
 		glog.Warningf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
@@ -306,6 +303,7 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirutalF
 }
 
 func LoadKernelModule(name string) error {
+	glog.Infof("LoadKernelModule(): try to load kernel module %s", name)
 	cmd := exec.Command("/bin/sh", scriptsPath, name)
 	err := cmd.Run()
 	if err != nil {

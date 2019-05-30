@@ -95,7 +95,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		exitCh,
 		stopCh,
 		refreshCh,
-	).Run()
+	).Run(stopCh, exitCh)
 	if err != nil {
 		glog.Fatalf("failed to run daemon: %v", err)
 	}

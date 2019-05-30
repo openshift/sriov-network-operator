@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"github.com/pliurh/sriov-network-operator/pkg/utils"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/pliurh/sriov-network-operator/pkg/client/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,7 +53,7 @@ func (nm *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan struct
 
 func pollNicStatus(nm *NodeStateStatusWriter) error {
 	glog.V(2).Info("pollNicStatus()")
-	iface, err := DiscoverSriovDevices()
+	iface, err := utils.DiscoverSriovDevices()
 	if err != nil {
 		return err
 	}

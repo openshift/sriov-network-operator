@@ -36,6 +36,8 @@ operator-sdk:
 	  make install ; \
 	fi
 
+all: build plugins
+
 build: _build-manager _build-sriov-network-config-daemon
 
 _build-%:
@@ -71,3 +73,8 @@ test-e2e: operator-sdk
 	@hack/undeploy.sh sriov-network-operator
 undeploy:
 	@hack/undeploy.sh sriov-network-operator
+
+_plugin-%:
+	@hack/build-plugins.sh $*
+
+plugins: _plugin-intel _plugin-generic
