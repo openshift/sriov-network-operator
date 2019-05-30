@@ -123,7 +123,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	reqDrain := false
 
 	for k, p := range dn.LoadedPlugins {
-		d, r, err:= p.OnNodeStateAdd(nodeState)
+		d, r, err := p.OnNodeStateAdd(nodeState)
 		if err != nil {
 			glog.Errorf("nodeStateAddHandler(): plugin %s error: %v", k, err)
 			dn.exitCh <- err
@@ -140,7 +140,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
-			err:= p.Apply()
+			err := p.Apply()
 			if err != nil {
 				glog.Errorf("nodeStateAddHandler(): plugin %s fail to apply: %v", k, err)
 				dn.exitCh <- err
@@ -191,7 +191,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	reqDrain := false
 
 	for k, p := range dn.LoadedPlugins {
-		d, r, err:= p.OnNodeStateChange(oldState, newState)
+		d, r, err := p.OnNodeStateChange(oldState, newState)
 		if err != nil {
 			glog.Errorf("nodeStateChangeHandler(): plugin %s error: %v", k, err)
 			dn.exitCh <- err
@@ -208,7 +208,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
-			err:= p.Apply()
+			err := p.Apply()
 			if err != nil {
 				glog.Errorf("nodeStateChangeHandler(): plugin %s fail to apply: %v", k, err)
 				dn.exitCh <- err
@@ -264,12 +264,12 @@ func (dn *Daemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) er
 	pl := registerPlugins(ns)
 	pl = append(pl, GenericPlugin)
 	dn.LoadedPlugins = make(map[string]VendorPlugin)
- 
-    for _, pn := range(pl) {
+
+	for _, pn := range pl {
 		filePath := filepath.Join(pluginsPath, pn+".so")
-        glog.Infof("loadVendorPlugins(): try to load plugin %s", pn)
-        p, err := loadOnePlugin(filePath)
-        if err != nil {
+		glog.Infof("loadVendorPlugins(): try to load plugin %s", pn)
+		p, err := loadOnePlugin(filePath)
+		if err != nil {
 			glog.Errorf("loadVendorPlugins(): fail to load plugin %s: %v", filePath, err)
 			return err
 		}
@@ -340,12 +340,12 @@ func needRestartDevicePlugin(oldState, newState *sriovnetworkv1.SriovNetworkNode
 func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
 	pluginNames := make(map[string]string)
 	for _, iface := range ns.Status.Interfaces {
-			pluginNames[pluginMap[iface.Vendor]] = "Y"
+		pluginNames[pluginMap[iface.Vendor]] = "Y"
 	}
 	rawList := reflect.ValueOf(pluginNames).MapKeys()
 	nameList := make([]string, len(rawList))
-    for i := 0; i < len(rawList); i++ {
-        nameList[i] = rawList[i].String()
-    }
+	for i := 0; i < len(rawList); i++ {
+		nameList[i] = rawList[i].String()
+	}
 	return nameList
 }

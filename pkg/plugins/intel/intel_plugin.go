@@ -2,16 +2,15 @@ package main
 
 import (
 	"github.com/golang/glog"
-	"github.com/pliurh/sriov-network-operator/pkg/utils"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-
+	"github.com/pliurh/sriov-network-operator/pkg/utils"
 )
 
 type IntelPlugin struct {
-	PluginName  string
-	SpecVersion string
-	DesireState *sriovnetworkv1.SriovNetworkNodeState
-	LastState *sriovnetworkv1.SriovNetworkNodeState
+	PluginName     string
+	SpecVersion    string
+	DesireState    *sriovnetworkv1.SriovNetworkNodeState
+	LastState      *sriovnetworkv1.SriovNetworkNodeState
 	LoadVfioDriver bool
 }
 
@@ -36,7 +35,7 @@ func (p *IntelPlugin) Spec() string {
 }
 
 // OnNodeStateAdd Invoked when SriovNetworkNodeState CR is created, return if need dain and/or reboot node
-func (p *IntelPlugin)OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
+func (p *IntelPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("intel-plugin OnNodeStateAdd()")
 	needDrain = true
 	needReboot = false
@@ -49,7 +48,7 @@ func (p *IntelPlugin)OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState)
 }
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
-func (p *IntelPlugin)OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
+func (p *IntelPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("intel-plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
@@ -60,7 +59,7 @@ func (p *IntelPlugin)OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNode
 }
 
 // Apply config change
-func (p *IntelPlugin)Apply() error {
+func (p *IntelPlugin) Apply() error {
 	glog.Info("intel-plugin Apply()")
 	if p.LoadVfioDriver {
 		if err := utils.LoadKernelModule("vfio_pci"); err != nil {

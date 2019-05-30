@@ -6,9 +6,9 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
-	"github.com/pliurh/sriov-network-operator/pkg/utils"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/pliurh/sriov-network-operator/pkg/client/clientset/versioned"
+	"github.com/pliurh/sriov-network-operator/pkg/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"

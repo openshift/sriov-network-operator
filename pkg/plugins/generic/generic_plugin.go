@@ -2,16 +2,15 @@ package main
 
 import (
 	"github.com/golang/glog"
-	"github.com/pliurh/sriov-network-operator/pkg/utils"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-
+	"github.com/pliurh/sriov-network-operator/pkg/utils"
 )
 
 type GenericPlugin struct {
 	PluginName  string
 	SpecVersion string
 	DesireState *sriovnetworkv1.SriovNetworkNodeState
-	LastState *sriovnetworkv1.SriovNetworkNodeState
+	LastState   *sriovnetworkv1.SriovNetworkNodeState
 }
 
 var Plugin GenericPlugin
@@ -35,7 +34,7 @@ func (p *GenericPlugin) Spec() string {
 }
 
 // OnNodeStateAdd Invoked when SriovNetworkNodeState CR is created, return if need dain and/or reboot node
-func (p *GenericPlugin)OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
+func (p *GenericPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("generic-plugin OnNodeStateAdd()")
 	needDrain = false
 	needReboot = false
@@ -50,7 +49,7 @@ func (p *GenericPlugin)OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeStat
 }
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
-func (p *GenericPlugin)OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
+func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("generic-plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
@@ -78,9 +77,9 @@ func (p *GenericPlugin)OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNo
 }
 
 // Apply config change
-func (p *GenericPlugin)Apply() error {
+func (p *GenericPlugin) Apply() error {
 	glog.Info("generic-plugin Apply()")
-	if err := utils.SyncNodeState(p.DesireState); err != nil{
+	if err := utils.SyncNodeState(p.DesireState); err != nil {
 		return err
 	}
 	return nil

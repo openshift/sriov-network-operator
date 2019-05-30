@@ -1,9 +1,9 @@
-package  daemon
+package daemon
 
 import (
 	"fmt"
-	"plugin"
 	"path/filepath"
+	"plugin"
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -16,10 +16,10 @@ type VendorPlugin interface {
 	Spec() string
 	// Invoked when SriovNetworkNodeState CR is created, return if need dain and/or reboot node
 	OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error)
-	 // Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
-	 OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error)
-	 // Apply config change
-	 Apply() error
+	// Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
+	OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error)
+	// Apply config change
+	Apply() error
 }
 
 var pluginMap = map[string]string{
@@ -28,7 +28,7 @@ var pluginMap = map[string]string{
 }
 
 const (
-	SpecVersion = "1.0"
+	SpecVersion   = "1.0"
 	GenericPlugin = "generic_plugin"
 )
 
@@ -36,17 +36,17 @@ func loadVendorPlugins(path string) (map[string]VendorPlugin, error) {
 	pluginList := map[string]VendorPlugin{}
 	allPlugins, err := filepath.Glob(path + "/*.so")
 	if err != nil {
-        glog.Error("fail to list plugins from path %s: %v", path, err)
-    }
- 
-    for _, filename := range(allPlugins) {
-        glog.Infof("loadVendorPlugins(): try to load plugin %s", filename)
-        p, err := loadOnePlugin(filename)
-        if err != nil {
-            glog.Error("fail to load plugin %s: %e", filename, err)
+		glog.Error("fail to list plugins from path %s: %v", path, err)
+	}
+
+	for _, filename := range allPlugins {
+		glog.Infof("loadVendorPlugins(): try to load plugin %s", filename)
+		p, err := loadOnePlugin(filename)
+		if err != nil {
+			glog.Error("fail to load plugin %s: %e", filename, err)
 		}
 		pluginList[p.Name()] = p
-    }
+	}
 
 	return pluginList, nil
 }
