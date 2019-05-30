@@ -5,7 +5,7 @@ metadata:
   name: policy-1
   namespace: sriov-network-operator
 spec:
-  resourceName: intel-nics
+  resourceName: intelnics
   nodeSelector:
     feature.node.kubernetes.io/sriov-capable: "true"
   priority: 99
@@ -23,13 +23,13 @@ metadata:
   name: policy-2
   namespace: sriov-network-operator
 spec:
-  resourceName: mlx-nics
+  resourceName: mlxnics
   nodeSelector:
     feature.node.kubernetes.io/sriov: "false"
   priority: 99
   mtu: 9000
   numVfs: 16
   nicSelector:
-    vendor: "8086"
+    vendor: "15b3"
     rootDevices: ['02:00.1',]
   deviceType: netdevice

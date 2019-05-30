@@ -55,7 +55,7 @@ spec:
       "gateway": "10.56.217.1"
     }
   vlan: 0
-  resourceName: intel_nics_1
+  resourceName: intelnics
 ```
 
 ##SriovNetworkNodeState
@@ -145,7 +145,7 @@ spec:
     feature.node.kubernetes.io/sriov-capable: "true"
   numVfs: 4
   priority: 90
-  resourceName: intel_nics_1
+  resourceName: intelnics
 ```
 
 In this example, user selected the nice from vendor '8086' which is intel, device module is '1583' which is XL710 for 40GbE, on nodes labeled with 'sriov-capable' equals 'true'. Then for those PFs, create 4 VFs each, set mtu to 1500 and the load the vfio-pci driver to those virtual functions.
