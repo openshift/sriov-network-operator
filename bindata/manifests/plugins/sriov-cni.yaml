@@ -1,0 +1,42 @@
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: sriov-cni
+  namespace: sriov-network-operator
+  annotations:
+    kubernetes.io/description: |
+      This daemonset copies the SR-IOV CNI plugin on to each node.
+    release.openshift.io/version: "{{.ReleaseVersion}}"
+spec:
+  selector:
+    matchLabels:
+      app: sriov-cni
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: sriov-cni
+        component: network
+        type: infra
+        openshift.io/component: network
+    spec:
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+      tolerations:
+      - operator: Exists
+      serviceAccountName: sriov-cni
+      containers:
+      - name: sriov-cni
+        image: {{.SRIOVCNIImage}}
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: cnibin
+          mountPath: /host/opt/cni/bin
+      volumes:
+        - name: cnibin
+          hostPath:
+            path: /var/lib/cni/bin
+

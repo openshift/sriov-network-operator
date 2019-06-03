@@ -1,0 +1,5 @@
+FROM registry.access.redhat.com/ubi7-dev-preview/ubi-minimal:7.6
+WORKDIR /go/src/github.com/openshift/machine-config-operator
+
+COPY cmd/sriov-network-config-daemon/sriov-network-config-daemon /usr/bin/
+ENTRYPOINT ["/usr/bin/sriov-network-config-daemon"]

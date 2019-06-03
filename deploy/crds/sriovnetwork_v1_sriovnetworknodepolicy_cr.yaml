@@ -1,0 +1,35 @@
+---
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: policy-1
+  namespace: sriov-network-operator
+spec:
+  resourceName: intelnics
+  nodeSelector:
+    feature.node.kubernetes.io/sriov-capable: "true"
+  priority: 99
+  mtu: 9000
+  numVfs: 6
+  nicSelector:
+    vendor: "8086"
+    rootDevices: ['0000:86:00.1',]
+  deviceType: vfio-pci
+
+---
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: policy-2
+  namespace: sriov-network-operator
+spec:
+  resourceName: mlxnics
+  nodeSelector:
+    feature.node.kubernetes.io/sriov: "false"
+  priority: 99
+  mtu: 9000
+  numVfs: 16
+  nicSelector:
+    vendor: "15b3"
+    rootDevices: ['02:00.1',]
+  deviceType: netdevice
