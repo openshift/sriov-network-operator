@@ -49,6 +49,8 @@ spec:
         volumeMounts:
         # - name: host
         #   mountPath: /host
+        - name: hostetc
+          mountPath: /host/etc
         - name: hostdev
           mountPath: /host/dev
         - name: hostproc
@@ -71,6 +73,9 @@ spec:
       # - name: host
       #   hostPath:
       #     path: /
+      - name: hostetc
+        hostPath:
+          path: /etc
       - name: hostdev
         hostPath:
           path: /dev

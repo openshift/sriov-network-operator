@@ -135,8 +135,9 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	glog.V(2).Infof("nodeStateAddHandler(): reqDrain %v, reqReboot %v", reqDrain, reqReboot)
 
 	if reqDrain {
-		// dn.drainNode(node)
-		// defer drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
+		glog.Info("nodeStateAddHandler(): drain node")
+		dn.drainNode(node)
+		defer drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
@@ -158,6 +159,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	}
 
 	if reqReboot {
+		glog.Info("nodeStateAddHandler(): reboot node")
 		go rebootNode()
 		return
 	}
@@ -203,8 +205,9 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	glog.V(2).Infof("nodeStateChangeHandler(): reqDrain %v, reqReboot %v", reqDrain, reqReboot)
 
 	if reqDrain {
-		// dn.drainNode(node)
-		// defer drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
+		glog.Info("nodeStateChangeHandler(): drain node")
+		dn.drainNode(node)
+		defer drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
@@ -226,6 +229,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 
 	if reqReboot {
+		glog.Info("nodeStateChangeHandler(): reboot node")
 		go rebootNode()
 		return
 	}
