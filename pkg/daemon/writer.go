@@ -43,11 +43,13 @@ func (nm *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan struct
 			glog.V(0).Info("Run(): stop writer")
 			return
 		case <-refresh:
+			glog.V(2).Info("Run(): refresh trigger")
 			if err := pollNicStatus(nm); err != nil {
 				continue
 			}
 			setNodeStateStatus(nm.client, nm.node, nm.status)
 		case <-time.After(30 * time.Second):
+			glog.V(2).Info("Run(): period refresh")
 			if err := pollNicStatus(nm); err != nil {
 				continue
 			}
