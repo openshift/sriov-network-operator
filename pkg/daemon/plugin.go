@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"fmt"
-	"path/filepath"
 	"plugin"
 
 	"github.com/golang/glog"
@@ -32,27 +31,9 @@ const (
 	GenericPlugin = "generic_plugin"
 )
 
-func loadVendorPlugins(path string) (map[string]VendorPlugin, error) {
-	pluginList := map[string]VendorPlugin{}
-	allPlugins, err := filepath.Glob(path + "/*.so")
-	if err != nil {
-		glog.Error("fail to list plugins from path %s: %v", path, err)
-	}
-
-	for _, filename := range allPlugins {
-		glog.Infof("loadVendorPlugins(): try to load plugin %s", filename)
-		p, err := loadOnePlugin(filename)
-		if err != nil {
-			glog.Error("fail to load plugin %s: %e", filename, err)
-		}
-		pluginList[p.Name()] = p
-	}
-
-	return pluginList, nil
-}
-
 // loadPlugin loads a single plugin from a file path
-func loadOnePlugin(path string) (VendorPlugin, error) {
+func loadPlugin(path string) (VendorPlugin, error) {
+	glog.Infof("loadPlugin(): load plugin from %s", path)
 	plug, err := plugin.Open(path)
 	if err != nil {
 		return nil, err

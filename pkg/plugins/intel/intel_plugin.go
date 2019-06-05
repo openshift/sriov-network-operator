@@ -107,6 +107,7 @@ func tryEnableIommuInKernelArgs() (bool, error) {
 	i, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
 	if err == nil {
 		if i > 0 {
+			glog.Infof("tryEnableIommuInKernelArgs(): need to reboot node")
 			return true, nil
 		}
 	}

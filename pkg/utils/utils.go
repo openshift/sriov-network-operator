@@ -11,6 +11,7 @@ import (
 	// "regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/golang/glog"
@@ -30,7 +31,7 @@ const (
 )
 
 func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
-	glog.V(0).Info("DiscoverSriovDevices")
+	glog.V(2).Info("DiscoverSriovDevices")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
 	pci, err := ghw.PCI()
@@ -113,7 +114,7 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 				break
 			}
 		}
-		if !configured {
+		if !configured && ifaceStatus.NumVfs > 0{
 			if err = resetSriovDevice(ifaceStatus.PciAddress); err != nil {
 				return err
 			}
@@ -311,4 +312,24 @@ func LoadKernelModule(name string) error {
 		return err
 	}
 	return nil
+}
+
+func Chroot(path string) (func() error, error) {
+    root, err := os.Open("/")
+    if err != nil {
+        return nil, err
+    }
+ 
+    if err := syscall.Chroot(path); err != nil {
+        root.Close()
+        return nil, err
+    }
+ 
+    return func() error {
+        defer root.Close()
+        if err := root.Chdir(); err != nil {
+            return err
+        }
+        return syscall.Chroot(".")
+    }, nil
 }
