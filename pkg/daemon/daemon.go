@@ -17,10 +17,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	// "k8s.io/client-go/kubernetes/scheme"
-	"github.com/pliurh/sriov-network-operator/pkg/utils"
-	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	snclientset "github.com/pliurh/sriov-network-operator/pkg/client/clientset/versioned"
-	sninformer "github.com/pliurh/sriov-network-operator/pkg/client/informers/externalversions"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
+	sninformer "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions"
+	"github.com/openshift/sriov-network-operator/pkg/utils"
 )
 
 type Daemon struct {
@@ -173,7 +173,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	dn.refreshCh <- struct{}{}
 }
 
-func (dn *Daemon) uncordon (name string) {
+func (dn *Daemon) uncordon(name string) {
 	glog.Info("uncordon(): uncordon node")
 	node, err := dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
 	if err != nil {
@@ -315,16 +315,16 @@ func (dn *Daemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) er
 func rebootNode() {
 	glog.Infof("rebootNode(): trigger node reboot")
 	exit, err := utils.Chroot("/host")
-    if err != nil {
-        glog.Error("rebootNode(): %v", err)
-    }
+	if err != nil {
+		glog.Error("rebootNode(): %v", err)
+	}
 	cmd := exec.Command("systemctl", "reboot")
 	if err := cmd.Run(); err != nil {
 		glog.Error("failed to reboot node")
 	}
 	if err := exit(); err != nil {
-        glog.Error("rebootNode(): %v", err)
-    }
+		glog.Error("rebootNode(): %v", err)
+	}
 }
 
 func (dn *Daemon) drainNode(name string) {

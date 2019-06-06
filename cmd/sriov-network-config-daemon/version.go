@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/pliurh/sriov-network-operator/pkg/version"
+	"github.com/openshift/sriov-network-operator/pkg/version"
 	"github.com/spf13/cobra"
 )
 

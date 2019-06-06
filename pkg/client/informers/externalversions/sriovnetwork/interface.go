@@ -19,8 +19,8 @@ limitations under the License.
 package sriovnetwork
 
 import (
-	internalinterfaces "github.com/pliurh/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
-	v1 "github.com/pliurh/sriov-network-operator/pkg/client/informers/externalversions/sriovnetwork/v1"
+	internalinterfaces "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
+	v1 "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions/sriovnetwork/v1"
 )
 
 // Interface provides access to each of this group's versions.

@@ -1,7 +1,7 @@
 package controller
 
 import (
-	"github.com/pliurh/sriov-network-operator/pkg/controller/sriovnetwork"
+	"github.com/openshift/sriov-network-operator/pkg/controller/sriovnetwork"
 )
 
 func init() {

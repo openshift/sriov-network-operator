@@ -17,7 +17,7 @@ import (
 	"github.com/golang/glog"
 	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
 	"github.com/jaypipes/ghw"
-	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 )
 
 const (
@@ -119,7 +119,7 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 				break
 			}
 		}
-		if !configured && ifaceStatus.NumVfs > 0{
+		if !configured && ifaceStatus.NumVfs > 0 {
 			if err = resetSriovDevice(ifaceStatus.PciAddress); err != nil {
 				return err
 			}
@@ -241,7 +241,7 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 	return nil
 }
 
-func tryGetInterfaceName(pciAddr string) (string) {
+func tryGetInterfaceName(pciAddr string) string {
 	name, err := dputils.GetNetNames(pciAddr)
 	if err != nil {
 		return ""
@@ -329,21 +329,21 @@ func LoadKernelModule(name string) error {
 }
 
 func Chroot(path string) (func() error, error) {
-    root, err := os.Open("/")
-    if err != nil {
-        return nil, err
-    }
- 
-    if err := syscall.Chroot(path); err != nil {
-        root.Close()
-        return nil, err
-    }
- 
-    return func() error {
-        defer root.Close()
-        if err := root.Chdir(); err != nil {
-            return err
-        }
-        return syscall.Chroot(".")
-    }, nil
+	root, err := os.Open("/")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := syscall.Chroot(path); err != nil {
+		root.Close()
+		return nil, err
+	}
+
+	return func() error {
+		defer root.Close()
+		if err := root.Chdir(); err != nil {
+			return err
+		}
+		return syscall.Chroot(".")
+	}, nil
 }

@@ -12,7 +12,7 @@ IMAGE_BUILD=$(IMAGE_BUILDER)
 export IMAGE_TAG_CMD?=docker tag
 
 export APP_NAME=sriov-network-operator
-APP_REPO=github.com/pliurh/$(APP_NAME)
+APP_REPO=github.com/openshift/$(APP_NAME)
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 export IMAGE_TAG=quay.io/pliurh/$(APP_NAME):latest
 MAIN_PKG=cmd/manager/main.go

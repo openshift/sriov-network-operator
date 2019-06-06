@@ -1,7 +1,7 @@
 package apis
 
 import (
-	netattdefv1 "github.com/pliurh/sriov-network-operator/pkg/apis/k8s/v1"
+	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 

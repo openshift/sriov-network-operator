@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	netattdefv1 "github.com/pliurh/sriov-network-operator/pkg/apis/k8s/v1"
-	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	render "github.com/pliurh/sriov-network-operator/pkg/render"
+	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	render "github.com/openshift/sriov-network-operator/pkg/render"
 
 	"encoding/json"
 	"k8s.io/apimachinery/pkg/api/errors"

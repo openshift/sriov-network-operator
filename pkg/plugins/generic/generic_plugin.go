@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/golang/glog"
-	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	"github.com/pliurh/sriov-network-operator/pkg/utils"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	"github.com/openshift/sriov-network-operator/pkg/utils"
 )
 
 type GenericPlugin struct {
@@ -80,14 +80,14 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 func (p *GenericPlugin) Apply() error {
 	glog.Info("generic-plugin Apply()")
 	exit, err := utils.Chroot("/host")
-    if err != nil {
-        return err
-    }
+	if err != nil {
+		return err
+	}
 	if err := utils.SyncNodeState(p.DesireState); err != nil {
 		return err
 	}
 	if err := exit(); err != nil {
-        return err
-    }
+		return err
+	}
 	return nil
 }

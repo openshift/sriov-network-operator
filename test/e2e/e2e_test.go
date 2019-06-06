@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pliurh/sriov-network-operator/pkg/apis"
-	netattdefv1 "github.com/pliurh/sriov-network-operator/pkg/apis/k8s/v1"
-	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	"github.com/openshift/sriov-network-operator/pkg/apis"
+	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	// dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"

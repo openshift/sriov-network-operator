@@ -21,8 +21,8 @@ package v1
 import (
 	"time"
 
-	v1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	scheme "github.com/pliurh/sriov-network-operator/pkg/client/clientset/versioned/scheme"
+	v1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	scheme "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned/scheme"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

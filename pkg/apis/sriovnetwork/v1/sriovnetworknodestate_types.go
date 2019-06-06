@@ -22,10 +22,10 @@ type Interface struct {
 
 type InterfaceExt struct {
 	InterfaceProperty
-	NumVfs     int               `json:"numVfs,omitempty"`
-	LinkSpeed  string            `json:"linkSpeed,omitempty"`
-	TotalVfs   int               `json:"totalvfs,omitempty"`
-	VFs        []VirtualFunction `json:"Vfs,omitempty"`
+	NumVfs    int               `json:"numVfs,omitempty"`
+	LinkSpeed string            `json:"linkSpeed,omitempty"`
+	TotalVfs  int               `json:"totalvfs,omitempty"`
+	VFs       []VirtualFunction `json:"Vfs,omitempty"`
 }
 
 type InterfaceProperty struct {

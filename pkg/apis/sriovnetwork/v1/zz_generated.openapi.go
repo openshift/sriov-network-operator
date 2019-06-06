@@ -13,15 +13,15 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetwork":                 schema_pkg_apis_sriovnetwork_v1_SriovNetwork(ref),
-		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicy":       schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicy(ref),
-		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicySpec":   schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref),
-		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicyStatus": schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicyStatus(ref),
-		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeState":        schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeState(ref),
-		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateSpec":    schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateSpec(ref),
-		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateStatus":  schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateStatus(ref),
-		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkSpec":             schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref),
-		"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkStatus":           schema_pkg_apis_sriovnetwork_v1_SriovNetworkStatus(ref),
+		"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetwork":                 schema_pkg_apis_sriovnetwork_v1_SriovNetwork(ref),
+		"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicy":       schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicy(ref),
+		"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicySpec":   schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref),
+		"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicyStatus": schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicyStatus(ref),
+		"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeState":        schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeState(ref),
+		"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateSpec":    schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateSpec(ref),
+		"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateStatus":  schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateStatus(ref),
+		"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkSpec":             schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref),
+		"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkStatus":           schema_pkg_apis_sriovnetwork_v1_SriovNetworkStatus(ref),
 	}
 }
 
@@ -52,19 +52,19 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetwork(ref common.ReferenceCallback) 
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkSpec"),
+							Ref: ref("github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkStatus"),
+							Ref: ref("github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkStatus"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkSpec", "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkSpec", "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -95,19 +95,19 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicy(ref common.Reference
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicySpec"),
+							Ref: ref("github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicySpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicyStatus"),
+							Ref: ref("github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicyStatus"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicySpec", "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicyStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicySpec", "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodePolicyStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -157,7 +157,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref common.Refer
 					},
 					"nicSelector": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNicSelector"),
+							Ref: ref("github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNicSelector"),
 						},
 					},
 					"deviceType": {
@@ -171,7 +171,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref common.Refer
 			},
 		},
 		Dependencies: []string{
-			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNicSelector"},
+			"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNicSelector"},
 	}
 }
 
@@ -214,19 +214,19 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeState(ref common.ReferenceC
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateSpec"),
+							Ref: ref("github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateStatus"),
+							Ref: ref("github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateStatus"),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateSpec", "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateSpec", "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.SriovNetworkNodeStateStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -242,7 +242,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateSpec(ref common.Refere
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.Interface"),
+										Ref: ref("github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.Interface"),
 									},
 								},
 							},
@@ -252,7 +252,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateSpec(ref common.Refere
 			},
 		},
 		Dependencies: []string{
-			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.Interface"},
+			"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.Interface"},
 	}
 }
 
@@ -268,7 +268,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateStatus(ref common.Refe
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.InterfaceExt"),
+										Ref: ref("github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.InterfaceExt"),
 									},
 								},
 							},
@@ -278,7 +278,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateStatus(ref common.Refe
 			},
 		},
 		Dependencies: []string{
-			"github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1.InterfaceExt"},
+			"github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1.InterfaceExt"},
 	}
 }
 

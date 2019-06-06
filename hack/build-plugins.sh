@@ -2,7 +2,7 @@
 
 set -eu
 
-REPO=github.com/pliurh/sriov-network-operator
+REPO=github.com/openshift/sriov-network-operator
 WHAT=${WHAT:-sriov-network-operator}
 GOFLAGS=${GOFLAGS:-}
 GLDFLAGS=${GLDFLAGS:-}

@@ -21,10 +21,10 @@ package v1
 import (
 	time "time"
 
-	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	versioned "github.com/pliurh/sriov-network-operator/pkg/client/clientset/versioned"
-	internalinterfaces "github.com/pliurh/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
-	v1 "github.com/pliurh/sriov-network-operator/pkg/client/listers/sriovnetwork/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	versioned "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
+	internalinterfaces "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
+	v1 "github.com/openshift/sriov-network-operator/pkg/client/listers/sriovnetwork/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"

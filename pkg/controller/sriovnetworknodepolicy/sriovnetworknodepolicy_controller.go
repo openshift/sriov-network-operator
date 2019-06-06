@@ -7,8 +7,8 @@ import (
 	"os"
 	"sort"
 
-	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	render "github.com/pliurh/sriov-network-operator/pkg/render"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	render "github.com/openshift/sriov-network-operator/pkg/render"
 
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
 	errs "github.com/pkg/errors"
@@ -565,19 +565,19 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList,
 					rc.Selectors.Devices = append(rc.Selectors.Devices, p.Spec.NicSelector.DeviceID)
 				}
 			}
-			if l := len(rc.Selectors.PfNames);  l > 0 {
+			if l := len(rc.Selectors.PfNames); l > 0 {
 				for _, in := range p.Spec.NicSelector.PfNames {
 					i := 0
 					name := ""
 					for i, name = range rc.Selectors.PfNames {
 						if in == name {
 							continue
-						}	
+						}
 					}
 					if i == l-1 {
 						rc.Selectors.PfNames = append(rc.Selectors.PfNames, in)
 					}
-				} 
+				}
 			} else {
 				rc.Selectors.PfNames = append(rc.Selectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
