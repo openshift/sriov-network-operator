@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	// "k8s.io/client-go/kubernetes/scheme"
+	"github.com/pliurh/sriov-network-operator/pkg/utils"
 	sriovnetworkv1 "github.com/pliurh/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/pliurh/sriov-network-operator/pkg/client/clientset/versioned"
 	sninformer "github.com/pliurh/sriov-network-operator/pkg/client/informers/externalversions"
@@ -85,6 +86,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 		UpdateFunc: dn.nodeStateChangeHandler,
 	})
 
+	time.Sleep(3 * time.Second)
 	go informer.Run(dn.stopCh)
 
 	for {
@@ -112,13 +114,6 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 		return
 	}
 
-	node, err := dn.kubeClient.CoreV1().Nodes().Get(nodeState.GetName(), metav1.GetOptions{})
-	if err != nil {
-		glog.Errorf("nodeStateAddHandler(): failed to get node: %v", err)
-		dn.exitCh <- err
-		return
-	}
-
 	reqReboot := false
 	reqDrain := false
 
@@ -136,8 +131,8 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 
 	if reqDrain {
 		glog.Info("nodeStateAddHandler(): drain node")
-		dn.drainNode(node)
-		defer drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
+		dn.drainNode(nodeState.GetName())
+		defer dn.uncordon(nodeState.GetName())
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
@@ -150,42 +145,72 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 		}
 	}
 
-	// Apply generic_plugin last
-	err = dn.LoadedPlugins[GenericPlugin].Apply()
-	if err != nil {
-		glog.Errorf("nodeStateAddHandler(): generic_plugin fail to apply: %v", err)
-		dn.exitCh <- err
-		return
+	if len(dn.LoadedPlugins) > 1 {
+		// Apply generic_plugin last
+		err = dn.LoadedPlugins[GenericPlugin].Apply()
+		if err != nil {
+			glog.Errorf("nodeStateAddHandler(): generic_plugin fail to apply: %v", err)
+			dn.exitCh <- err
+			return
+		}
 	}
 
 	if reqReboot {
 		glog.Info("nodeStateAddHandler(): reboot node")
-		go rebootNode()
+		rebootNode()
 		return
 	}
 
 	// restart device plugin pod
 	if reqDrain {
-		if err := dn.restartDevicePluginPod(node); err != nil {
+		if err := dn.restartDevicePluginPod(); err != nil {
+			glog.Errorf("nodeStateAddHandler(): fail to restart device plugin pod: %v", err)
 			dn.exitCh <- err
 			return
 		}
 	}
+
 	dn.refreshCh <- struct{}{}
 }
 
+func (dn *Daemon) uncordon (name string) {
+	glog.Info("uncordon(): uncordon node")
+	node, err := dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
+	if err != nil {
+		glog.Errorf("uncordon(): failed to get node: %v", err)
+		dn.exitCh <- err
+		return
+	}
+	backoff := wait.Backoff{
+		Steps:    5,
+		Duration: 10 * time.Second,
+		Factor:   2,
+	}
+	var lastErr error
+
+	if err := wait.ExponentialBackoff(backoff, func() (bool, error) {
+		err := drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
+		if err == nil {
+			return true, nil
+		}
+		lastErr = err
+		glog.Infof("uncordon(): uncordon failed with: %v, retrying", err)
+		return false, nil
+	}); err != nil {
+		if err == wait.ErrWaitTimeout {
+			glog.Errorf("uncordon(): failed to uncordon node (%d tries): %v :%v", backoff.Steps, err, lastErr)
+		}
+		glog.Errorf("uncordon(): failed to uncordon node: %v", err)
+	}
+	glog.Info("uncordon(): uncordon complete")
+}
+
 func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
+	var err error
 	newState := new.(*sriovnetworkv1.SriovNetworkNodeState)
 	oldState := old.(*sriovnetworkv1.SriovNetworkNodeState)
 	if reflect.DeepEqual(newState.Spec.Interfaces, oldState.Spec.Interfaces) {
 		glog.V(2).Infof("nodeStateChangeHandler(): Interface not changed")
-		return
-	}
-
-	node, err := dn.kubeClient.CoreV1().Nodes().Get(newState.GetName(), metav1.GetOptions{})
-	if err != nil {
-		glog.Errorf("nodeStateChangeHandler(): failed to get node: %v", err)
-		dn.exitCh <- err
 		return
 	}
 
@@ -206,8 +231,8 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 
 	if reqDrain {
 		glog.Info("nodeStateChangeHandler(): drain node")
-		dn.drainNode(node)
-		defer drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
+		dn.drainNode(newState.GetName())
+		defer dn.uncordon(newState.GetName())
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
@@ -220,12 +245,14 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 		}
 	}
 
-	// Apply generic_plugin last
-	err = dn.LoadedPlugins[GenericPlugin].Apply()
-	if err != nil {
-		glog.Errorf("nodeStateChangeHandler(): generic_plugin fail to apply: %v", err)
-		dn.exitCh <- err
-		return
+	if len(dn.LoadedPlugins) > 1 {
+		// Apply generic_plugin last
+		err = dn.LoadedPlugins[GenericPlugin].Apply()
+		if err != nil {
+			glog.Errorf("nodeStateChangeHandler(): generic_plugin fail to apply: %v", err)
+			dn.exitCh <- err
+			return
+		}
 	}
 
 	if reqReboot {
@@ -236,7 +263,8 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 
 	// restart device plugin pod
 	if reqDrain {
-		if err := dn.restartDevicePluginPod(node); err != nil {
+		if err := dn.restartDevicePluginPod(); err != nil {
+			glog.Errorf("nodeStateChangeHandler(): fail to restart device plugin pod: %v", err)
 			dn.exitCh <- err
 			return
 		}
@@ -244,8 +272,8 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	dn.refreshCh <- struct{}{}
 }
 
-func (dn *Daemon) restartDevicePluginPod(node *corev1.Node) error {
-	glog.V(2).Infof("restartDevicePluginPod(): Need to restart device plugin pod")
+func (dn *Daemon) restartDevicePluginPod() error {
+	glog.V(2).Infof("restartDevicePluginPod(): try to restart device plugin pod")
 	pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(metav1.ListOptions{
 		LabelSelector: "app=sriov-device-plugin",
 		FieldSelector: "spec.nodeName=" + dn.name,
@@ -254,11 +282,13 @@ func (dn *Daemon) restartDevicePluginPod(node *corev1.Node) error {
 		glog.Warningf("restartDevicePluginPod(): Failed to list device plugin pod: %s", err)
 		return nil
 	}
-	glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s", pods.Items[0].GetName())
-	err = dn.kubeClient.CoreV1().Pods(namespace).Delete(pods.Items[0].GetName(), &metav1.DeleteOptions{})
-	if err != nil {
-		glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s", err)
-		return err
+	if len(pods.Items) > 0 {
+		glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s", pods.Items[0].GetName())
+		err = dn.kubeClient.CoreV1().Pods(namespace).Delete(pods.Items[0].GetName(), &metav1.DeleteOptions{})
+		if err != nil {
+			glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s", err)
+			return err
+		}
 	}
 
 	return nil
@@ -272,7 +302,7 @@ func (dn *Daemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) er
 	for _, pn := range pl {
 		filePath := filepath.Join(pluginsPath, pn+".so")
 		glog.Infof("loadVendorPlugins(): try to load plugin %s", pn)
-		p, err := loadOnePlugin(filePath)
+		p, err := loadPlugin(filePath)
 		if err != nil {
 			glog.Errorf("loadVendorPlugins(): fail to load plugin %s: %v", filePath, err)
 			return err
@@ -284,14 +314,25 @@ func (dn *Daemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) er
 
 func rebootNode() {
 	glog.Infof("rebootNode(): trigger node reboot")
+	exit, err := utils.Chroot("/host")
+    if err != nil {
+        glog.Error("rebootNode(): %v", err)
+    }
 	cmd := exec.Command("systemctl", "reboot")
 	if err := cmd.Run(); err != nil {
 		glog.Error("failed to reboot node")
 	}
+	if err := exit(); err != nil {
+        glog.Error("rebootNode(): %v", err)
+    }
 }
 
-func (dn *Daemon) drainNode(node *corev1.Node) {
-	glog.Info("Update prepared; beginning drain")
+func (dn *Daemon) drainNode(name string) {
+	glog.Info("drainNode(): Update prepared; beginning drain")
+	node, err := dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
+	if err != nil {
+		glog.Errorf("nodeStateChangeHandler(): failed to get node: %v", err)
+	}
 
 	backoff := wait.Backoff{
 		Steps:    5,
@@ -311,15 +352,15 @@ func (dn *Daemon) drainNode(node *corev1.Node) {
 			return true, nil
 		}
 		lastErr = err
-		glog.Infof("Draining failed with: %v, retrying", err)
+		glog.Infof("drainNode(): Draining failed with: %v, retrying", err)
 		return false, nil
 	}); err != nil {
 		if err == wait.ErrWaitTimeout {
-			glog.Errorf("failed to drain node (%d tries): %v :%v", backoff.Steps, err, lastErr)
+			glog.Errorf("drainNode(): failed to drain node (%d tries): %v :%v", backoff.Steps, err, lastErr)
 		}
-		glog.Errorf("failed to drain node: %v", err)
+		glog.Errorf("drainNode(): failed to drain node: %v", err)
 	}
-	glog.Info("drain complete, reboot node")
+	glog.Info("drainNode(): drain complete")
 }
 
 func needRestartDevicePlugin(oldState, newState *sriovnetworkv1.SriovNetworkNodeState) bool {
@@ -344,9 +385,12 @@ func needRestartDevicePlugin(oldState, newState *sriovnetworkv1.SriovNetworkNode
 func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
 	pluginNames := make(map[string]string)
 	for _, iface := range ns.Status.Interfaces {
-		pluginNames[pluginMap[iface.Vendor]] = "Y"
+		if val, ok := pluginMap[iface.Vendor]; ok {
+			pluginNames[val] = "Y"
+		}
 	}
 	rawList := reflect.ValueOf(pluginNames).MapKeys()
+	glog.Infof("registerPlugins(): %v", rawList)
 	nameList := make([]string, len(rawList))
 	for i := 0; i < len(rawList); i++ {
 		nameList[i] = rawList[i].String()

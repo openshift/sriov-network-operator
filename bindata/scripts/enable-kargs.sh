@@ -1,7 +1,7 @@
 #!/bin/bash
 set -x
 declare -a kargs=( "$@" )
-eval `grubby --info=DEFAULT | grep args`
+eval `chroot /host/ grubby --info=DEFAULT | grep args`
 ret=0
 
 for t in "${kargs[@]}";do

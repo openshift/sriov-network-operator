@@ -26,6 +26,7 @@ type SriovNetworkNicSelector struct {
 	Vendor      string   `json:"vendor,omitempty"`
 	DeviceID    string   `json:"deviceID,omitempty"`
 	RootDevices []string `json:"rootDevices,omitempty"`
+	PfNames     []string `json:"pfNames,omitempty"`
 }
 
 // SriovNetworkNodePolicyStatus defines the observed state of SriovNetworkNodePolicy

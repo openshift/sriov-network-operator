@@ -22,6 +22,7 @@ type pciNetDevice struct {
 	apiDevice   *pluginapi.Device
 	deviceSpecs []*pluginapi.DeviceSpec
 	mounts      []*pluginapi.Mount
+	rdmaSpec    types.RdmaSpec
 }
 
 // NewPciNetDevice returns an instance of PciNetDevice interface
@@ -30,8 +31,19 @@ func NewPciNetDevice(pciDevice *ghw.PCIDevice, rFactory types.ResourceFactory) (
 
 	// 			1. get PF details, add PF info in its pciNetDevice struct
 	// 			2. Get driver info
+	var ifName string
 	pciAddr := pciDevice.Address
 	driverName, err := utils.GetDriverName(pciAddr)
+	if err != nil {
+		return nil, err
+	}
+	netDevs, _ := utils.GetNetNames(pciAddr)
+	if len(netDevs) == 0 {
+		ifName = ""
+	} else {
+		ifName = netDevs[0]
+	}
+	pfName, err := utils.GetPfName(pciAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +54,7 @@ func NewPciNetDevice(pciDevice *ghw.PCIDevice, rFactory types.ResourceFactory) (
 	dSpecs := infoProvider.GetDeviceSpecs(pciAddr)
 	mnt := infoProvider.GetMounts(pciAddr)
 	env := infoProvider.GetEnvVal(pciAddr)
+	rdmaSpec := rFactory.GetRdmaSpec(pciDevice.Address)
 	apiDevice := &pluginapi.Device{
 		ID:     pciAddr,
 		Health: pluginapi.Healthy,
@@ -50,8 +63,8 @@ func NewPciNetDevice(pciDevice *ghw.PCIDevice, rFactory types.ResourceFactory) (
 	// 			4. Create pciNetDevice object with all relevent info
 	return &pciNetDevice{
 		pciDevice:   pciDevice,
-		ifName:      "", // TO-DO: Get this using utils pkg
-		pfName:      "", // TO-DO: Get this using utils pkg
+		ifName:      ifName,
+		pfName:      pfName,
 		driver:      driverName,
 		vfID:        0,  // TO-DO: Get this using utils pkg if needed
 		linkSpeed:   "", // TO-DO: Get this using utils pkg
@@ -60,11 +73,16 @@ func NewPciNetDevice(pciDevice *ghw.PCIDevice, rFactory types.ResourceFactory) (
 		mounts:      mnt,
 		env:         env,
 		numa:        "", // TO-DO: Get this using utils pkg
+		rdmaSpec:    rdmaSpec,
 	}, nil
 }
 
 func (nd *pciNetDevice) GetPFName() string {
 	return nd.pfName
+}
+
+func (nd *pciNetDevice) GetNetName() string {
+	return nd.ifName
 }
 
 func (nd *pciNetDevice) GetPfPciAddr() string {
@@ -78,18 +96,23 @@ func (nd *pciNetDevice) GetVendor() string {
 func (nd *pciNetDevice) GetDeviceCode() string {
 	return nd.pciDevice.Product.ID
 }
+
 func (nd *pciNetDevice) GetPciAddr() string {
 	return nd.pciDevice.Address
 }
+
 func (nd *pciNetDevice) GetDriver() string {
 	return nd.driver
 }
+
 func (nd *pciNetDevice) IsSriovPF() bool {
 	return false
 }
+
 func (nd *pciNetDevice) GetLinkSpeed() string {
 	return nd.linkSpeed
 }
+
 func (nd *pciNetDevice) GetSubClass() string {
 	return nd.pciDevice.Subclass.ID
 }
@@ -108,6 +131,10 @@ func (nd *pciNetDevice) GetMounts() []*pluginapi.Mount {
 
 func (nd *pciNetDevice) GetAPIDevice() *pluginapi.Device {
 	return nd.apiDevice
+}
+
+func (nd *pciNetDevice) GetRdmaSpec() types.RdmaSpec {
+	return nd.rdmaSpec
 }
 
 func getPFInfos(pciAddr string) (pfAddr, pfName string, err error) {

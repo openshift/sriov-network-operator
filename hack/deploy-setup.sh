@@ -18,7 +18,7 @@ load_manifest() {
     if ! oc get ns sriov-network-operator > /dev/null 2>&1 && test -f namespace.yaml ; then
       oc apply -f namespace.yaml
     fi
-    files="service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml crds/sriovnetwork_v1_sriovnetwork_crd.yaml crds/k8s_v1_networkattachmentdefinition_crd.yaml crds/sriovnetwork_v1_sriovnetworknodepolicy_crd.yaml crds/sriovnetwork_v1_sriovnetworknodestate_crd.yaml operator.yaml"
+    files="service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml crds/sriovnetwork_v1_sriovnetwork_crd.yaml crds/sriovnetwork_v1_sriovnetworknodepolicy_crd.yaml crds/sriovnetwork_v1_sriovnetworknodestate_crd.yaml operator.yaml"
     for m in ${files}; do
       if [ "$(echo ${EXCLUSIONS[@]} | grep -o ${m} | wc -w | xargs)" == "0" ] ; then
         oc apply -f ${m} ${namespace:-}

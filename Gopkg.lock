@@ -400,15 +400,15 @@
   version = "v1.0"
 
 [[projects]]
-  branch = "feature/device_selectors"
-  digest = "1:0d93dad832f1667549f366af9403b7254a889435b69ef4a173222e7187fd5cd3"
+  branch = "master"
+  digest = "1:9a84fa782be65253cc932ac5e883b80b7226d3c1a95ebe1b9342bc47c3bcaaf2"
   name = "github.com/intel/sriov-network-device-plugin"
   packages = [
     "pkg/types",
     "pkg/utils",
   ]
   pruneopts = "NT"
-  revision = "4f3dd248f051c5e9b368dabdc0f4a9ce12b1a007"
+  revision = "34d97db7c39b8c2bc1a0fa8194c8fefed7fd69f2"
 
 [[projects]]
   digest = "1:08e60c1225d3bae57e16847a99f447127a9ffe2e56593a13cf2b72aef5d21ee5"

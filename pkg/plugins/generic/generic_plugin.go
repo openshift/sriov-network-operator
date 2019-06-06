@@ -79,8 +79,15 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 // Apply config change
 func (p *GenericPlugin) Apply() error {
 	glog.Info("generic-plugin Apply()")
+	exit, err := utils.Chroot("/host")
+    if err != nil {
+        return err
+    }
 	if err := utils.SyncNodeState(p.DesireState); err != nil {
 		return err
 	}
+	if err := exit(); err != nil {
+        return err
+    }
 	return nil
 }

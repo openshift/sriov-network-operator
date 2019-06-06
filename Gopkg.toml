@@ -57,7 +57,7 @@ required = [
 
 [[override]]
   name = "github.com/intel/sriov-network-device-plugin"
-  branch = "feature/device_selectors"
+  branch = "master"
 
 [[constraint]]
   name = "github.com/operator-framework/operator-sdk"

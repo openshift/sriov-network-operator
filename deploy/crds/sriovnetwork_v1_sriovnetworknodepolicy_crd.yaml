@@ -38,6 +38,10 @@ spec:
               properties:
                 deviceID:
                   type: string
+                pfNames:
+                  items:
+                    type: string
+                  type: array
                 rootDevices:
                   items:
                     type: string

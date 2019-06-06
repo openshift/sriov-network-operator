@@ -21,20 +21,15 @@ type Interface struct {
 }
 
 type InterfaceExt struct {
-	Name       string            `json:"name,omitempty"`
+	InterfaceProperty
 	NumVfs     int               `json:"numVfs,omitempty"`
-	Mtu        int               `json:"mtu,omitempty"`
-	Vendor     string            `json:"vendor,omitempty"`
-	DeviceID   string            `json:"deviceID,omitempty"`
 	LinkSpeed  string            `json:"linkSpeed,omitempty"`
-	PciAddress string            `json:"pciAddress"`
-	Driver     string            `json:"driver,omitempty"`
 	TotalVfs   int               `json:"totalvfs,omitempty"`
-	VFs        []VirutalFunction `json:"Vfs,omitempty"`
+	VFs        []VirtualFunction `json:"Vfs,omitempty"`
 }
 
-type VirutalFunction struct {
-	No         int    `json:"no,omitempty"`
+type InterfaceProperty struct {
+	Name       string `json:"name,omitempty"`
 	Mac        string `json:"mac,omitempty"`
 	Assigned   string `json:"assigned,omitempty"`
 	Driver     string `json:"driver,omitempty"`
@@ -44,6 +39,8 @@ type VirutalFunction struct {
 	Vlan       int    `json:"Vlan,omitempty"`
 	Mtu        int    `json:"mtu,omitempty"`
 }
+
+type VirtualFunction InterfaceProperty
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
 // +k8s:openapi-gen=true
