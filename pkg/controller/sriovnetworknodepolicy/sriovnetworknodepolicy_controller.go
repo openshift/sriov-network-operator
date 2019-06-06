@@ -524,6 +524,17 @@ func renderDsForCR() ([]*uns.Unstructured, error) {
 }
 
 func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList, nsl *sriovnetworkv1.SriovNetworkNodeStateList) (map[string]string, error) {
+	// drivers := map[string]string{
+	// 	"1572": "i40e",
+	// 	"158b": "i40e",
+	// 	"1583": "i40e",
+	// 	"37d2": "i40e",
+	// 	"154c": "iavf",
+	// 	"1018": "mlx5_core",
+	// 	"1017": "mlx5_core",
+	// 	"1016": "mlx5_core",
+	// 	"1015": "mlx5_core",
+	// }
 	data := make(map[string]string)
 	rcl := &dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
@@ -543,11 +554,6 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList,
 		} else {
 			rc := &dptypes.ResourceConfig{
 				ResourceName: p.Spec.ResourceName,
-				Selectors: struct {
-					Vendors []string `json:"vendors,omitempty"`
-					Devices []string `json:"devices,omitempty"`
-					Drivers []string `json:"drivers,omitempty"`
-				}{[]string{}, []string{}, []string{}},
 			}
 			if p.Spec.NicSelector.Vendor != "" {
 				rc.Selectors.Vendors = append(rc.Selectors.Vendors, p.Spec.NicSelector.Vendor)
@@ -559,21 +565,35 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList,
 					rc.Selectors.Devices = append(rc.Selectors.Devices, p.Spec.NicSelector.DeviceID)
 				}
 			}
+			if l := len(rc.Selectors.PfNames);  l > 0 {
+				for _, in := range p.Spec.NicSelector.PfNames {
+					i := 0
+					name := ""
+					for i, name = range rc.Selectors.PfNames {
+						if in == name {
+							continue
+						}	
+					}
+					if i == l-1 {
+						rc.Selectors.PfNames = append(rc.Selectors.PfNames, in)
+					}
+				} 
+			} else {
+				rc.Selectors.PfNames = append(rc.Selectors.PfNames, p.Spec.NicSelector.PfNames...)
+			}
+
 			if p.Spec.DeviceType == "vfio-pci" {
 				rc.Selectors.Drivers = append(rc.Selectors.Drivers, p.Spec.DeviceType)
 			}
-
 			rcl.ResourceList = append(rcl.ResourceList, *rc)
-
-			fmt.Printf("Insert ResourcList = %v\n", rcl.ResourceList)
 		}
 
 	}
-	bc, err := json.Marshal(rcl)
+	config, err := json.Marshal(rcl)
 	if err != nil {
 		return nil, err
 	}
-	data[DP_CONFIG_FILENAME] = string(bc)
+	data[DP_CONFIG_FILENAME] = string(config)
 	return data, nil
 }
 

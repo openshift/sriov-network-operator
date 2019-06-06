@@ -8,7 +8,6 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // NetworkAttachmentDefinitionSpec defines the desired state of NetworkAttachmentDefinition
-// +k8s:openapi-gen=true
 type NetworkAttachmentDefinitionSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
@@ -22,7 +21,6 @@ type NetworkAttachmentDefinitionSpec struct {
 }
 
 // NetworkAttachmentDefinitionStatus defines the observed state of NetworkAttachmentDefinition
-// +k8s:openapi-gen=true
 type NetworkAttachmentDefinitionStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
@@ -32,7 +30,6 @@ type NetworkAttachmentDefinitionStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NetworkAttachmentDefinition is the Schema for the networkattachmentdefinitions API
-// +k8s:openapi-gen=true
 type NetworkAttachmentDefinition struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

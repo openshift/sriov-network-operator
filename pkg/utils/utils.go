@@ -67,13 +67,18 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			continue
 		}
 		iface := sriovnetworkv1.InterfaceExt{
-			PciAddress: device.Address,
-			Driver:     driver,
-			Vendor:     device.Vendor.ID,
-			DeviceID:   device.Product.ID,
+			InterfaceProperty: sriovnetworkv1.InterfaceProperty{
+				PciAddress: device.Address,
+				Driver:     driver,
+				Vendor:     device.Vendor.ID,
+				DeviceID:   device.Product.ID,
+			},
 		}
 		if mtu := getNetdevMTU(device.Address); mtu > 0 {
 			iface.Mtu = mtu
+		}
+		if name := tryGetInterfaceName(device.Address); name != "" {
+			iface.Name = name
 		}
 
 		if dputils.IsSriovPF(device.Address) {
@@ -236,6 +241,15 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 	return nil
 }
 
+func tryGetInterfaceName(pciAddr string) (string) {
+	name, err := dputils.GetNetNames(pciAddr)
+	if err != nil {
+		return ""
+	}
+	glog.V(2).Infof("tryGetInterfaceName(): name is %s", name[0])
+	return name[0]
+}
+
 func getNetdevMTU(pciAddr string) int {
 	glog.V(2).Infof("getNetdevMTU(): get MTU for device %s", pciAddr)
 	ifaceName, err := dputils.GetNetNames(pciAddr)
@@ -277,13 +291,13 @@ func resetSriovDevice(pciAddr string) error {
 	return nil
 }
 
-func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirutalFunction {
+func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction {
 	driver, err := dputils.GetDriverName(pciAddr)
 	if err != nil {
 		glog.Warningf("getVfInfo(): unable to parse device driver for device %s %q", pciAddr, err)
 	}
 
-	vf := sriovnetworkv1.VirutalFunction{
+	vf := sriovnetworkv1.VirtualFunction{
 		PciAddress: pciAddr,
 		Driver:     driver,
 	}
