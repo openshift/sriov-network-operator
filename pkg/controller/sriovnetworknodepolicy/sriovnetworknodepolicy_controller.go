@@ -309,14 +309,9 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(cr *sriovnet
 			if p.Name == "default" {
 				continue
 			}
-			fmt.Printf("evaluate policy %s for node %s\n", p.Name, node.Name)
 			if p.Selected(node) {
-				if len(found.Status.Interfaces) == 0 {
-					continue
-				} else {
-					fmt.Printf("apply policy %s for node %s\n", p.Name, node.Name)
-					p.Apply(found)
-				}
+				fmt.Printf("apply policy %s for node %s\n", p.Name, node.Name)
+				p.Apply(found)
 			}
 		}
 		err = r.client.Update(context.TODO(), found)
@@ -524,17 +519,6 @@ func renderDsForCR() ([]*uns.Unstructured, error) {
 }
 
 func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList, nsl *sriovnetworkv1.SriovNetworkNodeStateList) (map[string]string, error) {
-	// drivers := map[string]string{
-	// 	"1572": "i40e",
-	// 	"158b": "i40e",
-	// 	"1583": "i40e",
-	// 	"37d2": "i40e",
-	// 	"154c": "iavf",
-	// 	"1018": "mlx5_core",
-	// 	"1017": "mlx5_core",
-	// 	"1016": "mlx5_core",
-	// 	"1015": "mlx5_core",
-	// }
 	data := make(map[string]string)
 	rcl := &dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
@@ -550,43 +534,47 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList,
 			if p.Spec.NicSelector.DeviceID != "" && !sriovnetworkv1.StringInArray(p.Spec.NicSelector.DeviceID, rcl.ResourceList[i].Selectors.Devices) {
 				rcl.ResourceList[i].Selectors.Devices = append(rcl.ResourceList[i].Selectors.Devices, p.Spec.NicSelector.DeviceID)
 			}
+			if len(p.Spec.NicSelector.PfNames) > 0 {
+				rcl.ResourceList[i].Selectors.PfNames = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.PfNames, p.Spec.NicSelector.PfNames...)
+			}
+			if p.Spec.DeviceType == "vfio-pci" {
+				rcl.ResourceList[i].Selectors.Drivers = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.Drivers, p.Spec.DeviceType)
+			} else {
+				if p.Spec.NumVfs > 0 {
+					///////////////////////////////////
+					// TODO: remove unsupport VF driver
+					///////////////////////////////////
+					rcl.ResourceList[i].Selectors.Drivers = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.Drivers, "iavf", "mlx5_core", "ixgbevf", "i40evf")
+				}
+			}
 			fmt.Printf("Update ResourcList = %v\n", rcl.ResourceList)
 		} else {
 			rc := &dptypes.ResourceConfig{
 				ResourceName: p.Spec.ResourceName,
-				IsRdma: p.Spec.IsRdma,
+				IsRdma:       p.Spec.IsRdma,
 			}
 			if p.Spec.NicSelector.Vendor != "" {
 				rc.Selectors.Vendors = append(rc.Selectors.Vendors, p.Spec.NicSelector.Vendor)
 			}
 			if p.Spec.NicSelector.DeviceID != "" {
-				if p.Spec.NumVfs != 0 {
-					rc.Selectors.Devices = append(rc.Selectors.Devices, sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID])
-				} else {
-					rc.Selectors.Devices = append(rc.Selectors.Devices, p.Spec.NicSelector.DeviceID)
-				}
+				rc.Selectors.Devices = append(rc.Selectors.Devices, p.Spec.NicSelector.DeviceID)
 			}
-			if l := len(rc.Selectors.PfNames); l > 0 {
-				for _, in := range p.Spec.NicSelector.PfNames {
-					i := 0
-					name := ""
-					for i, name = range rc.Selectors.PfNames {
-						if in == name {
-							continue
-						}
-					}
-					if i == l-1 {
-						rc.Selectors.PfNames = append(rc.Selectors.PfNames, in)
-					}
-				}
-			} else {
+			if l := len(p.Spec.NicSelector.PfNames); l > 0 {
 				rc.Selectors.PfNames = append(rc.Selectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
 
 			if p.Spec.DeviceType == "vfio-pci" {
 				rc.Selectors.Drivers = append(rc.Selectors.Drivers, p.Spec.DeviceType)
+			} else {
+				if p.Spec.NumVfs > 0 {
+					///////////////////////////////////
+					// TODO: remove unsupport VF driver
+					///////////////////////////////////
+					rc.Selectors.Drivers = append(rc.Selectors.Drivers, "iavf", "mlx5_core", "i40evf", "ixgbevf")
+				}
 			}
 			rcl.ResourceList = append(rcl.ResourceList, *rc)
+			fmt.Printf("Add ResourcList = %v\n", rcl.ResourceList)
 		}
 
 	}

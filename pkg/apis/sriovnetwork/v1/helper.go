@@ -62,17 +62,26 @@ func StringInArray(val string, array []string) bool {
 	return false
 }
 
+func UniqueAppend(inSlice []string, strings ...string) []string {
+	for _, s := range strings {
+		if !StringInArray(s, inSlice) {
+			inSlice = append(inSlice, s)
+		}
+	}
+	return inSlice
+}
+
 // Apply policy to SriovNetworkNodeState CR
 func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 	s := p.Spec.NicSelector
-	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 {
+	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 {
 		// Empty NicSelector match none
 		return
 	}
 	interfaces := []Interface{}
 	for _, iface := range state.Status.Interfaces {
 		if s.Selected(&iface) {
-			log.Info("Update interface", "name", iface.Name)
+			log.Info("Update interface", "name:", iface.Name)
 			interfaces = append(interfaces, Interface{
 				PciAddress: iface.PciAddress,
 				Mtu:        p.Spec.Mtu,
@@ -81,7 +90,7 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 			})
 		}
 	}
-	state.Spec.Interfaces = interfaces
+	state.Spec.Interfaces = append(state.Spec.Interfaces, interfaces...)
 }
 
 func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool {
@@ -94,6 +103,9 @@ func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool {
 	if len(s.RootDevices) > 0 && !StringInArray(iface.PciAddress, s.RootDevices) {
 		return false
 	}
+	if len(s.PfNames) > 0 && !StringInArray(iface.Name, s.PfNames) {
+		return false
+	}
 	return true
 }
 
@@ -104,4 +116,13 @@ func (s *SriovNetworkNodeState) GetInterfaceStateByPciAddress(addr string) *Inte
 		}
 	}
 	return nil
+}
+
+func (s *SriovNetworkNodeState) GetDriverByPciAddress(addr string) string {
+	for _, iface := range s.Status.Interfaces {
+		if addr == iface.PciAddress {
+			return iface.Driver
+		}
+	}
+	return ""
 }
