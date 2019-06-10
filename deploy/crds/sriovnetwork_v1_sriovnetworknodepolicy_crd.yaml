@@ -31,6 +31,8 @@ spec:
           properties:
             deviceType:
               type: string
+            isRdma:
+              type: boolean
             mtu:
               format: int64
               type: integer

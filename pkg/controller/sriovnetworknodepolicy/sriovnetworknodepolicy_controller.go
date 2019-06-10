@@ -554,6 +554,7 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList,
 		} else {
 			rc := &dptypes.ResourceConfig{
 				ResourceName: p.Spec.ResourceName,
+				IsRdma: p.Spec.IsRdma,
 			}
 			if p.Spec.NicSelector.Vendor != "" {
 				rc.Selectors.Vendors = append(rc.Selectors.Vendors, p.Spec.NicSelector.Vendor)

@@ -166,6 +166,12 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref common.Refer
 							Format: "",
 						},
 					},
+					"isRdma": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"boolean"},
+							Format: "",
+						},
+					},
 				},
 				Required: []string{"resourceName", "numVfs", "nicSelector"},
 			},

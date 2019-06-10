@@ -20,6 +20,7 @@ type SriovNetworkNodePolicySpec struct {
 	NumVfs       int                     `json:"numVfs"`
 	NicSelector  SriovNetworkNicSelector `json:"nicSelector"`
 	DeviceType   string                  `json:"deviceType,omitempty"`
+	IsRdma       bool                    `json:"isRdma,omitempty"`
 }
 
 type SriovNetworkNicSelector struct {
