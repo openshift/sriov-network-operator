@@ -12,4 +12,5 @@ files="operator.yaml service_account.yaml role.yaml role_binding.yaml clusterrol
 for file in ${files}; do
   oc delete -f $file --ignore-not-found ${namespace}
 done
+oc delete cm --ignore-not-found ${namespace} device-plugin-config
 popd

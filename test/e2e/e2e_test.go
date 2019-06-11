@@ -2,21 +2,26 @@ package e2e
 
 import (
 	goctx "context"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
+	"reflect"
 
 	"github.com/openshift/sriov-network-operator/pkg/apis"
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	// dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
+	corev1 "k8s.io/api/core/v1"
+	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 var (
@@ -60,35 +65,101 @@ func TestOperatorController(t *testing.T) {
 
 	// run subtests
 	t.Run("Operator", func(t *testing.T) {
-		t.Run("Create-SriovDaemonset", func(t *testing.T) {
-			CreateSriovNetworkConfigDaemonset(t, ctx)
+		t.Run("Test-Sriov-Network-Config-Daemonset-Created", func(t *testing.T) {
+			testSriovNetworkConfigDaemonsetCreated(t, ctx)
 		})
-		t.Run("With-SriovNetworkCR-Create-NetAttDefCR", func(t *testing.T) {
-			WithSriovNetworkCRCreateNetAttDefCR(t, ctx)
+		t.Run("Test-With-SriovNetworkCR", func(t *testing.T) {
+			testWithSriovNetworkCR(t, ctx)
+		})
+		t.Run("Test-With-One-SriovNetworkNodePolicyCR", func(t *testing.T) {
+			testWithOneSriovNetworkNodePolicyCR(t, ctx)
 		})
 	})
 }
 
-func CreateSriovNetworkConfigDaemonset(t *testing.T, ctx *framework.TestCtx) {
+func testWithOneSriovNetworkNodePolicyCR(t *testing.T, ctx *framework.TestCtx) {
 	t.Parallel()
 	namespace, err := ctx.GetNamespace()
 	if err != nil {
 		t.Fatalf("failed to get namesapces: %v", err)
 	}
+
+	// create custom resource
+	policy := &sriovnetworkv1.SriovNetworkNodePolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "SriovNetworkNodePolicy",
+			APIVersion: "sriovnetwork.openshift.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "policy-1",
+			Namespace: namespace,
+		},
+		Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+			ResourceName: "resource-1",
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/sriov-capable": "true",
+			},
+			Priority: 99,
+			Mtu: 9000,
+			NumVfs: 6,
+			NicSelector: sriovnetworkv1.SriovNetworkNicSelector{
+				Vendor: "8086",
+				RootDevices: []string{"0000:86:00.1",},
+			},
+			DeviceType: "vfio-pci",
+		},
+	}
+	// get global framework variables
 	f := framework.Global
-	_, err = waitForDaemonset(t, f.Client, namespace, "sriov-network-config-daemon", retryInterval, timeout)
+	err = f.Client.Create(goctx.TODO(), policy, &framework.CleanupOptions{TestContext: ctx, Timeout: apiTimeout, RetryInterval: retryInterval})
+	if err != nil {
+		t.Fatalf("fail to create SriovNetworkNodePolicy CR: %v", err)
+	}
+
+	cm := &corev1.ConfigMap{}
+	err = waitForNamespacedObject(cm, t, f.Client, namespace, "device-plugin-config", retryInterval, timeout)
+	if err != nil {
+		t.Fatalf("fail to get ConfigMap: %v", err)
+	}
+
+	if err = validateDevicePluginConfig(policy, cm.Data["config.json"]); err != nil {
+		t.Fatalf("failed to validate ConfigMap : %v", err)
+	}
+
+	daemon := &appsv1.DaemonSet{}
+	err = waitForNamespacedObject(daemon, t, f.Client, namespace, "sriov-device-plugin", retryInterval, timeout)
+	if err != nil {
+		t.Fatalf("fail to get DaemonSet sriov-device-plugin: %v", err)
+	}
+
+	daemon = &appsv1.DaemonSet{}
+	err = waitForNamespacedObject(daemon, t, f.Client, namespace, "sriov-cni", retryInterval, timeout)
+	if err != nil {
+		t.Fatalf("fail to get DaemonSet sriov-cni: %v", err)
+	}
+}
+
+func testSriovNetworkConfigDaemonsetCreated(t *testing.T, ctx *framework.TestCtx) {
+	t.Parallel()
+	namespace, err := ctx.GetNamespace()
+	if err != nil {
+		t.Fatalf("failed to get namespaces: %v", err)
+	}
+	f := framework.Global
+	daemon := &appsv1.DaemonSet{}
+	err = waitForNamespacedObject(daemon, t, f.Client, namespace, "sriov-network-config-daemon", retryInterval, timeout)
 	if err != nil {
 		t.Fatalf("failed to get daemonset: %v", err)
 	}
 }
 
-func WithSriovNetworkCRCreateNetAttDefCR(t *testing.T, ctx *framework.TestCtx) {
+func testWithSriovNetworkCR(t *testing.T, ctx *framework.TestCtx) {
 	t.Parallel()
 	namespace, err := ctx.GetNamespace()
 	if err != nil {
-		t.Fatalf("failed to get namesapces: %v", err)
+		t.Fatalf("failed to get namespaces: %v", err)
 	}
-	// create memcached custom resource
+	// create custom resource
 	exampleCR := &sriovnetworkv1.SriovNetwork{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "SriovNetwork",
@@ -120,7 +191,7 @@ func WithSriovNetworkCRCreateNetAttDefCR(t *testing.T, ctx *framework.TestCtx) {
 	anno := netAttDefCR.GetAnnotations()
 
 	if anno["k8s.v1.cni.cncf.io/resourceName"] != exampleCR.Spec.ResourceName {
-		t.Fatal("CNI resourcName not match")
+		t.Fatal("CNI resourceName not match")
 	}
 
 	if strings.TrimSpace(netAttDefCR.Spec.Config) != expect {
@@ -153,13 +224,12 @@ func WaitForNetworkAttachmentDefinition(t *testing.T, client framework.Framework
 	return cr, nil
 }
 
-func waitForDaemonset(t *testing.T, client framework.FrameworkClient, namespace, name string, retryInterval, timeout time.Duration) (*appsv1.DaemonSet, error) {
-	found := &appsv1.DaemonSet{}
+func waitForNamespacedObject(obj runtime.Object, t *testing.T, client framework.FrameworkClient, namespace, name string, retryInterval, timeout time.Duration) (error) {
 
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), apiTimeout)
 		defer cancel()
-		err = client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, found)
+		err = client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, obj)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
@@ -169,9 +239,47 @@ func waitForDaemonset(t *testing.T, client framework.FrameworkClient, namespace,
 		return true, nil
 	})
 	if err != nil {
-		t.Logf("failed to wait for Daemonset %s/%s to exist: %v", namespace, name, err)
-		return nil, err
+		t.Logf("failed to wait for obj %s/%s to exist: %v", namespace, name, err)
+		return err
 	}
 
-	return found, nil
+	return nil
+}
+
+func validateDevicePluginConfig(np *sriovnetworkv1.SriovNetworkNodePolicy, rawConfig string) error {
+	rcl := dptypes.ResourceConfList{}
+
+	if err := json.Unmarshal([]byte(rawConfig), &rcl); err != nil {
+		return err
+	}
+
+	if len(rcl.ResourceList) != 1 {
+		return fmt.Errorf("number of resources in config is incorrect")
+	}
+
+	rc := rcl.ResourceList[0]
+	if rc.IsRdma != np.Spec.IsRdma || rc.ResourceName != np.Spec.ResourceName || !validateSelector(&rc, &np.Spec.NicSelector) {
+		return fmt.Errorf("content of config is incorrect")
+	}
+
+	return nil
+}
+
+func validateSelector(rc *dptypes.ResourceConfig, ns *sriovnetworkv1.SriovNetworkNicSelector) bool {
+	if ns.DeviceID != "" {
+		if len(rc.Selectors.Devices) != 1 || ns.DeviceID != rc.Selectors.Devices[0]{
+			return false
+		}
+	}
+	if ns.Vendor != "" {
+		if len(rc.Selectors.Vendors) != 1 || ns.Vendor != rc.Selectors.Vendors[0]{
+			return false
+		}
+	}
+	if len(ns.PfNames) > 0 {
+		if !reflect.DeepEqual(ns.PfNames, rc.Selectors.PfNames){
+			return false
+		}
+	}
+	return true
 }
