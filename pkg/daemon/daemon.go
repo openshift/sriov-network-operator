@@ -86,7 +86,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 		UpdateFunc: dn.nodeStateChangeHandler,
 	})
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 	go informer.Run(dn.stopCh)
 
 	for {
@@ -209,7 +209,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	var err error
 	newState := new.(*sriovnetworkv1.SriovNetworkNodeState)
 	oldState := old.(*sriovnetworkv1.SriovNetworkNodeState)
-	if reflect.DeepEqual(newState.Spec.Interfaces, oldState.Spec.Interfaces) {
+	if reflect.DeepEqual(newState.Spec.Interfaces, oldState.Spec.Interfaces) && reflect.DeepEqual(newState.GetAnnotations(), oldState.GetAnnotations()) {
 		glog.V(2).Infof("nodeStateChangeHandler(): Interface not changed")
 		return
 	}
@@ -383,10 +383,10 @@ func needRestartDevicePlugin(oldState, newState *sriovnetworkv1.SriovNetworkNode
 }
 
 func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
-	pluginNames := make(map[string]string)
+	pluginNames := make(map[string]bool)
 	for _, iface := range ns.Status.Interfaces {
 		if val, ok := pluginMap[iface.Vendor]; ok {
-			pluginNames[val] = "Y"
+			pluginNames[val] = true
 		}
 	}
 	rawList := reflect.ValueOf(pluginNames).MapKeys()

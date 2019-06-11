@@ -137,23 +137,20 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 
 	// Sort the policies with priority, higher priority ones is applied later
 	sort.Sort(sriovnetworkv1.ByPriority(policyList.Items))
-
-	// Render and sync Daemon objects
-	if err = r.syncPluginDaemonObjs(defaultPolicy, policyList); err != nil {
+	// Sync Sriov device plugin ConfigMap object
+	if err = r.syncDevicePluginConfigMap(policyList); err != nil {
 		return reconcile.Result{}, err
 	}
-
 	// Sync SriovNetworkNodeState objects
 	if err = r.syncAllSriovNetworkNodeStates(defaultPolicy, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
 	}
-	// Sync SriovNetworkNodeState objects
+	// Sync SriovNetworkConfigDaemon objects
 	if err = r.syncConfigDaemonSet(defaultPolicy); err != nil {
 		return reconcile.Result{}, err
 	}
-
-	// Sync Sriov device plugin ConfigMap object
-	if err = r.syncDevicePluginConfigMap(policyList, nodeList); err != nil {
+	// Render and sync Daemon objects
+	if err = r.syncPluginDaemonObjs(defaultPolicy, policyList); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -214,17 +211,11 @@ func (r *ReconcileSriovNetworkNodePolicy) syncConfigDaemonSet(dp *sriovnetworkv1
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
+func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.WithName("syncDevicePluginConfigMap")
 	logger.Info("Start to sync device plugin ConfigMap")
-	nsl := &sriovnetworkv1.SriovNetworkNodeStateList{}
-	lo := &client.ListOptions{Namespace: Namespace}
-	err := r.client.List(context.TODO(), lo, nsl)
-	if err != nil {
-		logger.Error(err, "Fail to get SriovNetworkNodeState list")
-		return err
-	}
-	data, err := renderDevicePluginConfigData(pl, nsl)
+
+	data, err := renderDevicePluginConfigData(pl)
 	if err != nil {
 		return err
 	}
@@ -261,20 +252,24 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnet
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
+func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(np *sriovnetworkv1.SriovNetworkNodePolicy, npl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
 	logger := log.WithName("syncAllSriovNetworkNodeStates")
 	logger.Info("Start to sync all SriovNetworkNodeState custom resource")
-
+	found := &corev1.ConfigMap{}
+	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: Namespace, Name: CONFIGMAP_NAME}, found); err != nil {
+		logger.Error(err, "Fail to get", "ConfigMap", CONFIGMAP_NAME)
+		return err
+	}
+	rv := found.GetResourceVersion()
 	for _, node := range nl.Items {
 		logger.Info("Sync SriovNetworkNodeState CR", "name", node.Name)
 		ns := &sriovnetworkv1.SriovNetworkNodeState{}
 		ns.Name = node.Name
 		ns.Namespace = Namespace
-		// nodeStates[node.Name] = ns
 		j, _ := json.Marshal(ns)
 		fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
-		if err := r.syncSriovNetworkNodeState(dp, pl, ns, &node); err != nil {
-			logger.Error(err, "Fail to sync SriovNetworkNodeState", "name", ns.Name)
+		if err := r.syncSriovNetworkNodeState(np, npl, ns, &node, rv); err != nil {
+			logger.Error(err, "Fail to sync", "SriovNetworkNodeState", ns.Name)
 			return err
 		}
 	}
@@ -282,30 +277,31 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(dp *srio
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) error {
+func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnetworkv1.SriovNetworkNodePolicy, npl *sriovnetworkv1.SriovNetworkNodePolicyList, ns *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node, cmrv string) error {
 	logger := log.WithName("syncSriovNetworkNodeState")
-	logger.Info("Start to sync SriovNetworkNodeState", "Name", in.Name)
+	logger.Info("Start to sync SriovNetworkNodeState", "Name", ns.Name)
 
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(np, ns, r.scheme); err != nil {
 		return err
 	}
 	found := &sriovnetworkv1.SriovNetworkNodeState{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, found)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: ns.Namespace, Name: ns.Name}, found)
 	if err != nil {
-		logger.Info("Fail to get SriovNetworkNodeState", "namespace", in.Namespace, "name", in.Name)
+		logger.Info("Fail to get SriovNetworkNodeState", "namespace", ns.Namespace, "name", ns.Name)
 		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
+			ns.SetAnnotations(map[string]string{"devicePluginConfigMapResourcVersion": cmrv})
+			err = r.client.Create(context.TODO(), ns)
 			if err != nil {
 				return fmt.Errorf("Couldn't create SriovNetworkNodeState: %v", err)
 			}
-			logger.Info("Created SriovNetworkNodeState for", in.Namespace, in.Name)
+			logger.Info("Created SriovNetworkNodeState for", ns.Namespace, ns.Name)
 		} else {
 			return fmt.Errorf("Failed to get SriovNetworkNodeState: %v", err)
 		}
 	} else {
 		logger.Info("SriovNetworkNodeState already exists, updating")
-		found.Spec = in.Spec
-		for _, p := range pl.Items {
+		found.Spec = ns.Spec
+		for _, p := range npl.Items {
 			if p.Name == "default" {
 				continue
 			}
@@ -314,6 +310,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(cr *sriovnet
 				p.Apply(found)
 			}
 		}
+		found.SetAnnotations(map[string]string{"devicePluginConfigMapResourcVersion": cmrv})
 		err = r.client.Update(context.TODO(), found)
 		if err != nil {
 			return fmt.Errorf("Couldn't update SriovNetworkNodeState: %v", err)
@@ -518,7 +515,7 @@ func renderDsForCR() ([]*uns.Unstructured, error) {
 	return objs, nil
 }
 
-func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList, nsl *sriovnetworkv1.SriovNetworkNodeStateList) (map[string]string, error) {
+func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList) (map[string]string, error) {
 	data := make(map[string]string)
 	rcl := &dptypes.ResourceConfList{}
 	for _, p := range pl.Items {

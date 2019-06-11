@@ -54,11 +54,10 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 	needDrain = false
 	needReboot = false
 	err = nil
-
+	found := false
 	p.DesireState = new
 	p.LastState = old
 
-	var found bool
 	for _, in := range new.Spec.Interfaces {
 		found = false
 		for _, io := range old.Spec.Interfaces {
@@ -73,6 +72,11 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 			needDrain = true
 		}
 	}
+
+	if new.GetAnnotations()["devicePluginConfigMapResourcVersion"] != old.GetAnnotations()["devicePluginConfigMapResourcVersion"] {
+		needDrain = true
+	}
+
 	return
 }
 
