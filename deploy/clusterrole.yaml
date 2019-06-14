@@ -13,11 +13,23 @@ rules:
   resources: ["daemonsets"]
   verbs: ["get"]
 - apiGroups: [""]
-  resources: ["pods/eviction"]
-  verbs: ["create"]
-- apiGroups: [""]
   resources: [namespaces, serviceaccounts, ]
   verbs: ["*"]
-- apiGroups: [rbac.authorization.k8s.io]
-  resources: [rolebindings, roles]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sriov-network-config-daemon
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch", "patch", "update"]
+- apiGroups: [""]
+  resources: ["pods"]
   verbs: ["*"]
+- apiGroups: ["extensions"]
+  resources: ["daemonsets"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods/eviction"]
+  verbs: ["create"]

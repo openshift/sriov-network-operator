@@ -3,7 +3,7 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: sriov-device-plugin
-  namespace: sriov-network-operator
+  namespace: {{.Namespace}}
   annotations:
     kubernetes.io/description: |
       This daemon set launches the SR-IOV network device plugin on each node.

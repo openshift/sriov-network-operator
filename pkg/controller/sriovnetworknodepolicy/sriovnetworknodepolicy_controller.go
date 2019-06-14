@@ -161,50 +161,23 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 func (r *ReconcileSriovNetworkNodePolicy) syncConfigDaemonSet(dp *sriovnetworkv1.SriovNetworkNodePolicy) error {
 	logger := log.WithName("syncConfigDaemonset")
 	logger.Info("Start to sync config daemonset")
-	var err error
+	// var err error
 	objs := []*uns.Unstructured{}
 
 	data := render.MakeRenderData()
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
 	data.Data["Namespace"] = os.Getenv("NAMESPACE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	objs, err = render.RenderDir("./bindata/manifests/daemon", &data)
+	objs, err := renderDsForCR("./bindata/manifests/daemon", &data)
 	if err != nil {
-		logger.Error(err, "Fail to render config daemonset")
+		logger.Error(err, "Fail to render config daemon manifests")
 		return err
 	}
-
-	scheme := kscheme.Scheme
-	ds := &appsv1.DaemonSet{}
-	err = scheme.Convert(objs[0], ds, nil)
-	if err != nil {
-		return fmt.Errorf("Fail to convert manifest to daemonset: %v", err)
-	}
-	name := ds.GetName()
-	namespace := ds.GetNamespace()
-	if err = controllerutil.SetControllerReference(dp, ds, r.scheme); err != nil {
-		return err
-	}
-
-	found := &appsv1.DaemonSet{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, found)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Create DaemonSet", namespace, name)
-			err = r.client.Create(context.TODO(), ds)
-			if err != nil {
-				logger.Error(err, "Fail to create DaemonSet")
-				return err
-			}
-		} else {
-			logger.Error(err, "Fail to get DaemonSet")
-			return err
-		}
-	} else {
-		logger.Info("Update DaemonSet", namespace, name)
-		err = r.client.Update(context.TODO(), ds)
+	// Sync DaemonSets
+	for _, obj := range objs {
+		err = r.syncDsObject(dp, nil, obj)
 		if err != nil {
-			logger.Error(err, "Fail to update DaemonSet")
+			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
 			return err
 		}
 	}
@@ -322,7 +295,14 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnet
 func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.WithName("syncPluginDaemonObjs")
 	logger.Info("Start to sync sriov daemons objects")
-	objs, err := renderDsForCR()
+		
+	// render RawCNIConfig manifests
+	data := render.MakeRenderData()
+	data.Data["Namespace"] = os.Getenv("NAMESPACE")
+	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
+	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
+	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
+	objs, err := renderDsForCR(PLUGIN_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render SR-IoV manifests")
 		return err
@@ -344,14 +324,6 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDsObject(dp *sriovnetworkv1.SriovN
 	logger.Info("Start to sync Objects")
 	scheme := kscheme.Scheme
 	switch kind := obj.GetKind(); kind {
-	case "Namespace":
-		ns := &corev1.Namespace{}
-		err = scheme.Convert(obj, ns, nil)
-		r.syncNamespace(dp, ns)
-		if err != nil {
-			logger.Error(err, "Fail to sync Namespace")
-			return err
-		}
 	case "ServiceAccount":
 		sa := &corev1.ServiceAccount{}
 		err = scheme.Convert(obj, sa, nil)
@@ -374,7 +346,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDsObject(dp *sriovnetworkv1.SriovN
 
 func (r *ReconcileSriovNetworkNodePolicy) syncServiceAccount(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.ServiceAccount) error {
 	logger := log.WithName("syncServiceAccount")
-	logger.Info("Start to sync ServiceAccount", "Name", in.Name)
+	logger.Info("Start to sync ServiceAccount", "Name", in.Name, "Namespace", in.Namespace)
 
 	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
 		return err
@@ -401,42 +373,15 @@ func (r *ReconcileSriovNetworkNodePolicy) syncServiceAccount(cr *sriovnetworkv1.
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy) syncNamespace(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.Namespace) error {
-	logger := log.WithName("syncNamespace")
-	logger.Info("Start to sync Namespaces", "Name", in.Name)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
-	}
-	ns := &corev1.Namespace{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, ns)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create Namespace: %v", err)
-			}
-			logger.Info("Create Namespace for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get Namespace: %v", err)
-		}
-	} else {
-		logger.Info("Namespace already exists, updating")
-		err = r.client.Update(context.TODO(), in)
-		if err != nil {
-			return fmt.Errorf("Couldn't update Namespace: %v", err)
-		}
-	}
-	return nil
-}
-
 func (r *ReconcileSriovNetworkNodePolicy) syncDaemonSet(cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *appsv1.DaemonSet) error {
 	logger := log.WithName("syncDaemonSet")
 	logger.Info("Start to sync DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
 	var err error
 
-	if err = setDsNodeAffinity(pl, in); err != nil {
-		return err
+	if pl != nil {
+		if err = setDsNodeAffinity(pl, in); err != nil {
+			return err
+		}
 	}
 	if err = controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
 		return err
@@ -497,18 +442,13 @@ func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1
 }
 
 // renderDsForCR returns a busybox pod with the same name/namespace as the cr
-func renderDsForCR() ([]*uns.Unstructured, error) {
+func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, error) {
 	logger := log.WithName("renderDsForCR")
 	logger.Info("Start to render objects")
 	var err error
 	objs := []*uns.Unstructured{}
 
-	// render RawCNIConfig manifests
-	data := render.MakeRenderData()
-	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
-	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
-	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	objs, err = render.RenderDir(PLUGIN_PATH, &data)
+	objs, err = render.RenderDir(path, data)
 	if err != nil {
 		return nil, errs.Wrap(err, "failed to render OpenShiftSRIOV Network manifests")
 	}

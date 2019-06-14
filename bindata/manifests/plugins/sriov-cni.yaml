@@ -3,7 +3,7 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: sriov-cni
-  namespace: sriov-network-operator
+  namespace: {{.Namespace}}
   annotations:
     kubernetes.io/description: |
       This daemonset copies the SR-IOV CNI plugin on to each node.
