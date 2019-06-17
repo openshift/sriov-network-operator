@@ -36,6 +36,7 @@ var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
 // bad, but there's no way to pass configuration to the reconciler right now
 const (
 	PLUGIN_PATH         = "./bindata/manifests/plugins"
+	DAEMON_PATH         = "./bindata/manifests/daemon"
 	DEFAULT_POLICY_NAME = "default"
 	CONFIGMAP_NAME      = "device-plugin-config"
 	DP_CONFIG_FILENAME  = "config.json"
@@ -168,7 +169,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncConfigDaemonSet(dp *sriovnetworkv1
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
 	data.Data["Namespace"] = os.Getenv("NAMESPACE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	objs, err := renderDsForCR("./bindata/manifests/daemon", &data)
+	objs, err := renderDsForCR(DAEMON_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render config daemon manifests")
 		return err

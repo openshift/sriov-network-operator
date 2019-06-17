@@ -1,0 +1,4 @@
+packageName: openshift-sriov-network-operator
+channels:
+- name: alpha
+  currentCSV: sriov-network-operator.v0.0.1
