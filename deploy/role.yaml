@@ -75,6 +75,7 @@ rules:
 - apiGroups:
   - sriovnetwork.openshift.io
   resources:
+  - '*'
   - sriovnetworknodestates
   verbs:
   - '*'
