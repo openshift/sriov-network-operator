@@ -32,9 +32,9 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: SRIOV_CNI_IMAGE
-              value: quay.io/openshift/origin-sriov-cni:v4.0.0
+              value: quay.io/openshift/origin-sriov-cni:v4.2.0
             - name: SRIOV_DEVICE_PLUGIN_IMAGE
-              value: quay.io/openshift/origin-sriov-network-device-plugin:v4.0.0
+              value: quay.io/openshift/origin-sriov-network-device-plugin:v4.2.0
             - name: OPERATOR_NAME
               value: sriov-network-operator
             - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE

@@ -41,9 +41,6 @@ spec:
         - name: devicesock
           mountPath: /var/lib/kubelet/
           readOnly: false
-        - name: net
-          mountPath: /sys/class/net
-          readOnly: true
         - name: config-volume
           mountPath: /etc/pcidp/
           readOnly: true
