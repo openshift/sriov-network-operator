@@ -1,0 +1,17 @@
+---
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+spec:
+  tags:
+  - name: sriov-network-operator
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-sriov-network-operator:latest
+  - name: sriov-cni
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-sriov-cni:latest
+  - name: sriov-network-device-plugin
+    from:
+      kind: DockerImage
+      name:quay.io/openshift/origin-sriov-network-device-plugin:latest

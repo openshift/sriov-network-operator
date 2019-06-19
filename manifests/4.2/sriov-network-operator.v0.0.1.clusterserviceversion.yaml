@@ -59,7 +59,7 @@ metadata:
         }
       ]
     certified: "false"
-    containerImage: quay.io/pliurh/sriov-network-operator:v0.0.1
+    containerImage: quay.io/openshift/origin-sriov-network-operator:latest
     createdAt: 2019/04/30
     description: An operator for configuring SR-IOV components and initializing SRIOV network devices in Openshift cluster.
     repository: https://github.com/openshift/sriov-network-operator
@@ -242,7 +242,7 @@ spec:
               serviceAccountName: sriov-network-operator
               containers:
                 - name: sriov-network-operator
-                  image: quay.io/pliurh/sriov-network-operator
+                  image: quay.io/openshift/origin-sriov-network-operator:latest
                   command:
                   - sriov-network-operator
                   imagePullPolicy: IfNotPresent
@@ -252,13 +252,13 @@ spec:
                         fieldRef:
                           fieldPath: metadata.namespace
                     - name: SRIOV_CNI_IMAGE
-                      value: quay.io/openshift/origin-sriov-cni:v4.2.0
+                      value: quay.io/openshift/origin-sriov-cni:latest
                     - name: SRIOV_DEVICE_PLUGIN_IMAGE
-                      value: quay.io/openshift/origin-sriov-network-device-plugin:v4.2.0
+                      value: quay.io/openshift/origin-sriov-network-device-plugin:latest
                     - name: OPERATOR_NAME
                       value: sriov-network-operator
                     - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-                      value: quay.io/pliurh/sriov-network-operator
+                      value: quay.io/openshift/origin-sriov-network-operator:latest
                     - name: NAMESPACE
                       valueFrom:
                         fieldRef:
