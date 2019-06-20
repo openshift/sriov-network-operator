@@ -14,4 +14,4 @@ spec:
   - name: sriov-network-device-plugin
     from:
       kind: DockerImage
-      name:quay.io/openshift/origin-sriov-network-device-plugin:4.2.0
+      name: quay.io/openshift/origin-sriov-network-device-plugin:4.2.0
