@@ -10,8 +10,8 @@ spec:
   - name: sriov-cni
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-cni:latest
+      name: quay.io/openshift/origin-sriov-cni:4.2.0
   - name: sriov-network-device-plugin
     from:
       kind: DockerImage
-      name:quay.io/openshift/origin-sriov-network-device-plugin:latest
+      name:quay.io/openshift/origin-sriov-network-device-plugin:4.2.0

@@ -242,21 +242,21 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 }
 
 func tryGetInterfaceName(pciAddr string) string {
-	name, err := dputils.GetNetNames(pciAddr)
-	if err != nil {
+	names, err := dputils.GetNetNames(pciAddr)
+	if err != nil || len(names) < 1 {
 		return ""
 	}
-	glog.V(2).Infof("tryGetInterfaceName(): name is %s", name[0])
-	return name[0]
+	glog.V(2).Infof("tryGetInterfaceName(): name is %s", names[0])
+	return names[0]
 }
 
 func getNetdevMTU(pciAddr string) int {
 	glog.V(2).Infof("getNetdevMTU(): get MTU for device %s", pciAddr)
-	ifaceName, err := dputils.GetNetNames(pciAddr)
-	if err != nil {
+	ifaceName := tryGetInterfaceName(pciAddr)
+	if ifaceName == "" {
 		return 0
 	}
-	mtuFile := "net/" + ifaceName[0] + "/mtu"
+	mtuFile := "net/" + ifaceName + "/mtu"
 	mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
 	data, err := ioutil.ReadFile(mtuFilePath)
 	if err != nil {
