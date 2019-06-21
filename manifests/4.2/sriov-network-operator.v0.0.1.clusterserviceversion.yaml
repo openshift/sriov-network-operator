@@ -259,6 +259,8 @@ spec:
                       value: sriov-network-operator
                     - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
                       value: quay.io/openshift/origin-sriov-network-operator:latest
+                    - name: RESOURCE_PREFIX
+                      value: openshift.com
                     - name: NAMESPACE
                       valueFrom:
                         fieldRef:

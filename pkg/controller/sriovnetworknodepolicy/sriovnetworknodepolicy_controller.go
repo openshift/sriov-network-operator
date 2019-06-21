@@ -303,6 +303,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv
 	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
+	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
 	objs, err := renderDsForCR(PLUGIN_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render SR-IoV manifests")

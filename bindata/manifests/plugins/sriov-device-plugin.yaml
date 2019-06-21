@@ -35,6 +35,7 @@ spec:
         image: {{.SRIOVDevicePluginImage}}
         args:
         - --log-level=10
+        - --resource-prefix={{.ResourcePrefix}}
         securityContext:
           privileged: true
         volumeMounts:

@@ -3,6 +3,7 @@ package sriovnetwork
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
@@ -163,7 +164,7 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 	data := render.MakeRenderData()
 	data.Data["SriovNetworkName"] = cr.Name
 	data.Data["SriovNetworkNamespace"] = cr.Namespace
-	data.Data["SriovCniResourceName"] = cr.Spec.ResourceName
+	data.Data["SriovCniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
 	data.Data["SriovCniVlan"] = cr.Spec.Vlan
 	data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 
