@@ -58,7 +58,7 @@ spec:
   resourceName: intelnics
 ```
 
-##SriovNetworkNodeState
+### SriovNetworkNodeState
 
 The custom resource to represent the SR-IOV interface states of each host, which should only be managed by the operator itself.
 
@@ -117,7 +117,7 @@ status:
 
 From this example, in status field, user can find out there are 2 SRIOV capable NICs on node 'work-node-1'; in spec field, user can learn what the expected configure is generated from the combination of SriovNetworkNodeConfigPolicy CRs.
 
-## SriovNetworkNodeConfigPolicy
+### SriovNetworkNodeConfigPolicy
 
 This CRD is the key of SR-IOV network operator. This custom resource should be managed by cluster admin, to instruct the operator to:
 
