@@ -242,6 +242,12 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodeStateSpec(ref common.Refere
 			SchemaProps: spec.SchemaProps{
 				Description: "SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState",
 				Properties: map[string]spec.Schema{
+					"dpConfigVersion": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"string"},
+							Format: "",
+						},
+					},
 					"interfaces": {
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},

@@ -29,6 +29,8 @@ spec:
           type: object
         spec:
           properties:
+            dpConfigVersion:
+              type: string
             interfaces:
               items:
                 properties:

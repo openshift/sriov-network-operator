@@ -1,6 +1,8 @@
 package main
 
 import (
+	"reflect"
+
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	"github.com/openshift/sriov-network-operator/pkg/utils"
@@ -53,11 +55,15 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 	glog.Info("generic-plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
+	p.DesireState = new
+	if new.Spec.DpConfigVersion != old.Spec.DpConfigVersion && (len(new.Spec.Interfaces) > 0 || len(old.Spec.Interfaces) > 0) {
+		glog.Infof("generic-plugin OnNodeStateChange(): CMRV changed %v -> %v", old.Spec.DpConfigVersion, new.Spec.DpConfigVersion)
+		needDrain = true
+		return
+	}
+
 	err = nil
 	found := false
-	p.DesireState = new
-	p.LastState = old
-
 	for _, in := range new.Spec.Interfaces {
 		found = false
 		for _, io := range old.Spec.Interfaces {
@@ -72,17 +78,19 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 			needDrain = true
 		}
 	}
-
-	if new.GetAnnotations()["devicePluginConfigMapResourcVersion"] != old.GetAnnotations()["devicePluginConfigMapResourcVersion"] {
-		needDrain = true
-	}
-
 	return
 }
 
 // Apply config change
 func (p *GenericPlugin) Apply() error {
-	glog.Info("generic-plugin Apply()")
+	glog.Infof("generic-plugin Apply(): desiredState=%v", p.DesireState.Spec)
+	if p.LastState != nil {
+		glog.Infof("generic-plugin Apply(): lastStat=%v", p.LastState.Spec)
+		if reflect.DeepEqual(p.LastState.Spec.Interfaces, p.DesireState.Spec.Interfaces) {
+			glog.Info("generic-plugin Apply(): nothing to apply")
+			return nil
+		}
+	}
 	exit, err := utils.Chroot("/host")
 	if err != nil {
 		return err
@@ -93,5 +101,7 @@ func (p *GenericPlugin) Apply() error {
 	if err := exit(); err != nil {
 		return err
 	}
+	p.LastState = &sriovnetworkv1.SriovNetworkNodeState{}
+	*p.LastState = *p.DesireState
 	return nil
 }

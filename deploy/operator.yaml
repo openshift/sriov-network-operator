@@ -38,7 +38,7 @@ spec:
             - name: OPERATOR_NAME
               value: sriov-network-operator
             - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-              value: quay.io/pliurh/ose-sriov-network-operator
+              value: quay.io/pliurh/sriov-network-operator
             - name: RESOURCE_PREFIX
               value: openshift.com
             - name: NAMESPACE

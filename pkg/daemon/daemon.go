@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"reflect"
 	"time"
+	"sync"
 
 	"github.com/golang/glog"
 	drain "github.com/openshift/kubernetes-drain"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -45,6 +47,8 @@ type Daemon struct {
 	refreshCh chan<- struct{}
 
 	dpReboot bool
+
+	mu *sync.Mutex
 }
 
 var namespace = os.Getenv("NAMESPACE")
@@ -72,6 +76,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	glog.V(0).Info("Run(): start daemon")
 	// Only watch own SriovNetworkNodeState CR
 
+	dn.mu = &sync.Mutex{}
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
 		time.Second*30,
 		namespace,
@@ -209,7 +214,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	var err error
 	newState := new.(*sriovnetworkv1.SriovNetworkNodeState)
 	oldState := old.(*sriovnetworkv1.SriovNetworkNodeState)
-	if reflect.DeepEqual(newState.Spec.Interfaces, oldState.Spec.Interfaces) && reflect.DeepEqual(newState.GetAnnotations(), oldState.GetAnnotations()) {
+	if newState.GetObjectMeta().GetGeneration() == oldState.GetObjectMeta().GetGeneration() {
 		glog.V(2).Infof("nodeStateChangeHandler(): Interface not changed")
 		return
 	}
@@ -273,6 +278,8 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 }
 
 func (dn *Daemon) restartDevicePluginPod() error {
+	dn.mu.Lock()
+	defer dn.mu.Unlock()
 	glog.V(2).Infof("restartDevicePluginPod(): try to restart device plugin pod")
 	pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(metav1.ListOptions{
 		LabelSelector: "app=sriov-device-plugin",
@@ -288,6 +295,24 @@ func (dn *Daemon) restartDevicePluginPod() error {
 		if err != nil {
 			glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s", err)
 			return err
+		}
+
+		var lastErr error
+	
+		if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
+			_, err := dn.kubeClient.CoreV1().Pods(namespace).Get(pods.Items[0].GetName(), metav1.GetOptions{})
+			if err != nil {
+				if errors.IsNotFound(err) {
+					return true, nil
+				}
+				lastErr = err
+				glog.Infof("restartDevicePluginPod(): unexpected error: %v, retrying", err)
+				return false, err
+			}
+			glog.Info("restartDevicePluginPod(): waiting for pod get deleted")
+			return false, nil
+		}, dn.stopCh); err != nil {
+			glog.Errorf("restartDevicePluginPod(): failed to wait for pod deletion complete: %v", err)
 		}
 	}
 

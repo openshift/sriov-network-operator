@@ -2,10 +2,14 @@ package sriovnetworknodepolicy
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"sort"
+	// "time"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	render "github.com/openshift/sriov-network-operator/pkg/render"
@@ -65,16 +69,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// Watch for changes to primary resource SriovNetworkNodePolicy
 	err = c.Watch(&source.Kind{Type: &sriovnetworkv1.SriovNetworkNodePolicy{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner SriovNetworkNodePolicy
-	err = c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
-	})
 	if err != nil {
 		return err
 	}
@@ -234,7 +228,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(np *srio
 		logger.Error(err, "Fail to get", "ConfigMap", CONFIGMAP_NAME)
 		return err
 	}
-	rv := found.GetResourceVersion()
+	md5sum := md5.Sum([]byte(found.Data[DP_CONFIG_FILENAME]))
 	for _, node := range nl.Items {
 		logger.Info("Sync SriovNetworkNodeState CR", "name", node.Name)
 		ns := &sriovnetworkv1.SriovNetworkNodeState{}
@@ -242,7 +236,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(np *srio
 		ns.Namespace = Namespace
 		j, _ := json.Marshal(ns)
 		fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
-		if err := r.syncSriovNetworkNodeState(np, npl, ns, &node, rv); err != nil {
+		if err := r.syncSriovNetworkNodeState(np, npl, ns, &node, hex.EncodeToString(md5sum[:])); err != nil {
 			logger.Error(err, "Fail to sync", "SriovNetworkNodeState", ns.Name)
 			return err
 		}
@@ -251,9 +245,9 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(np *srio
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnetworkv1.SriovNetworkNodePolicy, npl *sriovnetworkv1.SriovNetworkNodePolicyList, ns *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node, cmrv string) error {
+func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnetworkv1.SriovNetworkNodePolicy, npl *sriovnetworkv1.SriovNetworkNodePolicyList, ns *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node, cksum string) error {
 	logger := log.WithName("syncSriovNetworkNodeState")
-	logger.Info("Start to sync SriovNetworkNodeState", "Name", ns.Name)
+	logger.Info("Start to sync SriovNetworkNodeState", "Name", ns.Name, "cksum", cksum)
 
 	if err := controllerutil.SetControllerReference(np, ns, r.scheme); err != nil {
 		return err
@@ -263,7 +257,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnet
 	if err != nil {
 		logger.Info("Fail to get SriovNetworkNodeState", "namespace", ns.Namespace, "name", ns.Name)
 		if errors.IsNotFound(err) {
-			ns.SetAnnotations(map[string]string{"devicePluginConfigMapResourcVersion": cmrv})
+			ns.Spec.DpConfigVersion = cksum
 			err = r.client.Create(context.TODO(), ns)
 			if err != nil {
 				return fmt.Errorf("Couldn't create SriovNetworkNodeState: %v", err)
@@ -284,7 +278,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnet
 				p.Apply(found)
 			}
 		}
-		found.SetAnnotations(map[string]string{"devicePluginConfigMapResourcVersion": cmrv})
+		found.Spec.DpConfigVersion = cksum
 		err = r.client.Update(context.TODO(), found)
 		if err != nil {
 			return fmt.Errorf("Couldn't update SriovNetworkNodeState: %v", err)
@@ -296,10 +290,17 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnet
 func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.WithName("syncPluginDaemonObjs")
 	logger.Info("Start to sync sriov daemons objects")
+	ns := os.Getenv("NAMESPACE")
+
+	if len(pl.Items) < 2 {
+		r.tryDeleteDs(ns, "sriov-device-plugin")
+		r.tryDeleteDs(ns, "sriov-cni")
+		return nil
+	}
 		
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
-	data.Data["Namespace"] = os.Getenv("NAMESPACE")
+	data.Data["Namespace"] = ns
 	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
@@ -314,6 +315,27 @@ func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv
 		err = r.syncDsObject(dp, pl, obj)
 		if err != nil {
 			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ReconcileSriovNetworkNodePolicy) tryDeleteDs(namespace, name string) error {
+	logger := log.WithName("tryDeleteDsObject")
+	ds := &appsv1.DaemonSet{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, ds)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		} else {
+			logger.Error(err, "Fail to get DaemonSet", "Namespace", namespace, "Name", name)
+			return err
+		}
+	} else {
+		err = r.client.Delete(context.TODO(), ds)
+		if err != nil {
+			logger.Error(err, "Fail to delete DaemonSet", "Namespace", namespace, "Name", name)
 			return err
 		}
 	}
@@ -395,17 +417,24 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDaemonSet(cr *sriovnetworkv1.Sriov
 			logger.Info("Created DaemonSet", in.Namespace, in.Name)
 			err = r.client.Create(context.TODO(), in)
 			if err != nil {
-				logger.Info("DaemonSet not found", "Namespace", in.Namespace, "Name", in.Name)
-				return fmt.Errorf("Couldn't create DaemonSet: %v", err)
+				logger.Error(err, "Fail to create Daemonset", "Namespace", in.Namespace, "Name", in.Name)
+				return err
 			}
 		} else {
-			return fmt.Errorf("Failed to get DaemonSet: %v", err)
+			logger.Error(err, "Fail to get Daemonset", "Namespace", in.Namespace, "Name", in.Name)
+			return err
 		}
 	} else {
 		logger.Info("DaemonSet already exists, updating")
-		err = r.client.Update(context.TODO(), in)
+		if ds.Spec.Template.Spec.Affinity != nil && in.Spec.Template.Spec.Affinity != nil {
+			if !reflect.DeepEqual(*ds.Spec.Template.Spec.Affinity.NodeAffinity, *in.Spec.Template.Spec.Affinity.NodeAffinity) {
+				ds.Spec.Template.Spec.Affinity.NodeAffinity = in.Spec.Template.Spec.Affinity.NodeAffinity
+			}
+		}
+		err = r.client.Update(context.TODO(), ds)
 		if err != nil {
-			return fmt.Errorf("Couldn't update DaemonSet: %v", err)
+			logger.Error(err, "Fail to update DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
+			return err
 		}
 	}
 	return nil
@@ -433,12 +462,14 @@ func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1
 		terms = append(terms, nodeSelector)
 	}
 
-	ds.Spec.Template.Spec.Affinity = &corev1.Affinity{
-		NodeAffinity: &corev1.NodeAffinity{
-			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-				NodeSelectorTerms: terms,
+	if len(terms) > 0 {
+		ds.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			NodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: terms,
+				},
 			},
-		},
+		}
 	}
 	return nil
 }
