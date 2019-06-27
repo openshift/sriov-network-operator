@@ -240,6 +240,12 @@ spec:
                 name: sriov-network-operator
             spec:
               serviceAccountName: sriov-network-operator
+              nodeSelector:
+                node-role.kubernetes.io/master: ""
+              tolerations:
+              - effect: NoSchedule
+                key: node-role.kubernetes.io/master
+                operator: Exists
               containers:
                 - name: sriov-network-operator
                   image: quay.io/openshift/origin-sriov-network-operator:latest
