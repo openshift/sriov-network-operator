@@ -33,7 +33,7 @@ spec:
         image: {{.Image}}
         command:
           - sriov-network-config-daemon
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         securityContext:
           privileged: true
         args:
