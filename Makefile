@@ -1,6 +1,7 @@
 CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
 KUBECONFIG?=$(HOME)/.kube/config
+export OPERATOR_EXEC?=oc
 
 GOLIST=go list
 GOFMT=gofmt
