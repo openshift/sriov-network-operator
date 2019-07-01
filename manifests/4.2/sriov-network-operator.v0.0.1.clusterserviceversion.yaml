@@ -43,7 +43,8 @@ metadata:
           "spec": {
             "ipam": "{\n  \"type\": \"host-local\",\n  \"subnet\": \"10.56.217.0/24\",\n  \"rangeStart\": \"10.56.217.171\",\n  \"rangeEnd\": \"10.56.217.181\",\n  \"routes\": [{\n    \"dst\": \"0.0.0.0/0\"\n  }],\n  \"gateway\": \"10.56.217.1\"\n}\n",
             "vlan": 0,
-            "resourceName": "intelnics"
+            "resourceName": "intelnics",
+            "networkNamespace": "default"
           }
         },
         {
@@ -136,7 +137,10 @@ spec:
           resources: ["daemonsets"]
           verbs: ["get"]
         - apiGroups: [""]
-          resources: [namespaces, serviceaccounts, ]
+          resources: [namespaces, serviceaccounts]
+          verbs: ["*"]
+        - apiGroups: ["k8s.cni.cncf.io"]
+          resources: ["network-attachment-definitions"]
           verbs: ["*"]
         serviceAccountName: sriov-network-operator
       - rules:
@@ -197,12 +201,6 @@ spec:
           - '*'
           - sriovnetworknodepolicies
           - sriovnetworknodestates
-          verbs:
-          - '*'
-        - apiGroups:
-          - k8s.cni.cncf.io
-          resources:
-          - '*'
           verbs:
           - '*'
         serviceAccountName: sriov-network-operator

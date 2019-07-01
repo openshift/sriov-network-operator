@@ -63,11 +63,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to secondary resource NetworkAttachmentDefinition and requeue the owner SriovNetwork
-	err = c.Watch(&source.Kind{Type: &netattdefv1.NetworkAttachmentDefinition{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovNetwork{},
-	})
 	if err != nil {
 		return err
 	}
@@ -133,6 +128,7 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 			reqLogger.Info("Creating a new NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 			err = r.client.Create(context.TODO(), netAttDef)
 			if err != nil {
+				reqLogger.Error(err, "Couldn't create SriovNetworkNodeState", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err
 			}
 		}
@@ -163,7 +159,11 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
 	data.Data["SriovNetworkName"] = cr.Name
-	data.Data["SriovNetworkNamespace"] = cr.Namespace
+	if  cr.Spec.NetworkNamespace == "" {
+		data.Data["SriovNetworkNamespace"] = cr.Namespace
+	} else {
+		data.Data["SriovNetworkNamespace"] = cr.Spec.NetworkNamespace
+	}
 	data.Data["SriovCniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
 	data.Data["SriovCniVlan"] = cr.Spec.Vlan
 	data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")

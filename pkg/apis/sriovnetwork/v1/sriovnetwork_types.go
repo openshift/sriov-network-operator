@@ -13,9 +13,10 @@ type SriovNetworkSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
-	ResourceName string `json:"resourceName"`
-	IPAM         string `json:"ipam,omitempty"`
-	Vlan         int    `json:"vlan,omitempty"`
+	NetworkNamespace string `json:"networkNamespace,omitempty"`
+	ResourceName     string `json:"resourceName"`
+	IPAM             string `json:"ipam,omitempty"`
+	Vlan             int    `json:"vlan,omitempty"`
 }
 
 // // Ipam defines the desired state of IPAM
