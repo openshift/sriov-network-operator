@@ -5,6 +5,7 @@ RUN make _build-sriov-network-config-daemon
 RUN make plugins
 
 FROM registry.svc.ci.openshift.org/openshift/origin-v4.0:base
+RUN yum -y update; yum -y install mstflint net-tools; yum clean all
 LABEL io.k8s.display-name="OpenShift sriov-network-config-daemon" \
       io.k8s.description="This is a daemon that manage and config sriov network devices in Openshift cluster" \
       io.openshift.tags="openshift,networking,sr-iov" \
