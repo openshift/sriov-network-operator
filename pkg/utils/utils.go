@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cenkalti/backoff"
 	"github.com/golang/glog"
 	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
 	"github.com/jaypipes/ghw"
@@ -114,6 +115,7 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 					break
 				}
 				if err = configSriovDevice(&iface, newState); err != nil {
+					glog.Errorf("SyncNodeState(): fail to config sriov interface %s: %v", iface.PciAddress, err)
 					return err
 				}
 				break
@@ -181,21 +183,19 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, nodeState *sriovnetworkv
 		if iface.DeviceType == "netdevice" || iface.DeviceType == "" {
 			err := setNetdevMTU(iface.PciAddress, iface.Mtu)
 			if err != nil {
-				glog.Warningf("configSriovDevice(): fail to set mtu for device %s", iface.PciAddress)
+				glog.Warningf("configSriovDevice(): fail to set mtu for device %s: %v", iface.PciAddress, err)
 				return err
 			}
 
 			if iface.NumVfs > 0 {
-				// wait 1s for VFs become ready
-				time.Sleep(3 * time.Second)
 				vfs, err := dputils.GetVFList(iface.PciAddress)
 				if err != nil {
-					glog.Warningf("configSriovDevice(): unable to parse VFs for device %+v %q", iface.PciAddress, err)
+					glog.Warningf("configSriovDevice(): unable to parse VFs for device %s: %v", iface.PciAddress, err)
 				}
 				for _, vf := range vfs {
 					err := setNetdevMTU(vf, iface.Mtu)
 					if err != nil {
-						glog.Warningf("configSriovDevice(): fail to set mtu for device %s", vf)
+						glog.Warningf("configSriovDevice(): fail to set mtu for device %s: %v", vf, err)
 					}
 				}
 			}
@@ -232,10 +232,12 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 	}
 	mtuFile := "net/" + ifaceName[0] + "/mtu"
 	mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
-	bs := []byte(strconv.Itoa(mtu))
-	err = ioutil.WriteFile(mtuFilePath, bs, os.ModeAppend)
-	if err != nil {
-		glog.Warningf("setNetdevMTU(): fail to set mtu file %s", mtuFilePath)
+	b := backoff.NewConstantBackOff(1*time.Second)
+	err = backoff.Retry(func() error {
+		return ioutil.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
+	}, backoff.WithMaxRetries(b, 10))
+	if err != nil{
+		glog.Warningf("setNetdevMTU(): fail to write mtu file after retrying: %v", err)
 		return err
 	}
 	return nil
@@ -273,19 +275,10 @@ func getNetdevMTU(pciAddr string) int {
 
 func resetSriovDevice(pciAddr string) error {
 	glog.V(2).Infof("resetSriovDevice(): reset sr-iov device %s", pciAddr)
-	numVfsFilePath := filepath.Join(sysBusPciDevices, pciAddr, numVfsFile)
-	err := ioutil.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
-	if err != nil {
+	if err := setSriovNumVfs(pciAddr, 0); err != nil {
 		return err
-	}
-	ifaceName, err := dputils.GetNetNames(pciAddr)
-	if err != nil {
-		return err
-	}
-	mtuFile := "net/" + ifaceName[0] + "/mtu"
-	mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
-	err = ioutil.WriteFile(mtuFilePath, []byte("1500"), os.ModeAppend)
-	if err != nil {
+	} 
+	if err := setNetdevMTU(pciAddr, 1500); err != nil {
 		return err
 	}
 	return nil
