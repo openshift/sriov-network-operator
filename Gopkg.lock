@@ -105,6 +105,14 @@
   version = "v3.6.1"
 
 [[projects]]
+  digest = "1:cdee563173093e5ae7ab2a19c298e0904129719e1919a3c532b7bb0c3398b818"
+  name = "github.com/cenkalti/backoff"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "4b4cebaf850ec58f1bb1fec5bdebdf8501c2bc3f"
+  version = "v3.0.0"
+
+[[projects]]
   digest = "1:13af3d205c774ec0bbda45fee1a4089f3cd9a55c5367b527698b34550ec15e71"
   name = "github.com/census-instrumentation/opencensus-proto"
   packages = [
@@ -1291,6 +1299,7 @@
   input-imports = [
     "github.com/Masterminds/sprig",
     "github.com/blang/semver",
+    "github.com/cenkalti/backoff",
     "github.com/go-openapi/spec",
     "github.com/golang/glog",
     "github.com/intel/sriov-network-device-plugin/pkg/types",
