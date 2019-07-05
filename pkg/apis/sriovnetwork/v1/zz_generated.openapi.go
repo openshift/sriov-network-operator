@@ -119,9 +119,8 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref common.Refer
 				Properties: map[string]spec.Schema{
 					"resourceName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run \"operator-sdk generate k8s\" to regenerate code after modifying this file Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html",
-							Type:        []string{"string"},
-							Format:      "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"nodeSelector": {
@@ -173,7 +172,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref common.Refer
 						},
 					},
 				},
-				Required: []string{"resourceName", "numVfs", "nicSelector"},
+				Required: []string{"resourceName", "nodeSelector", "numVfs", "nicSelector"},
 			},
 		},
 		Dependencies: []string{
@@ -302,7 +301,6 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"networkNamespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run \"operator-sdk generate k8s\" to regenerate code after modifying this file Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html",
 							Type:        []string{"string"},
 							Format:      "",
 						},

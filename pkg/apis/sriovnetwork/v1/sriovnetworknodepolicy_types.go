@@ -10,20 +10,26 @@ import (
 // SriovNetworkNodePolicySpec defines the desired state of SriovNetworkNodePolicy
 // +k8s:openapi-gen=true
 type SriovNetworkNodePolicySpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
 	ResourceName string                  `json:"resourceName"`
-	NodeSelector map[string]string       `json:"nodeSelector,omitempty"`
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:UniqueItems=false
+	NodeSelector map[string]string       `json:"nodeSelector"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=99
 	Priority     int                     `json:"priority,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=9000
 	Mtu          int                     `json:"mtu,omitempty"`
+	// +kubebuilder:validation:Minimum=1
 	NumVfs       int                     `json:"numVfs"`
 	NicSelector  SriovNetworkNicSelector `json:"nicSelector"`
+	// +kubebuilder:validation:Enum=netdevice,vfio-pci
 	DeviceType   string                  `json:"deviceType,omitempty"`
 	IsRdma       bool                    `json:"isRdma,omitempty"`
 }
 
 type SriovNetworkNicSelector struct {
+	// +kubebuilder:validation:Enum=8086,15b3
 	Vendor      string   `json:"vendor,omitempty"`
 	DeviceID    string   `json:"deviceID,omitempty"`
 	RootDevices []string `json:"rootDevices,omitempty"`

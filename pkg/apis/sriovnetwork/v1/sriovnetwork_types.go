@@ -10,12 +10,11 @@ import (
 // SriovNetworkSpec defines the desired state of SriovNetwork
 // +k8s:openapi-gen=true
 type SriovNetworkSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
 	NetworkNamespace string `json:"networkNamespace,omitempty"`
 	ResourceName     string `json:"resourceName"`
 	IPAM             string `json:"ipam,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=4096
 	Vlan             int    `json:"vlan,omitempty"`
 }
 
