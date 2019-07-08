@@ -15,3 +15,7 @@ spec:
     from:
       kind: DockerImage
       name: quay.io/openshift/origin-sriov-network-device-plugin:4.2.0
+  - name: sriov-dp-admission-controller
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-sriov-dp-admission-controller:4.2.0

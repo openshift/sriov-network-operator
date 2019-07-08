@@ -1,0 +1,55 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: network-resources-injector
+  name: network-resources-injector
+  namespace: {{.Namespace}}
+  annotations:
+    kubernetes.io/description: |
+      This daemon set launches the network resource injector component on master nodes.
+    release.openshift.io/version: "{{.ReleaseVersion}}"
+spec:
+  selector:
+    matchLabels:
+      app: network-resources-injector
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: network-resources-injector
+        component: network
+        type: infra
+        openshift.io/component: network
+    spec:
+      serviceAccountName: network-resources-injector-sa
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+        node-role.kubernetes.io/master:
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: Exists
+        effect: NoSchedule
+      - key: "node.kubernetes.io/not-ready"
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: webhook-server
+        image: {{.NetworkResourcesInjectorImage}}
+        command:
+        - webhook
+        args:
+        - -bind-address=0.0.0.0
+        - -port=443
+        - -tls-private-key-file=/etc/tls/tls.key
+        - -tls-cert-file=/etc/tls/tls.crt
+        - -alsologtostderr=true
+        volumeMounts:
+        - mountPath: /etc/tls
+          name: tls
+      volumes:
+      - name: tls
+        secret:
+          secretName: network-resources-injector-secret
