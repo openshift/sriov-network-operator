@@ -16,6 +16,8 @@ type SriovNetworkSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=4096
 	Vlan             int    `json:"vlan,omitempty"`
+	SpoofChk	 *bool	`json:"spoofChk,omitempty"`
+	Trust            *bool	`json:"trust,omitempty"`
 }
 
 // // Ipam defines the desired state of IPAM

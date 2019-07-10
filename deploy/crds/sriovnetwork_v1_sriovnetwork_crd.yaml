@@ -33,6 +33,10 @@ spec:
               type: string
             resourceName:
               type: string
+            spoofChk:
+              type: boolean
+            trust:
+              type: boolean
             vlan:
               format: int64
               type: integer

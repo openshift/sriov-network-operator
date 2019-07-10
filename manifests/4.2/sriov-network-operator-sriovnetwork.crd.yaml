@@ -40,6 +40,10 @@ spec:
             vlan:
               format: int64
               type: integer
+            spoofChk:
+              type: boolean
+            trust:
+              type: boolean
           required:
           - resourceName
           type: object
