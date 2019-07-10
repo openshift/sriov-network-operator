@@ -7,7 +7,7 @@ metadata:
 spec:
   resourceName: intelnics
   nodeSelector:
-    feature.node.kubernetes.io/sriov-capable: "true"
+    feature.node.kubernetes.io/network-sriov.capable: "true"
   priority: 99
   mtu: 9000
   numVfs: 6
@@ -25,11 +25,12 @@ metadata:
 spec:
   resourceName: mlxnics
   nodeSelector:
-    feature.node.kubernetes.io/sriov: "false"
+    feature.node.kubernetes.io/network-sriov.capable: "true"
   priority: 99
   mtu: 9000
   numVfs: 16
   nicSelector:
     vendor: "15b3"
-    rootDevices: ['02:00.1',]
+    rootDevices: ['0000:02:00.0', '0000:02:00.1']
   deviceType: netdevice
+  isRdma: true
