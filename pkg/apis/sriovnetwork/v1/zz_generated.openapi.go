@@ -301,8 +301,8 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref common.ReferenceCallba
 				Properties: map[string]spec.Schema{
 					"networkNamespace": {
 						SchemaProps: spec.SchemaProps{
-							Type:        []string{"string"},
-							Format:      "",
+							Type:   []string{"string"},
+							Format: "",
 						},
 					},
 					"resourceName": {

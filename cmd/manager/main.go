@@ -140,7 +140,13 @@ func createDefaultPolicy(cfg *rest.Config) error {
 	if err != nil {
 		return fmt.Errorf("Couldn't create client: %v", err)
 	}
-	policy := &sriovnetworkv1.SriovNetworkNodePolicy{}
+	policy := &sriovnetworkv1.SriovNetworkNodePolicy{
+		Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+			NumVfs: 0,
+			NodeSelector: make(map[string]string),
+			NicSelector: sriovnetworkv1.SriovNetworkNicSelector{},
+		},
+	}
 	name := "default"
 	namespace := os.Getenv("NAMESPACE")
 	err = c.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, policy)
