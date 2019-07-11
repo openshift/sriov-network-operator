@@ -1,0 +1,68 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: {{.Namespace}}
+  name: network-resources-injector-sa
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: network-resources-injector-sa-secret
+  namespace: {{.Namespace}}
+  annotations:
+    kubernetes.io/service-account.name: network-resources-injector-sa
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: network-resources-injector
+rules:
+- apiGroups:
+  - ""
+  - k8s.cni.cncf.io
+  resources:
+  - pods
+  - network-attachment-definitions
+  verbs:
+  - '*'
+- apiGroups:
+  - certificates.k8s.io
+  resources:
+  - certificatesigningrequests
+  - certificatesigningrequests/approval
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - '*'
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  - validatingwebhookconfigurations
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: network-resources-injector-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: network-resources-injector
+subjects:
+- kind: ServiceAccount
+  name: network-resources-injector-sa
+  namespace: {{.Namespace}}

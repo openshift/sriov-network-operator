@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: network-resources-injector-service
+  namespace: {{.Namespace}}
+  annotations:
+    service.alpha.openshift.io/serving-cert-secret-name: network-resources-injector-secret
+spec:
+  ports:
+  - port: 443
+    targetPort: 443
+  selector:
+    app: network-resources-injector
