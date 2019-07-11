@@ -38,9 +38,9 @@ spec:
               type: boolean
             mtu:
               format: int64
-              type: integer
-              minimum: 1
               maximum: 9000
+              minimum: 1
+              type: integer
             nicSelector:
               properties:
                 deviceID:
@@ -65,13 +65,13 @@ spec:
               type: object
             numVfs:
               format: int64
-              minimum: 1
+              minimum: 0
               type: integer
             priority:
               format: int64
-              type: integer
-              minimum: 1
               maximum: 99
+              minimum: 0
+              type: integer
             resourceName:
               type: string
           required:
