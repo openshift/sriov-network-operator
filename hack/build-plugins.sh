@@ -11,11 +11,10 @@ GLDFLAGS=${GLDFLAGS:-}
 
 # : "${GOOS:=${GOHOSTOS}}"
 # : "${GOARCH:=${GOHOSTARCH}}"
+GOOS=$(go env GOOS)
+GOARCH=$(go env GOARCH)
 
 # Go to the root of the repo
-GOOS=linux
-GOARCH=amd64
-
 cdup="$(git rev-parse --show-cdup)" && test -n "$cdup" && cd "$cdup"
 
 if [ -z ${VERSION_OVERRIDE+a} ]; then

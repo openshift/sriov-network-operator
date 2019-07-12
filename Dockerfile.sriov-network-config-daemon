@@ -1,15 +1,15 @@
 FROM golang:1.10 AS builder
 WORKDIR /go/src/github.com/openshift/sriov-network-operator
 COPY . .
-RUN make _build-sriov-network-config-daemon
-RUN make plugins
+RUN make _build-sriov-network-config-daemon BIN_PATH=build/_output/cmd
+RUN make plugins BIN_PATH=build/_output/pkg
 
 FROM centos:7
 RUN yum -y update; yum -y install mstflint net-tools; yum clean all
 LABEL io.k8s.display-name="sriov-network-config-daemon" \
       io.k8s.description="This is a daemon that manage and config sriov network devices in Kubernetes cluster"
-COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_output/linux/amd64/sriov-network-config-daemon /usr/bin/
-COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_output/linux/amd64/plugins /plugins
+COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_output/cmd/sriov-network-config-daemon /usr/bin/
+COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_output/pkg/plugins /plugins
 COPY bindata /bindata
 ENV PLUGINSPATH=/plugins
 CMD ["/usr/bin/sriov-network-config-daemon"]
