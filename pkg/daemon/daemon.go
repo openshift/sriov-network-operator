@@ -1,11 +1,14 @@
 package daemon
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"time"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/golang/glog"
@@ -51,6 +54,7 @@ type Daemon struct {
 	mu *sync.Mutex
 }
 
+const scriptsPath = "/bindata/scripts/enable-rdma.sh"
 var namespace = os.Getenv("NAMESPACE")
 var pluginsPath = os.Getenv("PLUGINSPATH")
 
@@ -75,6 +79,8 @@ func New(
 func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	glog.V(0).Info("Run(): start daemon")
 	// Only watch own SriovNetworkNodeState CR
+
+	tryEnableRdma()
 
 	dn.mu = &sync.Mutex{}
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
@@ -421,4 +427,30 @@ func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
 		nameList[i] = rawList[i].String()
 	}
 	return nameList
+}
+
+func tryEnableRdma() (bool, error) {
+	glog.V(2).Infof("tryEnableRdma()")
+	var stdout, stderr bytes.Buffer
+
+	cmd := exec.Command("/bin/bash", scriptsPath)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		glog.Errorf("tryEnableRdma(): fail to enable rdma %v: %v", err, cmd.Stderr)
+		return false, err
+	}
+	glog.V(2).Infof("tryEnableRdma(): %v", cmd.Stdout)
+
+	i, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
+	if err == nil {
+		if i == 0 {
+			glog.V(2).Infof("tryEnableRdma(): RDMA kernel modules loaded")
+			return true, nil
+		} else {
+			glog.V(2).Infof("tryEnableRdma(): RDMA kernel modules not loaded")
+			return false, nil
+		}
+	}
+	return false, err
 }
