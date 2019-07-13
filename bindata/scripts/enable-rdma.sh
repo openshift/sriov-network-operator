@@ -1,6 +1,6 @@
 #!/bin/bash
 
-REDHAT_RELEASE_FILE="/etc/redhat-release"
+REDHAT_RELEASE_FILE="/host/etc/redhat-release"
 
 function kmod_isloaded {
   if grep --quiet '\(^ib\|^rdma\)' <(chroot /host/ lsmod); then
