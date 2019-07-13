@@ -43,7 +43,7 @@ else
       trigger_udev_event
     fi
   else
-    yum install -y rdma-core
+    chroot /host/ yum install -y rdma-core
     trigger_udev_event
   fi
 
