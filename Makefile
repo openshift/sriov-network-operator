@@ -75,4 +75,4 @@ undeploy:
 _plugin-%:
 	@hack/build-plugins.sh $*
 
-plugins: _plugin-intel _plugin-generic
+plugins: _plugin-intel _plugin-mellanox _plugin-generic
