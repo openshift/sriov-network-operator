@@ -166,6 +166,28 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 	}
 	data.Data["SriovCniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
 	data.Data["SriovCniVlan"] = cr.Spec.Vlan
+	if cr.Spec.SpoofChk == nil {
+		data.Data["SpoofChkConfigured"] = false
+	} else {
+		data.Data["SpoofChkConfigured"] = true
+		switch *cr.Spec.SpoofChk {
+		case false:
+			data.Data["SriovCniSpoofChk"] = "off"
+		default:
+			data.Data["SriovCniSpoofChk"] = "on"
+		}
+	}
+	if cr.Spec.Trust == nil {
+		data.Data["TrustConfigured"] = false
+	} else {
+		data.Data["TrustConfigured"] = true
+		switch *cr.Spec.Trust {
+		case true:
+			data.Data["SriovCniTrust"] = "on"
+		default:
+			data.Data["SriovCniTrust"] = "off"
+		}
+	}
 	data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
