@@ -40,14 +40,6 @@ rules:
   - deployments/finalizers
   verbs:
   - update
-- apiGroups:
-  - sriovnetwork.openshift.io
-  resources:
-  - '*'
-  - sriovnetworknodepolicies
-  - sriovnetworknodestates
-  verbs:
-  - '*'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

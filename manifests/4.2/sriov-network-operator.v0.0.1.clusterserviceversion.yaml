@@ -142,6 +142,15 @@ spec:
         - apiGroups: ["k8s.cni.cncf.io"]
           resources: ["network-attachment-definitions"]
           verbs: ["*"]
+        - apiGroups: ["rbac.authorization.k8s.io"]
+          resources: [clusterroles, clusterrolebindings]
+          verbs: ["*"]
+        - apiGroups: ["admissionregistration.k8s.io"]
+          resources: ["mutatingwebhookconfigurations"]
+          verbs: ["*"]
+        - apiGroups: ["sriovnetwork.openshift.io"]
+          resources: ["*"]
+          verbs: ["*"]
         serviceAccountName: sriov-network-operator
       - rules:
         - apiGroups: [""]
@@ -195,14 +204,6 @@ spec:
           - deployments/finalizers
           verbs:
           - update
-        - apiGroups:
-          - sriovnetwork.openshift.io
-          resources:
-          - '*'
-          - sriovnetworknodepolicies
-          - sriovnetworknodestates
-          verbs:
-          - '*'
         serviceAccountName: sriov-network-operator
       - rules:
         - apiGroups:
