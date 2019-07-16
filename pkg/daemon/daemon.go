@@ -150,7 +150,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 		}
 	}
 
-	if len(dn.LoadedPlugins) > 1 {
+	if len(dn.LoadedPlugins) > 1 && !reqReboot {
 		// Apply generic_plugin last
 		err = dn.LoadedPlugins[GenericPlugin].Apply()
 		if err != nil {
@@ -250,7 +250,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 		}
 	}
 
-	if len(dn.LoadedPlugins) > 1 {
+	if len(dn.LoadedPlugins) > 1 && !reqReboot {
 		// Apply generic_plugin last
 		err = dn.LoadedPlugins[GenericPlugin].Apply()
 		if err != nil {
