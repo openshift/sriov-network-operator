@@ -33,13 +33,13 @@ spec:
               type: string
             resourceName:
               type: string
-            vlan:
-              format: int64
-              type: integer
             spoofChk:
               type: boolean
             trust:
               type: boolean
+            vlan:
+              format: int64
+              type: integer
               minimum: 0
               maximum: 4096
           required:
