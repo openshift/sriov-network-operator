@@ -61,7 +61,12 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	exitCh := make(chan error)
 	defer close(exitCh)
 
-	refreshCh := make(chan struct{})
+	// This channel is to make sure main thread will wait until the writer finish
+	// to report lastSyncError in SriovNetworkNodeState object.
+	syncCh := make(chan struct{})
+	defer close(syncCh)
+
+	refreshCh := make(chan daemon.Message)
 	defer close(refreshCh)
 
 	var config *rest.Config
@@ -85,7 +90,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	glog.V(0).Info("starting node writer")
 	nodeWriter := daemon.NewNodeStateStatusWriter(snclient, startOpts.nodeName)
-	go nodeWriter.Run(stopCh, refreshCh)
+	go nodeWriter.Run(stopCh, refreshCh, syncCh)
 
 	glog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(
@@ -97,7 +102,8 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		refreshCh,
 	).Run(stopCh, exitCh)
 	if err != nil {
-		glog.Fatalf("failed to run daemon: %v", err)
+		glog.Errorf("failed to run daemon: %v", err)
 	}
-	defer glog.V(0).Info("Shutting down SriovNetworkConfigDaemon")
+	<-syncCh
+	glog.V(0).Info("Shutting down SriovNetworkConfigDaemon")
 }

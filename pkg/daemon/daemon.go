@@ -28,6 +28,11 @@ import (
 	"github.com/openshift/sriov-network-operator/pkg/utils"
 )
 
+type Message struct {
+	syncStatus string
+	lastSyncError string
+}
+
 type Daemon struct {
 	// name is the node name.
 	name      string
@@ -47,7 +52,7 @@ type Daemon struct {
 	// channel used to ensure all spawned goroutines exit when we exit.
 	stopCh <-chan struct{}
 
-	refreshCh chan<- struct{}
+	refreshCh chan<- Message
 
 	dpReboot bool
 
@@ -64,7 +69,7 @@ func New(
 	kubeClient *kubernetes.Clientset,
 	exitCh chan<- error,
 	stopCh <-chan struct{},
-	refreshCh chan<- struct{},
+	refreshCh chan<- Message,
 ) *Daemon {
 	return &Daemon{
 		name:       nodeName,
@@ -107,6 +112,10 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 			return nil
 		case err := <-exitCh:
 			glog.Warningf("Got an error: %v", err)
+			dn.refreshCh <- Message{
+				syncStatus: "Failed",
+				lastSyncError: err.Error(),
+			}
 			return err
 		}
 	}
@@ -117,7 +126,10 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	// interface that allows us to get metadata easily
 	nodeState := obj.(*sriovnetworkv1.SriovNetworkNodeState)
 	glog.V(2).Infof("nodeStateAddHandler(): New SriovNetworkNodeState Added to Store: %s", nodeState.GetName())
-
+	dn.refreshCh <- Message{
+		syncStatus: "InProgress",
+		lastSyncError: "",
+	}
 	err := dn.loadVendorPlugins(nodeState)
 	if err != nil {
 		glog.Errorf("nodeStateAddHandler(): failed to load vendor plugin: %v", err)
@@ -181,7 +193,10 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 		}
 	}
 
-	dn.refreshCh <- struct{}{}
+	dn.refreshCh <- Message{
+		syncStatus: "Succeeded",
+		lastSyncError: "",
+	}
 }
 
 func (dn *Daemon) uncordon(name string) {
@@ -224,7 +239,10 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 		glog.V(2).Infof("nodeStateChangeHandler(): Interface not changed")
 		return
 	}
-
+	dn.refreshCh <- Message{
+		syncStatus: "InProgress",
+		lastSyncError: "",
+	}
 	reqReboot := false
 	reqDrain := false
 
@@ -280,7 +298,10 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 			return
 		}
 	}
-	dn.refreshCh <- struct{}{}
+	dn.refreshCh <- Message{
+		syncStatus: "Succeeded",
+		lastSyncError: "",
+	}
 }
 
 func (dn *Daemon) restartDevicePluginPod() error {

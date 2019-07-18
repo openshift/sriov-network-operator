@@ -30,11 +30,16 @@ spec:
         spec:
           properties:
             deviceType:
+              enum:
+              - netdevice
+              - vfio-pci
               type: string
             isRdma:
               type: boolean
             mtu:
               format: int64
+              maximum: 9000
+              minimum: 1
               type: integer
             nicSelector:
               properties:
@@ -49,6 +54,9 @@ spec:
                     type: string
                   type: array
                 vendor:
+                  enum:
+                  - "8086"
+                  - 15b3
                   type: string
               type: object
             nodeSelector:
@@ -57,18 +65,18 @@ spec:
               type: object
             numVfs:
               format: int64
+              minimum: 0
               type: integer
             priority:
               format: int64
+              maximum: 99
+              minimum: 0
               type: integer
             resourceName:
-              description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                Important: Run "operator-sdk generate k8s" to regenerate code after
-                modifying this file Add custom validation using kubebuilder tags:
-                https://book.kubebuilder.io/beyond_basics/generating_crd.html'
               type: string
           required:
           - resourceName
+          - nodeSelector
           - numVfs
           - nicSelector
           type: object

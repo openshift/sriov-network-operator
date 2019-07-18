@@ -29,6 +29,8 @@ spec:
           type: object
         spec:
           properties:
+            dpConfigVersion:
+              type: string
             interfaces:
               items:
                 properties:
@@ -49,6 +51,10 @@ spec:
           type: object
         status:
           properties:
+            lastSyncError:
+              type: string
+            syncStatus:
+              type: string
             interfaces:
               items:
                 properties:

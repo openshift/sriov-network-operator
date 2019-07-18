@@ -30,41 +30,46 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string) *NodeStateStatu
 
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
-func (nm *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan struct{}) {
+func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}) {
 	glog.V(0).Info("Run(): start writer")
-	if err := pollNicStatus(nm); err != nil {
+	if err := writer.pollNicStatus(); err != nil {
 		glog.Errorf("Run(): first poll failed: %v", err)
 	}
-	setNodeStateStatus(nm.client, nm.node, nm.status)
+	msg := Message{}
+	setNodeStateStatus(writer.client, writer.node, writer.status, msg)
 
 	for {
 		select {
 		case <-stop:
 			glog.V(0).Info("Run(): stop writer")
 			return
-		case <-refresh:
+		case msg = <-refresh:
 			glog.V(2).Info("Run(): refresh trigger")
-			if err := pollNicStatus(nm); err != nil {
+			if err := writer.pollNicStatus(); err != nil {
 				continue
 			}
-			setNodeStateStatus(nm.client, nm.node, nm.status)
+			setNodeStateStatus(writer.client, writer.node, writer.status, msg)
+			if msg.syncStatus == "Failed" {
+				syncCh <- struct{}{}
+				return
+			}
 		case <-time.After(30 * time.Second):
 			glog.V(2).Info("Run(): period refresh")
-			if err := pollNicStatus(nm); err != nil {
+			if err := writer.pollNicStatus(); err != nil {
 				continue
 			}
-			setNodeStateStatus(nm.client, nm.node, nm.status)
+			setNodeStateStatus(writer.client, writer.node, writer.status, msg)
 		}
 	}
 }
 
-func pollNicStatus(nm *NodeStateStatusWriter) error {
+func (writer *NodeStateStatusWriter)pollNicStatus() error {
 	glog.V(2).Info("pollNicStatus()")
 	iface, err := utils.DiscoverSriovDevices()
 	if err != nil {
 		return err
 	}
-	nm.status.Interfaces = iface
+	writer.status.Interfaces = iface
 
 	return nil
 }
@@ -92,10 +97,14 @@ func updateNodeStateStatusRetry(client snclientset.Interface, nodeName string, f
 	return nodeState, nil
 }
 
-func setNodeStateStatus(client snclientset.Interface, nodeName string, status sriovnetworkv1.SriovNetworkNodeStateStatus) (*sriovnetworkv1.SriovNetworkNodeState, error) {
+func setNodeStateStatus(client snclientset.Interface, nodeName string, status sriovnetworkv1.SriovNetworkNodeStateStatus, msg Message) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	nodeState, err := updateNodeStateStatusRetry(client, nodeName, func(nodeState *sriovnetworkv1.SriovNetworkNodeState) {
 		nodeState.Status = status
+		nodeState.Status.LastSyncError = msg.lastSyncError
+		nodeState.Status.SyncStatus = msg.syncStatus
 	})
+
+	glog.V(2).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
 	return nodeState, err
 }
 

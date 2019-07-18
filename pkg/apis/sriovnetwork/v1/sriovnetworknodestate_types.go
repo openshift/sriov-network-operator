@@ -46,7 +46,9 @@ type VirtualFunction InterfaceProperty
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
 // +k8s:openapi-gen=true
 type SriovNetworkNodeStateStatus struct {
-	Interfaces []InterfaceExt `json:"interfaces,omitempty"`
+	Interfaces    []InterfaceExt `json:"interfaces,omitempty"`
+	SyncStatus    string         `json:"syncStatus,omitempty"`
+	LastSyncError string         `json:"lastSyncError,omitempty"`
 }
 
 // +genclient
