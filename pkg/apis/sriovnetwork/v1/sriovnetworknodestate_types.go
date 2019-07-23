@@ -10,8 +10,8 @@ import (
 // SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
 // +k8s:openapi-gen=true
 type SriovNetworkNodeStateSpec struct {
-	DpConfigVersion string `json:"dpConfigVersion,omitempty"`
-	Interfaces []Interface `json:"interfaces,omitempty"`
+	DpConfigVersion string      `json:"dpConfigVersion,omitempty"`
+	Interfaces      []Interface `json:"interfaces,omitempty"`
 }
 
 type Interface struct {

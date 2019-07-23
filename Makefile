@@ -6,6 +6,7 @@ export OPERATOR_EXEC?=oc
 GOLIST=go list
 GOFMT=gofmt
 BUILD_GOPATH=$(TARGET_DIR):$(TARGET_DIR)/vendor:$(CURPATH)/cmd
+GOFMT_CHECK=$(shell find . -not \( \( -wholename './.*' -o -wholename '*/vendor/*' \) -prune \) -name '*.go' | sort -u | xargs gofmt -s -l)
 
 IMAGE_BUILDER?=@docker
 IMAGE_BUILD_OPTS?=
@@ -49,7 +50,7 @@ run:
 clean:
 	@rm -rf $(TARGET_DIR)
 
-image: $(info Building image...)
+image: ; $(info Building image...)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE) -t $(IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
 
 fmt: ; $(info  running gofmt...) @ ## Run gofmt on all source files
@@ -76,3 +77,17 @@ _plugin-%:
 	@hack/build-plugins.sh $*
 
 plugins: _plugin-intel _plugin-mellanox _plugin-generic
+
+verify-gofmt:
+ifeq (, $(GOFMT_CHECK))
+	@echo "verify-gofmt: OK"
+else
+	@echo "verify-gofmt: ERROR: gofmt failed on the following files:"
+	@echo "$(GOFMT_CHECK)"
+	@echo ""
+	@echo "For details, run: gofmt -d -s $(GOFMT_CHECK)"
+	@echo ""
+	@exit 1
+endif
+
+verify: verify-gofmt

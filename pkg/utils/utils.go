@@ -238,11 +238,11 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 	}
 	mtuFile := "net/" + ifaceName[0] + "/mtu"
 	mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
-	b := backoff.NewConstantBackOff(1*time.Second)
+	b := backoff.NewConstantBackOff(1 * time.Second)
 	err = backoff.Retry(func() error {
 		return ioutil.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
 	}, backoff.WithMaxRetries(b, 10))
-	if err != nil{
+	if err != nil {
 		glog.Warningf("setNetdevMTU(): fail to write mtu file after retrying: %v", err)
 		return err
 	}
@@ -283,7 +283,7 @@ func resetSriovDevice(pciAddr string) error {
 	glog.V(2).Infof("resetSriovDevice(): reset sr-iov device %s", pciAddr)
 	if err := setSriovNumVfs(pciAddr, 0); err != nil {
 		return err
-	} 
+	}
 	if err := setNetdevMTU(pciAddr, 1500); err != nil {
 		return err
 	}

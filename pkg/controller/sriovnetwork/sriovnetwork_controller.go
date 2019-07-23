@@ -159,7 +159,7 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
 	data.Data["SriovNetworkName"] = cr.Name
-	if  cr.Spec.NetworkNamespace == "" {
+	if cr.Spec.NetworkNamespace == "" {
 		data.Data["SriovNetworkNamespace"] = cr.Namespace
 	} else {
 		data.Data["SriovNetworkNamespace"] = cr.Spec.NetworkNamespace
