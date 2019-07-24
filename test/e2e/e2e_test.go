@@ -4,24 +4,24 @@ import (
 	goctx "context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
-	"reflect"
 
+	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
 	"github.com/openshift/sriov-network-operator/pkg/apis"
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 var (
@@ -100,11 +100,11 @@ func testWithOneSriovNetworkNodePolicyCR(t *testing.T, ctx *framework.TestCtx) {
 				"feature.node.kubernetes.io/sriov-capable": "true",
 			},
 			Priority: 99,
-			Mtu: 9000,
-			NumVfs: 6,
+			Mtu:      9000,
+			NumVfs:   6,
 			NicSelector: sriovnetworkv1.SriovNetworkNicSelector{
-				Vendor: "8086",
-				RootDevices: []string{"0000:86:00.1",},
+				Vendor:      "8086",
+				RootDevices: []string{"0000:86:00.1"},
 			},
 			DeviceType: "vfio-pci",
 		},
@@ -224,7 +224,7 @@ func WaitForNetworkAttachmentDefinition(t *testing.T, client framework.Framework
 	return cr, nil
 }
 
-func waitForNamespacedObject(obj runtime.Object, t *testing.T, client framework.FrameworkClient, namespace, name string, retryInterval, timeout time.Duration) (error) {
+func waitForNamespacedObject(obj runtime.Object, t *testing.T, client framework.FrameworkClient, namespace, name string, retryInterval, timeout time.Duration) error {
 
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), apiTimeout)
@@ -267,17 +267,17 @@ func validateDevicePluginConfig(np *sriovnetworkv1.SriovNetworkNodePolicy, rawCo
 
 func validateSelector(rc *dptypes.ResourceConfig, ns *sriovnetworkv1.SriovNetworkNicSelector) bool {
 	if ns.DeviceID != "" {
-		if len(rc.Selectors.Devices) != 1 || ns.DeviceID != rc.Selectors.Devices[0]{
+		if len(rc.Selectors.Devices) != 1 || ns.DeviceID != rc.Selectors.Devices[0] {
 			return false
 		}
 	}
 	if ns.Vendor != "" {
-		if len(rc.Selectors.Vendors) != 1 || ns.Vendor != rc.Selectors.Vendors[0]{
+		if len(rc.Selectors.Vendors) != 1 || ns.Vendor != rc.Selectors.Vendors[0] {
 			return false
 		}
 	}
 	if len(ns.PfNames) > 0 {
-		if !reflect.DeepEqual(ns.PfNames, rc.Selectors.PfNames){
+		if !reflect.DeepEqual(ns.PfNames, rc.Selectors.PfNames) {
 			return false
 		}
 	}

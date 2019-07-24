@@ -6,10 +6,10 @@ import (
 )
 
 type IntelPlugin struct {
-	PluginName     string
-	SpecVersion    string
-	DesireState    *sriovnetworkv1.SriovNetworkNodeState
-	LastState      *sriovnetworkv1.SriovNetworkNodeState
+	PluginName  string
+	SpecVersion string
+	DesireState *sriovnetworkv1.SriovNetworkNodeState
+	LastState   *sriovnetworkv1.SriovNetworkNodeState
 }
 
 var Plugin IntelPlugin

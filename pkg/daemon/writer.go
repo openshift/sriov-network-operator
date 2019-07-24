@@ -63,7 +63,7 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 	}
 }
 
-func (writer *NodeStateStatusWriter)pollNicStatus() error {
+func (writer *NodeStateStatusWriter) pollNicStatus() error {
 	glog.V(2).Info("pollNicStatus()")
 	iface, err := utils.DiscoverSriovDevices()
 	if err != nil {

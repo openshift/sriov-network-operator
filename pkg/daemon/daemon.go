@@ -6,10 +6,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"time"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golang/glog"
 	drain "github.com/openshift/kubernetes-drain"
@@ -29,7 +29,7 @@ import (
 )
 
 type Message struct {
-	syncStatus string
+	syncStatus    string
 	lastSyncError string
 }
 
@@ -60,6 +60,7 @@ type Daemon struct {
 }
 
 const scriptsPath = "/bindata/scripts/enable-rdma.sh"
+
 var namespace = os.Getenv("NAMESPACE")
 var pluginsPath = os.Getenv("PLUGINSPATH")
 
@@ -113,7 +114,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 		case err := <-exitCh:
 			glog.Warningf("Got an error: %v", err)
 			dn.refreshCh <- Message{
-				syncStatus: "Failed",
+				syncStatus:    "Failed",
 				lastSyncError: err.Error(),
 			}
 			return err
@@ -127,7 +128,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	nodeState := obj.(*sriovnetworkv1.SriovNetworkNodeState)
 	glog.V(2).Infof("nodeStateAddHandler(): New SriovNetworkNodeState Added to Store: %s", nodeState.GetName())
 	dn.refreshCh <- Message{
-		syncStatus: "InProgress",
+		syncStatus:    "InProgress",
 		lastSyncError: "",
 	}
 	err := dn.loadVendorPlugins(nodeState)
@@ -194,7 +195,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	}
 
 	dn.refreshCh <- Message{
-		syncStatus: "Succeeded",
+		syncStatus:    "Succeeded",
 		lastSyncError: "",
 	}
 }
@@ -240,7 +241,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 		return
 	}
 	dn.refreshCh <- Message{
-		syncStatus: "InProgress",
+		syncStatus:    "InProgress",
 		lastSyncError: "",
 	}
 	reqReboot := false
@@ -299,7 +300,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 		}
 	}
 	dn.refreshCh <- Message{
-		syncStatus: "Succeeded",
+		syncStatus:    "Succeeded",
 		lastSyncError: "",
 	}
 }
@@ -325,7 +326,7 @@ func (dn *Daemon) restartDevicePluginPod() error {
 		}
 
 		var lastErr error
-	
+
 		if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
 			_, err := dn.kubeClient.CoreV1().Pods(namespace).Get(pods.Items[0].GetName(), metav1.GetOptions{})
 			if err != nil {

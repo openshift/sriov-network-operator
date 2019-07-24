@@ -13,10 +13,10 @@ import (
 )
 
 type GenericPlugin struct {
-	PluginName  string
-	SpecVersion string
-	DesireState *sriovnetworkv1.SriovNetworkNodeState
-	LastState   *sriovnetworkv1.SriovNetworkNodeState
+	PluginName     string
+	SpecVersion    string
+	DesireState    *sriovnetworkv1.SriovNetworkNodeState
+	LastState      *sriovnetworkv1.SriovNetworkNodeState
 	LoadVfioDriver uint
 }
 
@@ -33,8 +33,8 @@ var Plugin GenericPlugin
 // Initialize our plugin and set up initial values
 func init() {
 	Plugin = GenericPlugin{
-		PluginName:  "generic_plugin",
-		SpecVersion: "1.0",
+		PluginName:     "generic_plugin",
+		SpecVersion:    "1.0",
 		LoadVfioDriver: unloaded,
 	}
 }
