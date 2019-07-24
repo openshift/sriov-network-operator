@@ -1,7 +1,7 @@
 FROM registry.svc.ci.openshift.org/openshift/release:golang-1.10 AS builder
 WORKDIR /go/src/github.com/openshift/sriov-network-operator
 COPY . .
-RUN make _build-manager
+RUN make _build-manager BIN_PATH=build/_output/cmd
 
 FROM registry.svc.ci.openshift.org/openshift/origin-v4.0:base
 LABEL io.k8s.display-name="OpenShift sriov-network-operator" \
@@ -9,7 +9,7 @@ LABEL io.k8s.display-name="OpenShift sriov-network-operator" \
       io.openshift.tags="openshift,networking,sr-iov" \
       com.redhat.delivery.appregistry=true \
       maintainer="Multus team <multus-dev@redhat.com>"
-COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_output/linux/amd64/manager /usr/bin/sriov-network-operator
+COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_output/cmd/manager /usr/bin/sriov-network-operator
 COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/manifests /manifests
 COPY bindata /bindata
 ENV OPERATOR_NAME=sriov-network-operator
