@@ -7,4 +7,4 @@ metadata:
     k8s.v1.cni.cncf.io/resourceName: {{.SriovCniResourceName}}
 spec:
   config: |
-    {"cniVersion":"0.3.1","name":"sriov-net","type":"sriov",{{if .SpoofChkConfigured}} "spoofchk":"{{.SriovCniSpoofChk}}", {{- end}} {{if .TrustConfigured}} "trust":"{{.SriovCniTrust}}", {{- end}} "vlan":{{.SriovCniVlan}},{{.SriovCniIpam}}}
+    {"cniVersion":"0.3.1","name":"sriov-net","type":"sriov",{{if .SpoofChkConfigured}}"spoofchk":"{{.SriovCniSpoofChk}}",{{- end}}{{if .TrustConfigured}}"trust":"{{.SriovCniTrust}}",{{- end}}"vlan":{{.SriovCniVlan}},{{.SriovCniIpam}}}

@@ -1,8 +1,9 @@
-SRIOV_CNI_IMAGE=quay.io/openshift/origin-sriov-cni:4.2.0
-SRIOV_DEVICE_PLUGIN_IMAGE=quay.io/openshift/origin-sriov-network-device-plugin:4.2.0
-NETWORK_RESOURCES_INJECTOR_IMAGE=quay.io/openshift/origin-sriov-dp-admission-controller:4.2.0
-RELEASE_VERSION=0.0.1-snapshot
-NAMESPACE=sriov-network-operator
-OPERATOR_NAME=sriov-network-operator
-SRIOV_NETWORK_CONFIG_DAEMON_IMAGE=quay.io/openshift/origin-sriov-network-config-daemon
-RESOURCE_PREFIX=openshift.com
+export SRIOV_CNI_IMAGE=quay.io/openshift/origin-sriov-cni:4.2.0
+export SRIOV_DEVICE_PLUGIN_IMAGE=quay.io/openshift/origin-sriov-network-device-plugin:4.2.0
+export NETWORK_RESOURCES_INJECTOR_IMAGE=quay.io/openshift/origin-sriov-dp-admission-controller:4.2.0
+export RELEASE_VERSION=0.0.1-snapshot
+export NAMESPACE=sriov-network-operator
+export OPERATOR_NAME=sriov-network-operator
+export DAEMON_IMAGE_DIGEST=$(skopeo inspect docker://quay.io/openshift/origin-sriov-network-config-daemon | jq --raw-output '.Digest')
+export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE=${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-quay.io/openshift/origin-sriov-network-config-daemon@${DAEMON_IMAGE_DIGEST}}
+export RESOURCE_PREFIX=openshift.com

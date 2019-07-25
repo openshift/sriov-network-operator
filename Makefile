@@ -67,9 +67,12 @@ deploy-setup:
 
 # test-unit:
 # 	@go test -v $(PKGS)
-test-e2e: operator-sdk
-	@EXCLUSIONS=() hack/deploy-setup.sh sriov-network-operator && operator-sdk test local ./test/e2e --go-test-flags "-v" --namespace sriov-network-operator --no-setup
-	@hack/undeploy.sh sriov-network-operator
+test-e2e-local: operator-sdk
+	@hack/run-e2e-test-locally.sh
+
+test-e2e:
+	@hack/run-e2e-test.sh
+
 undeploy:
 	@hack/undeploy.sh sriov-network-operator
 
