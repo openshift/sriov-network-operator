@@ -44,7 +44,6 @@ var log = logf.Log.WithName("controller_sriovnetwork")
 // Add creates a new SriovNetwork Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
-
 	reconciler, err := newReconciler(mgr)
 	if err != nil {
 		return err
@@ -55,7 +54,6 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) (reconcile.Reconciler, error) {
-
 	// The default client serves read requests from the cache which contains
 	// objects only from the namespace the operator is watching. Given we need
 	// to query other namespaces for NetworkAttachmentDefinitions, we create our
