@@ -42,7 +42,7 @@ spec:
         - webhook
         args:
         - -bind-address=0.0.0.0
-        - -port=443
+        - -port=6443
         - -tls-private-key-file=/etc/tls/tls.key
         - -tls-cert-file=/etc/tls/tls.crt
         - -alsologtostderr=true
