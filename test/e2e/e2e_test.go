@@ -64,17 +64,70 @@ func TestOperatorController(t *testing.T) {
 	}
 
 	// run subtests
-	t.Run("Operator", func(t *testing.T) {
+	t.Run("Operator initialization", func(t *testing.T) {
 		t.Run("Test-Sriov-Network-Config-Daemonset-Created", func(t *testing.T) {
 			testSriovNetworkConfigDaemonsetCreated(t, ctx)
 		})
-		t.Run("Test-With-SriovNetworkCR", func(t *testing.T) {
-			testWithSriovNetworkCR(t, ctx)
-		})
+
+	})
+
+	t.Run("Operator handle SriovNetwork CR Creation", func(t *testing.T) {
+		testCases := generateSriovNetworkCRs(namespace)
+		for _, cr := range testCases {
+			t.Run("Test-With-SriovNetworkCR", func(t *testing.T) {
+				testWithSriovNetworkCR(t, ctx, cr)
+			})
+		}
+	})
+
+	t.Run("Operator handle SriovNetworkNodePolicy CR Creation", func(t *testing.T) {
 		t.Run("Test-With-One-SriovNetworkNodePolicyCR", func(t *testing.T) {
 			testWithOneSriovNetworkNodePolicyCR(t, ctx)
 		})
 	})
+}
+
+func generateSriovNetworkCRs(namespace string) []*sriovnetworkv1.SriovNetwork {
+	spoofChk := true
+	trust := true
+	specs := map[string]sriovnetworkv1.SriovNetworkSpec{
+		"test-0": {
+			ResourceName: "resource-1",
+			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
+			Vlan:         100,
+		},
+		"test-1": {
+			ResourceName:     "resource-1",
+			IPAM:             `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
+			NetworkNamespace: "default",
+		},
+		"test-2": {
+			ResourceName: "resource-1",
+			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
+			SpoofChk:     &spoofChk,
+		},
+		"test-3": {
+			ResourceName: "resource-1",
+			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
+			Trust:        &trust,
+		},
+	}
+	var crs []*sriovnetworkv1.SriovNetwork
+
+	for k, v := range specs {
+		crs = append(crs, &sriovnetworkv1.SriovNetwork{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "SriovNetwork",
+				APIVersion: "sriovnetwork.openshift.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      k,
+				Namespace: namespace,
+			},
+			Spec: v,
+		})
+	}
+	return crs
 }
 
 func testWithOneSriovNetworkNodePolicyCR(t *testing.T, ctx *framework.TestCtx) {
@@ -153,49 +206,52 @@ func testSriovNetworkConfigDaemonsetCreated(t *testing.T, ctx *framework.TestCtx
 	}
 }
 
-func testWithSriovNetworkCR(t *testing.T, ctx *framework.TestCtx) {
+func testWithSriovNetworkCR(t *testing.T, ctx *framework.TestCtx, cr *sriovnetworkv1.SriovNetwork) {
 	t.Parallel()
-	namespace, err := ctx.GetNamespace()
-	if err != nil {
-		t.Fatalf("failed to get namespaces: %v", err)
-	}
-	// create custom resource
-	exampleCR := &sriovnetworkv1.SriovNetwork{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "SriovNetwork",
-			APIVersion: "sriovnetwork.openshift.io/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "example-sriovnetwork",
-			Namespace: namespace,
-		},
-		Spec: sriovnetworkv1.SriovNetworkSpec{
-			ResourceName: "resource-1",
-			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
-			Vlan:         100,
-		},
+	var err error
+	spoofchk := ""
+	trust := ""
+
+	if cr.Spec.Trust != nil {
+		if *cr.Spec.Trust {
+			trust = `,"trust":"on"`
+		} else {
+			trust = `,"trust":"off"`
+		}
 	}
 
-	expect := `{"cniVersion":"0.3.1","name":"sriov-net","type":"sriov","vlan":100,"ipam":{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}}`
+	if cr.Spec.SpoofChk != nil {
+		if *cr.Spec.SpoofChk {
+			spoofchk = `,"spoofchk":"on"`
+		} else {
+			spoofchk = `,"spoofchk":"off"`
+		}
+	}
+
+	expect := fmt.Sprintf(`{"cniVersion":"0.3.1","name":"sriov-net","type":"sriov"%s%s,"vlan":%d,"ipam":%s}`, spoofchk, trust, cr.Spec.Vlan, cr.Spec.IPAM)
 
 	// get global framework variables
 	f := framework.Global
-	err = f.Client.Create(goctx.TODO(), exampleCR, &framework.CleanupOptions{TestContext: ctx, Timeout: apiTimeout, RetryInterval: retryInterval})
+	err = f.Client.Create(goctx.TODO(), cr, &framework.CleanupOptions{TestContext: ctx, Timeout: apiTimeout, RetryInterval: retryInterval})
 	if err != nil {
 		t.Fatalf("fail to create SriovNetwork CR: %v", err)
 	}
-	netAttDefCR, err := WaitForNetworkAttachmentDefinition(t, f.Client, exampleCR.GetName(), exampleCR.GetNamespace(), retryInterval, timeout)
+	namespace := cr.GetNamespace()
+	if cr.Spec.NetworkNamespace != "" {
+		namespace = cr.Spec.NetworkNamespace
+	}
+	netAttDefCR, err := WaitForNetworkAttachmentDefinition(t, f.Client, cr.GetName(), namespace, retryInterval, timeout)
 	if err != nil {
 		t.Fatalf("fail to get NetworkAttachmentDefinition: %v", err)
 	}
 	anno := netAttDefCR.GetAnnotations()
 
-	if anno["k8s.v1.cni.cncf.io/resourceName"] != "openshift.com/" + exampleCR.Spec.ResourceName {
+	if anno["k8s.v1.cni.cncf.io/resourceName"] != "openshift.io/"+cr.Spec.ResourceName {
 		t.Fatalf("CNI resourceName not match: %v", anno["k8s.v1.cni.cncf.io/resourceName"])
 	}
 
 	if strings.TrimSpace(netAttDefCR.Spec.Config) != expect {
-		t.Fatalf("CNI config not match: %v", strings.TrimSpace(netAttDefCR.Spec.Config))
+		t.Fatalf("CNI config not match: %v: %v", strings.TrimSpace(netAttDefCR.Spec.Config), expect)
 	}
 
 }
