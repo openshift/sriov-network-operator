@@ -11,13 +11,16 @@ import (
 	render "github.com/openshift/sriov-network-operator/pkg/render"
 
 	"encoding/json"
+
 	"k8s.io/apimachinery/pkg/api/errors"
+
 	// metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -41,12 +44,31 @@ var log = logf.Log.WithName("controller_sriovnetwork")
 // Add creates a new SriovNetwork Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+	reconciler, err := newReconciler(mgr)
+	if err != nil {
+		return err
+	}
+
+	return add(mgr, reconciler)
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileSriovNetwork{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+func newReconciler(mgr manager.Manager) (reconcile.Reconciler, error) {
+	// The default client serves read requests from the cache which contains
+	// objects only from the namespace the operator is watching. Given we need
+	// to query other namespaces for NetworkAttachmentDefinitions, we create our
+	// own client and pass it the manager's scheme which has all our registered types
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := client.New(cfg, client.Options{Scheme: mgr.GetScheme()})
+	if err != nil {
+		return nil, err
+	}
+
+	return &ReconcileSriovNetwork{client: client, scheme: mgr.GetScheme()}, nil
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
