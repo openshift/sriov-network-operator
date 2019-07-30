@@ -42,7 +42,7 @@ spec:
             - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
               value: quay.io/openshift/origin-sriov-network-config-daemon
             - name: RESOURCE_PREFIX
-              value: openshift.com
+              value: openshift.io
             - name: ENABLE_ADMISSION_CONTROLLER
               value: "false"
             - name: NAMESPACE
