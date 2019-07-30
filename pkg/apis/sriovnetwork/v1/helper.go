@@ -5,24 +5,11 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-var DeviceDriverMap = map[string](map[string]string){
-	"PF": {
-		"1572": "i40e",
-		"1583": "i40e",
-		"158b": "i40e",
-		"37d2": "i40e",
-	},
-	"VF": {
-		"1572": "iavf",
-		"1583": "iavf",
-		"158b": "iavf",
-		"37d2": "iavf",
-		"154c": "iavf",
-	},
-}
-
 var SriovPfVfMap = map[string](string){
 	"1583": "154c",
+	"10fb": "10ed",
+	"1015": "1016",
+	"1017": "1018",
 }
 
 var log = logf.Log.WithName("sriovnetwork")
@@ -73,8 +60,8 @@ func UniqueAppend(inSlice []string, strings ...string) []string {
 
 // Apply policy to SriovNetworkNodeState CR
 func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
-	s := p.Spec.NicSelector
-	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 {
+	s := p.Spec
+	if s.NicSelector.Vendor == "" && s.NicSelector.DeviceID == "" && len(s.NicSelector.RootDevices) == 0 && len(s.NicSelector.PfNames) == 0 {
 		// Empty NicSelector match none
 		return
 	}
@@ -93,17 +80,19 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 	state.Spec.Interfaces = append(state.Spec.Interfaces, interfaces...)
 }
 
-func (s *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool {
-	if s.Vendor != "" && s.Vendor != iface.Vendor {
+func (s *SriovNetworkNodePolicySpec) Selected(iface *InterfaceExt) bool {
+	if s.NicSelector.Vendor != "" && s.NicSelector.Vendor != iface.Vendor {
 		return false
 	}
-	if s.DeviceID != "" && s.DeviceID != iface.DeviceID {
+	if s.NicSelector.DeviceID != "" {
+		if ((s.NumVfs == 0 && s.NicSelector.DeviceID != iface.DeviceID) || (s.NumVfs > 0 && s.NicSelector.DeviceID != SriovPfVfMap[iface.DeviceID])) {
+			return false
+		}
+	}
+	if len(s.NicSelector.RootDevices) > 0 && !StringInArray(iface.PciAddress, s.NicSelector.RootDevices) {
 		return false
 	}
-	if len(s.RootDevices) > 0 && !StringInArray(iface.PciAddress, s.RootDevices) {
-		return false
-	}
-	if len(s.PfNames) > 0 && !StringInArray(iface.Name, s.PfNames) {
+	if len(s.NicSelector.PfNames) > 0 && !StringInArray(iface.Name, s.NicSelector.PfNames) {
 		return false
 	}
 	return true
