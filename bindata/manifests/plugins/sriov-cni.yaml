@@ -38,5 +38,5 @@ spec:
       volumes:
         - name: cnibin
           hostPath:
-            path: /var/lib/cni/bin
+            path: {{.CNIBinPath}}
 

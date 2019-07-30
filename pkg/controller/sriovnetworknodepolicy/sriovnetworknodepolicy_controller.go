@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+
 	// "time"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -157,7 +158,6 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	if err = r.syncWebhookObjs(defaultPolicy); err != nil {
 		return reconcile.Result{}, err
 	}
-
 
 	// All was successful. Request that this be re-triggered after ResyncPeriod,
 	// so we can reconcile state again.
@@ -314,6 +314,13 @@ func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
+	envCniBinPath := os.Getenv("SRIOV_CNI_BIN_PATH")
+	if envCniBinPath == "" {
+		data.Data["CNIBinPath"] = "/var/lib/cni/bin"
+	} else {
+		data.Data["CNIBinPath"] = envCniBinPath
+	}
+
 	objs, err := renderDsForCR(PLUGIN_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render SR-IoV manifests")
