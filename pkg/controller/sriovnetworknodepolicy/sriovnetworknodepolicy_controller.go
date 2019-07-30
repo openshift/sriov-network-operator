@@ -318,6 +318,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv
 	if envCniBinPath == "" {
 		data.Data["CNIBinPath"] = "/var/lib/cni/bin"
 	} else {
+		logger.Info("New cni bin found", "CNIBinPath", envCniBinPath)
 		data.Data["CNIBinPath"] = envCniBinPath
 	}
 
