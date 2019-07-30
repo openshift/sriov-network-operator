@@ -97,7 +97,7 @@ func testWithOneSriovNetworkNodePolicyCR(t *testing.T, ctx *framework.TestCtx) {
 		Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
 			ResourceName: "resource-1",
 			NodeSelector: map[string]string{
-				"feature.node.kubernetes.io/sriov-capable": "true",
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
 			},
 			Priority: 99,
 			Mtu:      9000,
@@ -190,12 +190,12 @@ func testWithSriovNetworkCR(t *testing.T, ctx *framework.TestCtx) {
 	}
 	anno := netAttDefCR.GetAnnotations()
 
-	if anno["k8s.v1.cni.cncf.io/resourceName"] != exampleCR.Spec.ResourceName {
-		t.Fatal("CNI resourceName not match")
+	if anno["k8s.v1.cni.cncf.io/resourceName"] != "openshift.com/" + exampleCR.Spec.ResourceName {
+		t.Fatalf("CNI resourceName not match: %v", anno["k8s.v1.cni.cncf.io/resourceName"])
 	}
 
 	if strings.TrimSpace(netAttDefCR.Spec.Config) != expect {
-		t.Fatal("CNI config not match")
+		t.Fatalf("CNI config not match: %v", strings.TrimSpace(netAttDefCR.Spec.Config))
 	}
 
 }
@@ -254,7 +254,7 @@ func validateDevicePluginConfig(np *sriovnetworkv1.SriovNetworkNodePolicy, rawCo
 	}
 
 	if len(rcl.ResourceList) != 1 {
-		return fmt.Errorf("number of resources in config is incorrect")
+		return fmt.Errorf("number of resources in config is incorrect: %d", len(rcl.ResourceList))
 	}
 
 	rc := rcl.ResourceList[0]

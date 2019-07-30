@@ -137,10 +137,6 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 
 	// Sort the policies with priority, higher priority ones is applied later
 	sort.Sort(sriovnetworkv1.ByPriority(policyList.Items))
-	// Sync Sriov device plugin ConfigMap object
-	if err = r.syncDevicePluginConfigMap(policyList); err != nil {
-		return reconcile.Result{}, err
-	}
 	// Sync SriovNetworkNodeState objects
 	if err = r.syncAllSriovNetworkNodeStates(defaultPolicy, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
@@ -149,9 +145,15 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	if err = r.syncConfigDaemonSet(defaultPolicy); err != nil {
 		return reconcile.Result{}, err
 	}
-	// Render and sync Daemon objects
-	if err = r.syncPluginDaemonObjs(defaultPolicy, policyList); err != nil {
-		return reconcile.Result{}, err
+	if len(policyList.Items) > 1 {
+		// Sync Sriov device plugin ConfigMap object
+		if err = r.syncDevicePluginConfigMap(policyList); err != nil {
+			return reconcile.Result{}, err
+		}
+		// Render and sync Daemon objects
+		if err = r.syncPluginDaemonObjs(defaultPolicy, policyList); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 	// Render and sync Webhook objects
 	if err = r.syncWebhookObjs(defaultPolicy); err != nil {
@@ -234,8 +236,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(np *srio
 	logger.Info("Start to sync all SriovNetworkNodeState custom resource")
 	found := &corev1.ConfigMap{}
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: Namespace, Name: CONFIGMAP_NAME}, found); err != nil {
-		logger.Error(err, "Fail to get", "ConfigMap", CONFIGMAP_NAME)
-		return err
+		logger.Info("Fail to get", "ConfigMap", CONFIGMAP_NAME)
 	}
 	md5sum := md5.Sum([]byte(found.Data[DP_CONFIG_FILENAME]))
 	for _, node := range nl.Items {
