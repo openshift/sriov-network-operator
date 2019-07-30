@@ -47,6 +47,8 @@ NAME                                                DESIRED   CURRENT   READY   
 replicaset.apps/sriov-network-operator-54d7545f65   1         1         1       10s
 ```
 
+You may need to label SR-IOV worker nodes using `node-role.kubernetes.io/worker` label, if not already.
+
 ## Configuration
 
 After the operator gets installed, you can configure it with creating the custom resource of SriovNetwork and SriovNetworkNodePolicy. But before that, you may want to check the status of SriovNetworkNodeState CRs to find out all the SRIOV capable devices in you cluster.
