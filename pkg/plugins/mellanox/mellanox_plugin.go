@@ -73,35 +73,31 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 		if !isMlnxNicAndInNode(iface.PciAddress, new) {
 			continue
 		}
-		ifaceFwData, err := getMlnxNicFwData(iface.PciAddress)
+		fwCurrent, fwNext, err := getMlnxNicFwData(iface.PciAddress)
 		if err != nil {
 			return false, false, err
 		}
-		ifaceData, err := getMlnxNicData(iface.PciAddress, new)
-		if err != nil {
-			return false, false, err
-		}
-		if ifaceData.enableSriov != ifaceFwData.enableSriov || ifaceData.linkType != ifaceFwData.linkType ||
-			ifaceData.totalVfs != ifaceFwData.totalVfs {
+		if fwCurrent.enableSriov != fwNext.enableSriov || fwCurrent.totalVfs != fwNext.totalVfs ||
+			fwCurrent.linkType != fwNext.linkType {
 			needReboot = true
 			break
 		}
-		attrs := &mlnxNic{totalVfs: -1}
+		attrs := &mlnxNic{totalVfs: -1, singlePort: fwCurrent.singlePort, firstPort: fwCurrent.firstPort}
 		requireChange := false
 
-		if ifaceFwData.totalVfs != iface.NumVfs {
+		if fwCurrent.totalVfs != iface.NumVfs {
 			attrs.totalVfs = iface.NumVfs
 			requireChange = true
 		}
-		if iface.NumVfs == 0 && ifaceFwData.enableSriov {
+		if iface.NumVfs == 0 && fwCurrent.enableSriov {
 			attrs.enableSriov = false
 			requireChange = true
-		} else if iface.NumVfs > 0 && !ifaceFwData.enableSriov {
+		} else if iface.NumVfs > 0 && !fwCurrent.enableSriov {
 			attrs.enableSriov = true
 			requireChange = true
 		}
-		if ifaceFwData.linkType != EthLinkType {
-			ifaceFwData.linkType = EthLinkType
+		if fwCurrent.linkType != EthLinkType {
+			attrs.linkType = EthLinkType
 			requireChange = true
 		}
 		if requireChange {
@@ -144,6 +140,10 @@ func configFW() error {
 				cmdArgs = append(cmdArgs, "LINK_TYPE_P2="+EthLinkType)
 			}
 		}
+		glog.Info("mellanox-plugin: configFW(): %v", cmdArgs)
+		if len(cmdArgs) <= 4 {
+			continue
+		}
 		out, err := runCommand("mstconfig", cmdArgs...)
 		if err != nil {
 			glog.Errorf("mellanox-plugin configFW(): failed : %v : %s", err, out)
@@ -156,12 +156,10 @@ func configFW() error {
 func mstconfigReadData(pciAddress string, attributes ...string) (string, error) {
 	glog.Infof("mellanox-plugin mstconfigReadData(): try to read %s for device %s", attributes, pciAddress)
 
-	args := []string{"-d", pciAddress, "q"}
+	args := []string{"-e", "-d", pciAddress, "q"}
 	args = append(args, attributes...)
 	out, err := runCommand("mstconfig", args...)
-	if err != nil {
-		glog.Errorf("mellanox-plugin mstconfigReadData(): failed : %v : %s", err, out)
-	}
+	glog.Info("mellanox-plugin mstconfigReadData(): %s", out)
 	return out, err
 }
 
@@ -177,43 +175,56 @@ func runCommand(command string, args ...string) (string, error) {
 	return stdout.String(), err
 }
 
-func getMlnxNicFwData(pciAddress string) (*mlnxNic, error) {
+func getMlnxNicFwData(pciAddress string) (current, next *mlnxNic, err error) {
 	glog.Infof("mellanox-plugin getMlnxNicFwData(): for device %s", pciAddress)
-	fwData := &mlnxNic{}
+	err = nil
 	attrs := []string{TotalVfs, EnableSriov}
 	singlePort, err := isSinglePortNic(pciAddress)
 	if err != nil {
-		return nil, err
+		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
+		return
 	}
+	firstPort := isFirstPort(pciAddress)
+
 	if singlePort {
 		attrs = append(attrs, "LINK_TYPE")
-		fwData.singlePort = true
 	} else {
-		fwData.singlePort = false
-		if isFirstPort(pciAddress) {
+		if firstPort {
 			attrs = append(attrs, "LINK_TYPE_P1")
-			fwData.firstPort = true
 		} else {
 			attrs = append(attrs, "LINK_TYPE_P2")
-			fwData.firstPort = false
 		}
 	}
 	out, err := mstconfigReadData(pciAddress, attrs...)
 	if err != nil {
-		return nil, err
+		return
+		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
 	}
-	mstData := parseMstconfigOutput(out, attrs)
+	mstCurrentData, mstNextData := parseMstconfigOutput(out, attrs)
+	current, err = mlnxNicFromMap(mstCurrentData, singlePort, firstPort)
+	if err != nil {
+		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
+		return
+	}
+	next, err = mlnxNicFromMap(mstNextData, singlePort, firstPort)
+	if err != nil {
+		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
+	}
+	return
+}
+
+func mlnxNicFromMap(mstData map[string]string, singlePort, firstPort bool) (*mlnxNic, error) {
+	glog.Infof("mellanox-plugin mlnxNicFromMap() %v, %v, %v", mstData, singlePort, firstPort)
+	fwData := &mlnxNic{singlePort: singlePort, firstPort: firstPort}
+	var linkType string
 	if strings.Contains(mstData[EnableSriov], "True") {
 		fwData.enableSriov = true
-	} else {
-		fwData.enableSriov = false
 	}
 	i, err := strconv.Atoi(mstData[TotalVfs])
 	if err != nil {
 		return nil, err
 	}
 	fwData.totalVfs = i
-	var linkType string
 	if fwData.singlePort {
 		linkType = mstData["LINK_TYPE"]
 	} else if fwData.firstPort {
@@ -221,26 +232,35 @@ func getMlnxNicFwData(pciAddress string) (*mlnxNic, error) {
 	} else {
 		linkType = mstData["LINK_TYPE_P2"]
 	}
-	fwData.linkType = linkType[:len(linkType)-3]
+
+	if strings.Contains(linkType, EthLinkType) {
+		fwData.linkType = EthLinkType
+	} else if strings.Contains(linkType, InfinibandLinkType) {
+		fwData.linkType = InfinibandLinkType
+	} else {
+		return nil, fmt.Errorf("mellanox-plugin getMlnxNicFwData(): Unknown link type %s", linkType)
+	}
 
 	return fwData, nil
 }
 
-func parseMstconfigOutput(mstOutput string, attributes []string) map[string]string {
+func parseMstconfigOutput(mstOutput string, attributes []string) (fwCurrent, fwNext map[string]string) {
 	glog.Infof("mellanox-plugin parseMstconfigOutput(): Attributes %v", attributes)
-	fwData := map[string]string{}
-	formatRegex := regexp.MustCompile(`(?P<Attribute>\S+)\s+(?P<Value>\S+)`)
+	fwCurrent = map[string]string{}
+	fwNext = map[string]string{}
+	formatRegex := regexp.MustCompile(`(?P<Attribute>\w+)\s+(?P<Default>\S+)\s+(?P<Current>\S+)\s+(?P<Next>\S+)`)
 	mstOutputLines := strings.Split(mstOutput, "\n")
 	for _, attr := range attributes {
 		for _, line := range mstOutputLines {
 			if strings.Contains(line, attr) {
 				regexResult := formatRegex.FindStringSubmatch(line)
-				fwData[attr] = regexResult[2]
-
+				fwCurrent[attr] = regexResult[3]
+				fwNext[attr] = regexResult[4]
+				break
 			}
 		}
 	}
-	return fwData
+	return
 }
 
 func isFirstPort(pciAddress string) bool {
@@ -274,31 +294,4 @@ func isMlnxNicAndInNode(pciAddress string, state *sriovnetworkv1.SriovNetworkNod
 		}
 	}
 	return false
-}
-
-func getMlnxNicData(pciAddress string, state *sriovnetworkv1.SriovNetworkNodeState) (*mlnxNic, error) {
-	glog.Infof("mellanox-plugin getMlnxNicData(): device %s", pciAddress)
-	var iface sriovnetworkv1.InterfaceExt
-	ifaceData := &mlnxNic{}
-	for _, iface = range state.Status.Interfaces {
-		if iface.PciAddress == pciAddress {
-			break
-		}
-	}
-	ifaceData.totalVfs = iface.TotalVfs
-	if iface.TotalVfs > 0 {
-		ifaceData.enableSriov = true
-	}
-	args := []string{iface.Name}
-	out, err := runCommand("ifconfig", args...)
-	if err != nil {
-		glog.Errorf("mellanox-plugin getMlnxNicData(): %v : %v", err, out)
-		return nil, err
-	}
-	if strings.Contains(out, "Infiniband") {
-		ifaceData.linkType = InfinibandLinkType
-	} else {
-		ifaceData.linkType = EthLinkType
-	}
-	return ifaceData, nil
 }
