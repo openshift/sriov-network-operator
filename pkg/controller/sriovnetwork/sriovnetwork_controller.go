@@ -93,6 +93,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 }
 
 var _ reconcile.Reconciler = &ReconcileSriovNetwork{}
+var lastNetworkNamespace = ""
 
 // ReconcileSriovNetwork reconciles a SriovNetwork object
 type ReconcileSriovNetwork struct {
@@ -115,6 +116,7 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 
 	// Fetch the SriovNetwork instance
 	instance := &sriovnetworkv1.SriovNetwork{}
+	var namespaces = ""
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -141,33 +143,66 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	if err := controllerutil.SetControllerReference(instance, netAttDef, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
-
-	// Check if this NetworkAttachmentDefinition already exists
-	found := &netattdefv1.NetworkAttachmentDefinition{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			reqLogger.Info("Creating a new NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
-			err = r.client.Create(context.TODO(), netAttDef)
+	if lastNetworkNamespace == "" {
+		lastNetworkNamespace = netAttDef.GetNamespace()
+	}
+	if lastNetworkNamespace == netAttDef.GetNamespace() {
+		// networkNamespace not updated
+		namespaces = netAttDef.GetNamespace()
+		// Check if this NetworkAttachmentDefinition already exists
+		found := &netattdefv1.NetworkAttachmentDefinition{}
+		err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: namespaces}, found)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				reqLogger.Info("Creating a NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				err = r.client.Create(context.TODO(), netAttDef)
+				if err != nil {
+					reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+					return reconcile.Result{}, err
+				}
+				lastNetworkNamespace = netAttDef.GetNamespace()
+			}
+			// NetworkAttachmentDefinition created successfully - don't requeue
+			return reconcile.Result{}, err
+		}
+		if lastNetworkNamespace != netAttDef.GetNamespace() {
+			err = r.client.Delete(context.TODO(), found)
 			if err != nil {
-				reqLogger.Error(err, "Couldn't create SriovNetworkNodeState", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				reqLogger.Error(err, "Couldn't delete NetworkAttachmentDefinition", "Namespace", found.Namespace, "Name", found.Name)
 				return reconcile.Result{}, err
 			}
 		}
-		// NetworkAttachmentDefinition created successfully - don't requeue
-		return reconcile.Result{}, err
-	} else {
-		reqLogger.Info("SriovNetworkNodeState already exists, updating")
+		reqLogger.Info("NetworkAttachmentDefinition already exists, updating")
 		found.Spec = netAttDef.Spec
 		err = r.client.Update(context.TODO(), found)
 		if err != nil {
-			reqLogger.Error(err, "Couldn't update SriovNetworkNodeState", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+			reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 			return reconcile.Result{}, err
 		}
+		// NetworkAttachmentDefinition updated successfully - don't requeue
+		return reconcile.Result{}, nil
 	}
-
-	// NetworkAttachmentDefinition already exists - don't requeue
-	reqLogger.Info("Skip reconcile: NetworkAttachmentDefinition already exists", "Namespace", found.Namespace, "Name", found.Name)
+	// networkNamespace updated, delete existing net-att-def cr and create a new one
+	reqLogger.Info("networkNamespace namespace changed, delete existing NetworkAttachmentDefinition")
+	namespaces = lastNetworkNamespace
+	found := &netattdefv1.NetworkAttachmentDefinition{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: namespaces}, found)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	err = r.client.Delete(context.TODO(), found)
+	if err != nil {
+		reqLogger.Error(err, "Couldn't delete NetworkAttachmentDefinition", "Namespace", found.Namespace, "Name", found.Name)
+		return reconcile.Result{}, err
+	}
+	reqLogger.Info("Creating a new NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+	err = r.client.Create(context.TODO(), netAttDef)
+	if err != nil {
+		reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+		return reconcile.Result{}, err
+	}
+	lastNetworkNamespace = netAttDef.GetNamespace()
+	// NetworkAttachmentDefinition re-created successfully - don't requeue
 	return reconcile.Result{}, nil
 }
 
