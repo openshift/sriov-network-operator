@@ -173,6 +173,10 @@ func tryEnableIommuInKernelArgs() (bool, error) {
 		glog.Errorf("generic-plugin tryEnableIommuInKernelArgs(): fail to enable iommu %s: %v", args, err)
 		return false, err
 	}
+	if strings.TrimSpace(stdout.String()) == "grubby not available" {
+		glog.Infof("generic-plugin tryEnableIommuInKernelArgs(): grubby not available, assuming intel_iommu=on, iommu=pt")
+		return false, nil
+	}
 
 	i, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
 	if err == nil {

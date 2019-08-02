@@ -1,5 +1,13 @@
 #!/bin/bash
 set -x
+
+chroot /host/ which grubby
+
+# if grubby is not there, let's send a message
+if [ $? -ne 0 ]; then
+    echo "grubby not available"
+fi
+
 declare -a kargs=( "$@" )
 eval `chroot /host/ grubby --info=DEFAULT | grep args`
 ret=0
