@@ -39,7 +39,7 @@ operator-sdk:
 
 all: build plugins
 
-build: _build-manager _build-sriov-network-config-daemon
+build: fmt _build-manager _build-sriov-network-config-daemon
 
 _build-%:
 	WHAT=$* hack/build-go.sh
@@ -79,7 +79,7 @@ undeploy:
 _plugin-%:
 	@hack/build-plugins.sh $*
 
-plugins: _plugin-intel _plugin-mellanox _plugin-generic
+plugins: fmt _plugin-intel _plugin-mellanox _plugin-generic
 
 verify-gofmt:
 ifeq (, $(GOFMT_CHECK))
