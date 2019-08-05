@@ -20,7 +20,10 @@ type GenericPlugin struct {
 	LoadVfioDriver uint
 }
 
-const scriptsPath = "bindata/scripts/enable-kargs.sh"
+const (
+	scriptsPath          = "bindata/scripts/enable-kargs.sh"
+	commandNotFoundError = 127
+)
 
 const (
 	unloaded = iota
@@ -170,12 +173,14 @@ func tryEnableIommuInKernelArgs() (bool, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		// if grubby is not there log and assume kernel args are set correctly.
+		if exiterr, ok := err.(*exec.ExitError); ok && exiterr.Error() == "exit status 127" {
+			glog.Error("generic-plugin tryEnableIommuInKernelArgs(): grubby command not found. Please ensure that kernel args intel_iommu=on iommu=pt are set")
+			return false, nil
+		}
+
 		glog.Errorf("generic-plugin tryEnableIommuInKernelArgs(): fail to enable iommu %s: %v", args, err)
 		return false, err
-	}
-	if strings.TrimSpace(stdout.String()) == "grubby not available" {
-		glog.Infof("generic-plugin tryEnableIommuInKernelArgs(): grubby not available, assuming intel_iommu=on, iommu=pt")
-		return false, nil
 	}
 
 	i, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
