@@ -6,6 +6,7 @@ chroot /host/ which grubby
 # if grubby is not there, let's send a message
 if [ $? -ne 0 ]; then
     echo "grubby not available"
+    exit
 fi
 
 declare -a kargs=( "$@" )
