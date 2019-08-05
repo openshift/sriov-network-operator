@@ -1,21 +1,31 @@
 #!/bin/bash
 set -x
 
-chroot /host/ which grubby
-
-# if grubby is not there, let's send a message
-if [ $? -ne 0 ]; then
-    exit 127
-fi
+REDHAT_RELEASE_FILE="/host/etc/redhat-release"
 
 declare -a kargs=( "$@" )
-eval `chroot /host/ grubby --info=DEFAULT | grep args`
 ret=0
-
-for t in "${kargs[@]}";do
-    if [[ $args != *${t}* ]];then
-        chroot /host/ grubby --update-kernel=DEFAULT --args=${t}
-        let ret++
+if grep --quiet CoreOS "$REDHAT_RELEASE_FILE"; then
+    args=$(chroot /host/ rpm-ostree kargs)
+    for t in "${kargs[@]}";do
+        if [[ $args != *${t}* ]];then
+            chroot /host/ rpm-ostree kargs --append ${t}
+            let ret++
+        fi
+    done
+else
+    chroot /host/ which grubby
+    # if grubby is not there, let's tell it
+    if [ $? -ne 0 ]; then
+        exit 127
     fi
-done
+
+    eval `chroot /host/ grubby --info=DEFAULT | grep args`
+    for t in "${kargs[@]}";do
+        if [[ $args != *${t}* ]];then
+            chroot /host/ grubby --update-kernel=DEFAULT --args=${t}
+            let ret++
+        fi
+    done
+fi
 echo $ret
