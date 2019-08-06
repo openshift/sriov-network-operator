@@ -85,7 +85,6 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 	if new.Spec.DpConfigVersion != old.Spec.DpConfigVersion && (len(new.Spec.Interfaces) > 0 || len(old.Spec.Interfaces) > 0) {
 		glog.Infof("generic-plugin OnNodeStateChange(): CMRV changed %v -> %v", old.Spec.DpConfigVersion, new.Spec.DpConfigVersion)
 		needDrain = true
-		return
 	}
 
 	err = nil
