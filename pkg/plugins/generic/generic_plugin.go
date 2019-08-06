@@ -20,10 +20,7 @@ type GenericPlugin struct {
 	LoadVfioDriver uint
 }
 
-const (
-	scriptsPath          = "bindata/scripts/enable-kargs.sh"
-	commandNotFoundError = 127
-)
+const scriptsPath = "bindata/scripts/enable-kargs.sh"
 
 const (
 	unloaded = iota
