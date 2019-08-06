@@ -93,7 +93,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 }
 
 var _ reconcile.Reconciler = &ReconcileSriovNetwork{}
-var lastNetworkNamespace = ""
+var lastNetworkNamespace = make(map[types.UID]string)
 
 // ReconcileSriovNetwork reconciles a SriovNetwork object
 type ReconcileSriovNetwork struct {
@@ -143,10 +143,10 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	if err := controllerutil.SetControllerReference(instance, netAttDef, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
-	if lastNetworkNamespace == "" {
-		lastNetworkNamespace = netAttDef.GetNamespace()
+	if lastNetworkNamespace[instance.GetUID()] == "" {
+		lastNetworkNamespace[instance.GetUID()] = netAttDef.GetNamespace()
 	}
-	if lastNetworkNamespace == netAttDef.GetNamespace() {
+	if lastNetworkNamespace[instance.GetUID()] == netAttDef.GetNamespace() {
 		// networkNamespace not updated
 		namespaces = netAttDef.GetNamespace()
 		// Check if this NetworkAttachmentDefinition already exists
@@ -160,17 +160,10 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 					reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 					return reconcile.Result{}, err
 				}
-				lastNetworkNamespace = netAttDef.GetNamespace()
+				lastNetworkNamespace[instance.GetUID()] = netAttDef.GetNamespace()
 			}
 			// NetworkAttachmentDefinition created successfully - don't requeue
 			return reconcile.Result{}, err
-		}
-		if lastNetworkNamespace != netAttDef.GetNamespace() {
-			err = r.client.Delete(context.TODO(), found)
-			if err != nil {
-				reqLogger.Error(err, "Couldn't delete NetworkAttachmentDefinition", "Namespace", found.Namespace, "Name", found.Name)
-				return reconcile.Result{}, err
-			}
 		}
 		reqLogger.Info("NetworkAttachmentDefinition already exists, updating")
 		found.Spec = netAttDef.Spec
@@ -184,7 +177,7 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	}
 	// networkNamespace updated, delete existing net-att-def cr and create a new one
 	reqLogger.Info("networkNamespace namespace changed, delete existing NetworkAttachmentDefinition")
-	namespaces = lastNetworkNamespace
+	namespaces = lastNetworkNamespace[instance.GetUID()]
 	found := &netattdefv1.NetworkAttachmentDefinition{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: namespaces}, found)
 	if err != nil {
@@ -201,7 +194,7 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 		reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 		return reconcile.Result{}, err
 	}
-	lastNetworkNamespace = netAttDef.GetNamespace()
+	lastNetworkNamespace[instance.GetUID()] = netAttDef.GetNamespace()
 	// NetworkAttachmentDefinition re-created successfully - don't requeue
 	return reconcile.Result{}, nil
 }
