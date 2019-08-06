@@ -14,7 +14,7 @@ if grep --quiet CoreOS "$REDHAT_RELEASE_FILE"; then
         fi
     done
 else
-    chroot /host/ which grubby
+    chroot /host/ which grubby > /dev/null 2>&1
     # if grubby is not there, let's tell it
     if [ $? -ne 0 ]; then
         exit 127
