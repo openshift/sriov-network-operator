@@ -153,8 +153,8 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 				return reconcile.Result{}, err
 			}
 			reqLogger.Info("NetworkAttachmentDefinition already exists, updating")
-			found.Spec = netAttDef.Spec
-			err = r.client.Update(context.TODO(), found)
+			netAttDef.SetResourceVersion(found.GetResourceVersion())
+			err = r.client.Update(context.TODO(), netAttDef)
 			if err != nil {
 				reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err
