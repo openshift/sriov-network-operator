@@ -202,6 +202,7 @@ make build
 
 If you want to test changes to the `network config daemon`, you must:
 - build and tag an image locally with `docker build -f Dockerfile.sriov-network-config-daemon -t imagename`
-- change `hack/env.sh` value for `SRIOV_NETWORK_CONFIG_DAEMON_IMAGE` pointing _imagename_
+- push the image to a registry
+- change `hack/env.sh` value for `SRIOV_NETWORK_CONFIG_DAEMON_IMAGE` pointing _imagename_ from the registry you pushed the image to
 
 and then `make run`
