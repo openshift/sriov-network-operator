@@ -19,7 +19,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -755,10 +754,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDaemonSet(cr *sriovnetworkv1.Sriov
 		}
 	} else {
 		logger.Info("DaemonSet already exists, updating")
-		if !apiequality.Semantic.DeepEqual(ds.Spec, in.Spec) {
-			ds.Spec = in.Spec
-		}
-		err = r.client.Update(context.TODO(), ds)
+		err = r.client.Update(context.TODO(), in)
 		if err != nil {
 			logger.Error(err, "Fail to update DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
 			return err
