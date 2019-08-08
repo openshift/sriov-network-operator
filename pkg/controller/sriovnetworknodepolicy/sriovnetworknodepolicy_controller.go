@@ -79,6 +79,76 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// Watch for changes to secondary resource DaemonSet
+	err = c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource ServiceAccount
+	err = c.Watch(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource ConfigMap
+	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource ClusterRole
+	err = c.Watch(&source.Kind{Type: &rbacv1.ClusterRole{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource ClusterRoleBinding
+	err = c.Watch(&source.Kind{Type: &rbacv1.ClusterRoleBinding{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource Service
+	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource Webhook
+	err = c.Watch(&source.Kind{Type: &admissionregistrationv1beta1.MutatingWebhookConfiguration{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
+	})
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -106,6 +176,22 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: Namespace}, defaultPolicy)
 	if err != nil {
+		if errors.IsNotFound(err) {
+			// Default policy object not found, create it.
+			defaultPolicy.SetNamespace(Namespace)
+			defaultPolicy.SetName(DEFAULT_POLICY_NAME)
+			defaultPolicy.Spec =sriovnetworkv1.SriovNetworkNodePolicySpec{
+				NumVfs:       0,
+				NodeSelector: make(map[string]string),
+				NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
+			}
+			err = r.client.Create(context.TODO(), defaultPolicy)
+			if err != nil {
+				reqLogger.Error(err, "Failed to create default Policy", "Namespace", Namespace, "Name", DEFAULT_POLICY_NAME)
+				return reconcile.Result{},err
+			}
+			return reconcile.Result{}, nil
+		}
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
@@ -725,13 +811,8 @@ func (r *ReconcileSriovNetworkNodePolicy) syncServiceAccount(cr *sriovnetworkv1.
 		} else {
 			return fmt.Errorf("Fail to get ServiceAccount: %v", err)
 		}
-	} else {
-		logger.Info("ServiceAccount already exists, updating")
-		err = r.client.Update(context.TODO(), in)
-		if err != nil {
-			return fmt.Errorf("Couldn't update ServiceAccount: %v", err)
-		}
 	}
+	// No neet to update SA
 	return nil
 }
 
