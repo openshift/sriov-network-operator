@@ -17,7 +17,7 @@ Install the Operator-SDK. The following commands will put operator-sdk to your $
 
 ```bash
 cd $GOPATH/github.com/openshift/sriov-network-operator
-make deploy-setup
+make operator-sdk
 ```
 
 Deploy the operator. 
