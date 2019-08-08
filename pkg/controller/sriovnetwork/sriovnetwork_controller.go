@@ -163,8 +163,8 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 			return reconcile.Result{}, nil
 		} else {
 			err = r.client.Delete(context.TODO(), &netattdefv1.NetworkAttachmentDefinition{
-			    ObjectMeta: metav1.ObjectMeta{
-					Name: netAttDef.GetName(), 
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      netAttDef.GetName(),
 					Namespace: namespace,
 				},
 			})
@@ -173,9 +173,6 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 				return reconcile.Result{}, err
 			}
 		}
-	} else {
-		lastNetworkNamespace[instance.GetUID()] = netAttDef.GetNamespace()
-		namespace = netAttDef.GetNamespace()
 	}
 	reqLogger.Info("Creating a new NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 	err = r.client.Create(context.TODO(), netAttDef)
