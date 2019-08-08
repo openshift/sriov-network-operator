@@ -65,6 +65,11 @@ gencode: operator-sdk
 deploy-setup:
 	@EXCLUSIONS=() hack/deploy-setup.sh sriov-network-operator
 
+prepare-k8s:
+    @CNI_BIN_PATH=/opt/cni/bin
+
+deploy-setup-k8s: prepare-k8s deploy-setup
+
 # test-unit:
 # 	@go test -v $(PKGS)
 test-e2e-local: operator-sdk
