@@ -7,7 +7,7 @@ import (
 
 var SriovPfVfMap = map[string](string){
 	"1583": "154c",
-	"154d": "10ed",
+	"154b": "10ed",
 	"10fb": "10ed",
 	"1015": "1016",
 	"1017": "1018",
