@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -171,11 +172,10 @@ func tryEnableIommuInKernelArgs() (bool, error) {
 
 	if err := cmd.Run(); err != nil {
 		// if grubby is not there log and assume kernel args are set correctly.
-		if exiterr, ok := err.(*exec.ExitError); ok && exiterr.Error() == "exit status 127" {
+		if isCommandNotFound(err) {
 			glog.Error("generic-plugin tryEnableIommuInKernelArgs(): grubby command not found. Please ensure that kernel args intel_iommu=on iommu=pt are set")
 			return false, nil
 		}
-
 		glog.Errorf("generic-plugin tryEnableIommuInKernelArgs(): fail to enable iommu %s: %v", args, err)
 		return false, err
 	}
@@ -188,4 +188,13 @@ func tryEnableIommuInKernelArgs() (bool, error) {
 		}
 	}
 	return false, err
+}
+
+func isCommandNotFound(err error) bool {
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 127 {
+			return true
+		}
+	}
+	return false
 }
