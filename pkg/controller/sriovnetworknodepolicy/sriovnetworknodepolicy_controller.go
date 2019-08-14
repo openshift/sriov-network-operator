@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"sort"
 
 	// "time"
@@ -764,12 +763,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDaemonSet(cr *sriovnetworkv1.Sriov
 		}
 	} else {
 		logger.Info("DaemonSet already exists, updating")
-		if ds.Spec.Template.Spec.Affinity != nil && in.Spec.Template.Spec.Affinity != nil {
-			if !reflect.DeepEqual(*ds.Spec.Template.Spec.Affinity.NodeAffinity, *in.Spec.Template.Spec.Affinity.NodeAffinity) {
-				ds.Spec.Template.Spec.Affinity.NodeAffinity = in.Spec.Template.Spec.Affinity.NodeAffinity
-			}
-		}
-		err = r.client.Update(context.TODO(), ds)
+		err = r.client.Update(context.TODO(), in)
 		if err != nil {
 			logger.Error(err, "Fail to update DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
 			return err
