@@ -9,11 +9,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
-
 	// "time"
-
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	render "github.com/openshift/sriov-network-operator/pkg/render"
 
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
 	errs "github.com/pkg/errors"
@@ -35,6 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	render "github.com/openshift/sriov-network-operator/pkg/render"
 )
 
 var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
@@ -552,14 +551,6 @@ func (r *ReconcileSriovNetworkNodePolicy) syncWebhookObject(dp *sriovnetworkv1.S
 			logger.Error(err, "Fail to sync Service", "Namespace", s.Namespace, "Name", s.Name)
 			return err
 		}
-	case "Secret":
-		s := &corev1.Secret{}
-		err = scheme.Convert(obj, s, nil)
-		r.syncSecret(dp, s)
-		if err != nil {
-			logger.Error(err, "Fail to sync Secret", "Namespace", s.Namespace, "Name", s.Name)
-			return err
-		}
 	case "ClusterRole":
 		cr := &rbacv1.ClusterRole{}
 		err = scheme.Convert(obj, cr, nil)
@@ -671,35 +662,6 @@ func (r *ReconcileSriovNetworkNodePolicy) syncService(cr *sriovnetworkv1.SriovNe
 		err = r.client.Update(context.TODO(), in)
 		if err != nil {
 			return fmt.Errorf("Couldn't update service: %v", err)
-		}
-	}
-	return nil
-}
-
-func (r *ReconcileSriovNetworkNodePolicy) syncSecret(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.Secret) error {
-	logger := log.WithName("syncSecret")
-	logger.Info("Start to sync secret", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
-	}
-	s := &corev1.Secret{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, s)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create secret: %v", err)
-			}
-			logger.Info("Create secret for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get secret: %v", err)
-		}
-	} else {
-		logger.Info("Secret already exists, updating")
-		err = r.client.Update(context.TODO(), in)
-		if err != nil {
-			return fmt.Errorf("Couldn't update secret: %v", err)
 		}
 	}
 	return nil
