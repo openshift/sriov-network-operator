@@ -114,7 +114,7 @@ spec:
       EOF
 
       $ oc create -f - <<EOF
-      apiVersion: operators.coreos.com/v1alpha2
+      apiVersion: operators.coreos.com/v1
       kind: OperatorGroup
       metadata:
         name: sriov-network-operators
