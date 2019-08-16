@@ -83,6 +83,11 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
+	// Watch for changes to secondary resource NetworkAttachmentDefinition
+	err = c.Watch(&source.Kind{Type: &netattdefv1.NetworkAttachmentDefinition{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetwork{},
+	})
 
 	if err != nil {
 		return err
