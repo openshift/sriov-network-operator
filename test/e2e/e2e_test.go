@@ -10,9 +10,6 @@ import (
 	"time"
 
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
-	"github.com/openshift/sriov-network-operator/pkg/apis"
-	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	"github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	appsv1 "k8s.io/api/apps/v1"
@@ -22,6 +19,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	dynclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/sriov-network-operator/pkg/apis"
+	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 )
 
 var (
@@ -71,11 +73,29 @@ func TestOperatorController(t *testing.T) {
 
 	})
 
-	t.Run("Operator handle SriovNetwork CR Creation", func(t *testing.T) {
+	t.Run("Operator handle SriovNetwork CR creation", func(t *testing.T) {
 		testCases := generateSriovNetworkCRs(namespace)
 		for _, cr := range testCases {
 			t.Run("Test-With-SriovNetworkCR", func(t *testing.T) {
-				testWithSriovNetworkCR(t, ctx, cr)
+				testWithSriovNetworkCRCreation(t, ctx, cr)
+			})
+		}
+	})
+
+	t.Run("Operator handle SriovNetwork CR update", func(t *testing.T) {
+		testCases := generateSriovNetworkCRs(namespace)
+		for _, cr := range testCases {
+			t.Run("Test-With-SriovNetworkCR", func(t *testing.T) {
+				testWithSriovNetworkCRUpdate(t, ctx, cr)
+			})
+		}
+	})
+
+	t.Run("Operator handle SriovNetwork CR deletion", func(t *testing.T) {
+		testCases := generateSriovNetworkCRs(namespace)
+		for _, cr := range testCases {
+			t.Run("Test-With-SriovNetworkCR", func(t *testing.T) {
+				testWithSriovNetworkCRDeletion(t, ctx, cr)
 			})
 		}
 	})
@@ -206,7 +226,85 @@ func testSriovNetworkConfigDaemonsetCreated(t *testing.T, ctx *framework.TestCtx
 	}
 }
 
-func testWithSriovNetworkCR(t *testing.T, ctx *framework.TestCtx, cr *sriovnetworkv1.SriovNetwork) {
+func testWithSriovNetworkCRDeletion(t *testing.T, ctx *framework.TestCtx, cr *sriovnetworkv1.SriovNetwork) {
+	t.Parallel()
+
+	var err error	
+	// get global framework variables
+	f := framework.Global
+	found := &sriovnetworkv1.SriovNetwork{}
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName(),}, found)
+	if err != nil {
+		t.Fatalf("fail to Get SriovNetwork CR: %v", err)
+	}
+	err = f.Client.Delete(goctx.TODO(), found, []dynclient.DeleteOptionFunc{}...)
+	if err != nil {
+		t.Fatalf("fail to Delete SriovNetwork CR: %v", err)
+	}
+	// wait 100ms for object get deleted
+	time.Sleep(300*time.Millisecond)
+	nad := &netattdefv1.NetworkAttachmentDefinition{}
+	namespace := cr.GetNamespace()
+	if cr.Spec.NetworkNamespace != "" {
+		namespace = cr.Spec.NetworkNamespace
+	}
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: cr.GetName(),}, nad)
+	if err != nil && errors.IsNotFound(err) {
+		return
+	}
+	t.Fatalf("fail to Delete NetworkAttachmentDefinition CR: %v", err)
+}
+
+func testWithSriovNetworkCRUpdate(t *testing.T, ctx *framework.TestCtx, cr *sriovnetworkv1.SriovNetwork) {
+	t.Parallel()
+	cr0 := &sriovnetworkv1.SriovNetwork{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "SriovNetwork",
+			APIVersion: "sriovnetwork.openshift.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Name,
+			Namespace: cr.Namespace,
+		},
+		Spec: sriovnetworkv1.SriovNetworkSpec{
+			ResourceName:     "resource-1",
+			IPAM:             `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","gateway":"10.56.217.1"}`,
+		},
+	}
+
+	var err error
+	expect := fmt.Sprintf(`{"cniVersion":"0.3.1","name":"sriov-net","type":"sriov","vlan":0,"ipam":%s}`, cr0.Spec.IPAM)
+	
+	// get global framework variables
+	f := framework.Global
+	found := &sriovnetworkv1.SriovNetwork{}
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName(),}, found)
+	if err != nil {
+		t.Fatalf("fail to get SriovNetwork CR: %v", err)
+	}
+	found.Spec = cr0.Spec
+	err = f.Client.Update(goctx.TODO(), found)
+	if err != nil {
+		t.Fatalf("fail to update SriovNetwork CR: %v", err)
+	}
+	// wait 100ms for object get update
+	time.Sleep(300*time.Millisecond)
+	netAttDefCR, err := WaitForNetworkAttachmentDefinition(t, f.Client, cr.GetName(), cr.GetNamespace(), retryInterval, timeout)
+	if err != nil {
+		t.Fatalf("fail to get NetworkAttachmentDefinition after update: %v", err)
+	}
+	anno := netAttDefCR.GetAnnotations()
+
+	if anno["k8s.v1.cni.cncf.io/resourceName"] != "openshift.io/"+cr.Spec.ResourceName {
+		t.Fatalf("CNI resourceName not match: %v", anno["k8s.v1.cni.cncf.io/resourceName"])
+	}
+
+	if strings.TrimSpace(netAttDefCR.Spec.Config) != expect {
+		t.Fatalf("CNI config not match: %v\nexpect: %v", strings.TrimSpace(netAttDefCR.Spec.Config), expect)
+	}
+}
+
+func testWithSriovNetworkCRCreation(t *testing.T, ctx *framework.TestCtx, cr *sriovnetworkv1.SriovNetwork) {
 	t.Parallel()
 	var err error
 	spoofchk := ""
