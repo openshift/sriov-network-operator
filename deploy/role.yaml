@@ -50,6 +50,7 @@ rules:
   - ""
   resources:
   - pods
+  - configmaps
   verbs:
   - '*'
 - apiGroups:
