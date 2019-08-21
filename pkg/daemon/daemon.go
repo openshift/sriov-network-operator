@@ -18,10 +18,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+
 	// "k8s.io/client-go/informers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+
 	// "k8s.io/client-go/kubernetes/scheme"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
@@ -55,9 +57,9 @@ type Daemon struct {
 
 	refreshCh chan<- Message
 
-	dpReboot bool
-
 	mu *sync.Mutex
+
+	noReboot bool
 }
 
 const scriptsPath = "/bindata/scripts/enable-rdma.sh"
@@ -97,6 +99,13 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 			lo.FieldSelector = "metadata.name=" + dn.name
 		},
 	)
+
+	var err error
+	dn.noReboot, err = dn.rebootDisabled()
+
+	if err != nil {
+		glog.Warningf("Failed to check reboot disabled: %v", err)
+	}
 
 	informer := informerFactory.Sriovnetwork().V1().SriovNetworkNodeStates().Informer()
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -181,6 +190,10 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	}
 
 	if reqReboot {
+		if dn.noReboot {
+			glog.Fatal("Would reboot but reboot disabled, check your config")
+			return
+		}
 		glog.Info("nodeStateAddHandler(): reboot node")
 		rebootNode()
 		return
@@ -287,6 +300,10 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 
 	if reqReboot {
+		if dn.noReboot {
+			glog.Fatal("Would reboot but reboot disabled, check your config")
+			return
+		}
 		glog.Info("nodeStateChangeHandler(): reboot node")
 		go rebootNode()
 		return
@@ -381,7 +398,7 @@ func rebootNode() {
 	// as systemd will time out the stop invocation.
 	cmd := exec.Command("systemd-run", "--unit", "sriov-network-config-daemon-reboot",
 		"--description", fmt.Sprintf("sriov-network-config-daemon reboot node"), "/bin/sh", "-c", "systemctl stop kubelet.service; reboot")
-	
+
 	if err := cmd.Run(); err != nil {
 		glog.Error("failed to reboot node: %v", err)
 	}
@@ -485,4 +502,23 @@ func tryEnableRdma() (bool, error) {
 		}
 	}
 	return false, err
+}
+
+func (dn *Daemon) rebootDisabled() (bool, error) {
+	cfg, err := dn.kubeClient.CoreV1().ConfigMaps(namespace).Get("disable-reboot", v1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	disabled, ok := cfg.Data["disabled"]
+	if !ok {
+		return false, nil
+	}
+	res, err := strconv.ParseBool(disabled)
+	if err != nil {
+		return false, err
+	}
+	return res, nil
 }
