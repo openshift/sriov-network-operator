@@ -23,7 +23,7 @@ PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
-.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test-e2e run image
+.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test-e2e test-e2e-k8s run image
 
 all: build #check install
 
@@ -65,10 +65,9 @@ gencode: operator-sdk
 deploy-setup:
 	@EXCLUSIONS=() hack/deploy-setup.sh sriov-network-operator
 
-prepare-k8s:
-    @CNI_BIN_PATH=/opt/cni/bin
-
-deploy-setup-k8s: prepare-k8s deploy-setup
+    
+deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
+deploy-setup-k8s: deploy-setup
 
 # test-unit:
 # 	@go test -v $(PKGS)
@@ -78,7 +77,8 @@ test-e2e-local: operator-sdk
 test-e2e:
 	@hack/run-e2e-test.sh
 
-test-e2e-k8s: prepare-k8s test-e2e
+test-e2e-k8s: export CNI_BIN_PATH=/opt/cni/bin
+test-e2e-k8s: test-e2e
 
 undeploy:
 	@hack/undeploy.sh sriov-network-operator
