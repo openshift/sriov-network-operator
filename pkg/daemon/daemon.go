@@ -343,15 +343,12 @@ func (dn *Daemon) restartDevicePluginPod() error {
 			return err
 		}
 
-		var lastErr error
-
 		if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
 			_, err := dn.kubeClient.CoreV1().Pods(namespace).Get(pods.Items[0].GetName(), metav1.GetOptions{})
 			if err != nil {
 				if errors.IsNotFound(err) {
 					return true, nil
 				}
-				lastErr = err
 				glog.Infof("restartDevicePluginPod(): unexpected error: %v, retrying", err)
 				return false, err
 			}
