@@ -24,7 +24,10 @@ load_manifest() {
         ${OPERATOR_EXEC} apply -f ${m} ${namespace:-} --validate=false
       fi
     done
-    envsubst < operator.yaml | ${OPERATOR_EXEC} apply ${namespace:-} --validate=false -f -
+    # handling operator.yaml as special case since it needs env variable substitutions
+    if [ "$(echo ${EXCLUSIONS[@]} | grep -o operator.yaml | wc -w | xargs)" == "0" ] ; then
+      envsubst < operator.yaml | ${OPERATOR_EXEC} apply ${namespace:-} --validate=false -f -
+    fi
   popd
 }
 
