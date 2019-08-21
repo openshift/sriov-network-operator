@@ -78,6 +78,8 @@ test-e2e-local: operator-sdk
 test-e2e:
 	@hack/run-e2e-test.sh
 
+test-e2e-k8s: prepare-k8s test-e2e
+
 undeploy:
 	@hack/undeploy.sh sriov-network-operator
 
