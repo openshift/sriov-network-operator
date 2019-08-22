@@ -22,8 +22,15 @@ make operator-sdk
 
 Deploy the operator. 
 
+If you are running an Openshift cluster:
+
 ```bash
 make deploy-setup
+```
+
+If you are running a Kubernetes cluster:
+```bash
+make deploy-setup-k8s
 ```
 
 By default, the operator will be deployed in namespace 'sriov-network-operator', you can check if the deployment is finished successfully.
