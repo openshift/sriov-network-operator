@@ -30,6 +30,7 @@ make deploy-setup
 
 If you are running a Kubernetes cluster:
 ```bash
+export OPERATOR_EXEC=kubectl
 make deploy-setup-k8s
 ```
 
