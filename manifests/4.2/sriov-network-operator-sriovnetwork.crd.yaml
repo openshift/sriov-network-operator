@@ -26,22 +26,30 @@ spec:
         metadata:
           type: object
         spec:
+          description: Specification describing how a NetworkAttachmentDefinition
+            custom resource shall be defined for SR-IOV CNI plugin.
           properties:
             ipam:
+              description: IPAM configuration to be used for this network.
               type: string
             networkNamespace:
+              description: Namespace of the NetworkAttachmentDefinition custom resource
               type: string
             resourceName:
+              description: SRIOV Network device plugin endpoint resource name
               type: string
             spoofChk:
+              description: VF spoof check
               type: boolean
             trust:
+              description: VF trust mode
               type: boolean
             vlan:
+              description: VLAN ID to assign for the VF. Defaults to 0.
               format: int64
-              type: integer
-              minimum: 0
               maximum: 4096
+              minimum: 0
+              type: integer
           required:
           - resourceName
           type: object

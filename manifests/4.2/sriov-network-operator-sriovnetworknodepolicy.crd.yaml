@@ -10,8 +10,6 @@ spec:
     plural: sriovnetworknodepolicies
     singular: sriovnetworknodepolicy
   scope: Namespaced
-  subresources:
-    status: {}
   validation:
     openAPIV3Schema:
       properties:
@@ -28,32 +26,44 @@ spec:
         metadata:
           type: object
         spec:
+          description: Spec hold the intent of how this operator should configure
+            the SR-IoV on host.
           properties:
             deviceType:
+              description: The driver type for configured VFs. Allowed value "netdevice",
+                "vfio-pci". Defaults to netdevice.
               enum:
               - netdevice
               - vfio-pci
               type: string
             isRdma:
+              description: RDMA mode. Defaults to false.
               type: boolean
             mtu:
+              description: MTU of VF
               format: int64
               maximum: 9000
               minimum: 1
               type: integer
             nicSelector:
+              description: NicSelector selects the NICs to be configured
               properties:
                 deviceID:
+                  description: The device hex code of SR-IoV device.
                   type: string
                 pfNames:
+                  description: Name of SR-IoV PF.
                   items:
                     type: string
                   type: array
                 rootDevices:
+                  description: PCI address of SR-IoV PF.
                   items:
                     type: string
                   type: array
                 vendor:
+                  description: The vendor hex code of SR-IoV device. Allowed value
+                    "8086", "15b3".
                   enum:
                   - "8086"
                   - 15b3
@@ -62,17 +72,22 @@ spec:
             nodeSelector:
               additionalProperties:
                 type: string
+              description: NodeSelector selects the nodes to be configured
               type: object
             numVfs:
+              description: Number of VFs for each PF
               format: int64
               minimum: 0
               type: integer
             priority:
+              description: Priority of the policy, higher priority policies can override
+                lower ones.
               format: int64
               maximum: 99
               minimum: 0
               type: integer
             resourceName:
+              description: SRIOV Network device plugin endpoint resource name
               type: string
           required:
           - resourceName
