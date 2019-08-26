@@ -21,7 +21,10 @@ func (a ByPriority) Len() int {
 }
 
 func (a ByPriority) Less(i, j int) bool {
-	return a[i].Spec.Priority > a[j].Spec.Priority
+	if a[i].Spec.Priority !=  a[j].Spec.Priority {
+		return a[i].Spec.Priority > a[j].Spec.Priority
+	}
+	return a[i].GetName() < a[j].GetName()
 }
 
 func (a ByPriority) Swap(i, j int) {
