@@ -10,29 +10,41 @@ import (
 // SriovNetworkNodePolicySpec defines the desired state of SriovNetworkNodePolicy
 // +k8s:openapi-gen=true
 type SriovNetworkNodePolicySpec struct {
+	// SRIOV Network device plugin endpoint resource name
 	ResourceName string `json:"resourceName"`
 	// +kubebuilder:validation:MinItems=0
 	// +kubebuilder:validation:UniqueItems=true
+	// NodeSelector selects the nodes to be configured
 	NodeSelector map[string]string `json:"nodeSelector"`
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=99
+	// Priority of the policy, higher priority policies can override lower ones.
 	Priority int `json:"priority,omitempty"`
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=9000
+	// MTU of VF
 	Mtu int `json:"mtu,omitempty"`
 	// +kubebuilder:validation:Minimum=0
+	// Number of VFs for each PF
 	NumVfs      int                     `json:"numVfs"`
+	// NicSelector selects the NICs to be configured
 	NicSelector SriovNetworkNicSelector `json:"nicSelector"`
 	// +kubebuilder:validation:Enum=netdevice,vfio-pci
+	// The driver type for configured VFs. Allowed value "netdevice", "vfio-pci". Defaults to netdevice.
 	DeviceType string `json:"deviceType,omitempty"`
+	// RDMA mode. Defaults to false.
 	IsRdma     bool   `json:"isRdma,omitempty"`
 }
 
 type SriovNetworkNicSelector struct {
 	// +kubebuilder:validation:Enum=8086,15b3
+	// The vendor hex code of SR-IoV device. Allowed value "8086", "15b3".
 	Vendor      string   `json:"vendor,omitempty"`
+	// The device hex code of SR-IoV device.
 	DeviceID    string   `json:"deviceID,omitempty"`
+	// PCI address of SR-IoV PF.
 	RootDevices []string `json:"rootDevices,omitempty"`
+	// Name of SR-IoV PF.
 	PfNames     []string `json:"pfNames,omitempty"`
 }
 
@@ -52,6 +64,7 @@ type SriovNetworkNodePolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	// Spec hold the intent of how this operator should configure the SR-IoV on host.
 	Spec   SriovNetworkNodePolicySpec   `json:"spec,omitempty"`
 	Status SriovNetworkNodePolicyStatus `json:"status,omitempty"`
 }

@@ -10,20 +10,21 @@ import (
 // SriovNetworkSpec defines the desired state of SriovNetwork
 // +k8s:openapi-gen=true
 type SriovNetworkSpec struct {
+	// Namespace of the NetworkAttachmentDefinition custom resource
 	NetworkNamespace string `json:"networkNamespace,omitempty"`
+	// SRIOV Network device plugin endpoint resource name
 	ResourceName     string `json:"resourceName"`
+	//IPAM configuration to be used for this network.
 	IPAM             string `json:"ipam,omitempty"`
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=4096
+	// VLAN ID to assign for the VF. Defaults to 0.
 	Vlan     int   `json:"vlan,omitempty"`
+	// VF spoof check
 	SpoofChk *bool `json:"spoofChk,omitempty"`
+	// VF trust mode
 	Trust    *bool `json:"trust,omitempty"`
 }
-
-// // Ipam defines the desired state of IPAM
-// type Ipam struct {
-// 	Type string `json:"type,omitempty"`
-// }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork
 // +k8s:openapi-gen=true
@@ -41,6 +42,7 @@ type SriovNetwork struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
+	// Specification describing how a NetworkAttachmentDefinition custom resource shall be defined for SR-IOV CNI plugin.
 	Spec   SriovNetworkSpec   `json:"spec,omitempty"`
 	Status SriovNetworkStatus `json:"status,omitempty"`
 }
