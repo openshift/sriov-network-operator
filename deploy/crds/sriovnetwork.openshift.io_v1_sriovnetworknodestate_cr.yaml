@@ -2,6 +2,5 @@ apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodeState
 metadata:
   name: minikube
-  namespace: sriov-network-operator
 spec:
   interfaces: []

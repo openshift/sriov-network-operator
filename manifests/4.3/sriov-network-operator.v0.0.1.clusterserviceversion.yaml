@@ -2,7 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   name: sriov-network-operator.v0.0.1
-  namespace: sriov-network-operator
+  namespace: openshift-sriov-network-operator
   annotations:
     alm-examples: |
       [
@@ -11,7 +11,7 @@ metadata:
           "kind": "SriovNetworkNodePolicy",
           "metadata": {
             "name": "policy-1",
-            "namespace": "sriov-network-operator"
+            "namespace": "openshift-sriov-network-operator"
           },
           "spec": {
             "resourceName": "intelnics",
@@ -38,7 +38,7 @@ metadata:
           "kind": "SriovNetwork",
           "metadata": {
             "name": "example-sriovnetwork",
-            "namespace": "sriov-network-operator"
+            "namespace": "openshift-sriov-network-operator"
           },
           "spec": {
             "ipam": "{\n  \"type\": \"host-local\",\n  \"subnet\": \"10.56.217.0/24\",\n  \"rangeStart\": \"10.56.217.171\",\n  \"rangeEnd\": \"10.56.217.181\",\n  \"routes\": [{\n    \"dst\": \"0.0.0.0/0\"\n  }],\n  \"gateway\": \"10.56.217.1\"\n}\n",
@@ -54,7 +54,7 @@ metadata:
           "kind": "SriovNetworkNodeState",
           "metadata": {
             "name": "minikube",
-            "namespace": "sriov-network-operator"
+            "namespace": "openshift-sriov-network-operator"
           },
           "spec": {
             "interfaces": []
@@ -101,14 +101,14 @@ spec:
       * manage configuration of SR-IOV device plugin.
       * generate net-att-def CRs for SR-IOV CNI plugin.
 
-      This operator has to run in namespace 'sriov-network-operator'. An Operator Group is also required to install this operator:
+      This operator has to run in namespace 'openshift-sriov-network-operator'. An Operator Group is also required to install this operator:
 
       ```
       $ oc create -f - <<EOF
       apiVersion: v1
       kind: Namespace
       metadata:
-        name: sriov-network-operator
+        name: openshift-sriov-network-operator
         labels:
           openshift.io/run-level: "1"
       EOF
@@ -118,10 +118,10 @@ spec:
       kind: OperatorGroup
       metadata:
         name: sriov-network-operators
-        namespace: sriov-network-operator
+        namespace: openshift-sriov-network-operator
       spec:
         targetNamespaces:
-        - sriov-network-operator
+        - openshift-sriov-network-operator
       EOF
       ```
   displayName: SR-IOV Network Operator

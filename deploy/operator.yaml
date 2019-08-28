@@ -32,19 +32,19 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: SRIOV_CNI_IMAGE
-              value: quay.io/openshift/origin-sriov-cni:4.2
+              value: $SRIOV_CNI_IMAGE
             - name: SRIOV_DEVICE_PLUGIN_IMAGE
-              value: quay.io/openshift/origin-sriov-network-device-plugin:4.2
+              value: $SRIOV_DEVICE_PLUGIN_IMAGE
             - name: NETWORK_RESOURCES_INJECTOR_IMAGE
-              value: quay.io/openshift/origin-sriov-dp-admission-controller:4.2
+              value: $NETWORK_RESOURCES_INJECTOR_IMAGE
             - name: OPERATOR_NAME
               value: sriov-network-operator
             - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-              value: quay.io/openshift/origin-sriov-network-config-daemon
+              value: $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
             - name: RESOURCE_PREFIX
               value: openshift.io
             - name: ENABLE_ADMISSION_CONTROLLER
-              value: "false"
+              value: "$ENABLE_ADMISSION_CONTROLLER"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:

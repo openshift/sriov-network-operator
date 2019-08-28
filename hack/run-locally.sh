@@ -1,4 +1,4 @@
 #!/bin/bash
-EXCLUSIONS=(operator.yaml) hack/deploy-setup.sh sriov-network-operator
+EXCLUSIONS=(operator.yaml) hack/deploy-setup.sh ${NAMESPACE}
 source hack/env.sh
-operator-sdk up local --namespace sriov-network-operator
+operator-sdk up local --namespace ${NAMESPACE}
