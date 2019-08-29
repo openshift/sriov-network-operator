@@ -5,16 +5,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	render "github.com/openshift/sriov-network-operator/pkg/render"
-
 	"encoding/json"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
@@ -27,6 +23,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	render "github.com/openshift/sriov-network-operator/pkg/render"
 )
 
 const (
@@ -148,6 +148,18 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	if err := controllerutil.SetControllerReference(instance, netAttDef, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
+	
+	// Try initialize lastNetworkNamespace
+	nadList := &netattdefv1.NetworkAttachmentDefinitionList{}
+	fieldSelector := fields.Set{"metadata.name": instance.GetName(),}.AsSelector()
+	r.client.List(context.TODO(), &client.ListOptions{FieldSelector: fieldSelector,}, nadList)
+	reqLogger.Info("NetworkAttachmentDefinition", "list", nadList)
+	if len(nadList.Items) == 1 {
+		lastNetworkNamespace[instance.GetUID()] = nadList.Items[0].GetNamespace()
+	} else if len(nadList.Items) > 1 {
+		err := fmt.Errorf("more than one NetworkAttachmentDefinition CR exists for one SriovNetwork CR %s, remove the NetworkAttachmentDefinition CRs then retry", instance.GetName())
+		return reconcile.Result{}, err
+	}
 
 	if namespace, ok = lastNetworkNamespace[instance.GetUID()]; ok {
 		if namespace == netAttDef.GetNamespace() {
@@ -185,7 +197,6 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 		reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 		return reconcile.Result{}, err
 	}
-	lastNetworkNamespace[instance.GetUID()] = netAttDef.GetNamespace()
 	// NetworkAttachmentDefinition re-created successfully - don't requeue
 	return reconcile.Result{}, nil
 }
