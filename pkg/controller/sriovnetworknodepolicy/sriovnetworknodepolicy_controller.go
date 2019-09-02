@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"sort"
 	// "time"
 
@@ -283,6 +284,13 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnet
 	if err != nil {
 		return err
 	}
+	config, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	configData := make(map[string]string)
+	configData[DP_CONFIG_FILENAME] = string(config)
+
 	cm := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -292,7 +300,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnet
 			Name:      CONFIGMAP_NAME,
 			Namespace: Namespace,
 		},
-		Data: data,
+		Data: configData,
 	}
 	found := &corev1.ConfigMap{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: cm.Namespace, Name: cm.Name}, found)
@@ -308,6 +316,11 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnet
 		}
 	} else {
 		logger.Info("ConfigMap already exists, updating")
+		currentConfig := dptypes.ResourceConfList{}
+		if reflect.DeepEqual(currentConfig, data) {
+			logger.Info("No content change, skip update")
+			return nil
+		}
 		err = r.client.Update(context.TODO(), cm)
 		if err != nil {
 			return fmt.Errorf("Couldn't update ConfigMap: %v", err)
@@ -863,15 +876,16 @@ func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, e
 	return objs, nil
 }
 
-func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList) (map[string]string, error) {
-	data := make(map[string]string)
-	rcl := &dptypes.ResourceConfList{}
+func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList) (dptypes.ResourceConfList, error) {
+	logger := log.WithName("renderDevicePluginConfigData")
+	logger.Info("Start to render device plugin config data")
+	rcl := dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
 		if p.Name == "default" {
 			continue
 		}
 
-		found, i := resourceNameInList(p.Spec.ResourceName, rcl)
+		found, i := resourceNameInList(p.Spec.ResourceName, &rcl)
 		if found {
 			if p.Spec.NicSelector.Vendor != "" && !sriovnetworkv1.StringInArray(p.Spec.NicSelector.Vendor, rcl.ResourceList[i].Selectors.Vendors) {
 				rcl.ResourceList[i].Selectors.Vendors = append(rcl.ResourceList[i].Selectors.Vendors, p.Spec.NicSelector.Vendor)
@@ -892,7 +906,7 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 					rcl.ResourceList[i].Selectors.Drivers = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.Drivers, "iavf", "mlx5_core", "ixgbevf", "i40evf")
 				}
 			}
-			fmt.Printf("Update ResourcList = %v\n", rcl.ResourceList)
+			logger.Info("Update resource", "Resource", rcl.ResourceList[i])
 		} else {
 			rc := &dptypes.ResourceConfig{
 				ResourceName: p.Spec.ResourceName,
@@ -919,16 +933,10 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 				}
 			}
 			rcl.ResourceList = append(rcl.ResourceList, *rc)
-			fmt.Printf("Add ResourcList = %v\n", rcl.ResourceList)
+			logger.Info("Add resource", "Resource", *rc, "Resource list", rcl.ResourceList)
 		}
-
 	}
-	config, err := json.Marshal(rcl)
-	if err != nil {
-		return nil, err
-	}
-	data[DP_CONFIG_FILENAME] = string(config)
-	return data, nil
+	return rcl, nil
 }
 
 func resourceNameInList(name string, rcl *dptypes.ResourceConfList) (bool, int) {
