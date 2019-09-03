@@ -153,12 +153,33 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	nadList := &netattdefv1.NetworkAttachmentDefinitionList{}
 	fieldSelector := fields.Set{"metadata.name": instance.GetName(),}.AsSelector()
 	r.client.List(context.TODO(), &client.ListOptions{FieldSelector: fieldSelector,}, nadList)
+	sriovNads := []netattdefv1.NetworkAttachmentDefinition{}
+	for _, cr := range nadList.Items {
+		if cr.GetOwnerReferences()[0].UID == instance.UID {
+			sriovNads = append(sriovNads, cr)
+		}
+	}
 	reqLogger.Info("NetworkAttachmentDefinition", "list", nadList)
-	if len(nadList.Items) == 1 {
-		lastNetworkNamespace[instance.GetUID()] = nadList.Items[0].GetNamespace()
-	} else if len(nadList.Items) > 1 {
-		err := fmt.Errorf("more than one NetworkAttachmentDefinition CR exists for one SriovNetwork CR %s, remove the NetworkAttachmentDefinition CRs then retry", instance.GetName())
-		return reconcile.Result{}, err
+	if len(sriovNads) == 1 {
+		lastNetworkNamespace[instance.GetUID()] = sriovNads[0].GetNamespace()
+	} else if len(sriovNads) > 1 {
+		reqLogger.Info("more than one NetworkAttachmentDefinition CR exists for one SriovNetwork CR", "Namespace", instance.GetNamespace(), "Name", instance.GetName())
+		ns := ""
+		if  instance.Spec.NetworkNamespace != "" {
+			ns = instance.Spec.NetworkNamespace
+		} else {
+			ns = instance.GetNamespace()
+		}
+		for _, nad := range sriovNads {
+			if nad.GetNamespace() != ns {
+				reqLogger.Info("delete the NetworkAttachmentDefinition", "Namespace", nad.GetNamespace(), "Name", nad.GetName())
+				err = r.client.Delete(context.TODO(), &nad)
+				if err != nil {
+					reqLogger.Error(err, "Couldn't delete NetworkAttachmentDefinition", "Namespace", nad.GetNamespace(), "Name", nad.GetName())
+					return reconcile.Result{}, err
+				}
+			}
+		}
 	}
 
 	if namespace, ok = lastNetworkNamespace[instance.GetUID()]; ok {
