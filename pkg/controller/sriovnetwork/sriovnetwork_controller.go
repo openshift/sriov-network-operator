@@ -7,15 +7,13 @@ import (
 	"strings"
 	"encoding/json"
 
+	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -43,31 +41,12 @@ var log = logf.Log.WithName("controller_sriovnetwork")
 // Add creates a new SriovNetwork Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
-	reconciler, err := newReconciler(mgr)
-	if err != nil {
-		return err
-	}
-
-	return add(mgr, reconciler)
+	return add(mgr, newReconciler(mgr))
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) (reconcile.Reconciler, error) {
-	// The default client serves read requests from the cache which contains
-	// objects only from the namespace the operator is watching. Given we need
-	// to query other namespaces for NetworkAttachmentDefinitions, we create our
-	// own client and pass it the manager's scheme which has all our registered types
-	cfg, err := config.GetConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	client, err := client.New(cfg, client.Options{Scheme: mgr.GetScheme()})
-	if err != nil {
-		return nil, err
-	}
-
-	return &ReconcileSriovNetwork{client: client, scheme: mgr.GetScheme()}, nil
+func newReconciler(mgr manager.Manager) (reconcile.Reconciler) {
+	return &ReconcileSriovNetwork{client: mgr.GetClient(), scheme: mgr.GetScheme()}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -97,7 +76,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 }
 
 var _ reconcile.Reconciler = &ReconcileSriovNetwork{}
-var lastNetworkNamespace = make(map[types.UID]string)
 
 // ReconcileSriovNetwork reconciles a SriovNetwork object
 type ReconcileSriovNetwork struct {
@@ -117,12 +95,17 @@ type ReconcileSriovNetwork struct {
 func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling SriovNetwork")
+	var err error
 
+	// The SriovNetwork CR shall only be defined in operator namespace.
+	request.Namespace, err = k8sutil.GetWatchNamespace() 
+	if err != nil {
+		reqLogger.Error(err, "Failed get operator namespace")
+		return reconcile.Result{}, err
+	}
 	// Fetch the SriovNetwork instance
 	instance := &sriovnetworkv1.SriovNetwork{}
-	var ok bool
-	var namespace = ""
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
+	err = r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -143,35 +126,49 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-
 	// Set SriovNetwork instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, netAttDef, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
-	
-	// Try initialize lastNetworkNamespace
+
+	// Check if this NetworkAttachmentDefinition already exists
+	found := &netattdefv1.NetworkAttachmentDefinition{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			reqLogger.Info("NetworkAttachmentDefinition not exist, creating")
+			err = r.client.Create(context.TODO(), netAttDef)
+			if err != nil {
+				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				return reconcile.Result{}, err
+			}
+		}
+		reqLogger.Error(err, "Couldn't get NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+		return reconcile.Result{}, err	
+	} else {
+		reqLogger.Info("NetworkAttachmentDefinition already exist, updating")
+		netAttDef.SetResourceVersion(found.GetResourceVersion())
+		err = r.client.Update(context.TODO(), netAttDef)
+		if err != nil {
+			reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+			return reconcile.Result{}, err
+		}
+	}
+
+	// Check if there are more than one children for one SriovNetwork CR.
 	nadList := &netattdefv1.NetworkAttachmentDefinitionList{}
-	fieldSelector := fields.Set{"metadata.name": instance.GetName(),}.AsSelector()
-	r.client.List(context.TODO(), &client.ListOptions{FieldSelector: fieldSelector,}, nadList)
+	r.client.List(context.TODO(), &client.ListOptions{}, nadList)
 	sriovNads := []netattdefv1.NetworkAttachmentDefinition{}
 	for _, cr := range nadList.Items {
 		if cr.GetOwnerReferences()[0].UID == instance.UID {
 			sriovNads = append(sriovNads, cr)
 		}
 	}
-	reqLogger.Info("NetworkAttachmentDefinition", "list", nadList)
-	if len(sriovNads) == 1 {
-		lastNetworkNamespace[instance.GetUID()] = sriovNads[0].GetNamespace()
-	} else if len(sriovNads) > 1 {
+	reqLogger.Info("NetworkAttachmentDefinition", "list", sriovNads)
+	if len(sriovNads) > 1 {
 		reqLogger.Info("more than one NetworkAttachmentDefinition CR exists for one SriovNetwork CR", "Namespace", instance.GetNamespace(), "Name", instance.GetName())
-		ns := ""
-		if  instance.Spec.NetworkNamespace != "" {
-			ns = instance.Spec.NetworkNamespace
-		} else {
-			ns = instance.GetNamespace()
-		}
 		for _, nad := range sriovNads {
-			if nad.GetNamespace() != ns {
+			if nad.GetNamespace() != netAttDef.GetNamespace() {
 				reqLogger.Info("delete the NetworkAttachmentDefinition", "Namespace", nad.GetNamespace(), "Name", nad.GetName())
 				err = r.client.Delete(context.TODO(), &nad)
 				if err != nil {
@@ -181,44 +178,6 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 			}
 		}
 	}
-
-	if namespace, ok = lastNetworkNamespace[instance.GetUID()]; ok {
-		if namespace == netAttDef.GetNamespace() {
-			// Check if this NetworkAttachmentDefinition already exists
-			found := &netattdefv1.NetworkAttachmentDefinition{}
-			err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: namespace}, found)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-			reqLogger.Info("NetworkAttachmentDefinition already exists, updating")
-			netAttDef.SetResourceVersion(found.GetResourceVersion())
-			err = r.client.Update(context.TODO(), netAttDef)
-			if err != nil {
-				reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
-				return reconcile.Result{}, err
-			}
-			// NetworkAttachmentDefinition updated successfully - don't requeue
-			return reconcile.Result{}, nil
-		} else {
-			err = r.client.Delete(context.TODO(), &netattdefv1.NetworkAttachmentDefinition{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      netAttDef.GetName(),
-					Namespace: namespace,
-				},
-			})
-			if err != nil {
-				reqLogger.Error(err, "Couldn't delete NetworkAttachmentDefinition", "Namespace", namespace, "Name", netAttDef.GetName())
-				return reconcile.Result{}, err
-			}
-		}
-	}
-	reqLogger.Info("Creating a new NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
-	err = r.client.Create(context.TODO(), netAttDef)
-	if err != nil {
-		reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
-		return reconcile.Result{}, err
-	}
-	// NetworkAttachmentDefinition re-created successfully - don't requeue
 	return reconcile.Result{}, nil
 }
 
