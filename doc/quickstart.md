@@ -16,7 +16,7 @@ go get github.com/openshift/sriov-network-operator
 Install the Operator-SDK. The following commands will put operator-sdk to your $GOPATH/bin, please make sure that path is included in your \$PATH.
 
 ```bash
-cd $GOPATH/github.com/openshift/sriov-network-operator
+cd $GOPATH/src/github.com/openshift/sriov-network-operator
 make operator-sdk
 ```
 
