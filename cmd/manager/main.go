@@ -97,6 +97,14 @@ func main() {
 		log.Error(err, "")
 		os.Exit(1)
 	}
+	// Create a global manager for watching net-att-def CRs in all namespaces
+	mgrGlobal, err := manager.New(cfg, manager.Options{
+		Namespace: "",
+	})
+	if err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
 
 	log.Info("Registering Components.")
 
@@ -108,6 +116,10 @@ func main() {
 
 	// Setup all Controllers
 	if err := controller.AddToManager(mgr); err != nil {
+		log.Error(err, "")
+		os.Exit(1)
+	}
+	if err := controller.AddToManagerGlobal(mgrGlobal); err != nil {
 		log.Error(err, "")
 		os.Exit(1)
 	}
@@ -127,8 +139,16 @@ func main() {
 
 	log.Info("Starting the Cmd.")
 
+	stopCh := signals.SetupSignalHandler()
+	go func() {
+		if err := mgrGlobal.Start(stopCh); err != nil {
+			log.Error(err, "Manager Global exited non-zero")
+			os.Exit(1)
+		}
+	}()
+
 	// Start the Cmd
-	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(stopCh); err != nil {
 		log.Error(err, "Manager exited non-zero")
 		os.Exit(1)
 	}
