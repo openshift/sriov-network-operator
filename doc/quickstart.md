@@ -94,6 +94,8 @@ metadata:
   name: policy-1
   namespace: sriov-network-operator
 spec:
+  nodeSelector:
+    feature.node.kubernetes.io/sriov-capable: "true"
   resourceName: intelnics
   priority: 99
   mtu: 9000
