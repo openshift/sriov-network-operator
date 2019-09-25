@@ -142,9 +142,10 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err
 			}
+		} else {
+			reqLogger.Error(err, "Couldn't get NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+			return reconcile.Result{}, err
 		}
-		reqLogger.Error(err, "Couldn't get NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
-		return reconcile.Result{}, err	
 	} else {
 		reqLogger.Info("NetworkAttachmentDefinition already exist, updating")
 		netAttDef.SetResourceVersion(found.GetResourceVersion())
@@ -160,7 +161,8 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	r.client.List(context.TODO(), &client.ListOptions{}, nadList)
 	sriovNads := []netattdefv1.NetworkAttachmentDefinition{}
 	for _, cr := range nadList.Items {
-		if cr.GetOwnerReferences()[0].UID == instance.UID {
+		refs := cr.GetOwnerReferences()
+		if refs != nil && refs[0].UID == instance.UID {
 			sriovNads = append(sriovNads, cr)
 		}
 	}
