@@ -62,7 +62,7 @@ metadata:
         }
       ]
     certified: "false"
-    containerImage: quay.io/openshift/origin-sriov-network-operator:4.2
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.3
     createdAt: 2019/04/30
     description: An operator for configuring SR-IOV components and initializing SRIOV network devices in Openshift cluster.
     repository: https://github.com/openshift/sriov-network-operator
@@ -249,7 +249,7 @@ spec:
                 operator: Exists
               containers:
                 - name: sriov-network-operator
-                  image: quay.io/openshift/origin-sriov-network-operator:latest
+                  image: quay.io/openshift/origin-sriov-network-operator:4.3
                   command:
                   - sriov-network-operator
                   imagePullPolicy: IfNotPresent
@@ -259,15 +259,15 @@ spec:
                         fieldRef:
                           fieldPath: metadata.namespace
                     - name: SRIOV_CNI_IMAGE
-                      value: quay.io/openshift/origin-sriov-cni:4.2
+                      value: quay.io/openshift/origin-sriov-cni:4.3
                     - name: SRIOV_DEVICE_PLUGIN_IMAGE
-                      value: quay.io/openshift/origin-sriov-network-device-plugin:4.2
+                      value: quay.io/openshift/origin-sriov-network-device-plugin:4.3
                     - name: NETWORK_RESOURCES_INJECTOR_IMAGE
-                      value: quay.io/openshift/origin-sriov-dp-admission-controller:4.2
+                      value: quay.io/openshift/origin-sriov-dp-admission-controller:4.3
                     - name: OPERATOR_NAME
                       value: sriov-network-operator
                     - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-                      value: quay.io/openshift/origin-sriov-network-config-daemon:4.2
+                      value: quay.io/openshift/origin-sriov-network-config-daemon:4.3
                     - name: RESOURCE_PREFIX
                       value: openshift.io
                     - name: ENABLE_ADMISSION_CONTROLLER
