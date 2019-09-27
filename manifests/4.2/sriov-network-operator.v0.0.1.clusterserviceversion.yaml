@@ -249,7 +249,7 @@ spec:
                 operator: Exists
               containers:
                 - name: sriov-network-operator
-                  image: quay.io/openshift/origin-sriov-network-operator:latest
+                  image: quay.io/openshift/origin-sriov-network-operator:4.2
                   command:
                   - sriov-network-operator
                   imagePullPolicy: IfNotPresent
