@@ -890,8 +890,17 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 			if p.Spec.NicSelector.Vendor != "" && !sriovnetworkv1.StringInArray(p.Spec.NicSelector.Vendor, rcl.ResourceList[i].Selectors.Vendors) {
 				rcl.ResourceList[i].Selectors.Vendors = append(rcl.ResourceList[i].Selectors.Vendors, p.Spec.NicSelector.Vendor)
 			}
-			if p.Spec.NicSelector.DeviceID != "" && !sriovnetworkv1.StringInArray(p.Spec.NicSelector.DeviceID, rcl.ResourceList[i].Selectors.Devices) {
-				rcl.ResourceList[i].Selectors.Devices = append(rcl.ResourceList[i].Selectors.Devices, p.Spec.NicSelector.DeviceID)
+			if p.Spec.NicSelector.DeviceID != "" {
+				var deviceID string
+				if p.Spec.NumVfs == 0 {
+					deviceID = p.Spec.NicSelector.DeviceID
+				} else {
+					deviceID = sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID]
+				}
+
+				if !sriovnetworkv1.StringInArray(p.Spec.NicSelector.DeviceID, rcl.ResourceList[i].Selectors.Devices) {
+					rcl.ResourceList[i].Selectors.Devices = append(rcl.ResourceList[i].Selectors.Devices, deviceID)
+				}
 			}
 			if len(p.Spec.NicSelector.PfNames) > 0 {
 				rcl.ResourceList[i].Selectors.PfNames = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.PfNames, p.Spec.NicSelector.PfNames...)
@@ -916,7 +925,11 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 				rc.Selectors.Vendors = append(rc.Selectors.Vendors, p.Spec.NicSelector.Vendor)
 			}
 			if p.Spec.NicSelector.DeviceID != "" {
-				rc.Selectors.Devices = append(rc.Selectors.Devices, p.Spec.NicSelector.DeviceID)
+				if p.Spec.NumVfs == 0 {
+					rc.Selectors.Devices = append(rc.Selectors.Devices, p.Spec.NicSelector.DeviceID)
+				} else {
+					rc.Selectors.Devices = append(rc.Selectors.Devices, sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID])
+				}
 			}
 			if l := len(p.Spec.NicSelector.PfNames); l > 0 {
 				rc.Selectors.PfNames = append(rc.Selectors.PfNames, p.Spec.NicSelector.PfNames...)
