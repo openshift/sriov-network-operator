@@ -15,16 +15,10 @@
 package scaffold
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"strings"
-	"text/tabwriter"
 
 	"github.com/operator-framework/operator-sdk/internal/pkg/scaffold/input"
-
-	"github.com/BurntSushi/toml"
+	"github.com/operator-framework/operator-sdk/internal/pkg/scaffold/internal/deps"
 )
 
 const GopkgTomlFile = "Gopkg.toml"
@@ -43,24 +37,8 @@ func (s *GopkgToml) GetInput() (input.Input, error) {
 
 const gopkgTomlTmpl = `# Force dep to vendor the code generators, which aren't imported just used at dev time.
 required = [
-  "k8s.io/code-generator/cmd/deepcopy-gen",
-  "k8s.io/code-generator/cmd/conversion-gen",
-  "k8s.io/code-generator/cmd/client-gen",
-  "k8s.io/code-generator/cmd/lister-gen",
-  "k8s.io/code-generator/cmd/informer-gen",
-  "k8s.io/kube-openapi/cmd/openapi-gen",
-  "k8s.io/gengo/args",
   "sigs.k8s.io/controller-tools/pkg/crd/generator",
 ]
-
-[[override]]
-  name = "k8s.io/code-generator"
-  # revision for tag "kubernetes-1.13.1"
-  revision = "c2090bec4d9b1fb25de3812f868accc2bc9ecbae"
-
-[[override]]
-  name = "k8s.io/kube-openapi"
-  revision = "0cf8f7e6ed1d2e3d47d02e3b6e559369af24d803"
 
 [[override]]
   name = "github.com/go-openapi/spec"
@@ -68,128 +46,60 @@ required = [
 
 [[override]]
   name = "sigs.k8s.io/controller-tools"
-  version = "=v0.1.8"
+  revision = "9d55346c2bde73fb3326ac22eac2e5210a730207"
 
 [[override]]
   name = "k8s.io/api"
-  # revision for tag "kubernetes-1.13.1"
-  revision = "05914d821849570fba9eacfb29466f2d8d3cd229"
+  # revision for tag "kubernetes-1.13.4"
+  revision = "5cb15d34447165a97c76ed5a60e4e99c8a01ecfe"
 
 [[override]]
   name = "k8s.io/apiextensions-apiserver"
-  # revision for tag "kubernetes-1.13.1"
-  revision = "0fe22c71c47604641d9aa352c785b7912c200562"
+  # revision for tag "kubernetes-1.13.4"
+  revision = "d002e88f6236312f0289d9d1deab106751718ff0"
 
 [[override]]
   name = "k8s.io/apimachinery"
-  # revision for tag "kubernetes-1.13.1"
-  revision = "2b1284ed4c93a43499e781493253e2ac5959c4fd"
+  # revision for tag "kubernetes-1.13.4"
+  revision = "86fb29eff6288413d76bd8506874fddd9fccdff0"
 
 [[override]]
   name = "k8s.io/client-go"
-  # revision for tag "kubernetes-1.13.1"
-  revision = "8d9ed539ba3134352c586810e749e58df4e94e4f"
+  # revision for tag "kubernetes-1.13.4"
+  revision = "b40b2a5939e43f7ffe0028ad67586b7ce50bb675"
 
 [[override]]
   name = "github.com/coreos/prometheus-operator"
   version = "=v0.29.0"
 
 [[override]]
+  name = "k8s.io/kube-state-metrics"
+  version = "v1.6.0"
+
+[[override]]
   name = "sigs.k8s.io/controller-runtime"
-  version = "=v0.1.10"
+  version = "=v0.1.12"
 
 [[constraint]]
   name = "github.com/operator-framework/operator-sdk"
   # The version rule is used for a specific release and the master branch for in between releases.
-  branch = "master" #osdk_branch_annotation
-  # version = "=v0.7.0" #osdk_version_annotation
+  # branch = "master" #osdk_branch_annotation
+  version = "=v0.9.0" #osdk_version_annotation
 
 [prune]
   go-tests = true
   non-go = true
 
   [[prune.project]]
-    name = "k8s.io/code-generator"
-    non-go = false
+    name = "k8s.io/kube-state-metrics"
+    unused-packages = true
 
-  [[prune.project]]
-    name = "k8s.io/gengo"
-    non-go = false
 `
 
-func PrintDepsAsFile() {
-	fmt.Println(gopkgTomlTmpl)
-}
-
-func PrintDeps() error {
-	gopkgData := make(map[string]interface{})
-	_, err := toml.Decode(gopkgTomlTmpl, &gopkgData)
-	if err != nil {
+func PrintDepGopkgTOML(asFile bool) error {
+	if asFile {
+		_, err := fmt.Println(gopkgTomlTmpl)
 		return err
 	}
-
-	buf := &bytes.Buffer{}
-	w := tabwriter.NewWriter(buf, 16, 8, 0, '\t', 0)
-	_, err = w.Write([]byte("NAME\tVERSION\tBRANCH\tREVISION\t\n"))
-	if err != nil {
-		return err
-	}
-
-	constraintList, ok := gopkgData["constraint"]
-	if !ok {
-		return errors.New("constraints not found")
-	}
-	for _, dep := range constraintList.([]map[string]interface{}) {
-		err = writeDepRow(w, dep)
-		if err != nil {
-			return err
-		}
-	}
-	overrideList, ok := gopkgData["override"]
-	if !ok {
-		return errors.New("overrides not found")
-	}
-	for _, dep := range overrideList.([]map[string]interface{}) {
-		err = writeDepRow(w, dep)
-		if err != nil {
-			return err
-		}
-	}
-	if err := w.Flush(); err != nil {
-		return err
-	}
-
-	requiredList, ok := gopkgData["required"]
-	if !ok {
-		return errors.New("required list not found")
-	}
-	pl, err := json.MarshalIndent(requiredList, "", " ")
-	if err != nil {
-		return err
-	}
-	_, err = buf.Write([]byte(fmt.Sprintf("\nrequired = %v", string(pl))))
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(buf.String())
-
-	return nil
-}
-
-func writeDepRow(w *tabwriter.Writer, dep map[string]interface{}) error {
-	name := dep["name"].(string)
-	ver, col := "", 0
-	if v, ok := dep["version"]; ok {
-		ver, col = v.(string), 1
-	} else if v, ok = dep["branch"]; ok {
-		ver, col = v.(string), 2
-	} else if v, ok = dep["revision"]; ok {
-		ver, col = v.(string), 3
-	} else {
-		return fmt.Errorf("no version, revision, or branch found for %s", name)
-	}
-
-	_, err := w.Write([]byte(name + strings.Repeat("\t", col) + ver + "\t\n"))
-	return err
+	return deps.PrintDepGopkgTOML(gopkgTomlTmpl)
 }

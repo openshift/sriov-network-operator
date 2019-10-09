@@ -22,7 +22,8 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	discovery "k8s.io/client-go/discovery"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -99,12 +100,7 @@ func GetPod(ctx context.Context, client crclient.Client, ns string) (*corev1.Pod
 
 	log.V(1).Info("Found podname", "Pod.Name", podName)
 
-	pod := &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Pod",
-		},
-	}
+	pod := &corev1.Pod{}
 	key := crclient.ObjectKey{Namespace: ns, Name: podName}
 	err := client.Get(ctx, key, pod)
 	if err != nil {
@@ -112,7 +108,51 @@ func GetPod(ctx context.Context, client crclient.Client, ns string) (*corev1.Pod
 		return nil, err
 	}
 
+	// .Get() clears the APIVersion and Kind,
+	// so we need to set them before returning the object.
+	pod.TypeMeta.APIVersion = "v1"
+	pod.TypeMeta.Kind = "Pod"
+
 	log.V(1).Info("Found Pod", "Pod.Namespace", ns, "Pod.Name", pod.Name)
 
 	return pod, nil
+}
+
+// GetGVKsFromAddToScheme takes in the runtime scheme and filters out all generic apimachinery meta types.
+// It returns just the GVK specific to this scheme.
+func GetGVKsFromAddToScheme(addToSchemeFunc func(*runtime.Scheme) error) ([]schema.GroupVersionKind, error) {
+	s := runtime.NewScheme()
+	err := addToSchemeFunc(s)
+	if err != nil {
+		return nil, err
+	}
+	schemeAllKnownTypes := s.AllKnownTypes()
+	ownGVKs := []schema.GroupVersionKind{}
+	for gvk, _ := range schemeAllKnownTypes {
+		if !isKubeMetaKind(gvk.Kind) {
+			ownGVKs = append(ownGVKs, gvk)
+		}
+	}
+
+	return ownGVKs, nil
+}
+
+func isKubeMetaKind(kind string) bool {
+	if strings.HasSuffix(kind, "List") ||
+		kind == "GetOptions" ||
+		kind == "DeleteOptions" ||
+		kind == "ExportOptions" ||
+		kind == "APIVersions" ||
+		kind == "APIGroupList" ||
+		kind == "APIResourceList" ||
+		kind == "UpdateOptions" ||
+		kind == "CreateOptions" ||
+		kind == "Status" ||
+		kind == "WatchEvent" ||
+		kind == "ListOptions" ||
+		kind == "APIGroup" {
+		return true
+	}
+
+	return false
 }

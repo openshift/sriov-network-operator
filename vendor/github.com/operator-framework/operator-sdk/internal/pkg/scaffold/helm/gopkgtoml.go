@@ -15,8 +15,11 @@
 package helm
 
 import (
+	"fmt"
+
 	"github.com/operator-framework/operator-sdk/internal/pkg/scaffold"
 	"github.com/operator-framework/operator-sdk/internal/pkg/scaffold/input"
+	"github.com/operator-framework/operator-sdk/internal/pkg/scaffold/internal/deps"
 )
 
 // GopkgToml - the Gopkg.toml file for a hybrid operator
@@ -35,32 +38,32 @@ func (s *GopkgToml) GetInput() (input.Input, error) {
 const gopkgTomlTmpl = `[[constraint]]
   name = "github.com/operator-framework/operator-sdk"
   # The version rule is used for a specific release and the master branch for in between releases.
-  branch = "master" #osdk_branch_annotation
-  # version = "=v0.7.0" #osdk_version_annotation
+  # branch = "master" #osdk_branch_annotation
+  version = "=v0.9.0" #osdk_version_annotation
 
 [[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.13.1"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.13.1"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/apiextensions-apiserver"
-  version = "kubernetes-1.13.1"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/apiserver"
-  version = "kubernetes-1.13.1"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/client-go"
-  version = "kubernetes-1.13.1"
+  version = "kubernetes-1.13.4"
 
 [[override]]
   name = "k8s.io/cli-runtime"
-  version = "kubernetes-1.13.1"
+  version = "kubernetes-1.13.4"
 
 # We need overrides for the following imports because dep can't resolve them
 # correctly. The easiest way to get this right is to use the versions that
@@ -85,3 +88,11 @@ revision = "a9fbbdc8dd8794b20af358382ab780559bca589d"
   go-tests = true
   unused-packages = true
 `
+
+func PrintDepGopkgTOML(asFile bool) error {
+	if asFile {
+		_, err := fmt.Println(gopkgTomlTmpl)
+		return err
+	}
+	return deps.PrintDepGopkgTOML(gopkgTomlTmpl)
+}

@@ -26,15 +26,22 @@ import (
 	"github.com/operator-framework/operator-sdk/pkg/ansible/proxy/controllermap"
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"github.com/operator-framework/operator-sdk/pkg/leader"
+	"github.com/operator-framework/operator-sdk/pkg/metrics"
+	"github.com/operator-framework/operator-sdk/pkg/restmapper"
 	sdkVersion "github.com/operator-framework/operator-sdk/version"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
-var log = logf.Log.WithName("cmd")
+var (
+	log               = logf.Log.WithName("cmd")
+	metricsPort int32 = 8383
+)
 
 func printVersion() {
 	log.Info(fmt.Sprintf("Go Version: %s", runtime.Version()))
@@ -62,8 +69,11 @@ func Run(flags *aoflags.AnsibleOperatorFlags) error {
 		log.Error(err, "Failed to get config.")
 		return err
 	}
+	// TODO: probably should expose the host & port as an environment variables
 	mgr, err := manager.New(cfg, manager.Options{
-		Namespace: namespace,
+		Namespace:          namespace,
+		MapperProvider:     restmapper.NewDynamicRESTMapper,
+		MetricsBindAddress: fmt.Sprintf("0.0.0.0:%d", metricsPort),
 	})
 	if err != nil {
 		log.Error(err, "Failed to create a new manager.")
@@ -79,6 +89,18 @@ func Run(flags *aoflags.AnsibleOperatorFlags) error {
 	err = leader.Become(context.TODO(), name+"-lock")
 	if err != nil {
 		log.Error(err, "Failed to become leader.")
+		return err
+	}
+
+	// Add to the below struct any other metrics ports you want to expose.
+	servicePorts := []v1.ServicePort{
+		{Port: metricsPort, Name: metrics.OperatorPortName, Protocol: v1.ProtocolTCP, TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: metricsPort}},
+	}
+	// Create Service object to expose the metrics port(s).
+	// TODO: probably should expose the port as an environment variable
+	_, err = metrics.CreateMetricsService(context.TODO(), cfg, servicePorts)
+	if err != nil {
+		log.Error(err, "Exposing metrics port failed.")
 		return err
 	}
 

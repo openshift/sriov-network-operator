@@ -540,12 +540,12 @@
   revision = "c2e51be1758efa30d71a4d30dc4e2db86b70a4df"
 
 [[projects]]
-  branch = "master"
-  digest = "1:29bf43ecd02d43977bb41f4e8d86b3bac5e6d4380c888c9503b9f4a288cd342a"
+  digest = "1:7e2c55ad751405c43281c7546295524ae848f642df8a8c464822a6b598d575b8"
   name = "github.com/operator-framework/operator-sdk"
   packages = [
     "internal/pkg/scaffold",
     "internal/pkg/scaffold/input",
+    "internal/pkg/scaffold/internal/deps",
     "internal/util/fileutil",
     "internal/util/k8sutil",
     "internal/util/projutil",
@@ -559,7 +559,8 @@
     "version",
   ]
   pruneopts = "NT"
-  revision = "6767e9a70b967903db010cf1a3cf9a91cb974731"
+  revision = "560208dc998de497bbf59fea1b63426aec430934"
+  version = "v0.9.0"
 
 [[projects]]
   digest = "1:93b1d84c5fa6d1ea52f4114c37714cddd84d5b78f151b62bb101128dd51399bf"
@@ -972,7 +973,7 @@
   source = "github.com/DHowett/go-plist"
 
 [[projects]]
-  digest = "1:6fa82ea248029bbbdddade20c06ab177ff6e485e5e45e48b045707415b7efd34"
+  digest = "1:18b9b70bdf29da610c0df032cf60ee7526a48756fa44012cc639dcb557335cbc"
   name = "k8s.io/api"
   packages = [
     "admission/v1beta1",
@@ -1010,7 +1011,7 @@
     "storage/v1beta1",
   ]
   pruneopts = "NT"
-  revision = "05914d821849570fba9eacfb29466f2d8d3cd229"
+  revision = "5cb15d34447165a97c76ed5a60e4e99c8a01ecfe"
 
 [[projects]]
   digest = "1:c6f23048e162e65d586c809fd02e263e180ad157f110df17437c22517bb59a4b"
@@ -1021,10 +1022,10 @@
     "pkg/client/clientset/clientset/scheme",
   ]
   pruneopts = "NT"
-  revision = "0fe22c71c47604641d9aa352c785b7912c200562"
+  revision = "d002e88f6236312f0289d9d1deab106751718ff0"
 
 [[projects]]
-  digest = "1:15b5c41ff6faa4d0400557d4112d6337e1abc961c65513d44fce7922e32c9ca7"
+  digest = "1:f44b5a32a31245ea062cd397cc343bda06d75c731596589996c1f77634e653af"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/errors",
@@ -1072,10 +1073,10 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "NT"
-  revision = "2b1284ed4c93a43499e781493253e2ac5959c4fd"
+  revision = "86fb29eff6288413d76bd8506874fddd9fccdff0"
 
 [[projects]]
-  digest = "1:c904a3d70131b33df36e4e51b574226b82308fc1ea66964aa21095a95d453fc9"
+  digest = "1:7f28bbfb5889618ab038d4d250d7adb6762aa43b2fc120a95a1cd47c68af6dd4"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -1155,7 +1156,7 @@
     "util/workqueue",
   ]
   pruneopts = "NT"
-  revision = "8d9ed539ba3134352c586810e749e58df4e94e4f"
+  revision = "b40b2a5939e43f7ffe0028ad67586b7ce50bb675"
 
 [[projects]]
   digest = "1:dc1ae99dcab96913d81ae970b1f7a7411a54199b14bfb17a7e86f9a56979c720"
@@ -1233,7 +1234,7 @@
   version = "v1.14.1"
 
 [[projects]]
-  digest = "1:06035489efbd51ccface65fc878ceeb849aba05b2f9443c8993f363fc96e80ac"
+  digest = "1:21c23272171c749230b32cf3d797db213414dc4bed6abcd457946230d002418f"
   name = "sigs.k8s.io/controller-runtime"
   packages = [
     "pkg/cache",
@@ -1247,6 +1248,7 @@
     "pkg/handler",
     "pkg/internal/controller",
     "pkg/internal/controller/metrics",
+    "pkg/internal/objectutil",
     "pkg/internal/recorder",
     "pkg/leaderelection",
     "pkg/manager",
@@ -1267,11 +1269,11 @@
     "pkg/webhook/types",
   ]
   pruneopts = "NT"
-  revision = "12d98582e72927b6cd0123e2b4e819f9341ce62c"
-  version = "v0.1.10"
+  revision = "f1eaba5087d69cebb154c6a48193e6667f5b512c"
+  version = "v0.1.12"
 
 [[projects]]
-  digest = "1:0a14ea9a2647d064bb9d48b2de78306e74b196681efd7b654eb0b518d90c2e8d"
+  digest = "1:00eecd8f1e0541da85a37549f6514c4b3517e2e000b74a0dc9f47cee07d7e1b5"
   name = "sigs.k8s.io/controller-tools"
   packages = [
     "pkg/crd/generator",
@@ -1282,8 +1284,7 @@
     "pkg/util",
   ]
   pruneopts = "NT"
-  revision = "950a0e88e4effb864253b3c7504b326cc83b9d11"
-  version = "v0.1.8"
+  revision = "9d55346c2bde73fb3326ac22eac2e5210a730207"
 
 [[projects]]
   digest = "1:8730e0150dfb2b7e173890c8b9868e7a273082ef8e39f4940e3506a481cf895c"
@@ -1317,8 +1318,10 @@
     "github.com/pkg/errors",
     "github.com/spf13/cobra",
     "github.com/spf13/pflag",
+    "k8s.io/api/admissionregistration/v1beta1",
     "k8s.io/api/apps/v1",
     "k8s.io/api/core/v1",
+    "k8s.io/api/rbac/v1",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured",
@@ -1327,6 +1330,7 @@
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/runtime/serializer",
     "k8s.io/apimachinery/pkg/types",
+    "k8s.io/apimachinery/pkg/util/intstr",
     "k8s.io/apimachinery/pkg/util/runtime",
     "k8s.io/apimachinery/pkg/util/wait",
     "k8s.io/apimachinery/pkg/util/yaml",
