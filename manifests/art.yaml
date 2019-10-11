@@ -1,0 +1,12 @@
+updates:
+  - file: "{MAJOR}.{MINOR}/sriov-network-operator.v0.0.1.clusterserviceversion.yaml" # relative to this file
+    update_list:
+    # replace metadata.name value
+    - search: "sriov-network-operator.v0.0.1"
+      replace: "sriov-network-operator.{FULL_VER}"
+    - search: "version: 0.0.1"
+      replace: "version: {FULL_VER}"
+  - file: "sriov-network-operator.package.yaml"
+    update_list:
+    - search: "currentCSV: sriov-network-operator.v0.0.1"
+      replace: "currentCSV: sriov-network-operator.{FULL_VER}"
