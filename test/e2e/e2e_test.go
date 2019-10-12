@@ -112,22 +112,22 @@ func generateSriovNetworkCRs(namespace string) []*sriovnetworkv1.SriovNetwork {
 	trust := true
 	specs := map[string]sriovnetworkv1.SriovNetworkSpec{
 		"test-0": {
-			ResourceName: "resource-1",
+			ResourceName: "resource_1",
 			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
 			Vlan:         100,
 		},
 		"test-1": {
-			ResourceName:     "resource-1",
+			ResourceName:     "resource_1",
 			IPAM:             `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
 			NetworkNamespace: "default",
 		},
 		"test-2": {
-			ResourceName: "resource-1",
+			ResourceName: "resource_1",
 			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
 			SpoofChk:     &spoofChk,
 		},
 		"test-3": {
-			ResourceName: "resource-1",
+			ResourceName: "resource_1",
 			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
 			Trust:        &trust,
 		},
@@ -168,7 +168,7 @@ func testWithOneSriovNetworkNodePolicyCR(t *testing.T, ctx *framework.TestCtx) {
 			Namespace: namespace,
 		},
 		Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
-			ResourceName: "resource-1",
+			ResourceName: "resource_1",
 			NodeSelector: map[string]string{
 				"feature.node.kubernetes.io/network-sriov.capable": "true",
 			},
@@ -229,7 +229,7 @@ func testSriovNetworkConfigDaemonsetCreated(t *testing.T, ctx *framework.TestCtx
 func testWithSriovNetworkCRDeletion(t *testing.T, ctx *framework.TestCtx, cr *sriovnetworkv1.SriovNetwork) {
 	t.Parallel()
 
-	var err error	
+	var err error
 	// get global framework variables
 	f := framework.Global
 	found := &sriovnetworkv1.SriovNetwork{}
@@ -267,14 +267,14 @@ func testWithSriovNetworkCRUpdate(t *testing.T, ctx *framework.TestCtx, cr *srio
 			Namespace: cr.Namespace,
 		},
 		Spec: sriovnetworkv1.SriovNetworkSpec{
-			ResourceName:     "resource-1",
+			ResourceName:     "resource_1",
 			IPAM:             `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","gateway":"10.56.217.1"}`,
 		},
 	}
 
 	var err error
 	expect := fmt.Sprintf(`{"cniVersion":"0.3.1","name":"sriov-net","type":"sriov","vlan":0,"ipam":%s}`, cr0.Spec.IPAM)
-	
+
 	// get global framework variables
 	f := framework.Global
 	found := &sriovnetworkv1.SriovNetwork{}
