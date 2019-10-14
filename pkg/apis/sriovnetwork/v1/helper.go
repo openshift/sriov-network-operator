@@ -7,6 +7,7 @@ import (
 
 var SriovPfVfMap = map[string](string){
 	"1583": "154c",
+	"158b": "154c",
 	"10fb": "10ed",
 	"1015": "1016",
 	"1017": "1018",
@@ -87,10 +88,8 @@ func (s *SriovNetworkNodePolicySpec) Selected(iface *InterfaceExt) bool {
 	if s.NicSelector.Vendor != "" && s.NicSelector.Vendor != iface.Vendor {
 		return false
 	}
-	if s.NicSelector.DeviceID != "" {
-		if ((s.NumVfs == 0 && s.NicSelector.DeviceID != iface.DeviceID) || (s.NumVfs > 0 && s.NicSelector.DeviceID != SriovPfVfMap[iface.DeviceID])) {
-			return false
-		}
+	if s.NicSelector.DeviceID != "" && s.NicSelector.DeviceID != iface.DeviceID {
+		return false
 	}
 	if len(s.NicSelector.RootDevices) > 0 && !StringInArray(iface.PciAddress, s.NicSelector.RootDevices) {
 		return false
