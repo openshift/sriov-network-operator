@@ -29,15 +29,16 @@ type SriovNetworkNodePolicySpec struct {
 	NumVfs      int                     `json:"numVfs"`
 	// NicSelector selects the NICs to be configured
 	NicSelector SriovNetworkNicSelector `json:"nicSelector"`
-	// +kubebuilder:validation:Enum=netdevice,vfio-pci
+	// +kubebuilder:validation:Enum=netdevice;vfio-pci
 	// The driver type for configured VFs. Allowed value "netdevice", "vfio-pci". Defaults to netdevice.
 	DeviceType string `json:"deviceType,omitempty"`
 	// RDMA mode. Defaults to false.
 	IsRdma     bool   `json:"isRdma,omitempty"`
 }
 
+// +k8s:openapi-gen=false
 type SriovNetworkNicSelector struct {
-	// +kubebuilder:validation:Enum=8086,15b3
+	// +kubebuilder:validation:Enum={"8086","15b3"}
 	// The vendor hex code of SR-IoV device. Allowed value "8086", "15b3".
 	Vendor      string   `json:"vendor,omitempty"`
 	// +kubebuilder:validation:Enum=1583,158b,10fb,1015,1017
@@ -54,18 +55,19 @@ type SriovNetworkNicSelector struct {
 type SriovNetworkNodePolicyStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
+	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SriovNetworkNodePolicy is the Schema for the sriovnetworknodepolicies API
 // +k8s:openapi-gen=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:path=sriovnetworknodepolicies,scope=Namespaced
 type SriovNetworkNodePolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Spec hold the intent of how this operator should configure the SR-IoV on host.
 	Spec   SriovNetworkNodePolicySpec   `json:"spec,omitempty"`
 	Status SriovNetworkNodePolicyStatus `json:"status,omitempty"`
 }

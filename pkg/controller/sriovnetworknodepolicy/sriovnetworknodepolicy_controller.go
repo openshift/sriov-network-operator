@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -197,7 +197,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 
 	// Fetch the SriovNetworkNodePolicyList
 	policyList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
-	err = r.client.List(context.TODO(), &client.ListOptions{}, policyList)
+	err = r.client.List(context.TODO(), policyList, &client.ListOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -210,11 +210,11 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	}
 	// Fetch the Nodes
 	nodeList := &corev1.NodeList{}
-	lo := &client.ListOptions{}
-	lbl := make(map[string]string)
-	lbl["node-role.kubernetes.io/worker"] = ""
-	lo.MatchingLabels(lbl)
-	err = r.client.List(context.TODO(), lo, nodeList)
+	lo := &client.MatchingLabels{
+		"node-role.kubernetes.io/worker": "",
+	}
+
+	err = r.client.List(context.TODO(), nodeList, lo)
 	if err != nil {
 		// Error reading the object - requeue the request.
 		reqLogger.Error(err, "Fail to list nodes")

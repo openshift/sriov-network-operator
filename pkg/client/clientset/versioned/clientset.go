@@ -28,8 +28,6 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	SriovnetworkV1() sriovnetworkv1.SriovnetworkV1Interface
-	// Deprecated: please explicitly pick a version if possible.
-	Sriovnetwork() sriovnetworkv1.SriovnetworkV1Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -41,12 +39,6 @@ type Clientset struct {
 
 // SriovnetworkV1 retrieves the SriovnetworkV1Client
 func (c *Clientset) SriovnetworkV1() sriovnetworkv1.SriovnetworkV1Interface {
-	return c.sriovnetworkV1
-}
-
-// Deprecated: Sriovnetwork retrieves the default version of SriovnetworkClient.
-// Please explicitly pick a version.
-func (c *Clientset) Sriovnetwork() sriovnetworkv1.SriovnetworkV1Interface {
 	return c.sriovnetworkV1
 }
 

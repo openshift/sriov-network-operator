@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
@@ -158,7 +158,7 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 
 	// Check if there are more than one children for one SriovNetwork CR.
 	nadList := &netattdefv1.NetworkAttachmentDefinitionList{}
-	r.client.List(context.TODO(), &client.ListOptions{}, nadList)
+	r.client.List(context.TODO(), nadList, &client.ListOptions{})
 	sriovNads := []netattdefv1.NetworkAttachmentDefinition{}
 	for _, cr := range nadList.Items {
 		refs := cr.GetOwnerReferences()
