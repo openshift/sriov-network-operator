@@ -16,7 +16,7 @@ metadata:
           "spec": {
             "resourceName": "intelnics",
             "nodeSelector": {
-              "feature.node.kubernetes.io/sriov-capable": "true"
+              "feature.node.kubernetes.io/network-sriov.capable": "true"
             },
             "priority": 99,
             "mtu": 9000,
