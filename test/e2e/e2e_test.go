@@ -237,7 +237,7 @@ func testWithSriovNetworkCRDeletion(t *testing.T, ctx *framework.TestCtx, cr *sr
 	if err != nil {
 		t.Fatalf("fail to Get SriovNetwork CR: %v", err)
 	}
-	err = f.Client.Delete(goctx.TODO(), found, []dynclient.DeleteOptionFunc{}...)
+	err = f.Client.Delete(goctx.TODO(), found, []dynclient.DeleteOption{}...)
 	if err != nil {
 		t.Fatalf("fail to Delete SriovNetwork CR: %v", err)
 	}

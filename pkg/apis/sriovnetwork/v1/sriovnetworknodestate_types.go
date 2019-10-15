@@ -11,7 +11,7 @@ import (
 // +k8s:openapi-gen=true
 type SriovNetworkNodeStateSpec struct {
 	DpConfigVersion string      `json:"dpConfigVersion,omitempty"`
-	Interfaces      []Interface `json:"interfaces,omitempty"`
+	Interfaces      Interfaces `json:"interfaces,omitempty"`
 }
 
 type Interface struct {
@@ -21,6 +21,8 @@ type Interface struct {
 	DeviceType string `json:"deviceType,omitempty"`
 }
 
+type Interfaces []Interface
+
 type InterfaceExt struct {
 	InterfaceProperty
 	NumVfs    int               `json:"numVfs,omitempty"`
@@ -28,6 +30,7 @@ type InterfaceExt struct {
 	TotalVfs  int               `json:"totalvfs,omitempty"`
 	VFs       []VirtualFunction `json:"Vfs,omitempty"`
 }
+type InterfaceExts []InterfaceExt
 
 type InterfaceProperty struct {
 	Name       string `json:"name,omitempty"`
@@ -46,16 +49,17 @@ type VirtualFunction InterfaceProperty
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
 // +k8s:openapi-gen=true
 type SriovNetworkNodeStateStatus struct {
-	Interfaces    []InterfaceExt `json:"interfaces,omitempty"`
+	Interfaces    InterfaceExts `json:"interfaces,omitempty"`
 	SyncStatus    string         `json:"syncStatus,omitempty"`
 	LastSyncError string         `json:"lastSyncError,omitempty"`
 }
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:subresource:status
 // SriovNetworkNodeState is the Schema for the sriovnetworknodestates API
 // +k8s:openapi-gen=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:path=sriovnetworknodestates,scope=Namespaced
 type SriovNetworkNodeState struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

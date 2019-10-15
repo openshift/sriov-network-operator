@@ -19,6 +19,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/coreos/prometheus-operator/pkg/admission"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -29,7 +30,7 @@ import (
 
 	alertmanagercontroller "github.com/coreos/prometheus-operator/pkg/alertmanager"
 	"github.com/coreos/prometheus-operator/pkg/api"
-	monitoring "github.com/coreos/prometheus-operator/pkg/apis/monitoring"
+	"github.com/coreos/prometheus-operator/pkg/apis/monitoring"
 	monitoringv1 "github.com/coreos/prometheus-operator/pkg/apis/monitoring/v1"
 	prometheuscontroller "github.com/coreos/prometheus-operator/pkg/prometheus"
 	"github.com/coreos/prometheus-operator/pkg/version"
@@ -39,7 +40,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/klog"
 )
 
@@ -91,6 +92,16 @@ func (n namespaces) asSlice() []string {
 	return ns
 }
 
+func serve(srv *http.Server, listener net.Listener, logger log.Logger) func() error {
+	return func() error {
+		logger.Log("msg", "Staring insecure server on :8080")
+		if err := srv.Serve(listener); err != http.ErrServerClosed {
+			return err
+		}
+		return nil
+	}
+}
+
 var (
 	cfg                prometheuscontroller.Config
 	availableLogLevels = []string{
@@ -121,10 +132,10 @@ func init() {
 	// Prometheus Operator image, tagged with the same semver version. Default to
 	// the Prometheus Operator version if no Prometheus config reloader image is
 	// specified.
-	flagset.StringVar(&cfg.PrometheusConfigReloader, "prometheus-config-reloader", fmt.Sprintf("quay.io/coreos/prometheus-config-reloader:v%v", version.Version), "Prometheus config reloader image")
+	flagset.StringVar(&cfg.PrometheusConfigReloaderImage, "prometheus-config-reloader", fmt.Sprintf("quay.io/coreos/prometheus-config-reloader:v%v", version.Version), "Prometheus config reloader image")
 	flagset.StringVar(&cfg.ConfigReloaderImage, "config-reloader-image", "quay.io/coreos/configmap-reload:v0.0.1", "Reload Image")
-	flagset.StringVar(&cfg.ConfigReloaderCPU, "config-reloader-cpu", "100m", "Config Reloader CPU")
-	flagset.StringVar(&cfg.ConfigReloaderMemory, "config-reloader-memory", "25Mi", "Config Reloader Memory")
+	flagset.StringVar(&cfg.ConfigReloaderCPU, "config-reloader-cpu", "100m", "Config Reloader CPU. Value \"0\" disables it and causes no limit to be configured.")
+	flagset.StringVar(&cfg.ConfigReloaderMemory, "config-reloader-memory", "25Mi", "Config Reloader Memory. Value \"0\" disables it and causes no limit to be configured.")
 	flagset.StringVar(&cfg.AlertmanagerDefaultBaseImage, "alertmanager-default-base-image", "quay.io/prometheus/alertmanager", "Alertmanager default base image")
 	flagset.StringVar(&cfg.PrometheusDefaultBaseImage, "prometheus-default-base-image", "quay.io/prometheus/prometheus", "Prometheus default base image")
 	flagset.StringVar(&cfg.ThanosDefaultBaseImage, "thanos-default-base-image", "improbable/thanos", "Thanos default base image")
@@ -137,6 +148,7 @@ func init() {
 	flagset.StringVar(&cfg.LogLevel, "log-level", logLevelInfo, fmt.Sprintf("Log level to use. Possible values: %s", strings.Join(availableLogLevels, ", ")))
 	flagset.StringVar(&cfg.LogFormat, "log-format", logFormatLogfmt, fmt.Sprintf("Log format to use. Possible values: %s", strings.Join(availableLogFormats, ", ")))
 	flagset.BoolVar(&cfg.ManageCRDs, "manage-crds", true, "Manage all CRDs with the Prometheus Operator.")
+	flagset.StringVar(&cfg.PromSelector, "prometheus-instance-selector", "", "Label selector to filter Prometheus CRDs to manage")
 	flagset.Parse(os.Args[1:])
 	cfg.Namespaces = ns.asSlice()
 }
@@ -186,8 +198,10 @@ func Main() int {
 		fmt.Fprint(os.Stderr, "instantiating api failed: ", err)
 		return 1
 	}
+	admit := admission.New(log.With(logger, "component", "admissionwebhook"))
 
 	web.Register(mux)
+	admit.Register(mux)
 	l, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		fmt.Fprint(os.Stderr, "listening port 8080 failed", err)
@@ -205,12 +219,29 @@ func Main() int {
 			" triggered the Prometheus Operator to reconcile an object",
 	}, []string{"controller", "triggered_by", "action"})
 
+	validationTriggeredCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "prometheus_operator_rule_validation_triggered_total",
+		Help: "Number of times a prometheusRule object triggered validation",
+	})
+
+	validationErrorsCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "prometheus_operator_rule_validation_errors_total",
+		Help: "Number of errors that occurred while validating a prometheusRules object",
+	})
+
 	r := prometheus.NewRegistry()
 	r.MustRegister(
 		prometheus.NewGoCollector(),
 		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
 		reconcileErrorsCounter,
 		triggerByCounter,
+		validationTriggeredCounter,
+		validationErrorsCounter,
+	)
+
+	admit.RegisterMetrics(
+		&validationTriggeredCounter,
+		&validationErrorsCounter,
 	)
 
 	prometheusLabels := prometheus.Labels{"controller": "prometheus"}
@@ -241,7 +272,7 @@ func Main() int {
 	wg.Go(func() error { return ao.Run(ctx.Done()) })
 
 	srv := &http.Server{Handler: mux}
-	go srv.Serve(l)
+	wg.Go(serve(srv, l, logger))
 
 	term := make(chan os.Signal)
 	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
@@ -250,6 +281,10 @@ func Main() int {
 	case <-term:
 		logger.Log("msg", "Received SIGTERM, exiting gracefully...")
 	case <-ctx.Done():
+	}
+
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Log("msg", "Server shutdown error", "err", err)
 	}
 
 	cancel()

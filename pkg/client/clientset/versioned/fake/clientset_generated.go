@@ -75,8 +75,3 @@ var _ clientset.Interface = &Clientset{}
 func (c *Clientset) SriovnetworkV1() sriovnetworkv1.SriovnetworkV1Interface {
 	return &fakesriovnetworkv1.FakeSriovnetworkV1{Fake: &c.Fake}
 }
-
-// Sriovnetwork retrieves the SriovnetworkV1Client
-func (c *Clientset) Sriovnetwork() sriovnetworkv1.SriovnetworkV1Interface {
-	return &fakesriovnetworkv1.FakeSriovnetworkV1{Fake: &c.Fake}
-}

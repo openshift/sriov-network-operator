@@ -16,23 +16,26 @@ package scaffold
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/operator-framework/operator-sdk/internal/pkg/scaffold/input"
 	"github.com/operator-framework/operator-sdk/internal/util/k8sutil"
 
 	"github.com/ghodss/yaml"
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 	apiextv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	crdgenerator "sigs.k8s.io/controller-tools/pkg/crd/generator"
+	crdgen "sigs.k8s.io/controller-tools/pkg/crd"
+	"sigs.k8s.io/controller-tools/pkg/genall"
+	"sigs.k8s.io/controller-tools/pkg/loader"
 )
 
-// CRD is the input needed to generate a deploy/crds/<group>_<version>_<kind>_crd.yaml file
+// CRD is the input needed to generate a deploy/crds/<full group>_<resource>_crd.yaml file
 type CRD struct {
 	input.Input
 
@@ -41,178 +44,214 @@ type CRD struct {
 
 	// IsOperatorGo is true when the operator is written in Go.
 	IsOperatorGo bool
+
+	once sync.Once
+	fs   afero.Fs // For testing, ex. afero.NewMemMapFs()
+}
+
+func (s *CRD) initFS(fs afero.Fs) {
+	s.once.Do(func() {
+		s.fs = fs
+	})
+}
+
+func (s *CRD) getFS() afero.Fs {
+	s.initFS(afero.NewOsFs())
+	return s.fs
 }
 
 func (s *CRD) GetInput() (input.Input, error) {
 	if s.Path == "" {
-		fileName := fmt.Sprintf("%s_%s_%s_crd.yaml",
-			strings.ToLower(s.Resource.Group),
-			strings.ToLower(s.Resource.Version),
-			s.Resource.LowerKind)
-		s.Path = filepath.Join(CRDsDir, fileName)
+		s.Path = crdPathForResource(CRDsDir, s.Resource)
 	}
-	initCache()
 	return s.Input, nil
 }
 
-type fsCache struct {
-	afero.Fs
+func crdPathForResource(dir string, r *Resource) string {
+	file := fmt.Sprintf("%s_%s_crd.yaml", r.FullGroup, r.Resource)
+	return filepath.Join(dir, file)
 }
 
-func (c *fsCache) fileExists(path string) bool {
-	_, err := c.Stat(path)
-	return err == nil
+type crdOutputRule struct {
+	fs afero.Fs
 }
 
-var (
-	// Global cache so users can use new CRD structs.
-	cache *fsCache
-	once  sync.Once
-)
+var _ genall.OutputRule = crdOutputRule{}
 
-func initCache() {
-	once.Do(func() {
-		cache = &fsCache{Fs: afero.NewMemMapFs()}
-	})
+// Open is meant to be used to generate a CRD manifest in memory at path.
+func (o crdOutputRule) Open(_ *loader.Package, path string) (io.WriteCloser, error) {
+	if o.fs == nil {
+		return nil, errors.Errorf("error opening %s: crdOutputRule fs must be set", path)
+	}
+	return o.fs.Create(path)
 }
 
-func (s *CRD) SetFS(_ afero.Fs) {}
+var _ CustomRenderer = &CRD{}
+
+func (s *CRD) SetFS(fs afero.Fs) { s.initFS(fs) }
 
 func (s *CRD) CustomRender() ([]byte, error) {
-	i, _ := s.GetInput()
-	// controller-tools generates crd file names with no _crd.yaml suffix:
-	// <group>_<version>_<kind>.yaml.
-	path := strings.Replace(filepath.Base(i.Path), "_crd.yaml", ".yaml", 1)
-
-	// controller-tools' generators read and make crds for all apis in pkg/apis,
-	// so generate crds in a cached, in-memory fs to extract the data we need.
-	if s.IsOperatorGo && !cache.fileExists(path) {
-		g := &crdgenerator.Generator{
-			RootPath:          s.AbsProjectPath,
-			Domain:            strings.SplitN(s.Resource.FullGroup, ".", 2)[1],
-			OutputDir:         ".",
-			SkipMapValidation: false,
-			OutFs:             cache,
-		}
-		if err := g.ValidateAndInitFields(); err != nil {
-			return nil, err
-		}
-		if err := g.Do(); err != nil {
-			return nil, err
-		}
-	}
-
-	dstCRD := newCRDForResource(s.Resource)
-	// Get our generated crd's from the in-memory fs. If it doesn't exist in the
-	// fs, the corresponding API does not exist yet, so scaffold a fresh crd
-	// without a validation spec.
-	// If the crd exists in the fs, and a local crd exists, append the validation
-	// spec. If a local crd does not exist, use the generated crd.
-	if _, err := cache.Stat(path); err != nil && !os.IsNotExist(err) {
-		return nil, err
-	} else if err == nil {
-		b, err := afero.ReadFile(cache, path)
+	crd := &apiextv1beta1.CustomResourceDefinition{}
+	if s.IsOperatorGo {
+		fs := afero.NewMemMapFs()
+		// controller-tool's generator reads and scaffolds a CRD for all APIs in
+		// pkg/apis.
+		err := runCRDGenerator(crdOutputRule{fs: fs}, s.AbsProjectPath)
 		if err != nil {
 			return nil, err
 		}
-		dstCRD = &apiextv1beta1.CustomResourceDefinition{}
-		if err = yaml.Unmarshal(b, dstCRD); err != nil {
+		// controller-tools generates CRD file names in the format below, which
+		// we need to read from fs.
+		genFile := fmt.Sprintf("%s_%s.yaml", s.Resource.FullGroup, s.Resource.Resource)
+		b, err := afero.ReadFile(fs, genFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("error generating CRD for Group %s Version %s Kind %s",
+					s.Resource.GoImportGroup, s.Resource.Version, s.Resource.Kind)
+			}
 			return nil, err
 		}
-		val := dstCRD.Spec.Validation.DeepCopy()
-
-		// If the crd exists at i.Path, append the validation spec to its crd spec.
-		if _, err := os.Stat(i.Path); err == nil {
-			cb, err := ioutil.ReadFile(i.Path)
+		if err = yaml.Unmarshal(b, crd); err != nil {
+			return nil, err
+		}
+		// controller-tools does not set ListKind or Singular names.
+		setCRDNamesForResource(crd, s.Resource)
+	} else {
+		// There are currently no commands to update CRD manifests for non-Go
+		// operators, so if a CRD manifest already exists for this gvk, this
+		// scaffold is a no-op (for now).
+		path := crdPathForResource(filepath.Join(s.AbsProjectPath, CRDsDir), s.Resource)
+		if _, err := s.getFS().Stat(path); err == nil {
+			b, err := afero.ReadFile(s.getFS(), path)
 			if err != nil {
 				return nil, err
 			}
-			if len(cb) > 0 {
-				dstCRD = &apiextv1beta1.CustomResourceDefinition{}
-				if err = yaml.Unmarshal(cb, dstCRD); err != nil {
+			if len(b) == 0 {
+				crd = newCRDForResource(s.Resource)
+			} else {
+				if err = yaml.Unmarshal(b, crd); err != nil {
 					return nil, err
 				}
-				dstCRD.Spec.Validation = val
 			}
 		}
-		// controller-tools does not set ListKind or Singular names.
-		dstCRD.Spec.Names = getCRDNamesForResource(s.Resource)
-		// Remove controller-tools default label.
-		delete(dstCRD.Labels, "controller-tools.k8s.io")
 	}
-	addCRDSubresource(dstCRD)
-	addCRDVersions(dstCRD)
-	return k8sutil.GetObjectBytes(dstCRD)
+
+	setCRDStorageVersion(crd)
+	if err := checkCRDVersions(crd); err != nil {
+		return nil, err
+	}
+	return k8sutil.GetObjectBytes(crd, yaml.Marshal)
+}
+
+func runCRDGenerator(rule genall.OutputRule, root string) (err error) {
+	absAPIsDir := filepath.Join(root, ApisDir)
+	gvs, err := k8sutil.ParseGroupVersions(absAPIsDir)
+	if err != nil {
+		return errors.Wrapf(err, "error parsing API group versions from directory %+q", absAPIsDir)
+	}
+	apiDirs := []string{}
+	for g, vs := range gvs {
+		for _, v := range vs {
+			apiDirs = append(apiDirs, filepath.Join(absAPIsDir, g, v))
+		}
+	}
+
+	cg := crdgen.Generator{}
+	gens := genall.Generators{cg}
+	r, err := gens.ForRoots(apiDirs...)
+	if err != nil {
+		return errors.Wrapf(err, "error loading API roots %+q", apiDirs)
+	}
+	r.OutputRules.ByGenerator = map[genall.Generator]genall.OutputRule{cg: rule}
+	ctx := r.GenerationContext
+	ctx.OutputRule = r.OutputRules.ForGenerator(gens[0])
+	if err := gens[0].Generate(&ctx); err != nil {
+		return errors.Wrapf(err, "error generating CRDs")
+	}
+	return nil
 }
 
 func newCRDForResource(r *Resource) *apiextv1beta1.CustomResourceDefinition {
-	return &apiextv1beta1.CustomResourceDefinition{
+	crd := &apiextv1beta1.CustomResourceDefinition{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apiextensions.k8s.io/v1beta1",
+			APIVersion: apiextv1beta1.SchemeGroupVersion.String(),
 			Kind:       "CustomResourceDefinition",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: r.Resource + "." + r.FullGroup,
+			Name: fmt.Sprintf("%s.%s", r.Resource, r.FullGroup),
 		},
 		Spec: apiextv1beta1.CustomResourceDefinitionSpec{
-			Group:   r.FullGroup,
-			Names:   getCRDNamesForResource(r),
-			Scope:   apiextv1beta1.NamespaceScoped,
-			Version: r.Version,
+			Group: r.FullGroup,
+			Scope: apiextv1beta1.NamespaceScoped,
+			Versions: []apiextv1beta1.CustomResourceDefinitionVersion{
+				{Name: r.Version, Served: true, Storage: true},
+			},
 			Subresources: &apiextv1beta1.CustomResourceSubresources{
 				Status: &apiextv1beta1.CustomResourceSubresourceStatus{},
 			},
 		},
 	}
+	setCRDNamesForResource(crd, r)
+	return crd
 }
 
-func getCRDNamesForResource(r *Resource) apiextv1beta1.CustomResourceDefinitionNames {
-	return apiextv1beta1.CustomResourceDefinitionNames{
-		Kind:     r.Kind,
-		ListKind: r.Kind + "List",
-		Plural:   r.Resource,
-		Singular: r.LowerKind,
+func setCRDNamesForResource(crd *apiextv1beta1.CustomResourceDefinition, r *Resource) {
+	if crd.Spec.Names.Kind == "" {
+		crd.Spec.Names.Kind = r.Kind
+	}
+	if crd.Spec.Names.ListKind == "" {
+		crd.Spec.Names.ListKind = r.Kind + "List"
+	}
+	if crd.Spec.Names.Plural == "" {
+		crd.Spec.Names.Plural = r.Resource
+	}
+	if crd.Spec.Names.Singular == "" {
+		crd.Spec.Names.Singular = r.LowerKind
 	}
 }
 
-func addCRDSubresource(crd *apiextv1beta1.CustomResourceDefinition) {
-	if crd.Spec.Subresources == nil {
-		crd.Spec.Subresources = &apiextv1beta1.CustomResourceSubresources{}
+func setCRDStorageVersion(crd *apiextv1beta1.CustomResourceDefinition) {
+	if len(crd.Spec.Versions) == 0 {
+		return
 	}
-	if crd.Spec.Subresources.Status == nil {
-		crd.Spec.Subresources.Status = &apiextv1beta1.CustomResourceSubresourceStatus{}
+	for _, ver := range crd.Spec.Versions {
+		if ver.Storage {
+			return
+		}
 	}
+	// Set the first element in spec.versions to be the storage version.
+	log.Infof("Setting CRD %q storage version to %s", crd.GetName(), crd.Spec.Versions[0].Name)
+	crd.Spec.Versions[0].Storage = true
 }
 
-func addCRDVersions(crd *apiextv1beta1.CustomResourceDefinition) {
-	// crd.Version is deprecated, use crd.Versions instead.
-	var crdVersions []apiextv1beta1.CustomResourceDefinitionVersion
-	if crd.Spec.Version != "" {
-		var verExists, hasStorageVer bool
-		for _, ver := range crd.Spec.Versions {
-			if crd.Spec.Version == ver.Name {
-				verExists = true
-			}
-			// There must be exactly one version flagged as a storage version.
-			if ver.Storage {
-				hasStorageVer = true
-			}
-		}
-		if !verExists {
-			crdVersions = []apiextv1beta1.CustomResourceDefinitionVersion{
-				{Name: crd.Spec.Version, Served: true, Storage: !hasStorageVer},
-			}
-		}
-	} else {
-		crdVersions = []apiextv1beta1.CustomResourceDefinitionVersion{
-			{Name: "v1alpha1", Served: true, Storage: true},
+// checkCRDVersions ensures version(s) generated for a CRD are in valid format.
+// From the Kubernetes CRD docs:
+//
+// The version field is deprecated and optional, but if it is not empty,
+// it must match the first item in the versions field.
+func checkCRDVersions(crd *apiextv1beta1.CustomResourceDefinition) error {
+	singleVer := crd.Spec.Version != ""
+	multiVers := len(crd.Spec.Versions) > 0
+	if singleVer {
+		if !multiVers {
+			log.Warnf("CRD %s: spec.version is deprecated and should be migrated to spec.versions", crd.Spec.Names.Kind)
+		} else if crd.Spec.Version != crd.Spec.Versions[0].Name {
+			return errors.Errorf("spec.version %s must be the first element in spec.versions for CRD %s", crd.Spec.Version, crd.Spec.Names.Kind)
 		}
 	}
 
-	if len(crd.Spec.Versions) > 0 {
-		// crd.Version should always be the first element in crd.Versions.
-		crd.Spec.Versions = append(crdVersions, crd.Spec.Versions...)
-	} else {
-		crd.Spec.Versions = crdVersions
+	var hasStorageVer bool
+	for _, ver := range crd.Spec.Versions {
+		// There must be exactly one version flagged as a storage version.
+		if ver.Storage {
+			if hasStorageVer {
+				return errors.Errorf("spec.versions cannot have more than one storage version for CRD %s", crd.Spec.Names.Kind)
+			}
+			hasStorageVer = true
+		}
 	}
+	if multiVers && !hasStorageVer {
+		return errors.Errorf("spec.versions must have exactly one storage version for CRD %s", crd.Spec.Names.Kind)
+	}
+	return nil
 }

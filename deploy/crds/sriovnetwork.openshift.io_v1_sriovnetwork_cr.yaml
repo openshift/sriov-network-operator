@@ -1,0 +1,7 @@
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetwork
+metadata:
+  name: example-sriovnetwork
+spec:
+  # Add fields here
+  size: 3

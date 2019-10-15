@@ -15,6 +15,8 @@
 package ansible
 
 import (
+	"fmt"
+
 	"github.com/operator-framework/operator-sdk/internal/pkg/scaffold"
 	"github.com/operator-framework/operator-sdk/internal/pkg/scaffold/input"
 )
@@ -35,22 +37,31 @@ func (s *GopkgToml) GetInput() (input.Input, error) {
 const gopkgTomlTmpl = `[[constraint]]
   name = "github.com/operator-framework/operator-sdk"
   # The version rule is used for a specific release and the master branch for in between releases.
-  branch = "master" #osdk_branch_annotation
-  # version = "=v0.7.0" #osdk_version_annotation
+  # branch = "master" #osdk_branch_annotation
+  version = "=v0.11.0" #osdk_version_annotation
 
 [[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.13.1"
+  version = "kubernetes-1.14.1"
 
 [[override]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.13.1"
+  version = "kubernetes-1.14.1"
 
 [[override]]
   name = "k8s.io/client-go"
-  version = "kubernetes-1.13.1"
+  version = "kubernetes-1.14.1"
+
+[[override]]
+  name = "sigs.k8s.io/controller-runtime"
+  version = "=v0.2.0"
 
 [prune]
   go-tests = true
   unused-packages = true
 `
+
+func PrintDepGopkgTOML() error {
+	_, err := fmt.Println(gopkgTomlTmpl)
+	return err
+}
