@@ -4,4 +4,4 @@ metadata:
   name: example-sriovoperatorconfig
 spec:
   # Add fields here
-  size: 3
+  enableInjector: true
