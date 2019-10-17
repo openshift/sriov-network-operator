@@ -122,6 +122,11 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
                 return reconcile.Result{}, err
 	}
 
+	if request.Namespace != Namespace {
+		reqLogger.Info("Creating SriovOperatorConfig in", request.Namespace, "namespace is not supported, use namespace", Namespace)
+		return reconcile.Result{}, nil
+	}
+
 	// Fetch the SriovOperatorConfig instance
 	instance := &sriovnetworkv1.SriovOperatorConfig{}
 	err = r.client.Get(context.TODO(), request.NamespacedName, instance)
