@@ -43,8 +43,6 @@ spec:
               value: $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
             - name: RESOURCE_PREFIX
               value: openshift.io
-            - name: ENABLE_ADMISSION_CONTROLLER
-              value: "$ENABLE_ADMISSION_CONTROLLER"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:
