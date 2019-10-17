@@ -9,3 +9,4 @@ export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE=${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-qu
 export RELEASE_VERSION=0.0.1-snapshot
 export OPERATOR_NAME=sriov-network-operator
 export RESOURCE_PREFIX=openshift.io
+export ENABLE_ADMISSION_CONTROLLER='true'

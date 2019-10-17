@@ -40,7 +40,7 @@ operator-sdk:
 
 all: build plugins
 
-build: _build-manager _build-sriov-network-config-daemon
+build: _build-manager _build-sriov-network-config-daemon _build-webhook
 
 _build-%:
 	WHAT=$* hack/build-go.sh
