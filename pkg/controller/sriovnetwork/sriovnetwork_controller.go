@@ -200,28 +200,46 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 	}
 	data.Data["SriovCniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
 	data.Data["SriovCniVlan"] = cr.Spec.Vlan
-	if cr.Spec.SpoofChk == nil {
+
+	if cr.Spec.VlanQoS <= 7 && cr.Spec.VlanQoS >= 0 {
+		data.Data["VlanQoSConfigured"] = true
+		data.Data["SriovCniVlanQoS"] = cr.Spec.VlanQoS
+	} else {
+		data.Data["VlanQoSConfigured"] = false
+	}
+
+	data.Data["SpoofChkConfigured"] = true
+	switch cr.Spec.SpoofChk {
+	case "off":
+		data.Data["SriovCniSpoofChk"] = "off"
+	case "on":
+		data.Data["SriovCniSpoofChk"] = "on"
+	default:
 		data.Data["SpoofChkConfigured"] = false
-	} else {
-		data.Data["SpoofChkConfigured"] = true
-		switch *cr.Spec.SpoofChk {
-		case false:
-			data.Data["SriovCniSpoofChk"] = "off"
-		default:
-			data.Data["SriovCniSpoofChk"] = "on"
-		}
 	}
-	if cr.Spec.Trust == nil {
+
+	data.Data["TrustConfigured"] = true
+	switch cr.Spec.Trust {
+	case "on":
+		data.Data["SriovCniTrust"] = "on"
+	case "off":
+		data.Data["SriovCniTrust"] = "off"
+	default:
 		data.Data["TrustConfigured"] = false
-	} else {
-		data.Data["TrustConfigured"] = true
-		switch *cr.Spec.Trust {
-		case true:
-			data.Data["SriovCniTrust"] = "on"
-		default:
-			data.Data["SriovCniTrust"] = "off"
-		}
 	}
+
+	data.Data["StateConfigured"] = true
+	switch cr.Spec.LinkState {
+	case "enable":
+		data.Data["SriovCniState"] = "enable"
+	case "disable":
+		data.Data["SriovCniState"] = "disable"
+	case "auto":
+		data.Data["SriovCniState"] = "auto"
+	default:
+		data.Data["StateConfigured"] = false
+	}
+
 	data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
