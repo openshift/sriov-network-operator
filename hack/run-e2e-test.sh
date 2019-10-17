@@ -1,8 +1,8 @@
 #!/bin/bash
 
-EXCLUSIONS=(operator.yaml) $(dirname $0)/deploy-setup.sh sriov-network-operator
+EXCLUSIONS=(operator.yaml) $(dirname $0)/deploy-setup.sh ${NAMESPACE}
 
-export TEST_NAMESPACE=sriov-network-operator
+export TEST_NAMESPACE=${NAMESPACE}
 KUBECONFIG=${KUBECONFIG:-/root/env/ign/auth/kubeconfig}
 IMAGE_DIGEST=$(skopeo inspect docker://quay.io/openshift/origin-sriov-network-config-daemon | jq --raw-output '.Digest')
 SRIOV_NETWORK_CONFIG_DAEMON_IMAGE=${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-quay.io/openshift/origin-sriov-network-config-daemon@${IMAGE_DIGEST}}

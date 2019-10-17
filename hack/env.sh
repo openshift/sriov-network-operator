@@ -7,7 +7,5 @@ export NETWORK_RESOURCES_INJECTOR_IMAGE=${NETWORK_RESOURCES_INJECTOR_IMAGE:-quay
 DAEMON_IMAGE_DIGEST=$(skopeo inspect docker://quay.io/openshift/origin-sriov-network-config-daemon | jq --raw-output '.Digest')
 export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE=${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-quay.io/openshift/origin-sriov-network-config-daemon@${DAEMON_IMAGE_DIGEST}}
 export RELEASE_VERSION=0.0.1-snapshot
-export NAMESPACE=sriov-network-operator
 export OPERATOR_NAME=sriov-network-operator
 export RESOURCE_PREFIX=openshift.io
-export ENABLE_ADMISSION_CONTROLLER='false'

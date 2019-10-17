@@ -3,7 +3,6 @@ apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
   name: policy-1
-  namespace: sriov-network-operator
 spec:
   resourceName: intelnics
   nodeSelector:
@@ -21,7 +20,6 @@ apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodePolicy
 metadata:
   name: policy-2
-  namespace: sriov-network-operator
 spec:
   resourceName: mlxnics
   nodeSelector:

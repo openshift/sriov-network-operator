@@ -10,9 +10,9 @@ if [ -n "${namespace}" ] ; then
 fi
 
 pushd ${repo_dir}/deploy
-files="operator.yaml service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml crds/sriovnetwork_v1_sriovnetwork_crd.yaml crds/sriovnetwork_v1_sriovnetworknodepolicy_crd.yaml crds/sriovnetwork_v1_sriovnetworknodestate_crd.yaml"
+files="operator.yaml service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml operator.yaml"
 for file in ${files}; do
-  ${OPERATOR_EXEC} delete -f $file --ignore-not-found ${namespace}
+  envsubst< ${file} | ${OPERATOR_EXEC} delete --ignore-not-found ${namespace} -f -
 done
 ${OPERATOR_EXEC} delete cm --ignore-not-found ${namespace} device-plugin-config
 popd

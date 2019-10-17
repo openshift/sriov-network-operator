@@ -17,7 +17,8 @@ APP_REPO=github.com/openshift/$(APP_NAME)
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 IMAGE_TAG?=nfvpe/$(APP_NAME):latest
 MAIN_PKG=cmd/manager/main.go
-export NAMESPACE?=sriov-network-operator
+export NAMESPACE?=openshift-sriov-network-operator
+export ENABLE_ADMISSION_CONTROLLER?=true
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 
 # go source files, ignore vendor directory
@@ -63,9 +64,10 @@ gencode: operator-sdk
 	@operator-sdk generate openapi
 
 deploy-setup:
-	@EXCLUSIONS=() hack/deploy-setup.sh sriov-network-operator
+	@EXCLUSIONS=() hack/deploy-setup.sh $(NAMESPACE)
 
-    
+deploy-setup-k8s: export NAMESPACE=sriov-network-operator
+deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
 deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 deploy-setup-k8s: deploy-setup
 
@@ -77,11 +79,16 @@ test-e2e-local: operator-sdk
 test-e2e:
 	@hack/run-e2e-test.sh
 
-test-e2e-k8s: export CNI_BIN_PATH=/opt/cni/bin
+deploy-setup-k8s: export NAMESPACE=sriov-network-operator
+deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
+deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 test-e2e-k8s: test-e2e
 
 undeploy:
-	@hack/undeploy.sh sriov-network-operator
+	@hack/undeploy.sh $(NAMESPACE)
+
+undeploy-k8s: export NAMESPACE=sriov-network-operator
+undeploy-k8s: undeploy
 
 _plugin-%:
 	@hack/build-plugins.sh $*

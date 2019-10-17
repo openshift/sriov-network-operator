@@ -10,29 +10,29 @@ source "$(dirname $0)/common"
 load_manifest() {
   local repo=$1
   local namespace=${2:-}
+  export NAMESPACE=${namespace}
   if [ -n "${namespace}" ] ; then
     namespace="-n ${namespace}"
   fi
 
   pushd ${repo}/deploy
-    if ! ${OPERATOR_EXEC} get ns sriov-network-operator > /dev/null 2>&1 && test -f namespace.yaml ; then
-      ${OPERATOR_EXEC} apply -f namespace.yaml
+    if ! ${OPERATOR_EXEC} get ns $2 > /dev/null 2>&1 && test -f namespace.yaml ; then
+      
+      envsubst< namespace.yaml | ${OPERATOR_EXEC} apply -f -
     fi
-    files="crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml"
+    files="crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml operator.yaml"
     for m in ${files}; do
       if [ "$(echo ${EXCLUSIONS[@]} | grep -o ${m} | wc -w | xargs)" == "0" ] ; then
-        ${OPERATOR_EXEC} apply -f ${m} ${namespace:-} --validate=false
+        envsubst< ${m} | ${OPERATOR_EXEC} apply ${namespace:-} --validate=false -f -
       fi
     done
-    # handling operator.yaml as special case since it needs env variable substitutions
-    if [ "$(echo ${EXCLUSIONS[@]} | grep -o operator.yaml | wc -w | xargs)" == "0" ] ; then
-      envsubst < operator.yaml | ${OPERATOR_EXEC} apply ${namespace:-} --validate=false -f -
-    fi
+
   popd
 }
 
 # This is required for when running the operator locally using go run
 rm -rf /tmp/_working_dir
 mkdir /tmp/_working_dir
+source hack/env.sh
 
 load_manifest ${repo_dir} $1
