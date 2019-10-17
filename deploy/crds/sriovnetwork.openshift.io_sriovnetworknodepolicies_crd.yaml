@@ -53,13 +53,13 @@ spec:
                 deviceID:
                   description: The device hex code of SR-IoV device. Allowed value
                     "1583", "158b", "10fb", "1015", "1017".
-                  type: string
                   enum:
                   - "1583"
                   - 158b
                   - 10fb
                   - "1015"
                   - "1017"
+                  type: string
                 pfNames:
                   description: Name of SR-IoV PF.
                   items:

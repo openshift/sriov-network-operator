@@ -19,11 +19,20 @@ type SriovNetworkSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=4096
 	// VLAN ID to assign for the VF. Defaults to 0.
-	Vlan     int   `json:"vlan,omitempty"`
-	// VF spoof check
-	SpoofChk *bool `json:"spoofChk,omitempty"`
-	// VF trust mode
-	Trust    *bool `json:"trust,omitempty"`
+	Vlan		int   `json:"vlan,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=7
+	// VLAN QoS ID to assign for the VF. Defaults to 0.
+	VlanQoS		int   `json:"vlanQoS,omitempty"`
+	// VF spoof check, (on|off)
+	// +kubebuilder:validation:Enum={"on","off"}
+	SpoofChk	string `json:"spoofChk,omitempty"`
+	// VF trust mode (on|off)
+	// +kubebuilder:validation:Enum={"on","off"}
+	Trust		string `json:"trust,omitempty"`
+	// VF link state (enable|disable|auto)
+	// +kubebuilder:validation:Enum={"auto","enable","disable"}
+	LinkState	string `json:"link_state,omitempty"`
 }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork
