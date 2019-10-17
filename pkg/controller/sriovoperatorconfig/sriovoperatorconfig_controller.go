@@ -153,11 +153,6 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovO
 	logger := log.WithName("syncWebhookObjs")
 	logger.Info("Start to sync webhook objects")
 
-	if *dc.Spec.EnableInjector != true {
-		logger.Info("SR-IOV Admission Controller is disabled.")
-		logger.Info("To enable SR-IOV Admission Controller, set 'ENABLE_ADMISSION_CONTROLLER' to 'true'.")
-	}
-
 	// Render Webhook manifests
 	data := render.MakeRenderData()
 	data.Data["Namespace"] = os.Getenv("NAMESPACE")
@@ -170,6 +165,20 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovO
 		logger.Error(err, "Fail to render webhook manifests")
 		return err
 	}
+
+	// Delete webhook
+	if *dc.Spec.EnableInjector != true {
+		for _, obj := range objs {
+			err = r.deleteWebhookObject(obj)
+			if err != nil {
+				return err
+			}
+		}
+		logger.Info("SR-IOV Admission Controller is disabled.")
+		logger.Info("To enable SR-IOV Admission Controller, set 'SriovOperatorConfig.Spec.EnableInjector' to true(bool).")
+		return nil
+	}
+
 	// Sync Webhook
 	for _, obj := range objs {
 		err = r.syncWebhookObject(dc, obj)
@@ -177,6 +186,13 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovO
 			logger.Error(err, "Couldn't sync webhook objects")
 			return err
 		}
+	}
+	return nil
+}
+
+func (r *ReconcileSriovOperatorConfig) deleteWebhookObject(obj *uns.Unstructured) error {
+	if err := r.deleteK8sResource(obj); err != nil {
+		return err
 	}
 	return nil
 }
@@ -295,18 +311,19 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookConfigMap(cr *sriovnetworkv1.S
 	return nil
 }
 
+func (r *ReconcileSriovOperatorConfig) deleteK8sResource(in *uns.Unstructured) error {
+	if err := apply.DeleteObject(context.TODO(), r.client, in); err != nil {
+		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
+	}
+        return nil
+}
+
 func (r *ReconcileSriovOperatorConfig) syncK8sResource(cr *sriovnetworkv1.SriovOperatorConfig, in *uns.Unstructured) error {
-	if *cr.Spec.EnableInjector != true {
-		if err := apply.DeleteObject(context.TODO(), r.client, in); err != nil {
-			return fmt.Errorf("failed to delete object %v with err: %v", in, err)
-		}
-	} else {
-		if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-			return err
-		}
-		if err := apply.ApplyObject(context.TODO(), r.client, in); err != nil {
-			return fmt.Errorf("failed to apply object %v with err: %v", in, err)
-		}
+	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
+		return err
+	}
+	if err := apply.ApplyObject(context.TODO(), r.client, in); err != nil {
+		return fmt.Errorf("failed to apply object %v with err: %v", in, err)
 	}
         return nil
 }
