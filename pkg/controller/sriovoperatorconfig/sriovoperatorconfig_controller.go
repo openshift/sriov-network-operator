@@ -114,6 +114,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// Watch for changes to secondary resource ServiceAccount and requeue the owner SriovOperatorConfig
+	err = c.Watch(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
+	})
+	if err != nil {
+		return err
+	}
+
         // Watch for changes to secondary resource MutatingWebhookConfiguration
 	// and requeue the owner SriovOperatorConfig
 	err = c.Watch(&source.Kind{Type: &admissionregistrationv1beta1.MutatingWebhookConfiguration{}},
