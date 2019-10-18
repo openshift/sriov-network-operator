@@ -43,12 +43,9 @@ var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
 const (
 	PLUGIN_PATH                 = "./bindata/manifests/plugins"
 	DAEMON_PATH                 = "./bindata/manifests/daemon"
-	WEBHOOK_PATH                = "./bindata/manifests/webhook"
 	DEFAULT_POLICY_NAME         = "default"
 	CONFIGMAP_NAME              = "device-plugin-config"
 	DP_CONFIG_FILENAME          = "config.json"
-	SERVICE_CA_CONFIGMAP        = "openshift-service-ca"
-	SRIOV_MUTATING_WEBHOOK_NAME = "network-resources-injector-config"
 )
 
 var Namespace = os.Getenv("NAMESPACE")
@@ -241,10 +238,6 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 			return reconcile.Result{}, err
 		}
 	}
-	// Render and sync Webhook objects
-	if err = r.syncWebhookObjs(defaultPolicy); err != nil {
-		return reconcile.Result{}, err
-	}
 
 	// All was successful. Request that this be re-triggered after ResyncPeriod,
 	// so we can reconcile state again.
@@ -436,40 +429,6 @@ func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy) syncWebhookObjs(dp *sriovnetworkv1.SriovNetworkNodePolicy) error {
-	logger := log.WithName("syncWebhookObjs")
-	logger.Info("Start to sync webhook objects")
-
-	enable := os.Getenv("ENABLE_ADMISSION_CONTROLLER")
-	if enable != "true" {
-		logger.Info("SR-IOV Admission Controller is disabled, existing.")
-		logger.Info("To enable SR-IOV Admission Controller, set 'ENABLE_ADMISSION_CONTROLLER' to 'true'.")
-		return nil
-	}
-
-	// Render Webhook manifests
-	data := render.MakeRenderData()
-	data.Data["Namespace"] = os.Getenv("NAMESPACE")
-	data.Data["ServiceCAConfigMap"] = SERVICE_CA_CONFIGMAP
-	data.Data["SRIOVMutatingWebhookName"] = SRIOV_MUTATING_WEBHOOK_NAME
-	data.Data["NetworkResourcesInjectorImage"] = os.Getenv("NETWORK_RESOURCES_INJECTOR_IMAGE")
-	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	objs, err := render.RenderDir(WEBHOOK_PATH, &data)
-	if err != nil {
-		logger.Error(err, "Fail to render webhook manifests")
-		return err
-	}
-	// Sync Webhook
-	for _, obj := range objs {
-		err = r.syncWebhookObject(dp, obj)
-		if err != nil {
-			logger.Error(err, "Couldn't sync webhook objects")
-			return err
-		}
-	}
-	return nil
-}
-
 func (r *ReconcileSriovNetworkNodePolicy) tryDeleteDs(namespace, name string) error {
 	logger := log.WithName("tryDeleteDsObject")
 	ds := &appsv1.DaemonSet{}
@@ -512,139 +471,6 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDsObject(dp *sriovnetworkv1.SriovN
 		if err != nil {
 			logger.Error(err, "Fail to sync DaemonSet", "Namespace", ds.Namespace, "Name", ds.Name)
 			return err
-		}
-	}
-	return nil
-}
-
-func (r *ReconcileSriovNetworkNodePolicy) syncWebhookObject(dp *sriovnetworkv1.SriovNetworkNodePolicy, obj *uns.Unstructured) error {
-	var err error
-	logger := log.WithName("syncWebhookObject")
-	logger.Info("Start to sync Objects")
-	scheme := kscheme.Scheme
-	switch kind := obj.GetKind(); kind {
-	case "MutatingWebhookConfiguration":
-		whs := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
-		err = scheme.Convert(obj, whs, nil)
-		r.syncWebhook(dp, whs)
-		if err != nil {
-			logger.Error(err, "Fail to sync mutate webhook")
-			return err
-		}
-	case "ConfigMap":
-		cm := &corev1.ConfigMap{}
-		err = scheme.Convert(obj, cm, nil)
-		r.syncWebhookConfigMap(dp, cm)
-		if err != nil {
-			logger.Error(err, "Fail to sync webhook config map")
-			return err
-		}
-	case "ServiceAccount":
-		sa := &corev1.ServiceAccount{}
-		err = scheme.Convert(obj, sa, nil)
-		r.syncServiceAccount(dp, sa)
-		if err != nil {
-			logger.Error(err, "Fail to sync ServiceAccount")
-			return err
-		}
-	case "DaemonSet":
-		ds := &appsv1.DaemonSet{}
-		err = scheme.Convert(obj, ds, nil)
-		r.syncWebhookDaemonSet(dp, ds)
-		if err != nil {
-			logger.Error(err, "Fail to sync DaemonSet", "Namespace", ds.Namespace, "Name", ds.Name)
-			return err
-		}
-	case "Service":
-		s := &corev1.Service{}
-		err = scheme.Convert(obj, s, nil)
-		r.syncService(dp, s)
-		if err != nil {
-			logger.Error(err, "Fail to sync Service", "Namespace", s.Namespace, "Name", s.Name)
-			return err
-		}
-	case "ClusterRole":
-		cr := &rbacv1.ClusterRole{}
-		err = scheme.Convert(obj, cr, nil)
-		r.syncClusterRole(dp, cr)
-		if err != nil {
-			logger.Error(err, "Fail to sync cluster role", "Namespace", cr.Namespace, "Name", cr.Name)
-			return err
-		}
-	case "ClusterRoleBinding":
-		crb := &rbacv1.ClusterRoleBinding{}
-		err = scheme.Convert(obj, crb, nil)
-		r.syncClusterRoleBinding(dp, crb)
-		if err != nil {
-			logger.Error(err, "Fail to sync cluster role binding", "Namespace", crb.Namespace, "Name", crb.Name)
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *ReconcileSriovNetworkNodePolicy) syncWebhook(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *admissionregistrationv1beta1.MutatingWebhookConfiguration) error {
-	logger := log.WithName("syncWebhook")
-	logger.Info("Start to sync webhook", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
-	}
-	whs := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create webhook: %v", err)
-			}
-			logger.Info("Create webhook for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get webhook: %v", err)
-		}
-	} else {
-		logger.Info("Webhook already exists, updating")
-		for idx, wh := range whs.Webhooks {
-			if wh.ClientConfig.CABundle != nil {
-				in.Webhooks[idx].ClientConfig.CABundle = wh.ClientConfig.CABundle
-			}
-		}
-		err = r.client.Update(context.TODO(), in)
-		if err != nil {
-			return fmt.Errorf("Couldn't update webhook: %v", err)
-		}
-	}
-	return nil
-}
-
-func (r *ReconcileSriovNetworkNodePolicy) syncWebhookConfigMap(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.ConfigMap) error {
-	logger := log.WithName("syncWebhookConfigMap")
-	logger.Info("Start to sync config map", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
-	}
-	cm := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, cm)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create config map: %v", err)
-			}
-			logger.Info("Create config map for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get config map: %v", err)
-		}
-	} else {
-		logger.Info("Config map already exists, updating")
-		_, ok := cm.Data["service-ca.crt"]
-		if ok {
-			in.Data = cm.Data
-		}
-		err = r.client.Update(context.TODO(), in)
-		if err != nil {
-			return fmt.Errorf("Couldn't update config map: %v", err)
 		}
 	}
 	return nil
@@ -732,35 +558,6 @@ func (r *ReconcileSriovNetworkNodePolicy) syncClusterRoleBinding(cr *sriovnetwor
 		err = r.client.Update(context.TODO(), in)
 		if err != nil {
 			return fmt.Errorf("Couldn't update cluster role binding: %v", err)
-		}
-	}
-	return nil
-}
-
-func (r *ReconcileSriovNetworkNodePolicy) syncWebhookDaemonSet(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *appsv1.DaemonSet) error {
-	logger := log.WithName("syncWebhookDaemonSet")
-	logger.Info("Start to sync webhook daemon", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
-	}
-	ds := &appsv1.DaemonSet{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, ds)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create webhook daemon: %v", err)
-			}
-			logger.Info("Create webhook daemon for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to webhook daemon: %v", err)
-		}
-	} else {
-		logger.Info("Webhook daemon already exists, updating")
-		err = r.client.Update(context.TODO(), in)
-		if err != nil {
-			return fmt.Errorf("Couldn't update webhook daemon: %v", err)
 		}
 	}
 	return nil
