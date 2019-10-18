@@ -13,6 +13,8 @@ var SriovPfVfMap = map[string](string){
 	"1017": "1018",
 }
 
+var VfIds = []string{"0x154c", "0x10ed", "0x1016", "0x1018"}
+
 var log = logf.Log.WithName("sriovnetwork")
 
 type ByPriority []SriovNetworkNodePolicy
