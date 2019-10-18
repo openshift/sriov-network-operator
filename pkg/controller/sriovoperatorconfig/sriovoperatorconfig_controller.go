@@ -9,7 +9,9 @@ import (
 	apply "github.com/openshift/sriov-network-operator/pkg/apply"
 	render "github.com/openshift/sriov-network-operator/pkg/render"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -61,16 +63,63 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// Watch for changes to primary resource SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &sriovnetworkv1.SriovOperatorConfig{}}, &handler.EnqueueRequestForObject{})
+	err = c.Watch(&source.Kind{Type: &sriovnetworkv1.SriovOperatorConfig{}},
+		&handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
+	// Watch for changes to secondary resource DaemonSet and requeue the owner SriovOperatorConfig
+	err = c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource ConfigMap and requeue the owner SriovOperatorConfig
+	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource ClusterRole and requeue the owner SriovOperatorConfig
+	err = c.Watch(&source.Kind{Type: &rbacv1.ClusterRole{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource ClusterRoleBinding and requeue the owner SriovOperatorConfig
+	err = c.Watch(&source.Kind{Type: &rbacv1.ClusterRoleBinding{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to secondary resource Service and requeue the owner SriovOperatorConfig
+	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
+	})
+	if err != nil {
+		return err
+	}
+
+        // Watch for changes to secondary resource MutatingWebhookConfiguration
+	// and requeue the owner SriovOperatorConfig
+	err = c.Watch(&source.Kind{Type: &admissionregistrationv1beta1.MutatingWebhookConfiguration{}},
+		&handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
 	})
 	if err != nil {
 		return err
@@ -102,7 +151,8 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 	reqLogger.Info("Reconciling SriovOperatorConfig")
 
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_CONFIG_NAME, Namespace: Namespace}, defaultConfig)
+	err := r.client.Get(context.TODO(), types.NamespacedName{
+		Name: DEFAULT_CONFIG_NAME, Namespace: Namespace}, defaultConfig)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Default Config object not found, create it.
@@ -113,7 +163,8 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
                         }
                         err = r.client.Create(context.TODO(), defaultConfig)
                         if err != nil {
-                                reqLogger.Error(err, "Failed to create default Operator Config", "Namespace", Namespace, "Name", DEFAULT_CONFIG_NAME)
+                                reqLogger.Error(err, "Failed to create default Operator Config", "Namespace",
+					Namespace, "Name", DEFAULT_CONFIG_NAME)
                                 return reconcile.Result{},err
                         }
                         return reconcile.Result{}, nil
@@ -123,26 +174,11 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 	}
 
 	if request.Namespace != Namespace {
-		reqLogger.Info("Creating SriovOperatorConfig in", request.Namespace, "namespace is not supported, use namespace", Namespace)
 		return reconcile.Result{}, nil
 	}
 
-	// Fetch the SriovOperatorConfig instance
-	instance := &sriovnetworkv1.SriovOperatorConfig{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			return reconcile.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-
 	// Render and sync webhook objects
-	if err = r.syncWebhookObjs(instance); err != nil {
+	if err = r.syncWebhookObjs(defaultConfig); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -175,7 +211,8 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovO
 			}
 		}
 		logger.Info("SR-IOV Admission Controller is disabled.")
-		logger.Info("To enable SR-IOV Admission Controller, set 'SriovOperatorConfig.Spec.EnableInjector' to true(bool).")
+		logger.Info("To enable SR-IOV Admission Controller,")
+		logger.Info("Set 'SriovOperatorConfig.Spec.EnableInjector' to true(bool).")
 		return nil
 	}
 
@@ -214,13 +251,13 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObject(dc *sriovnetworkv1.Srio
 	case "ConfigMap":
 		cm := &corev1.ConfigMap{}
 		err = scheme.Convert(obj, cm, nil)
-		r.syncWebhookConfigMap(dc, cm)
+		err = r.syncWebhookConfigMap(dc, cm)
 		if err != nil {
 			logger.Error(err, "Fail to sync webhook config map")
 			return err
 		}
 	case "ServiceAccount", "DaemonSet", "Service", "ClusterRole", "ClusterRoleBinding":
-		r.syncK8sResource(dc, obj)
+		err = r.syncK8sResource(dc, obj)
 		if err != nil {
 			return err
 		}
@@ -247,26 +284,12 @@ func (r *ReconcileSriovOperatorConfig) syncWebhook(cr *sriovnetworkv1.SriovOpera
 		} else {
 			return fmt.Errorf("Fail to get webhook: %v", err)
 		}
-	} else {
-		if *cr.Spec.EnableInjector != true {
-			logger.Info("Deleting webhook Config")
-			err = r.client.Delete(context.TODO(), whs)
-			if err != nil {
-				return fmt.Errorf("Couldn't delete webhook config: %v", err)
-			}
-		} else {
-			logger.Info("Webhook already exists, updating")
-			for idx, wh := range whs.Webhooks {
-				if wh.ClientConfig.CABundle != nil {
-					in.Webhooks[idx].ClientConfig.CABundle = wh.ClientConfig.CABundle
-				}
-			}
-			err = r.client.Update(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't update webhook: %v", err)
-			}
-		}
 	}
+
+	// Note:
+	// we don't need to manage the update of MutatingWebhookConfiguration here
+	// as it's handled by caconfig controller
+
 	return nil
 }
 
@@ -289,25 +312,12 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookConfigMap(cr *sriovnetworkv1.S
 		} else {
 			return fmt.Errorf("Fail to get config map: %v", err)
 		}
-	} else {
-		if *cr.Spec.EnableInjector != true {
-			logger.Info("Deleting webhook ConfigMap")
-			err = r.client.Delete(context.TODO(), cm)
-			if err != nil {
-				return fmt.Errorf("Couldn't delete webhook configmap: %v", err)
-			}
-		} else {
-			logger.Info("Config map already exists, updating")
-			_, ok := cm.Data["service-ca.crt"]
-			if ok {
-				in.Data = cm.Data
-			}
-			err = r.client.Update(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't update config map: %v", err)
-			}
-		}
 	}
+
+	// Note:
+	// we don't need to manage the update of WebhookConfigMap here
+	// as service-ca.crt is automatically injected by service-ca-operator
+
 	return nil
 }
 
