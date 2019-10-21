@@ -9,7 +9,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
-	// "time"
+	"time"
 
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
 	errs "github.com/pkg/errors"
@@ -41,6 +41,7 @@ var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
 // ManifestPaths is the path to the manifest templates
 // bad, but there's no way to pass configuration to the reconciler right now
 const (
+	ResyncPeriod                = 5 * time.Minute
 	PLUGIN_PATH                 = "./bindata/manifests/plugins"
 	DAEMON_PATH                 = "./bindata/manifests/daemon"
 	WEBHOOK_PATH                = "./bindata/manifests/webhook"
@@ -87,67 +88,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
-
-	// Watch for changes to secondary resource ServiceAccount
-	err = c.Watch(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource ConfigMap
-	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource ClusterRole
-	err = c.Watch(&source.Kind{Type: &rbacv1.ClusterRole{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource ClusterRoleBinding
-	err = c.Watch(&source.Kind{Type: &rbacv1.ClusterRoleBinding{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource Service
-	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
-	})
-
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource Webhook
-	err = c.Watch(&source.Kind{Type: &admissionregistrationv1beta1.MutatingWebhookConfiguration{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
-	})
-
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -248,7 +188,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 
 	// All was successful. Request that this be re-triggered after ResyncPeriod,
 	// so we can reconcile state again.
-	return reconcile.Result{}, nil
+	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
 }
 func (r *ReconcileSriovNetworkNodePolicy) syncConfigDaemonSet(dp *sriovnetworkv1.SriovNetworkNodePolicy) error {
 	logger := log.WithName("syncConfigDaemonset")
