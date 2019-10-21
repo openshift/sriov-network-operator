@@ -132,18 +132,11 @@ func main() {
 		{Port: metricsPort, Name: metrics.OperatorPortName, Protocol: v1.ProtocolTCP, TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: metricsPort}},
 		{Port: operatorMetricsPort, Name: metrics.CRPortName, Protocol: v1.ProtocolTCP, TargetPort: intstr.IntOrString{Type: intstr.Int, IntVal: operatorMetricsPort}},
 	}
-
+	  
 	_, err = metrics.CreateMetricsService(ctx, cfg, servicePorts)
 
 	// Create a default SriovNetworkPolicy
 	err = createDefaultPolicy(cfg)
-	if err != nil {
-		log.Error(err, "")
-		os.Exit(1)
-	}
-
-	// Create default SriovOperatorConfig
-	err = createDefaultOperatorConfig(cfg)
 	if err != nil {
 		log.Error(err, "")
 		os.Exit(1)
@@ -188,36 +181,6 @@ func createDefaultPolicy(cfg *rest.Config) error {
 			policy.Namespace = namespace
 			policy.Name = name
 			err = c.Create(context.TODO(), policy)
-			if err != nil {
-				return err
-			}
-		}
-		// Error reading the object - requeue the request.
-		return err
-	}
-	return nil
-}
-
-func createDefaultOperatorConfig(cfg *rest.Config) error {
-	logger := log.WithName("createDefaultOperatorConfig")
-	c, err := client.New(cfg, client.Options{})
-	if err != nil {
-		return fmt.Errorf("Couldn't create client: %v", err)
-	}
-	config := &sriovnetworkv1.SriovOperatorConfig{
-		Spec: sriovnetworkv1.SriovOperatorConfigSpec{
-			EnableInjector: func() *bool { b := true; return &b }(),
-		},
-	}
-	name := "default"
-	namespace := os.Getenv("NAMESPACE")
-	err = c.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, config)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Create default SriovOperatorConfig")
-			config.Namespace = namespace
-			config.Name = name
-			err = c.Create(context.TODO(), config)
 			if err != nil {
 				return err
 			}
