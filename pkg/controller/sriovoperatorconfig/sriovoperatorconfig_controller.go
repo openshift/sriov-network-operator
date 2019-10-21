@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	apply "github.com/openshift/sriov-network-operator/pkg/apply"
 	render "github.com/openshift/sriov-network-operator/pkg/render"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,6 +29,7 @@ import (
 var log = logf.Log.WithName("controller_sriovoperatorconfig")
 
 const (
+	ResyncPeriod		    = 5 * time.Minute
 	DEFAULT_CONFIG_NAME	    = "default"
 	WEBHOOK_PATH                = "./bindata/manifests/webhook"
 	SERVICE_CA_CONFIGMAP        = "openshift-service-ca"
@@ -68,72 +68,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
-
-	// Watch for changes to secondary resource DaemonSet and requeue the owner SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
-	})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource ConfigMap and requeue the owner SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
-	})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource ClusterRole and requeue the owner SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &rbacv1.ClusterRole{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
-	})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource ClusterRoleBinding and requeue the owner SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &rbacv1.ClusterRoleBinding{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
-	})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource Service and requeue the owner SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
-	})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource ServiceAccount and requeue the owner SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &corev1.ServiceAccount{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
-	})
-	if err != nil {
-		return err
-	}
-
-        // Watch for changes to secondary resource MutatingWebhookConfiguration
-	// and requeue the owner SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &admissionregistrationv1beta1.MutatingWebhookConfiguration{}},
-		&handler.EnqueueRequestForOwner{
-			IsController: true,
-			OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
-	})
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -191,7 +125,7 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 		return reconcile.Result{}, err
 	}
 
-	return reconcile.Result{}, nil
+	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
 }
 
 func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovOperatorConfig) error {
