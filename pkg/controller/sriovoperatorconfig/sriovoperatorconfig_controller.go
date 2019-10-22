@@ -10,6 +10,7 @@ import (
 	apply "github.com/openshift/sriov-network-operator/pkg/apply"
 	render "github.com/openshift/sriov-network-operator/pkg/render"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -29,11 +30,12 @@ import (
 var log = logf.Log.WithName("controller_sriovoperatorconfig")
 
 const (
-	ResyncPeriod		    = 5 * time.Minute
-	DEFAULT_CONFIG_NAME	    = "default"
-	WEBHOOK_PATH                = "./bindata/manifests/webhook"
-	SERVICE_CA_CONFIGMAP        = "openshift-service-ca"
-	SRIOV_MUTATING_WEBHOOK_NAME = "network-resources-injector-config"
+	ResyncPeriod			= 5 * time.Minute
+	DEFAULT_CONFIG_NAME		= "default"
+	WEBHOOK_PATH			= "./bindata/manifests/webhook"
+	SERVICE_CA_CONFIGMAP		= "openshift-service-ca"
+	SERVICE_CA_CONFIGMAP_ANNOTATION	= "service.beta.openshift.io/inject-cabundle"
+	SRIOV_MUTATING_WEBHOOK_NAME	= "network-resources-injector-config"
 )
 
 var Namespace = os.Getenv("NAMESPACE")
@@ -68,6 +70,16 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
+
+	// Watch for changes to secondary resource DaemonSet
+	err = c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -249,12 +261,20 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookConfigMap(cr *sriovnetworkv1.S
 		if errors.IsNotFound(err) {
 			err = r.client.Create(context.TODO(), in)
 			if err != nil {
-				return fmt.Errorf("Couldn't create config map: %v", err)
+				return fmt.Errorf("Couldn't create webhook config map: %v", err)
 			}
-			logger.Info("Create config map for", in.Namespace, in.Name)
+			logger.Info("Create webhook config map for", in.Namespace, in.Name)
 		} else {
-			return fmt.Errorf("Fail to get config map: %v", err)
+			return fmt.Errorf("Fail to get webhook config map: %v", err)
 		}
+	} else {
+		logger.Info("Webhook ConfigMap already exists, updating")
+		cm.ObjectMeta.Annotations[SERVICE_CA_CONFIGMAP_ANNOTATION] = "true"
+		err = r.client.Update(context.TODO(), cm)
+		if err != nil {
+			return fmt.Errorf("Couldn't update webhook config map: %v", err)
+		}
+
 	}
 
 	// Note:
