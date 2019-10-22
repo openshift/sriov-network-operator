@@ -13,7 +13,6 @@ import (
 
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
 	errs "github.com/pkg/errors"
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
