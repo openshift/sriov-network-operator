@@ -338,6 +338,13 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref common.ReferenceCallba
 							Format:      "",
 						},
 					},
+					"capabilities": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Capabilities to be configured for this network. Capabilities supported: (mac|ips), e.g. '{\"mac\": true}'",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"ipam": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IPAM configuration to be used for this network.",

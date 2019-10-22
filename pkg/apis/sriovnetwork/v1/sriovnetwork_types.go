@@ -14,6 +14,9 @@ type SriovNetworkSpec struct {
 	NetworkNamespace string `json:"networkNamespace,omitempty"`
 	// SRIOV Network device plugin endpoint resource name
 	ResourceName     string `json:"resourceName"`
+	//Capabilities to be configured for this network.
+	//Capabilities supported: (mac|ips), e.g. '{"mac": true}'
+	Capabilities     string `json:"capabilities,omitempty"`
 	//IPAM configuration to be used for this network.
 	IPAM             string `json:"ipam,omitempty"`
 	// +kubebuilder:validation:Minimum=0

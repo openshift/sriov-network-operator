@@ -208,6 +208,13 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 		data.Data["VlanQoSConfigured"] = false
 	}
 
+	if cr.Spec.Capabilities == "" {
+		data.Data["CapabilitiesConfigured"] = false
+	} else {
+		data.Data["CapabilitiesConfigured"] = true
+		data.Data["SriovCniCapabilities"] = cr.Spec.Capabilities
+	}
+
 	data.Data["SpoofChkConfigured"] = true
 	switch cr.Spec.SpoofChk {
 	case "off":
