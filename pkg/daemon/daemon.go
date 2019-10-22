@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,6 +89,9 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	// Only watch own SriovNetworkNodeState CR
 
 	tryEnableRdma()
+	if err := tryCreateUdevRule(); err != nil {
+		return err
+	}
 
 	dn.mu = &sync.Mutex{}
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
@@ -485,4 +489,29 @@ func tryEnableRdma() (bool, error) {
 		}
 	}
 	return false, err
+}
+
+func tryCreateUdevRule() error {
+	glog.V(2).Infof("tryCreateUdevRule()")
+	filePath := "/host/etc/udev/rules.d/10-nm-unmanaged.rules"
+	_, err := os.Stat(filePath)
+    if err != nil {
+        if os.IsNotExist(err) {
+            glog.V(2).Infof("tryCreateUdevRule(): file not existed, create file")
+			_, err := os.Create(filePath)
+			if err != nil {
+				glog.Errorf("tryCreateUdevRule(): fail to create file: %v", err)
+				return err
+			}
+        } else {
+			return err
+		}
+	}
+	content := fmt.Sprintf("ACTION==\"add|change\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.VfIds, "|"))
+	err = ioutil.WriteFile(filePath, []byte(content), 0666)
+    if err != nil {
+		glog.Errorf("tryCreateUdevRule(): fail to write file: %v", err)
+		return err
+    }
+	return nil
 }

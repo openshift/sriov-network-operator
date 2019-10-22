@@ -13,6 +13,17 @@ var SriovPfVfMap = map[string](string){
 	"1017": "1018",
 }
 
+var VfIds = []string{}
+
+func init() {
+	for _, v := range SriovPfVfMap {
+		id := "0x"+v
+		if !StringInArray(id, VfIds) {
+			VfIds = append(VfIds, id)
+		}
+	}
+}
+
 var log = logf.Log.WithName("sriovnetwork")
 
 type ByPriority []SriovNetworkNodePolicy
