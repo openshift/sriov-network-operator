@@ -20,7 +20,7 @@ load_manifest() {
       
       envsubst< namespace.yaml | ${OPERATOR_EXEC} apply -f -
     fi
-    files="crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml operator.yaml"
+    files="crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml crds/sriovnetwork.openshift.io_sriovoperatorconfigs_crd.yaml service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml operator.yaml"
     for m in ${files}; do
       if [ "$(echo ${EXCLUSIONS[@]} | grep -o ${m} | wc -w | xargs)" == "0" ] ; then
         envsubst< ${m} | ${OPERATOR_EXEC} apply ${namespace:-} --validate=false -f -
