@@ -352,17 +352,31 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref common.ReferenceCallba
 							Format:      "int32",
 						},
 					},
+					"vlanQoS": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VLAN QoS ID to assign for the VF. Defaults to 0.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 					"spoofChk": {
 						SchemaProps: spec.SchemaProps{
-							Description: "VF spoof check",
-							Type:        []string{"boolean"},
+							Description: "VF spoof check, (on|off)",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"trust": {
 						SchemaProps: spec.SchemaProps{
-							Description: "VF trust mode",
-							Type:        []string{"boolean"},
+							Description: "VF trust mode (on|off)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"link_state": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VF link state (enable|disable|auto)",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},

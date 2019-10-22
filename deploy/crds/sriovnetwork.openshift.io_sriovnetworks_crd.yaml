@@ -34,6 +34,13 @@ spec:
             ipam:
               description: IPAM configuration to be used for this network.
               type: string
+            link_state:
+              description: VF link state (enable|disable|auto)
+              enum:
+              - auto
+              - enable
+              - disable
+              type: string
             networkNamespace:
               description: Namespace of the NetworkAttachmentDefinition custom resource
               type: string
@@ -41,14 +48,25 @@ spec:
               description: SRIOV Network device plugin endpoint resource name
               type: string
             spoofChk:
-              description: VF spoof check
-              type: boolean
+              description: VF spoof check, (on|off)
+              enum:
+              - "on"
+              - "off"
+              type: string
             trust:
-              description: VF trust mode
-              type: boolean
+              description: VF trust mode (on|off)
+              enum:
+              - "on"
+              - "off"
+              type: string
             vlan:
               description: VLAN ID to assign for the VF. Defaults to 0.
               maximum: 4096
+              minimum: 0
+              type: integer
+            vlanQoS:
+              description: VLAN QoS ID to assign for the VF. Defaults to 0.
+              maximum: 7
               minimum: 0
               type: integer
           required:
