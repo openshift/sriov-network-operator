@@ -24,7 +24,7 @@ spec:
   "link_state":"{{.SriovCniState}}",
 {{- end -}}
 {{- if .VlanQoSConfigured -}}
-  "vlanQoS":"{{.SriovCniVlanQoS}}",
+  "vlanQoS":{{.SriovCniVlanQoS}},
 {{- end -}}
   {{.SriovCniIpam}}
 }'
