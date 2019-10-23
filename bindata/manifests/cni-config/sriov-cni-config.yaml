@@ -11,6 +11,9 @@ spec:
   "name":"sriov-net",
   "type":"sriov",
   "vlan":{{.SriovCniVlan}},
+{{- if .CapabilitiesConfigured -}}
+  "capabilities":{{.SriovCniCapabilities}},
+{{- end -}}
 {{- if .SpoofChkConfigured -}}
   "spoofchk":"{{.SriovCniSpoofChk}}",
 {{- end -}}
