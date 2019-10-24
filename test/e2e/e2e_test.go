@@ -108,8 +108,6 @@ func TestOperatorController(t *testing.T) {
 }
 
 func generateSriovNetworkCRs(namespace string) []*sriovnetworkv1.SriovNetwork {
-	spoofChk := true
-	trust := true
 	specs := map[string]sriovnetworkv1.SriovNetworkSpec{
 		"test-0": {
 			ResourceName: "resource_1",
@@ -124,12 +122,12 @@ func generateSriovNetworkCRs(namespace string) []*sriovnetworkv1.SriovNetwork {
 		"test-2": {
 			ResourceName: "resource_1",
 			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
-			SpoofChk:     &spoofChk,
+			SpoofChk:     "on",
 		},
 		"test-3": {
 			ResourceName: "resource_1",
 			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
-			Trust:        &trust,
+			Trust:        "on",
 		},
 	}
 	var crs []*sriovnetworkv1.SriovNetwork
@@ -273,7 +271,7 @@ func testWithSriovNetworkCRUpdate(t *testing.T, ctx *framework.TestCtx, cr *srio
 	}
 
 	var err error
-	expect := fmt.Sprintf(`{"cniVersion":"0.3.1","name":"sriov-net","type":"sriov","vlan":0,"ipam":%s}`, cr0.Spec.IPAM)
+	expect := fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"sriov-net", "type":"sriov", "vlan":0,"vlanQoS":0,"ipam":%s }`, cr0.Spec.IPAM)
 
 	// get global framework variables
 	f := framework.Global
@@ -309,24 +307,31 @@ func testWithSriovNetworkCRCreation(t *testing.T, ctx *framework.TestCtx, cr *sr
 	var err error
 	spoofchk := ""
 	trust := ""
+	state := ""
 
-	if cr.Spec.Trust != nil {
-		if *cr.Spec.Trust {
-			trust = `,"trust":"on"`
-		} else {
-			trust = `,"trust":"off"`
-		}
+	if cr.Spec.Trust == "on" {
+		trust = `"trust":"on",`
+	} else if cr.Spec.Trust == "off" {
+		trust = `"trust":"off",`
 	}
 
-	if cr.Spec.SpoofChk != nil {
-		if *cr.Spec.SpoofChk {
-			spoofchk = `,"spoofchk":"on"`
-		} else {
-			spoofchk = `,"spoofchk":"off"`
-		}
+	if cr.Spec.SpoofChk == "on" {
+		spoofchk = `"spoofchk":"on",`
+	} else if cr.Spec.SpoofChk == "off" {
+		spoofchk = `"spoofchk":"off",`
 	}
 
-	expect := fmt.Sprintf(`{"cniVersion":"0.3.1","name":"sriov-net","type":"sriov"%s%s,"vlan":%d,"ipam":%s}`, spoofchk, trust, cr.Spec.Vlan, cr.Spec.IPAM)
+	if cr.Spec.LinkState == "auto" {
+		state = `"link_state":"auto",`
+	} else if cr.Spec.LinkState == "enable" {
+		state = `"link_state":"enable",`
+	} else if cr.Spec.LinkState == "disable" {
+		state = `"link_state":"disable",`
+	}
+
+	vlanQoS := cr.Spec.VlanQoS
+
+	expect := fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"sriov-net", "type":"sriov", "vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, cr.Spec.IPAM)
 
 	// get global framework variables
 	f := framework.Global
