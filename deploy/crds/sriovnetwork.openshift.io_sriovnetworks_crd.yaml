@@ -38,7 +38,7 @@ spec:
             ipam:
               description: IPAM configuration to be used for this network.
               type: string
-            link_state:
+            linkState:
               description: VF link state (enable|disable|auto)
               enum:
               - auto

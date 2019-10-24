@@ -33,27 +33,29 @@ spec:
           description: SriovOperatorConfigSpec defines the desired state of SriovOperatorConfig
           properties:
             enableInjector:
-              description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                Important: Run "operator-sdk generate k8s" to regenerate code after
-                modifying this file Add custom validation using kubebuilder tags:
-                https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
+              description: Flag to control whether the network resource injector webhook
+                shall be deployed
+              type: boolean
+            enableOperatorWebhook:
+              description: Flag to control whether the operator admission controller
+                webhook shall be deployed
               type: boolean
             nodeSelector:
               additionalProperties:
                 type: string
               description: NodeSelector selects the nodes to be configured
               type: object
-          required:
-          - nodeSelector
           type: object
         status:
           description: SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
           properties:
             injector:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "operator-sdk generate k8s" to regenerate
-                code after modifying this file Add custom validation using kubebuilder
-                tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html'
+              description: Show the runtime status of the network resource injector
+                webhook
+              type: string
+            operatorWebhook:
+              description: Show the runtime status of the operator admission controller
+                webhook
               type: string
           type: object
       type: object

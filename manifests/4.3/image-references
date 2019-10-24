@@ -23,3 +23,7 @@ spec:
     from:
       kind: DockerImage
       name: quay.io/openshift/origin-sriov-dp-admission-controller:4.3
+  - name: sriov-network-webhook
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-sriov-network-webhook:4.3

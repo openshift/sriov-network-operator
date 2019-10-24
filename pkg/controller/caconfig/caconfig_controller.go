@@ -3,7 +3,6 @@ package caconfig
 import (
 	"bytes"
 	"context"
-	"os"
 	"time"
 
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
@@ -18,12 +17,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	config "github.com/openshift/sriov-network-operator/pkg/controller/sriovoperatorconfig"
 )
 
-const (
-	SERVICE_CA_CONFIGMAP        = "openshift-service-ca"
-	SRIOV_MUTATING_WEBHOOK_NAME = "network-resources-injector-config"
-)
 
 var (
 	log          = logf.Log.WithName("controller_caconfig")
@@ -66,51 +63,72 @@ type ReconcileCAConfigMap struct {
 	scheme *runtime.Scheme
 }
 
-// Reconcile updates MutatingWebhookConfiguration CABundle, given from SERVICE_CA_CONFIGMAP
+// Reconcile updates MutatingWebhookConfiguration CABundle
 func (r *ReconcileCAConfigMap) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling CA config map")
 
-	if request.Namespace != os.Getenv("NAMESPACE") || request.Name != SERVICE_CA_CONFIGMAP {
+	whName := ""
+	if request.Name == config.INJECTOR_SERVICE_CA_CONFIGMAP {
+		whName = config.INJECTOR_WEBHOOK_NAME
+	} else if request.Name == config.WEBHOOK_SERVICE_CA_CONFIGMAP {
+		whName = config.OPERATOR_WEBHOOK_NAME
+	} else {
 		return reconcile.Result{}, nil
 	}
 
 	caBundleConfigMap := &corev1.ConfigMap{}
 	err := r.client.Get(context.TODO(), request.NamespacedName, caBundleConfigMap)
 	if err != nil {
-		reqLogger.Error(err, "Couldn't get caBundle ConfigMap")
+		reqLogger.Error(err, "Couldn't get caBundle ConfigMap", "name", request.Name)
 		return reconcile.Result{}, err
 	}
 
 	caBundleData, ok := caBundleConfigMap.Data["service-ca.crt"]
 	if !ok {
-		return reconcile.Result{}, err
-	}
-
-	webhookConfig := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: SRIOV_MUTATING_WEBHOOK_NAME}, webhookConfig)
-	if errors.IsNotFound(err) {
-		reqLogger.Error(err, "Couldn't find webhook config")
 		return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
 	}
 
+	mutateWebhookConfig := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: whName}, mutateWebhookConfig)
+	if errors.IsNotFound(err) {
+		reqLogger.Error(err, "Couldn't find", "mutate webhook config:", whName)
+	}
 	modified := false
-	for idx, webhook := range webhookConfig.Webhooks {
+	for idx, webhook := range mutateWebhookConfig.Webhooks {
 		// Update CABundle if CABundle is empty or updated.
 		if webhook.ClientConfig.CABundle == nil || !bytes.Equal(webhook.ClientConfig.CABundle, []byte(caBundleData)) {
 			modified = true
-			webhookConfig.Webhooks[idx].ClientConfig.CABundle = []byte(caBundleData)
+			mutateWebhookConfig.Webhooks[idx].ClientConfig.CABundle = []byte(caBundleData)
 		}
 	}
-	if !modified {
-		return reconcile.Result{}, err
+	if modified {
+		// Update webhookConfig
+		err = r.client.Update(context.TODO(), mutateWebhookConfig)
+		if err != nil {
+			reqLogger.Error(err, "Couldn't update mutate webhook config")
+		}
 	}
 
-	// Update webhookConfig
-	err = r.client.Update(context.TODO(), webhookConfig)
-	if err != nil {
-		reqLogger.Error(err, "Couldn't update webhook config")
+	validateWebhookConfig := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: whName}, validateWebhookConfig)
+	if errors.IsNotFound(err) {
+		reqLogger.Info("Couldn't find", "validate webhook config:", whName)
 	}
-
-	return reconcile.Result{}, nil
+	modified = false
+	for idx, webhook := range validateWebhookConfig.Webhooks {
+		// Update CABundle if CABundle is empty or updated.
+		if webhook.ClientConfig.CABundle == nil || !bytes.Equal(webhook.ClientConfig.CABundle, []byte(caBundleData)) {
+			modified = true
+			validateWebhookConfig.Webhooks[idx].ClientConfig.CABundle = []byte(caBundleData)
+		}
+	}
+	if modified {
+		// Update webhookConfig
+		err = r.client.Update(context.TODO(), validateWebhookConfig)
+		if err != nil {
+			reqLogger.Error(err, "Couldn't update validate webhook config")
+		}
+	}
+	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
 }

@@ -1,0 +1,53 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: operator-webhook
+  namespace: {{.Namespace}}
+  labels:
+    app: operator-webhook
+  annotations:
+    kubernetes.io/description: |
+      This deployment launches the sriov network operator admission control webhook component.
+    release.openshift.io/version: "{{.ReleaseVersion}}"
+spec:
+  selector:
+    matchLabels:
+      app: operator-webhook
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: operator-webhook
+    spec:
+      serviceAccountName: operator-webhook-sa
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+        node-role.kubernetes.io/master:
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: Exists
+        effect: NoSchedule
+      - key: "node.kubernetes.io/not-ready"
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: webhook-server
+        image: {{.SriovNetworkWebhookImage}}
+        command:
+        - webhook
+        args:
+        - "start"
+        - "--port=6443"
+        - "--tls-private-key-file=/etc/tls/tls.key"
+        - "--tls-cert-file=/etc/tls/tls.crt"
+        - "--alsologtostderr=true"
+        - "--v=3"
+        volumeMounts:
+        - mountPath: /etc/tls
+          name: tls
+      volumes:
+      - name: tls
+        secret:
+          secretName: operator-webhook-service

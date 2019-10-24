@@ -1,7 +1,9 @@
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovOperatorConfig
 metadata:
-  name: example-sriovoperatorconfig
+  name: default
 spec:
   # Add fields here
   enableInjector: true
+  enableOperatorWebhook: true
+  configDaemonNodeSelector: {}

@@ -10,8 +10,11 @@ spec:
     plural: sriovnetworks
     singular: sriovnetwork
   scope: Namespaced
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
+      description: SriovNetwork is the Schema for the sriovnetworks API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -26,11 +29,17 @@ spec:
         metadata:
           type: object
         spec:
-          description: Specification describing how a NetworkAttachmentDefinition
-            custom resource shall be defined for SR-IOV CNI plugin.
+          description: SriovNetworkSpec defines the desired state of SriovNetwork
           properties:
             ipam:
               description: IPAM configuration to be used for this network.
+              type: string
+            linkState:
+              description: VF link state (enable|disable|auto)
+              enum:
+              - auto
+              - enable
+              - disable
               type: string
             networkNamespace:
               description: Namespace of the NetworkAttachmentDefinition custom resource
@@ -39,22 +48,34 @@ spec:
               description: SRIOV Network device plugin endpoint resource name
               type: string
             spoofChk:
-              description: VF spoof check
-              type: boolean
+              description: VF spoof check, (on|off)
+              enum:
+              - "on"
+              - "off"
+              type: string
             trust:
-              description: VF trust mode
-              type: boolean
+              description: VF trust mode (on|off)
+              enum:
+              - "on"
+              - "off"
+              type: string
             vlan:
               description: VLAN ID to assign for the VF. Defaults to 0.
-              format: int64
               maximum: 4096
+              minimum: 0
+              type: integer
+            vlanQoS:
+              description: VLAN QoS ID to assign for the VF. Defaults to 0.
+              maximum: 7
               minimum: 0
               type: integer
           required:
           - resourceName
           type: object
         status:
+          description: SriovNetworkStatus defines the observed state of SriovNetwork
           type: object
+      type: object
   version: v1
   versions:
   - name: v1
