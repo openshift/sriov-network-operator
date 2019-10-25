@@ -163,10 +163,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	if err = r.syncAllSriovNetworkNodeStates(defaultPolicy, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
 	}
-	// Sync SriovNetworkConfigDaemon objects
-	if err = r.syncConfigDaemonSet(defaultPolicy); err != nil {
-		return reconcile.Result{}, err
-	}
+
 	if len(policyList.Items) > 1 {
 		// Sync Sriov device plugin ConfigMap object
 		if err = r.syncDevicePluginConfigMap(policyList); err != nil {
@@ -181,31 +178,6 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	// All was successful. Request that this be re-triggered after ResyncPeriod,
 	// so we can reconcile state again.
 	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
-}
-func (r *ReconcileSriovNetworkNodePolicy) syncConfigDaemonSet(dp *sriovnetworkv1.SriovNetworkNodePolicy) error {
-	logger := log.WithName("syncConfigDaemonset")
-	logger.Info("Start to sync config daemonset")
-	// var err error
-	objs := []*uns.Unstructured{}
-
-	data := render.MakeRenderData()
-	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
-	data.Data["Namespace"] = os.Getenv("NAMESPACE")
-	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	objs, err := renderDsForCR(DAEMON_PATH, &data)
-	if err != nil {
-		logger.Error(err, "Fail to render config daemon manifests")
-		return err
-	}
-	// Sync DaemonSets
-	for _, obj := range objs {
-		err = r.syncDsObject(dp, nil, obj)
-		if err != nil {
-			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
-			return err
-		}
-	}
-	return nil
 }
 
 func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {

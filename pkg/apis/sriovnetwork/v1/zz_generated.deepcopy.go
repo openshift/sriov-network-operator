@@ -520,6 +520,13 @@ func (in *SriovOperatorConfigSpec) DeepCopyInto(out *SriovOperatorConfigSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.ConfigDaemonNodeSelector != nil {
+		in, out := &in.ConfigDaemonNodeSelector, &out.ConfigDaemonNodeSelector
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	return
 }
 

@@ -207,6 +207,7 @@ func createDefaultOperatorConfig(cfg *rest.Config) error {
 	config := &sriovnetworkv1.SriovOperatorConfig{
 		Spec: sriovnetworkv1.SriovOperatorConfigSpec{
 			EnableInjector: func() *bool { b := true; return &b }(),
+			ConfigDaemonNodeSelector: map[string]string{},
 		},
 	}
 	name := "default"

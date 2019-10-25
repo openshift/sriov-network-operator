@@ -183,7 +183,7 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	return reconcile.Result{}, nil
 }
 
-// renderDsForCR returns a busybox pod with the same name/namespace as the cr
+// renderNetAttDef returns a busybox pod with the same name/namespace as the cr
 func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error) {
 	logger := log.WithName("renderNetAttDef")
 	logger.Info("Start to render SRIOV CNI NetworkAttachementDefinition")
