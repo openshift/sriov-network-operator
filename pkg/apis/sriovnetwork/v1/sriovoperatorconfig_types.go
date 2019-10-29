@@ -13,7 +13,11 @@ type SriovOperatorConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-	EnableInjector	*bool	`json:"enableInjector,omitempty"`
+	EnableInjector	         *bool	           `json:"enableInjector,omitempty"`
+	// +kubebuilder:validation:MinItems=0
+	// +kubebuilder:validation:UniqueItems=true
+	// NodeSelector selects the nodes to be configured
+	ConfigDaemonNodeSelector map[string]string `json:"nodeSelector"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig

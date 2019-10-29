@@ -30,12 +30,13 @@ import (
 var log = logf.Log.WithName("controller_sriovoperatorconfig")
 
 const (
-	ResyncPeriod			= 5 * time.Minute
-	DEFAULT_CONFIG_NAME		= "default"
-	WEBHOOK_PATH			= "./bindata/manifests/webhook"
-	SERVICE_CA_CONFIGMAP		= "openshift-service-ca"
-	SERVICE_CA_CONFIGMAP_ANNOTATION	= "service.beta.openshift.io/inject-cabundle"
-	SRIOV_MUTATING_WEBHOOK_NAME	= "network-resources-injector-config"
+	ResyncPeriod                    = 5 * time.Minute
+	DEFAULT_CONFIG_NAME             = "default"
+	CONFIG_DAEMON_PATH              = "./bindata/manifests/daemon"
+	WEBHOOK_PATH                    = "./bindata/manifests/webhook"
+	SERVICE_CA_CONFIGMAP            = "openshift-service-ca"
+	SERVICE_CA_CONFIGMAP_ANNOTATION = "service.beta.openshift.io/inject-cabundle"
+	SRIOV_MUTATING_WEBHOOK_NAME     = "network-resources-injector-config"
 )
 
 var Namespace = os.Getenv("NAMESPACE")
@@ -111,21 +112,22 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Default Config object not found, create it.
-                        defaultConfig.SetNamespace(Namespace)
-                        defaultConfig.SetName(DEFAULT_CONFIG_NAME)
-                        defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
-				EnableInjector: func() *bool { b := true; return &b }(),
-                        }
-                        err = r.client.Create(context.TODO(), defaultConfig)
-                        if err != nil {
-                                reqLogger.Error(err, "Failed to create default Operator Config", "Namespace",
+			defaultConfig.SetNamespace(Namespace)
+			defaultConfig.SetName(DEFAULT_CONFIG_NAME)
+			defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
+				EnableInjector:           func() *bool { b := true; return &b }(),
+				ConfigDaemonNodeSelector: map[string]string{},
+			}
+			err = r.client.Create(context.TODO(), defaultConfig)
+			if err != nil {
+				reqLogger.Error(err, "Failed to create default Operator Config", "Namespace",
 					Namespace, "Name", DEFAULT_CONFIG_NAME)
-                                return reconcile.Result{},err
-                        }
-                        return reconcile.Result{}, nil
-                }
-                // Error reading the object - requeue the request.
-                return reconcile.Result{}, err
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		return reconcile.Result{}, err
 	}
 
 	if request.Namespace != Namespace {
@@ -137,7 +139,53 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 		return reconcile.Result{}, err
 	}
 
+	// Sync SriovNetworkConfigDaemon objects
+	if err = r.syncConfigDaemonSet(defaultConfig); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
+}
+
+func (r *ReconcileSriovOperatorConfig) syncConfigDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
+	logger := log.WithName("syncConfigDaemonset")
+	logger.Info("Start to sync config daemonset")
+	// var err error
+	objs := []*uns.Unstructured{}
+
+	data := render.MakeRenderData()
+	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
+	data.Data["Namespace"] = os.Getenv("NAMESPACE")
+	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
+	objs, err := render.RenderDir(CONFIG_DAEMON_PATH, &data)
+	if err != nil {
+		logger.Error(err, "Fail to render config daemon manifests")
+		return err
+	}
+	// Sync DaemonSets
+	for _, obj := range objs {
+		if obj.GetKind() == "DaemonSet" && len(dc.Spec.ConfigDaemonNodeSelector) > 0 {
+			scheme := kscheme.Scheme
+			ds := &appsv1.DaemonSet{}
+			err = scheme.Convert(obj, ds, nil)
+			if err != nil {
+				logger.Error(err, "Fail to convert to DaemonSet")
+				return err
+			}
+			ds.Spec.Template.Spec.NodeSelector = dc.Spec.ConfigDaemonNodeSelector
+			err = scheme.Convert(ds, obj, nil)
+			if err != nil {
+				logger.Error(err, "Fail to convert to Unstructured")
+				return err
+			}
+		}
+		err = r.syncK8sResource(dc, obj)
+		if err != nil {
+			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovOperatorConfig) error {
@@ -288,7 +336,7 @@ func (r *ReconcileSriovOperatorConfig) deleteK8sResource(in *uns.Unstructured) e
 	if err := apply.DeleteObject(context.TODO(), r.client, in); err != nil {
 		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
 	}
-        return nil
+	return nil
 }
 
 func (r *ReconcileSriovOperatorConfig) syncK8sResource(cr *sriovnetworkv1.SriovOperatorConfig, in *uns.Unstructured) error {
@@ -298,5 +346,5 @@ func (r *ReconcileSriovOperatorConfig) syncK8sResource(cr *sriovnetworkv1.SriovO
 	if err := apply.ApplyObject(context.TODO(), r.client, in); err != nil {
 		return fmt.Errorf("failed to apply object %v with err: %v", in, err)
 	}
-        return nil
+	return nil
 }

@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	"github.com/openshift/sriov-network-operator/pkg/controller/sriovoperatorconfig"
 	render "github.com/openshift/sriov-network-operator/pkg/render"
 )
 
@@ -80,7 +81,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		IsController: true,
 		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
 	})
+	if err != nil {
+		return err
+	}
 
+	err = c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
+	})
 	if err != nil {
 		return err
 	}
@@ -146,10 +154,21 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	}
 	// Fetch the Nodes
 	nodeList := &corev1.NodeList{}
-	lo := &client.MatchingLabels{
-		"node-role.kubernetes.io/worker": "",
+	lo := &client.MatchingLabels{}
+	defaultOpConf := &sriovnetworkv1.SriovOperatorConfig{}
+	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: Namespace, Name: sriovoperatorconfig.DEFAULT_CONFIG_NAME}, defaultOpConf); err != nil {
+		return reconcile.Result{}, err
 	}
+	if len(defaultOpConf.Spec.ConfigDaemonNodeSelector) > 0 {
+		labels := client.MatchingLabels(defaultOpConf.Spec.ConfigDaemonNodeSelector)
+		lo = &labels
 
+	} else {
+		lo = &client.MatchingLabels{
+			"node-role.kubernetes.io/worker": "",
+			"beta.kubernetes.io/os": "linux",
+		}
+	}
 	err = r.client.List(context.TODO(), nodeList, lo)
 	if err != nil {
 		// Error reading the object - requeue the request.
@@ -163,10 +182,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	if err = r.syncAllSriovNetworkNodeStates(defaultPolicy, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
 	}
-	// Sync SriovNetworkConfigDaemon objects
-	if err = r.syncConfigDaemonSet(defaultPolicy); err != nil {
-		return reconcile.Result{}, err
-	}
+
 	if len(policyList.Items) > 1 {
 		// Sync Sriov device plugin ConfigMap object
 		if err = r.syncDevicePluginConfigMap(policyList); err != nil {
@@ -181,31 +197,6 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	// All was successful. Request that this be re-triggered after ResyncPeriod,
 	// so we can reconcile state again.
 	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
-}
-func (r *ReconcileSriovNetworkNodePolicy) syncConfigDaemonSet(dp *sriovnetworkv1.SriovNetworkNodePolicy) error {
-	logger := log.WithName("syncConfigDaemonset")
-	logger.Info("Start to sync config daemonset")
-	// var err error
-	objs := []*uns.Unstructured{}
-
-	data := render.MakeRenderData()
-	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
-	data.Data["Namespace"] = os.Getenv("NAMESPACE")
-	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	objs, err := renderDsForCR(DAEMON_PATH, &data)
-	if err != nil {
-		logger.Error(err, "Fail to render config daemon manifests")
-		return err
-	}
-	// Sync DaemonSets
-	for _, obj := range objs {
-		err = r.syncDsObject(dp, nil, obj)
-		if err != nil {
-			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
-			return err
-		}
-	}
-	return nil
 }
 
 func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
@@ -249,6 +240,10 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnet
 	} else {
 		logger.Info("ConfigMap already exists, updating")
 		currentConfig := dptypes.ResourceConfList{}
+		err = json.Unmarshal([]byte(string(found.Data[DP_CONFIG_FILENAME])), &currentConfig)
+		if err != nil {
+			return err
+		}
 		if reflect.DeepEqual(currentConfig, data) {
 			logger.Info("No content change, skip update")
 			return nil
@@ -265,10 +260,13 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(np *srio
 	logger := log.WithName("syncAllSriovNetworkNodeStates")
 	logger.Info("Start to sync all SriovNetworkNodeState custom resource")
 	found := &corev1.ConfigMap{}
+	md5sum := ""
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: Namespace, Name: CONFIGMAP_NAME}, found); err != nil {
 		logger.Info("Fail to get", "ConfigMap", CONFIGMAP_NAME)
+	} else {
+		sum := md5.Sum([]byte(found.Data[DP_CONFIG_FILENAME]))
+		md5sum = hex.EncodeToString(sum[:])
 	}
-	md5sum := md5.Sum([]byte(found.Data[DP_CONFIG_FILENAME]))
 	for _, node := range nl.Items {
 		logger.Info("Sync SriovNetworkNodeState CR", "name", node.Name)
 		ns := &sriovnetworkv1.SriovNetworkNodeState{}
@@ -276,12 +274,38 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(np *srio
 		ns.Namespace = Namespace
 		j, _ := json.Marshal(ns)
 		fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
-		if err := r.syncSriovNetworkNodeState(np, npl, ns, &node, hex.EncodeToString(md5sum[:])); err != nil {
+		if err := r.syncSriovNetworkNodeState(np, npl, ns, &node, md5sum); err != nil {
 			logger.Error(err, "Fail to sync", "SriovNetworkNodeState", ns.Name)
 			return err
 		}
 	}
-
+	logger.Info("Remove SriovNetworkNodeState custom resource for unselected node")
+	nsList := &sriovnetworkv1.SriovNetworkNodeStateList{}
+	err := r.client.List(context.TODO(), nsList, &client.ListOptions{})
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			logger.Info("Fail to list SriovNetworkNodeState CRs")
+			return err
+		}
+	} else {
+		for _, ns := range nsList.Items {
+			found := false
+			for _, node := range nl.Items {
+				logger.Info("validate", "SriovNetworkNodeState", ns.GetName(), "node", node.GetName())
+				if ns.GetName() == node.GetName() {
+					found = true
+					break
+				}
+			}
+			if !found {
+				err := r.client.Delete(context.TODO(), &ns, &client.DeleteOptions{})
+				if err != nil {
+					logger.Info("Fail to Delete", "SriovNetworkNodeState CR:", ns.GetName())
+					return err
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -357,8 +381,30 @@ func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv
 		logger.Error(err, "Fail to render SR-IoV manifests")
 		return err
 	}
+
+	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{
+		Name: sriovoperatorconfig.DEFAULT_CONFIG_NAME, Namespace: Namespace}, defaultConfig)
+	if err != nil {
+		return err
+	}
 	// Sync DaemonSets
 	for _, obj := range objs {
+		if obj.GetKind() == "DaemonSet" && len(defaultConfig.Spec.ConfigDaemonNodeSelector) > 0 {
+			scheme := kscheme.Scheme
+			ds := &appsv1.DaemonSet{}
+			err = scheme.Convert(obj, ds, nil)
+			if err != nil {
+				logger.Error(err, "Fail to convert to DaemonSet")
+				return err
+			}
+			ds.Spec.Template.Spec.NodeSelector = defaultConfig.Spec.ConfigDaemonNodeSelector
+			err = scheme.Convert(ds, obj, nil)
+			if err != nil {
+				logger.Error(err, "Fail to convert to Unstructured")
+				return err
+			}
+		}
 		err = r.syncDsObject(dp, pl, obj)
 		if err != nil {
 			logger.Error(err, "Couldn't sync SR-IoV daemons objects")

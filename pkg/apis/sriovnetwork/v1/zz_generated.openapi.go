@@ -466,7 +466,23 @@ func schema_pkg_apis_sriovnetwork_v1_SriovOperatorConfigSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelector selects the nodes to be configured",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"string"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
 				},
+				Required: []string{"nodeSelector"},
 			},
 		},
 	}
