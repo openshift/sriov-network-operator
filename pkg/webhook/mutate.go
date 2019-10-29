@@ -1,8 +1,8 @@
 package webhook
 
 import (
-	"k8s.io/api/admission/v1beta1"
 	"github.com/golang/glog"
+	"k8s.io/api/admission/v1beta1"
 )
 
 const (

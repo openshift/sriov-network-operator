@@ -4,30 +4,30 @@ import (
 	"fmt"
 
 	"github.com/golang/glog"
-	"k8s.io/apimachinery/pkg/labels"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-
 )
+
 const (
 	IntelID = "8086"
 )
 
 var (
-	nodesSelected bool
-	interfaceSelected  bool
+	nodesSelected     bool
+	interfaceSelected bool
 )
 
 func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
 	glog.V(2).Infof("validateSriovNetworkNodePolicy: %v", cr)
-	admit := true 
+	admit := true
 
 	if cr.GetName() == "default" {
 		// skip the default policy
 		return admit, nil
 	}
-	if cr.Spec.NicSelector.Vendor == "" && cr.Spec.NicSelector.DeviceID == "" && len(cr.Spec.NicSelector.PfNames) == 0{
+	if cr.Spec.NicSelector.Vendor == "" && cr.Spec.NicSelector.DeviceID == "" && len(cr.Spec.NicSelector.PfNames) == 0 {
 		return false, fmt.Errorf("at least one of these parameters (Vendor, DeviceID or PfNames) has to be defined in nicSelector in CR %s", cr.GetName())
 	}
 
@@ -55,7 +55,7 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 			nodesSelected = true
 			for _, ns := range nsList.Items {
 				if ns.GetName() == node.GetName() {
-					if ok, err := validatePolicyForNodeState(cr, &ns); err != nil || !ok{
+					if ok, err := validatePolicyForNodeState(cr, &ns); err != nil || !ok {
 						return false, err
 					}
 				}
@@ -78,7 +78,7 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 	for _, iface := range state.Status.Interfaces {
 		if policy.Spec.Selected(&iface) {
 			interfaceSelected = true
-			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID{
+			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID {
 				return false, fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value", policy.Spec.NumVfs, policy.GetName())
 			}
 		}

@@ -10,7 +10,7 @@ import (
 // SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
 // +k8s:openapi-gen=true
 type SriovNetworkNodeStateSpec struct {
-	DpConfigVersion string      `json:"dpConfigVersion,omitempty"`
+	DpConfigVersion string     `json:"dpConfigVersion,omitempty"`
 	Interfaces      Interfaces `json:"interfaces,omitempty"`
 }
 
@@ -50,8 +50,8 @@ type VirtualFunction InterfaceProperty
 // +k8s:openapi-gen=true
 type SriovNetworkNodeStateStatus struct {
 	Interfaces    InterfaceExts `json:"interfaces,omitempty"`
-	SyncStatus    string         `json:"syncStatus,omitempty"`
-	LastSyncError string         `json:"lastSyncError,omitempty"`
+	SyncStatus    string        `json:"syncStatus,omitempty"`
+	LastSyncError string        `json:"lastSyncError,omitempty"`
 }
 
 // +genclient
