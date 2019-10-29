@@ -383,7 +383,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref common.ReferenceCallba
 							Format:      "",
 						},
 					},
-					"link_state": {
+					"linkState": {
 						SchemaProps: spec.SchemaProps{
 							Description: "VF link state (enable|disable|auto)",
 							Type:        []string{"string"},
@@ -459,14 +459,7 @@ func schema_pkg_apis_sriovnetwork_v1_SriovOperatorConfigSpec(ref common.Referenc
 				Description: "SriovOperatorConfigSpec defines the desired state of SriovOperatorConfig",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"enableInjector": {
-						SchemaProps: spec.SchemaProps{
-							Description: "INSERT ADDITIONAL SPEC FIELDS - desired state of cluster Important: Run \"operator-sdk generate k8s\" to regenerate code after modifying this file Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"nodeSelector": {
+					"configDaemonNodeSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NodeSelector selects the nodes to be configured",
 							Type:        []string{"object"},
@@ -481,8 +474,21 @@ func schema_pkg_apis_sriovnetwork_v1_SriovOperatorConfigSpec(ref common.Referenc
 							},
 						},
 					},
+					"enableInjector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Flag to control whether the network resource injector webhook shall be deployed",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"enableOperatorWebhook": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Flag to control whether the operator admission controller webhook shall be deployed",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
-				Required: []string{"nodeSelector"},
 			},
 		},
 	}
@@ -497,7 +503,14 @@ func schema_pkg_apis_sriovnetwork_v1_SriovOperatorConfigStatus(ref common.Refere
 				Properties: map[string]spec.Schema{
 					"injector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "INSERT ADDITIONAL STATUS FIELD - define observed state of cluster Important: Run \"operator-sdk generate k8s\" to regenerate code after modifying this file Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html",
+							Description: "Show the runtime status of the network resource injector webhook",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"operatorWebhook": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Show the runtime status of the operator admission controller webhook",
 							Type:        []string{"string"},
 							Format:      "",
 						},

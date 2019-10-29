@@ -1,0 +1,39 @@
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{.SRIOVMutatingWebhookName}}
+  namespace: {{.Namespace}}
+webhooks:
+  - name: operator-webhook.sriovnetwork.openshift.io
+    failurePolicy: Fail
+    clientConfig:
+      service:
+        name: operator-webhook-service
+        namespace: {{.Namespace}}
+        path: "/mutating-custom-resource"
+    rules:
+      - operations: [ "CREATE", "UPDATE" ]
+        apiGroups: ["sriovnetwork.openshift.io"]
+        apiVersions: ["v1"]
+        resources: ["sriovnetworknodepolicies"]
+
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{.SRIOVMutatingWebhookName}}
+  namespace: {{.Namespace}}
+webhooks:
+  - name: operator-webhook.sriovnetwork.openshift.io
+    failurePolicy: Fail
+    clientConfig:
+      service:
+        name: operator-webhook-service
+        namespace: {{.Namespace}}
+        path: "/validating-custom-resource"
+    rules:
+      - operations: [ "CREATE", "UPDATE" ]
+        apiGroups: ["sriovnetwork.openshift.io"]
+        apiVersions: ["v1"]
+        resources: ["sriovnetworknodepolicies"]

@@ -33,11 +33,19 @@ const (
 	ResyncPeriod                    = 5 * time.Minute
 	DEFAULT_CONFIG_NAME             = "default"
 	CONFIG_DAEMON_PATH              = "./bindata/manifests/daemon"
-	WEBHOOK_PATH                    = "./bindata/manifests/webhook"
-	SERVICE_CA_CONFIGMAP            = "openshift-service-ca"
+	INJECTOR_WEBHOOK_PATH           = "./bindata/manifests/webhook"
+	OPERATOR_WEBHOOK_PATH           = "./bindata/manifests/operator-webhook"
+	INJECTOR_SERVICE_CA_CONFIGMAP   = "injector-service-ca"
+	WEBHOOK_SERVICE_CA_CONFIGMAP    = "webhook-service-ca"
 	SERVICE_CA_CONFIGMAP_ANNOTATION = "service.beta.openshift.io/inject-cabundle"
-	SRIOV_MUTATING_WEBHOOK_NAME     = "network-resources-injector-config"
+	INJECTOR_WEBHOOK_NAME           = "network-resources-injector-config"
+	OPERATOR_WEBHOOK_NAME           = "operator-webhook-config"
 )
+
+var Webhooks = map[string](string){
+	INJECTOR_WEBHOOK_NAME: INJECTOR_WEBHOOK_PATH,
+	OPERATOR_WEBHOOK_NAME: OPERATOR_WEBHOOK_PATH,
+}
 
 var Namespace = os.Getenv("NAMESPACE")
 
@@ -116,6 +124,7 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 			defaultConfig.SetName(DEFAULT_CONFIG_NAME)
 			defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 				EnableInjector:           func() *bool { b := true; return &b }(),
+				EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
 				ConfigDaemonNodeSelector: map[string]string{},
 			}
 			err = r.client.Create(context.TODO(), defaultConfig)
@@ -192,41 +201,59 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovO
 	logger := log.WithName("syncWebhookObjs")
 	logger.Info("Start to sync webhook objects")
 
-	// Render Webhook manifests
-	data := render.MakeRenderData()
-	data.Data["Namespace"] = os.Getenv("NAMESPACE")
-	data.Data["ServiceCAConfigMap"] = SERVICE_CA_CONFIGMAP
-	data.Data["SRIOVMutatingWebhookName"] = SRIOV_MUTATING_WEBHOOK_NAME
-	data.Data["NetworkResourcesInjectorImage"] = os.Getenv("NETWORK_RESOURCES_INJECTOR_IMAGE")
-	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	objs, err := render.RenderDir(WEBHOOK_PATH, &data)
-	if err != nil {
-		logger.Error(err, "Fail to render webhook manifests")
-		return err
-	}
+	for name, path := range Webhooks {
+		// Render Webhook manifests
+		data := render.MakeRenderData()
+		data.Data["Namespace"] = os.Getenv("NAMESPACE")
+		data.Data["InjectorServiceCAConfigMap"] = INJECTOR_SERVICE_CA_CONFIGMAP
+		data.Data["WebhookServiceCAConfigMap"] = WEBHOOK_SERVICE_CA_CONFIGMAP
+		data.Data["SRIOVMutatingWebhookName"] = name
+		data.Data["NetworkResourcesInjectorImage"] = os.Getenv("NETWORK_RESOURCES_INJECTOR_IMAGE")
+		data.Data["SriovNetworkWebhookImage"] = os.Getenv("SRIOV_NETWORK_WEBHOOK_IMAGE")
+		data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
+		objs, err := render.RenderDir(path, &data)
+		if err != nil {
+			logger.Error(err, "Fail to render webhook manifests")
+			return err
+		}
 
-	// Delete webhook
-	if *dc.Spec.EnableInjector != true {
+		// Delete injector webhook
+		if *dc.Spec.EnableInjector != true && path == INJECTOR_WEBHOOK_PATH {
+			for _, obj := range objs {
+				err = r.deleteWebhookObject(obj)
+				if err != nil {
+					return err
+				}
+			}
+			logger.Info("SR-IOV Admission Controller is disabled.")
+			logger.Info("To enable SR-IOV Admission Controller,")
+			logger.Info("Set 'SriovOperatorConfig.Spec.EnableInjector' to true(bool).")
+			continue
+		}
+		// Delete operator webhook
+		if *dc.Spec.EnableOperatorWebhook != true && path == OPERATOR_WEBHOOK_PATH {
+			for _, obj := range objs {
+				err = r.deleteWebhookObject(obj)
+				if err != nil {
+					return err
+				}
+			}
+			logger.Info("Operator Admission Controller is disabled.")
+			logger.Info("To enable Operator Admission Controller,")
+			logger.Info("Set 'SriovOperatorConfig.Spec.EnableOperatorWebhook' to true(bool).")
+			continue
+		}
+
+		// Sync Webhook
 		for _, obj := range objs {
-			err = r.deleteWebhookObject(obj)
+			err = r.syncWebhookObject(dc, obj)
 			if err != nil {
+				logger.Error(err, "Couldn't sync webhook objects")
 				return err
 			}
 		}
-		logger.Info("SR-IOV Admission Controller is disabled.")
-		logger.Info("To enable SR-IOV Admission Controller,")
-		logger.Info("Set 'SriovOperatorConfig.Spec.EnableInjector' to true(bool).")
-		return nil
 	}
 
-	// Sync Webhook
-	for _, obj := range objs {
-		err = r.syncWebhookObject(dc, obj)
-		if err != nil {
-			logger.Error(err, "Couldn't sync webhook objects")
-			return err
-		}
-	}
 	return nil
 }
 
@@ -246,9 +273,17 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObject(dc *sriovnetworkv1.Srio
 	case "MutatingWebhookConfiguration":
 		whs := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
 		err = scheme.Convert(obj, whs, nil)
-		r.syncWebhook(dc, whs)
+		r.syncMutatingWebhook(dc, whs)
 		if err != nil {
 			logger.Error(err, "Fail to sync mutate webhook")
+			return err
+		}
+	case "ValidatingWebhookConfiguration":
+		whs := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
+		err = scheme.Convert(obj, whs, nil)
+		r.syncValidatingWebhook(dc, whs)
+		if err != nil {
+			logger.Error(err, "Fail to sync validate webhook")
 			return err
 		}
 	case "ConfigMap":
@@ -268,14 +303,42 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObject(dc *sriovnetworkv1.Srio
 	return nil
 }
 
-func (r *ReconcileSriovOperatorConfig) syncWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1beta1.MutatingWebhookConfiguration) error {
-	logger := log.WithName("syncWebhook")
-	logger.Info("Start to sync webhook", "Name", in.Name, "Namespace", in.Namespace)
+func (r *ReconcileSriovOperatorConfig) syncMutatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1beta1.MutatingWebhookConfiguration) error {
+	logger := log.WithName("syncMutatingWebhook")
+	logger.Info("Start to sync mutating webhook", "Name", in.Name, "Namespace", in.Namespace)
 
 	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
 		return err
 	}
 	whs := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			err = r.client.Create(context.TODO(), in)
+			if err != nil {
+				return fmt.Errorf("Couldn't create webhook: %v", err)
+			}
+			logger.Info("Create webhook for", in.Namespace, in.Name)
+		} else {
+			return fmt.Errorf("Fail to get webhook: %v", err)
+		}
+	}
+
+	// Note:
+	// we don't need to manage the update of MutatingWebhookConfiguration here
+	// as it's handled by caconfig controller
+
+	return nil
+}
+
+func (r *ReconcileSriovOperatorConfig) syncValidatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1beta1.ValidatingWebhookConfiguration) error {
+	logger := log.WithName("syncValidatingWebhook")
+	logger.Info("Start to sync validating webhook", "Name", in.Name, "Namespace", in.Namespace)
+
+	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
+		return err
+	}
+	whs := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
 	if err != nil {
 		if errors.IsNotFound(err) {

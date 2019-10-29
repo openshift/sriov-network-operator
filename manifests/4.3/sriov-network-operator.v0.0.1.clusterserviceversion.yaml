@@ -268,6 +268,8 @@ spec:
                       value: sriov-network-operator
                     - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
                       value: quay.io/openshift/origin-sriov-network-config-daemon:4.3
+                    - name: SRIOV_NETWORK_WEBHOOK_IMAGE
+                      value: quay.io/openshift/origin-sriov-network-webhook:4.3
                     - name: RESOURCE_PREFIX
                       value: openshift.io
                     - name: NAMESPACE

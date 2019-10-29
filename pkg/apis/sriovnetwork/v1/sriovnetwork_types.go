@@ -35,7 +35,7 @@ type SriovNetworkSpec struct {
 	Trust		string `json:"trust,omitempty"`
 	// VF link state (enable|disable|auto)
 	// +kubebuilder:validation:Enum={"auto","enable","disable"}
-	LinkState	string `json:"link_state,omitempty"`
+	LinkState	string `json:"linkState,omitempty"`
 }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork
