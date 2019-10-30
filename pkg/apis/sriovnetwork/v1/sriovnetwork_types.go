@@ -36,6 +36,12 @@ type SriovNetworkSpec struct {
 	// VF link state (enable|disable|auto)
 	// +kubebuilder:validation:Enum={"auto","enable","disable"}
 	LinkState string `json:"linkState,omitempty"`
+	// +kubebuilder:validation:Minimum=0
+	// Minimum tx rate, in Mbps, for the VF. Defaults to 0 (no rate limiting). min_tx_rate should be <= max_tx_rate.
+	MinTxRate *int `json:"min_tx_rate"`
+	// +kubebuilder:validation:Minimum=0
+	// Maximum tx rate, in Mbps, for the VF. Defaults to 0 (no rate limiting)
+	MaxTxRate *int `json:"max_tx_rate"`
 }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork

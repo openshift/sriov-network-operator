@@ -247,6 +247,22 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 		data.Data["StateConfigured"] = false
 	}
 
+	data.Data["MinTxRateConfigured"] = false
+	if cr.Spec.MinTxRate != nil {
+	  if *cr.Spec.MinTxRate >= 0 {
+	  	data.Data["MinTxRateConfigured"] = true
+	  	data.Data["SriovCniMinTxRate"] = *cr.Spec.MinTxRate
+	  }
+    }
+
+	data.Data["MaxTxRateConfigured"] = false
+	if cr.Spec.MaxTxRate != nil {
+		if *cr.Spec.MaxTxRate >= 0 {
+			data.Data["MaxTxRateConfigured"] = true
+			data.Data["SriovCniMaxTxRate"] = *cr.Spec.MaxTxRate
+		}
+	}
+
 	data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)

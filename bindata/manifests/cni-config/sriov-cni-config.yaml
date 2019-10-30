@@ -26,5 +26,11 @@ spec:
 {{- if .VlanQoSConfigured -}}
   "vlanQoS":{{.SriovCniVlanQoS}},
 {{- end -}}
+{{- if .MinTxRateConfigured -}}
+  "minTxRate":{{.SriovCniMinTxRate}},
+{{- end -}}
+{{- if .MaxTxRateConfigured -}}
+  "maxTxRate":{{.SriovCniMaxTxRate}},
+{{- end -}}
   {{.SriovCniIpam}}
 }'

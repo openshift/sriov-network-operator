@@ -73,6 +73,14 @@ spec:
               maximum: 7
               minimum: 0
               type: integer
+            minTxRate:
+              description: Minimum tx rate, in Mbps, for the VF. Defaults to 0 (no rate limit). minTxRate should be <= maxTxRate
+              minimum: 0
+              type: integer
+            maxTxRate:
+              description: Maximum tx rate, in Mbps, for the VF. Defaults to 0 (no rate limit).
+              minimum: 0
+              type: integer
           required:
           - resourceName
           type: object
