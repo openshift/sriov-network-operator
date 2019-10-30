@@ -22,7 +22,7 @@ rules:
   resources: [clusterroles, clusterrolebindings]
   verbs: ["*"]
 - apiGroups: ["admissionregistration.k8s.io"]
-  resources: ["mutatingwebhookconfigurations"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
   verbs: ["*"]
 - apiGroups: ["sriovnetwork.openshift.io"]
   resources: ["*"]

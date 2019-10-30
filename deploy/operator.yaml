@@ -22,7 +22,7 @@ spec:
       containers:
         - name: sriov-network-operator
           # Replace this with the built image name
-          image: quay.io/openshift/origin-sriov-network-operator
+          image: $SRIOV_NETWORK_OPERATOR_IMAGE
           command:
           - sriov-network-operator
           imagePullPolicy: IfNotPresent
@@ -41,6 +41,8 @@ spec:
               value: sriov-network-operator
             - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
               value: $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
+            - name: SRIOV_NETWORK_WEBHOOK_IMAGE
+              value: $SRIOV_NETWORK_WEBHOOK_IMAGE
             - name: RESOURCE_PREFIX
               value: openshift.io
             - name: NAMESPACE
