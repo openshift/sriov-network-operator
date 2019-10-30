@@ -26,9 +26,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -41,12 +41,12 @@ var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
 // ManifestPaths is the path to the manifest templates
 // bad, but there's no way to pass configuration to the reconciler right now
 const (
-	ResyncPeriod                = 5 * time.Minute
-	PLUGIN_PATH                 = "./bindata/manifests/plugins"
-	DAEMON_PATH                 = "./bindata/manifests/daemon"
-	DEFAULT_POLICY_NAME         = "default"
-	CONFIGMAP_NAME              = "device-plugin-config"
-	DP_CONFIG_FILENAME          = "config.json"
+	ResyncPeriod        = 5 * time.Minute
+	PLUGIN_PATH         = "./bindata/manifests/plugins"
+	DAEMON_PATH         = "./bindata/manifests/daemon"
+	DEFAULT_POLICY_NAME = "default"
+	CONFIGMAP_NAME      = "device-plugin-config"
+	DP_CONFIG_FILENAME  = "config.json"
 )
 
 var Namespace = os.Getenv("NAMESPACE")
@@ -123,7 +123,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 			// Default policy object not found, create it.
 			defaultPolicy.SetNamespace(Namespace)
 			defaultPolicy.SetName(DEFAULT_POLICY_NAME)
-			defaultPolicy.Spec =sriovnetworkv1.SriovNetworkNodePolicySpec{
+			defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
 				NumVfs:       0,
 				NodeSelector: make(map[string]string),
 				NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
@@ -131,7 +131,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 			err = r.client.Create(context.TODO(), defaultPolicy)
 			if err != nil {
 				reqLogger.Error(err, "Failed to create default Policy", "Namespace", Namespace, "Name", DEFAULT_POLICY_NAME)
-				return reconcile.Result{},err
+				return reconcile.Result{}, err
 			}
 			return reconcile.Result{}, nil
 		}
@@ -166,7 +166,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	} else {
 		lo = &client.MatchingLabels{
 			"node-role.kubernetes.io/worker": "",
-			"beta.kubernetes.io/os": "linux",
+			"beta.kubernetes.io/os":          "linux",
 		}
 	}
 	err = r.client.List(context.TODO(), nodeList, lo)

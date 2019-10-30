@@ -31,7 +31,6 @@ func SetupInClusterClient() error {
 		return err
 	}
 
-
 	snclient = snclientset.NewForConfigOrDie(config)
 	kubeclient = kubernetes.NewForConfigOrDie(config)
 

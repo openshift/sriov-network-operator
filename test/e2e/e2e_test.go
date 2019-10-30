@@ -231,7 +231,7 @@ func testWithSriovNetworkCRDeletion(t *testing.T, ctx *framework.TestCtx, cr *sr
 	// get global framework variables
 	f := framework.Global
 	found := &sriovnetworkv1.SriovNetwork{}
-	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName(),}, found)
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
 	if err != nil {
 		t.Fatalf("fail to Get SriovNetwork CR: %v", err)
 	}
@@ -240,13 +240,13 @@ func testWithSriovNetworkCRDeletion(t *testing.T, ctx *framework.TestCtx, cr *sr
 		t.Fatalf("fail to Delete SriovNetwork CR: %v", err)
 	}
 	// wait 100ms for object get deleted
-	time.Sleep(300*time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 	nad := &netattdefv1.NetworkAttachmentDefinition{}
 	namespace := cr.GetNamespace()
 	if cr.Spec.NetworkNamespace != "" {
 		namespace = cr.Spec.NetworkNamespace
 	}
-	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: cr.GetName(),}, nad)
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: namespace, Name: cr.GetName()}, nad)
 	if err != nil && errors.IsNotFound(err) {
 		return
 	}
@@ -265,8 +265,8 @@ func testWithSriovNetworkCRUpdate(t *testing.T, ctx *framework.TestCtx, cr *srio
 			Namespace: cr.Namespace,
 		},
 		Spec: sriovnetworkv1.SriovNetworkSpec{
-			ResourceName:     "resource_1",
-			IPAM:             `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","gateway":"10.56.217.1"}`,
+			ResourceName: "resource_1",
+			IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","gateway":"10.56.217.1"}`,
 		},
 	}
 
@@ -276,7 +276,7 @@ func testWithSriovNetworkCRUpdate(t *testing.T, ctx *framework.TestCtx, cr *srio
 	// get global framework variables
 	f := framework.Global
 	found := &sriovnetworkv1.SriovNetwork{}
-	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName(),}, found)
+	err = f.Client.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
 	if err != nil {
 		t.Fatalf("fail to get SriovNetwork CR: %v", err)
 	}
@@ -286,7 +286,7 @@ func testWithSriovNetworkCRUpdate(t *testing.T, ctx *framework.TestCtx, cr *srio
 		t.Fatalf("fail to update SriovNetwork CR: %v", err)
 	}
 	// wait 100ms for object get update
-	time.Sleep(300*time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
 	netAttDefCR, err := WaitForNetworkAttachmentDefinition(t, f.Client, cr.GetName(), cr.GetNamespace(), retryInterval, timeout)
 	if err != nil {
 		t.Fatalf("fail to get NetworkAttachmentDefinition after update: %v", err)

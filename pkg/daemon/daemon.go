@@ -385,7 +385,7 @@ func rebootNode() {
 	// as systemd will time out the stop invocation.
 	cmd := exec.Command("systemd-run", "--unit", "sriov-network-config-daemon-reboot",
 		"--description", fmt.Sprintf("sriov-network-config-daemon reboot node"), "/bin/sh", "-c", "systemctl stop kubelet.service; reboot")
-	
+
 	if err := cmd.Run(); err != nil {
 		glog.Error("failed to reboot node: %v", err)
 	}
@@ -495,23 +495,23 @@ func tryCreateUdevRule() error {
 	glog.V(2).Infof("tryCreateUdevRule()")
 	filePath := "/host/etc/udev/rules.d/10-nm-unmanaged.rules"
 	_, err := os.Stat(filePath)
-    if err != nil {
-        if os.IsNotExist(err) {
-            glog.V(2).Infof("tryCreateUdevRule(): file not existed, create file")
+	if err != nil {
+		if os.IsNotExist(err) {
+			glog.V(2).Infof("tryCreateUdevRule(): file not existed, create file")
 			_, err := os.Create(filePath)
 			if err != nil {
 				glog.Errorf("tryCreateUdevRule(): fail to create file: %v", err)
 				return err
 			}
-        } else {
+		} else {
 			return err
 		}
 	}
 	content := fmt.Sprintf("ACTION==\"add|change\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.VfIds, "|"))
 	err = ioutil.WriteFile(filePath, []byte(content), 0666)
-    if err != nil {
+	if err != nil {
 		glog.Errorf("tryCreateUdevRule(): fail to write file: %v", err)
 		return err
-    }
+	}
 	return nil
 }

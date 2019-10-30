@@ -26,28 +26,28 @@ type SriovNetworkNodePolicySpec struct {
 	Mtu int `json:"mtu,omitempty"`
 	// +kubebuilder:validation:Minimum=0
 	// Number of VFs for each PF
-	NumVfs      int                     `json:"numVfs"`
+	NumVfs int `json:"numVfs"`
 	// NicSelector selects the NICs to be configured
 	NicSelector SriovNetworkNicSelector `json:"nicSelector"`
 	// +kubebuilder:validation:Enum=netdevice;vfio-pci
 	// The driver type for configured VFs. Allowed value "netdevice", "vfio-pci". Defaults to netdevice.
 	DeviceType string `json:"deviceType,omitempty"`
 	// RDMA mode. Defaults to false.
-	IsRdma     bool   `json:"isRdma,omitempty"`
+	IsRdma bool `json:"isRdma,omitempty"`
 }
 
 // +k8s:openapi-gen=false
 type SriovNetworkNicSelector struct {
 	// +kubebuilder:validation:Enum={"8086","15b3"}
 	// The vendor hex code of SR-IoV device. Allowed value "8086", "15b3".
-	Vendor      string   `json:"vendor,omitempty"`
+	Vendor string `json:"vendor,omitempty"`
 	// The device hex code of SR-IoV device. Allowed value "1583", "158b", "10fb", "1015", "1017".
 	// +kubebuilder:validation:Enum={"1583","158b","10fb","1015","1017"}
-	DeviceID    string   `json:"deviceID,omitempty"`
+	DeviceID string `json:"deviceID,omitempty"`
 	// PCI address of SR-IoV PF.
 	RootDevices []string `json:"rootDevices,omitempty"`
 	// Name of SR-IoV PF.
-	PfNames     []string `json:"pfNames,omitempty"`
+	PfNames []string `json:"pfNames,omitempty"`
 }
 
 // SriovNetworkNodePolicyStatus defines the observed state of SriovNetworkNodePolicy

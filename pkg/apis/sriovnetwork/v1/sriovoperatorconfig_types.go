@@ -15,18 +15,18 @@ type SriovOperatorConfigSpec struct {
 	// NodeSelector selects the nodes to be configured
 	ConfigDaemonNodeSelector map[string]string `json:"configDaemonNodeSelector,omitempty"`
 	// Flag to control whether the network resource injector webhook shall be deployed
-	EnableInjector	*bool	`json:"enableInjector,omitempty"`
+	EnableInjector *bool `json:"enableInjector,omitempty"`
 	// Flag to control whether the operator admission controller webhook shall be deployed
-	EnableOperatorWebhook	*bool	`json:"enableOperatorWebhook,omitempty"`
+	EnableOperatorWebhook *bool `json:"enableOperatorWebhook,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
 // +k8s:openapi-gen=true
 type SriovOperatorConfigStatus struct {
 	// Show the runtime status of the network resource injector webhook
-	Injector	string	`json:"injector,omitempty"`
+	Injector string `json:"injector,omitempty"`
 	// Show the runtime status of the operator admission controller webhook
-	OperatorWebhook	string	`json:"operatorWebhook,omitempty"`
+	OperatorWebhook string `json:"operatorWebhook,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

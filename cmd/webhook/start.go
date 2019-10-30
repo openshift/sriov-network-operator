@@ -8,10 +8,10 @@ import (
 	"net/http"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"github.com/golang/glog"
 
 	"github.com/openshift/sriov-network-operator/pkg/webhook"
 )
@@ -132,7 +132,7 @@ func newDelegateToV1beta1AdmitHandler(f admitv1beta1Func) admitHandler {
 }
 
 func runStartCmd(cmd *cobra.Command, args []string) {
-	if err := webhook.SetupInClusterClient(); err != nil{
+	if err := webhook.SetupInClusterClient(); err != nil {
 		glog.Error(err)
 		panic(err)
 	}
@@ -142,7 +142,6 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		glog.Fatalf("error load certificate: %s", err.Error())
 	}
 
-
 	http.HandleFunc("/mutating-custom-resource", serveMutateCustomResource)
 	http.HandleFunc("/validating-custom-resource", serveValidateCustomResource)
 	http.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) { w.Write([]byte("ok")) })
@@ -150,7 +149,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	go func() {
 		glog.Info("start server")
 		server := &http.Server{
-			Addr:      fmt.Sprintf(":%d", port),
+			Addr: fmt.Sprintf(":%d", port),
 			TLSConfig: &tls.Config{
 				GetCertificate: keyPair.GetCertificateFunc(),
 			},
@@ -160,7 +159,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 			glog.Error(err)
 			panic(err)
 		}
-	} ()
+	}()
 	/* watch the cert file and restart http sever if the file updated. */
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {

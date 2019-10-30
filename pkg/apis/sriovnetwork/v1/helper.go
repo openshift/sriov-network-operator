@@ -17,7 +17,7 @@ var VfIds = []string{}
 
 func init() {
 	for _, v := range SriovPfVfMap {
-		id := "0x"+v
+		id := "0x" + v
 		if !StringInArray(id, VfIds) {
 			VfIds = append(VfIds, id)
 		}
@@ -33,7 +33,7 @@ func (a ByPriority) Len() int {
 }
 
 func (a ByPriority) Less(i, j int) bool {
-	if a[i].Spec.Priority !=  a[j].Spec.Priority {
+	if a[i].Spec.Priority != a[j].Spec.Priority {
 		return a[i].Spec.Priority > a[j].Spec.Priority
 	}
 	return a[i].GetName() < a[j].GetName()

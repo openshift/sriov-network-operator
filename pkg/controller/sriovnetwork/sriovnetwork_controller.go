@@ -2,10 +2,10 @@ package sriovnetwork
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
-	"encoding/json"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -17,9 +17,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
@@ -45,7 +45,7 @@ func Add(mgr manager.Manager) error {
 }
 
 // newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) (reconcile.Reconciler) {
+func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 	return &ReconcileSriovNetwork{client: mgr.GetClient(), scheme: mgr.GetScheme()}
 }
 
@@ -98,7 +98,7 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	var err error
 
 	// The SriovNetwork CR shall only be defined in operator namespace.
-	request.Namespace, err = k8sutil.GetWatchNamespace() 
+	request.Namespace, err = k8sutil.GetWatchNamespace()
 	if err != nil {
 		reqLogger.Error(err, "Failed get operator namespace")
 		return reconcile.Result{}, err
