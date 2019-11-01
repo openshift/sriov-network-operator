@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	IntelID = "8086"
+	IntelID    = "8086"
+	MellanoxID = "15b3"
+	MlxMaxVFs  = 128
 )
 
 var (
@@ -79,7 +81,10 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 		if policy.Spec.Selected(&iface) {
 			interfaceSelected = true
 			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID {
-				return false, fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value", policy.Spec.NumVfs, policy.GetName())
+				return false, fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), iface.TotalVfs)
+			}
+			if policy.Spec.NumVfs > MlxMaxVFs && iface.Vendor == MellanoxID {
+				return false, fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs)
 			}
 		}
 	}
