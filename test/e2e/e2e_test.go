@@ -182,6 +182,13 @@ func testWithOneSriovNetworkNodePolicyCR(t *testing.T, ctx *framework.TestCtx) {
 	}
 	// get global framework variables
 	f := framework.Global
+
+	daemon := &appsv1.DaemonSet{}
+	err = waitForNamespacedObject(daemon, t, f.Client, namespace, "operator-webhook", retryInterval, timeout)
+	if err != nil {
+		t.Fatalf("failed to get daemonset: operator-webhook: %v", err)
+	}
+
 	err = f.Client.Create(goctx.TODO(), policy, &framework.CleanupOptions{TestContext: ctx, Timeout: apiTimeout, RetryInterval: retryInterval})
 	if err != nil {
 		t.Fatalf("fail to create SriovNetworkNodePolicy CR: %v", err)
@@ -197,7 +204,7 @@ func testWithOneSriovNetworkNodePolicyCR(t *testing.T, ctx *framework.TestCtx) {
 		t.Fatalf("failed to validate ConfigMap : %v", err)
 	}
 
-	daemon := &appsv1.DaemonSet{}
+	daemon = &appsv1.DaemonSet{}
 	err = waitForNamespacedObject(daemon, t, f.Client, namespace, "sriov-device-plugin", retryInterval, timeout)
 	if err != nil {
 		t.Fatalf("fail to get DaemonSet sriov-device-plugin: %v", err)
