@@ -249,11 +249,11 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 
 	data.Data["MinTxRateConfigured"] = false
 	if cr.Spec.MinTxRate != nil {
-	  if *cr.Spec.MinTxRate >= 0 {
-	  	data.Data["MinTxRateConfigured"] = true
-	  	data.Data["SriovCniMinTxRate"] = *cr.Spec.MinTxRate
-	  }
-    }
+		if *cr.Spec.MinTxRate >= 0 {
+			data.Data["MinTxRateConfigured"] = true
+			data.Data["SriovCniMinTxRate"] = *cr.Spec.MinTxRate
+		}
+	}
 
 	data.Data["MaxTxRateConfigured"] = false
 	if cr.Spec.MaxTxRate != nil {
