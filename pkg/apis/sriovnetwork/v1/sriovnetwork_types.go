@@ -38,10 +38,10 @@ type SriovNetworkSpec struct {
 	LinkState string `json:"linkState,omitempty"`
 	// +kubebuilder:validation:Minimum=0
 	// Minimum tx rate, in Mbps, for the VF. Defaults to 0 (no rate limiting). min_tx_rate should be <= max_tx_rate.
-	MinTxRate *int `json:"min_tx_rate,omitempty"`
+	MinTxRate *int `json:"minTxRate,omitempty"`
 	// +kubebuilder:validation:Minimum=0
 	// Maximum tx rate, in Mbps, for the VF. Defaults to 0 (no rate limiting)
-	MaxTxRate *int `json:"max_tx_rate,omitempty"`
+	MaxTxRate *int `json:"maxTxRate,omitempty"`
 }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork
