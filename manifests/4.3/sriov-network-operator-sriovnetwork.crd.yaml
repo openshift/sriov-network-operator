@@ -31,6 +31,10 @@ spec:
         spec:
           description: SriovNetworkSpec defines the desired state of SriovNetwork
           properties:
+            capabilities:
+              description: 'Capabilities to be configured for this network. Capabilities
+                supported: (mac|ips), e.g. ''{"mac": true}'''
+              type: string
             ipam:
               description: IPAM configuration to be used for this network.
               type: string
