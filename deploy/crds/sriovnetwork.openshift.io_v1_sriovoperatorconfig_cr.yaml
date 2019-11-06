@@ -7,3 +7,5 @@ spec:
   enableInjector: true
   enableOperatorWebhook: true
   configDaemonNodeSelector: {}
+  disableReboot: false
+  

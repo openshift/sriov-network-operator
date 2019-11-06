@@ -18,6 +18,7 @@ type SriovOperatorConfigSpec struct {
 	EnableInjector *bool `json:"enableInjector,omitempty"`
 	// Flag to control whether the operator admission controller webhook shall be deployed
 	EnableOperatorWebhook *bool `json:"enableOperatorWebhook,omitempty"`
+	DisableReboot         *bool `json:"disableReboot,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig

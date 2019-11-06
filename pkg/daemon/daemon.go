@@ -18,11 +18,15 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
+
 	// "k8s.io/client-go/informers"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+
 	// "k8s.io/client-go/kubernetes/scheme"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
@@ -43,6 +47,8 @@ type Daemon struct {
 	client snclientset.Interface
 	// kubeClient allows interaction with Kubernetes, including the node we are running on.
 	kubeClient *kubernetes.Clientset
+	// kubeClient allows interaction with Kubernetes crd,s
+	dynamicclient dynamic.Interface
 
 	nodeState *sriovnetworkv1.SriovNetworkNodeState
 
@@ -56,9 +62,9 @@ type Daemon struct {
 
 	refreshCh chan<- Message
 
-	dpReboot bool
-
 	mu *sync.Mutex
+
+	noReboot bool
 }
 
 const scriptsPath = "/bindata/scripts/enable-rdma.sh"
@@ -70,17 +76,19 @@ func New(
 	nodeName string,
 	client snclientset.Interface,
 	kubeClient *kubernetes.Clientset,
+	dynamicclient *dynamic.Interface,
 	exitCh chan<- error,
 	stopCh <-chan struct{},
 	refreshCh chan<- Message,
 ) *Daemon {
 	return &Daemon{
-		name:       nodeName,
-		client:     client,
-		kubeClient: kubeClient,
-		exitCh:     exitCh,
-		stopCh:     stopCh,
-		refreshCh:  refreshCh,
+		name:          nodeName,
+		client:        client,
+		kubeClient:    kubeClient,
+		dynamicclient: *dynamicclient,
+		exitCh:        exitCh,
+		stopCh:        stopCh,
+		refreshCh:     refreshCh,
 	}
 }
 
@@ -101,6 +109,8 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 			lo.FieldSelector = "metadata.name=" + dn.name
 		},
 	)
+
+	dn.noReboot = dn.rebootDisabled()
 
 	informer := informerFactory.Sriovnetwork().V1().SriovNetworkNodeStates().Informer()
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -185,6 +195,10 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	}
 
 	if reqReboot {
+		if dn.noReboot {
+			glog.Fatal("Would reboot but reboot disabled, check your config")
+			return
+		}
 		glog.Info("nodeStateAddHandler(): reboot node")
 		rebootNode()
 		return
@@ -291,6 +305,10 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 
 	if reqReboot {
+		if dn.noReboot {
+			glog.Fatal("Would reboot but reboot disabled, check your config")
+			return
+		}
 		glog.Info("nodeStateChangeHandler(): reboot node")
 		go rebootNode()
 		return
@@ -514,4 +532,30 @@ func tryCreateUdevRule() error {
 		return err
 	}
 	return nil
+}
+
+func (dn *Daemon) rebootDisabled() bool {
+
+	deploymentRes := schema.GroupVersionResource{
+		Group:    "sriovnetwork.openshift.io",
+		Version:  "v1",
+		Resource: "sriovoperatorconfigs",
+	}
+	sriovOperatorConfig, err := dn.dynamicclient.Resource(deploymentRes).Namespace("default").Get("default", metav1.GetOptions{})
+	if err != nil {
+		glog.V(2).Infof("rebootDisabled(): Failed to check disableReboot: SriovOperatorConfig not found.")
+		return false
+	}
+	spec := sriovOperatorConfig.Object["spec"].(map[string]interface{})
+	disableReboot, ok := spec["disableReboot"]
+	if !ok {
+		glog.V(2).Infof("rebootDisabled(): Failed to check disableReboot: SriovOperatorConfig does not contain disableReboot.")
+		return false
+	}
+	res, ok := disableReboot.(bool)
+	if !ok {
+		glog.V(2).Infof("rebootDisabled(): Failed to check disableReboot: disableReboot is not a bool.")
+		return false
+	}
+	return res
 }

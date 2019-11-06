@@ -45,6 +45,10 @@ spec:
                 type: string
               description: NodeSelector selects the nodes to be configured
               type: object
+            disableReboot:
+              description: Flag to control whether the sriov-config-daemon is allowed
+                to reboot nodes
+              type: boolean                
           type: object
         status:
           description: SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig

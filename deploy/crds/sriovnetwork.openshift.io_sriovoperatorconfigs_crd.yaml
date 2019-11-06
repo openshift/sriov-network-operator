@@ -45,6 +45,10 @@ spec:
               description: Flag to control whether the operator admission controller
                 webhook shall be deployed
               type: boolean
+            disableReboot:
+              description: Flag to control whether the sriov-config-daemon is allowed
+                to reboot nodes
+              type: boolean           
           type: object
         status:
           description: SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig

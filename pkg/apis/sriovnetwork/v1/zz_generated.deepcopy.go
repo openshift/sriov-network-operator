@@ -532,6 +532,11 @@ func (in *SriovOperatorConfigSpec) DeepCopyInto(out *SriovOperatorConfigSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.DisableReboot != nil {
+		in, out := &in.DisableReboot, &out.DisableReboot
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 

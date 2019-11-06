@@ -10,6 +10,7 @@ import (
 	"github.com/openshift/sriov-network-operator/pkg/daemon"
 	"github.com/openshift/sriov-network-operator/pkg/version"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -87,6 +88,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
+	dynamicClient := dynamic.NewForConfigOrDie(config)
 
 	glog.V(0).Info("starting node writer")
 	nodeWriter := daemon.NewNodeStateStatusWriter(snclient, startOpts.nodeName)
@@ -97,6 +99,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		startOpts.nodeName,
 		snclient,
 		kubeclient,
+		&dynamicClient,
 		exitCh,
 		stopCh,
 		refreshCh,
