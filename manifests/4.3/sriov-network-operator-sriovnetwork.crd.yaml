@@ -45,6 +45,16 @@ spec:
               - enable
               - disable
               type: string
+            maxTxRate:
+              description: Maximum tx rate, in Mbps, for the VF. Defaults to 0 (no
+                rate limiting)
+              minimum: 0
+              type: integer
+            minTxRate:
+              description: Minimum tx rate, in Mbps, for the VF. Defaults to 0 (no
+                rate limiting). min_tx_rate should be <= max_tx_rate.
+              minimum: 0
+              type: integer
             networkNamespace:
               description: Namespace of the NetworkAttachmentDefinition custom resource
               type: string
