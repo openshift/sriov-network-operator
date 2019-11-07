@@ -32,6 +32,11 @@ spec:
         spec:
           description: SriovOperatorConfigSpec defines the desired state of SriovOperatorConfig
           properties:
+            configDaemonNodeSelector:
+              additionalProperties:
+                type: string
+              description: NodeSelector selects the nodes to be configured
+              type: object
             enableInjector:
               description: Flag to control whether the network resource injector webhook
                 shall be deployed
@@ -40,11 +45,6 @@ spec:
               description: Flag to control whether the operator admission controller
                 webhook shall be deployed
               type: boolean
-            nodeSelector:
-              additionalProperties:
-                type: string
-              description: NodeSelector selects the nodes to be configured
-              type: object
           type: object
         status:
           description: SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
