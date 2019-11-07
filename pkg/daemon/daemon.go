@@ -63,8 +63,6 @@ type Daemon struct {
 	refreshCh chan<- Message
 
 	mu *sync.Mutex
-
-	noReboot bool
 }
 
 const scriptsPath = "/bindata/scripts/enable-rdma.sh"
@@ -109,8 +107,6 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 			lo.FieldSelector = "metadata.name=" + dn.name
 		},
 	)
-
-	dn.noReboot = dn.rebootDisabled()
 
 	informer := informerFactory.Sriovnetwork().V1().SriovNetworkNodeStates().Informer()
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -195,7 +191,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	}
 
 	if reqReboot {
-		if dn.noReboot {
+		if dn.rebootDisabled() {
 			glog.Fatal("Would reboot but reboot disabled, check your config")
 			return
 		}
@@ -305,7 +301,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 
 	if reqReboot {
-		if dn.noReboot {
+		if dn.rebootDisabled() {
 			glog.Fatal("Would reboot but reboot disabled, check your config")
 			return
 		}
