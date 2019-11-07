@@ -390,6 +390,20 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkSpec(ref common.ReferenceCallba
 							Format:      "",
 						},
 					},
+					"minTxRate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Minimum tx rate, in Mbps, for the VF. Defaults to 0 (no rate limiting). min_tx_rate should be <= max_tx_rate.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"maxTxRate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Maximum tx rate, in Mbps, for the VF. Defaults to 0 (no rate limiting)",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 				Required: []string{"resourceName"},
 			},
