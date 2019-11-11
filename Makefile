@@ -20,7 +20,7 @@ PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
-.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test-e2e test-e2e-k8s run image fmt
+.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test-e2e test-e2e-k8s run image fmt sync-manifests
 
 all: build #check install
 
@@ -102,3 +102,13 @@ else
 endif
 
 verify: verify-gofmt
+
+sync-manifests:
+	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml manifests/4.3/sriov-network-operator-sriovnetwork.crd.yaml
+	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml manifests/4.4/sriov-network-operator-sriovnetwork.crd.yaml
+	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml manifests/4.3/sriov-network-operator-sriovnetworknodestate.crd.yaml
+	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml manifests/4.4/sriov-network-operator-sriovnetworknodestate.crd.yaml
+	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml manifests/4.3/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
+	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml manifests/4.4/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
+	@cp deploy/crds/sriovnetwork.openshift.io_sriovoperatorconfigs_crd.yaml manifests/4.3/sriov-network-operator-sriovoperatorconfig.crd.yaml
+	@cp deploy/crds/sriovnetwork.openshift.io_sriovoperatorconfigs_crd.yaml manifests/4.4/sriov-network-operator-sriovoperatorconfig.crd.yaml

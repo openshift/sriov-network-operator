@@ -12,6 +12,7 @@ spec:
   scope: Namespaced
   subresources:
     status: {}
+  preserveUnknownFields: false
   validation:
     openAPIV3Schema:
       description: SriovNetwork is the Schema for the sriovnetworks API
