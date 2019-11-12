@@ -185,14 +185,14 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 	}
 
 	if iface.Mtu > 0 {
-		// Only set mtu for type netdevice
+		// set PF mtu
+		err := setNetdevMTU(iface.PciAddress, iface.Mtu)
+		if err != nil {
+			glog.Warningf("configSriovDevice(): fail to set mtu for device %s: %v", iface.PciAddress, err)
+			return err
+		}
 		if iface.DeviceType == "netdevice" || iface.DeviceType == "" {
-			err := setNetdevMTU(iface.PciAddress, iface.Mtu)
-			if err != nil {
-				glog.Warningf("configSriovDevice(): fail to set mtu for device %s: %v", iface.PciAddress, err)
-				return err
-			}
-
+			// set VF mtu for type netdevice
 			if iface.NumVfs > 0 {
 				vfs, err := dputils.GetVFList(iface.PciAddress)
 				if err != nil {
@@ -230,16 +230,15 @@ func setSriovNumVfs(pciAddr string, numVfs int) error {
 
 func setNetdevMTU(pciAddr string, mtu int) error {
 	glog.V(2).Infof("setNetdevMTU(): set MTU for device %s", pciAddr)
-
-	ifaceName, err := dputils.GetNetNames(pciAddr)
-	if err != nil {
-		glog.Warningf("setNetdevMTU(): fail to get interface name for %s: %s", pciAddr, err)
-		return err
-	}
-	mtuFile := "net/" + ifaceName[0] + "/mtu"
-	mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
 	b := backoff.NewConstantBackOff(1 * time.Second)
-	err = backoff.Retry(func() error {
+	err := backoff.Retry(func() error {
+		ifaceName, err := dputils.GetNetNames(pciAddr)
+		if err != nil {
+			glog.Warningf("setNetdevMTU(): fail to get interface name for %s: %s", pciAddr, err)
+			return err
+		}
+		mtuFile := "net/" + ifaceName[0] + "/mtu"
+		mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
 		return ioutil.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
 	}, backoff.WithMaxRetries(b, 10))
 	if err != nil {
