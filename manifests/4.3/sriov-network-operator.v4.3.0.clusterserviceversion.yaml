@@ -1,7 +1,7 @@
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
-  name: sriov-network-operator.v0.0.1
+  name: sriov-network-operator.v4.3.0
   namespace: openshift-sriov-network-operator
   annotations:
     alm-examples: |
@@ -63,6 +63,7 @@ metadata:
       ]
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:4.3
+    olm.skipRange: ">=4.3.0 <4.4.0"
     createdAt: 2019/04/30
     description: An operator for configuring SR-IOV components and initializing SRIOV network devices in Openshift cluster.
     repository: https://github.com/openshift/sriov-network-operator
@@ -292,7 +293,6 @@ spec:
     type: MultiNamespace
   - supported: false
     type: AllNamespaces
-  maturity: alpha
   provider:
     name: Red Hat, Inc.
   version: 0.0.1
@@ -305,7 +305,7 @@ spec:
   keywords: ["network", "sr-iov", "sriov"]
   labels:
     olm-owner-enterprise-app: sriov-network-operator
-    olm-status-descriptors: sriov-network-operator.v0.0.1
+    olm-status-descriptors: sriov-network-operator.v4.3.0
   maintainers:
   - email: support@redhat.com
     name: Red Hat
