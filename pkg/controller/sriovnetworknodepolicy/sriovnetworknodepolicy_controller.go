@@ -2,8 +2,7 @@ package sriovnetworknodepolicy
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/hex"
+
 	"encoding/json"
 	"fmt"
 	"os"
@@ -178,20 +177,17 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 
 	// Sort the policies with priority, higher priority ones is applied later
 	sort.Sort(sriovnetworkv1.ByPriority(policyList.Items))
+	// Sync Sriov device plugin ConfigMap object
+	if err = r.syncDevicePluginConfigMap(policyList); err != nil {
+		return reconcile.Result{}, err
+	}
+	// Render and sync Daemon objects
+	if err = r.syncPluginDaemonObjs(defaultPolicy, policyList); err != nil {
+		return reconcile.Result{}, err
+	}
 	// Sync SriovNetworkNodeState objects
 	if err = r.syncAllSriovNetworkNodeStates(defaultPolicy, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
-	}
-
-	if len(policyList.Items) > 1 {
-		// Sync Sriov device plugin ConfigMap object
-		if err = r.syncDevicePluginConfigMap(policyList); err != nil {
-			return reconcile.Result{}, err
-		}
-		// Render and sync Daemon objects
-		if err = r.syncPluginDaemonObjs(defaultPolicy, policyList); err != nil {
-			return reconcile.Result{}, err
-		}
 	}
 
 	// All was successful. Request that this be re-triggered after ResyncPeriod,
@@ -260,12 +256,8 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(np *srio
 	logger := log.WithName("syncAllSriovNetworkNodeStates")
 	logger.Info("Start to sync all SriovNetworkNodeState custom resource")
 	found := &corev1.ConfigMap{}
-	md5sum := ""
 	if err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: Namespace, Name: CONFIGMAP_NAME}, found); err != nil {
 		logger.Info("Fail to get", "ConfigMap", CONFIGMAP_NAME)
-	} else {
-		sum := md5.Sum([]byte(found.Data[DP_CONFIG_FILENAME]))
-		md5sum = hex.EncodeToString(sum[:])
 	}
 	for _, node := range nl.Items {
 		logger.Info("Sync SriovNetworkNodeState CR", "name", node.Name)
@@ -273,8 +265,8 @@ func (r *ReconcileSriovNetworkNodePolicy) syncAllSriovNetworkNodeStates(np *srio
 		ns.Name = node.Name
 		ns.Namespace = Namespace
 		j, _ := json.Marshal(ns)
-		fmt.Printf("SriovNetworkNodeState:\n%s\n\n", j)
-		if err := r.syncSriovNetworkNodeState(np, npl, ns, &node, md5sum); err != nil {
+		logger.Info("SriovNetworkNodeState CR", "content", j)
+		if err := r.syncSriovNetworkNodeState(np, npl, ns, &node, found.GetResourceVersion()); err != nil {
 			logger.Error(err, "Fail to sync", "SriovNetworkNodeState", ns.Name)
 			return err
 		}
