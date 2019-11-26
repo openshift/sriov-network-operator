@@ -131,16 +131,21 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 }
 
 func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
-	// if iface.Mtu != ifaceStatus.Mtu {
-	// 	return true
-	// }
-	// if iface.NumVfs != ifaceStatus.NumVfs {
-	// 	return true
-	// }
-	// if iface.DeviceType != ifaceStatus.Driver {
-	// 	return true
-	// }
-	return true
+	if iface.Mtu != ifaceStatus.Mtu {
+		return true
+	}
+	if iface.NumVfs != ifaceStatus.NumVfs {
+		return true
+	}
+	if iface.NumVfs > 0 {
+		if iface.DeviceType != "netdevice" && iface.DeviceType != ifaceStatus.VFs[0].Driver {
+			return true
+		}
+		if iface.DeviceType == "netdevice" && sriovnetworkv1.StringInArray(ifaceStatus.VFs[0].Driver, DpdkDrivers) {
+			return true
+		}
+	}
+	return false
 }
 
 func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) error {
