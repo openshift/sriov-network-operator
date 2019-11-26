@@ -282,7 +282,7 @@ spec:
                         fieldRef:
                           fieldPath: metadata.name
                     - name: RELEASE_VERSION
-                      value: 0.0.1
+                      value: 4.3.0
     strategy: deployment
   installModes:
   - supported: true
@@ -295,7 +295,7 @@ spec:
     type: AllNamespaces
   provider:
     name: Red Hat, Inc.
-  version: 0.0.1
+  version: 4.3.0
   links:
   - name: Source Code
     url: https://github.com/openshift/sriov-network-operator
