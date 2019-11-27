@@ -297,7 +297,8 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 
 	// restart device plugin pod
-	if reqDrain {
+	if reqDrain || (newState.Spec.DpConfigVersion != oldState.Spec.DpConfigVersion) {
+		glog.Info("nodeStateChangeHandler(): restart device plugin pod")
 		if err := dn.restartDevicePluginPod(); err != nil {
 			glog.Errorf("nodeStateChangeHandler(): fail to restart device plugin pod: %v", err)
 			dn.exitCh <- err

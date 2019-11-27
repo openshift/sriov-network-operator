@@ -4,6 +4,7 @@ import (
 	"github.com/golang/glog"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
@@ -82,7 +83,8 @@ func BindDefaultDriver(pciAddr string) error {
 	}
 
 	driverOverridePath := filepath.Join(sysBusPciDevices, pciAddr, "driver_override")
-	err := ioutil.WriteFile(driverOverridePath, []byte(""), os.ModeAppend)
+	cmd := exec.Command("/bin/sh", "-c", "echo>", driverOverridePath)
+	err := cmd.Run()
 	if err != nil {
 		glog.Errorf("BindDefaultDriver(): fail to write driver_override for device %s: %s", pciAddr, err)
 		return err
