@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,12 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (
 		// skip the default policy
 		return admit, nil
 	}
+
+	var validString = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+	if !validString.MatchString(cr.Spec.ResourceName) {
+		return false, fmt.Errorf("resource name \"%s\" contains invalid characters", cr.Spec.ResourceName)
+	}
+
 	if cr.Spec.NicSelector.Vendor == "" && cr.Spec.NicSelector.DeviceID == "" && len(cr.Spec.NicSelector.PfNames) == 0 {
 		return false, fmt.Errorf("at least one of these parameters (Vendor, DeviceID or PfNames) has to be defined in nicSelector in CR %s", cr.GetName())
 	}
