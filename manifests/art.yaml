@@ -10,5 +10,5 @@ updates:
       replace: 'olm.skipRange: ">=4.3.0 <{FULL_VER}"'
   - file: "sriov-network-operator.package.yaml"
     update_list:
-    - search: "currentCSV: sriov-network-operator.v4.3.0"
+    - search: "currentCSV: sriov-network-operator.v4.4.0"
       replace: "currentCSV: sriov-network-operator.{FULL_VER}"
