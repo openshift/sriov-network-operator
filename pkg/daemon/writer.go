@@ -30,7 +30,7 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string) *NodeStateStatu
 
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
-func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}) {
+func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, runonce bool) {
 	glog.V(0).Info("Run(): start writer")
 	if err := writer.pollNicStatus(); err != nil {
 		glog.Errorf("Run(): first poll failed: %v", err)
@@ -59,6 +59,10 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 				continue
 			}
 			setNodeStateStatus(writer.client, writer.node, writer.status, msg)
+		}
+		if runonce {
+			glog.V(2).Info("Run(): once")
+			return
 		}
 	}
 }
