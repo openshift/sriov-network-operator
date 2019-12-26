@@ -3,8 +3,8 @@ package sriovnetwork
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
@@ -136,23 +136,26 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			reqLogger.Info("NetworkAttachmentDefinition not exist, creating")
+			reqLogger.Info("NetworkAttachmentDefinition CR not exist, creating")
 			err = r.client.Create(context.TODO(), netAttDef)
 			if err != nil {
-				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err
 			}
 		} else {
-			reqLogger.Error(err, "Couldn't get NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+			reqLogger.Error(err, "Couldn't get NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 			return reconcile.Result{}, err
 		}
 	} else {
-		reqLogger.Info("NetworkAttachmentDefinition already exist, updating")
-		netAttDef.SetResourceVersion(found.GetResourceVersion())
-		err = r.client.Update(context.TODO(), netAttDef)
-		if err != nil {
-			reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
-			return reconcile.Result{}, err
+		reqLogger.Info("NetworkAttachmentDefinition CR already exist")
+		if !reflect.DeepEqual(found.Spec, netAttDef.Spec) || !reflect.DeepEqual(found.GetAnnotations(), netAttDef.GetAnnotations()) {
+			reqLogger.Info("Update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+			netAttDef.SetResourceVersion(found.GetResourceVersion())
+			err = r.client.Update(context.TODO(), netAttDef)
+			if err != nil {
+				reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				return reconcile.Result{}, err
+			}
 		}
 	}
 
@@ -271,7 +274,7 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 	}
 	for _, obj := range objs {
 		raw, _ := json.Marshal(obj)
-		fmt.Printf("manifest %s\n", raw)
+		logger.Info("render NetworkAttachementDefinition output", "raw", string(raw))
 	}
 	return objs[0], nil
 }
