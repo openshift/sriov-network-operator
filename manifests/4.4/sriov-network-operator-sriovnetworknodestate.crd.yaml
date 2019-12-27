@@ -12,9 +12,11 @@ spec:
   scope: Namespaced
   subresources:
     status: {}
-  preserveUnknownFields: false
+    preserveUnknownFields: false
   validation:
     openAPIV3Schema:
+      description: SriovNetworkNodeState is the Schema for the sriovnetworknodestates
+        API
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -29,28 +31,43 @@ spec:
         metadata:
           type: object
         spec:
+          description: SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
           properties:
             dpConfigVersion:
               type: string
             interfaces:
               items:
                 properties:
-                  deviceType:
-                    type: string
                   mtu:
-                    format: int64
                     type: integer
+                  name:
+                    type: string
                   numVfs:
-                    format: int64
                     type: integer
                   pciAddress:
                     type: string
+                  vfGroups:
+                    items:
+                      properties:
+                        deviceType:
+                          type: string
+                        resourceName:
+                          type: string
+                        vfRange:
+                          type: string
+                      required:
+                      - resourceName
+                      type: object
+                    type: array
                 required:
+                - name
                 - pciAddress
+                - vfGroups
                 type: object
               type: array
           type: object
         status:
+          description: SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
           properties:
             lastSyncError:
               type: string
@@ -62,8 +79,9 @@ spec:
                   Vfs:
                     items:
                       properties:
+                        VfID:
+                          type: integer
                         Vlan:
-                          format: int64
                           type: integer
                         assigned:
                           type: string

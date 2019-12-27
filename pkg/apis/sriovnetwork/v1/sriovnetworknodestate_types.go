@@ -15,10 +15,17 @@ type SriovNetworkNodeStateSpec struct {
 }
 
 type Interface struct {
-	PciAddress string `json:"pciAddress"`
-	NumVfs     int    `json:"numVfs,omitempty"`
-	Mtu        int    `json:"mtu,omitempty"`
-	DeviceType string `json:"deviceType,omitempty"`
+	PciAddress string    `json:"pciAddress"`
+	NumVfs     int       `json:"numVfs,omitempty"`
+	Mtu        int       `json:"mtu,omitempty"`
+	Name       string    `json:"name, omitempty"`
+	VfGroups   []VfGroup `json:"vfGroups, omitempty"`
+}
+
+type VfGroup struct {
+	ResourceName string `json:"resourceName"`
+	DeviceType   string `json:"deviceType,omitempty"`
+	VfRange      string `json:"vfRange,omitempty"`
 }
 
 type Interfaces []Interface
@@ -44,7 +51,10 @@ type InterfaceProperty struct {
 	Mtu        int    `json:"mtu,omitempty"`
 }
 
-type VirtualFunction InterfaceProperty
+type VirtualFunction struct {
+	InterfaceProperty
+	VfID int `json:"vfID"`
+}
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
 // +k8s:openapi-gen=true

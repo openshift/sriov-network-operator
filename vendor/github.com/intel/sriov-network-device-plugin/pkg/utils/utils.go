@@ -65,13 +65,20 @@ func GetPfName(pciAddr string) (string, error) {
 		if os.IsNotExist(err) {
 			path := filepath.Join(sysBusPci, pciAddr, "net")
 			files, err = ioutil.ReadDir(path)
-			if err == nil {
-				return files[0].Name(), nil
+			if err != nil {
+				return "", err
 			}
+			if len(files) < 1 {
+				return "", fmt.Errorf("no interface name found for device %s", pciAddr)
+			}
+			return files[0].Name(), nil
 		}
 		return "", err
+	} else if len(files) > 0 {
+		return files[0].Name(), nil
 	}
-	return files[0].Name(), nil
+	return "", fmt.Errorf("the PF name is not found for device %s", pciAddr)
+
 }
 
 // IsSriovPF check if a pci device SRIOV capable given its pci address
@@ -176,6 +183,21 @@ func GetSriovVFcapacity(pf string) int {
 		return 0
 	}
 	return numvfs
+}
+
+// GetDevNode returns the numa node of a PCI device, -1 if none is specified or error.
+func GetDevNode(pciAddr string) int {
+	devNodePath := filepath.Join(sysBusPci, pciAddr, "numa_node")
+	node, err := ioutil.ReadFile(devNodePath)
+	if err != nil {
+		return -1
+	}
+	node = bytes.TrimSpace(node)
+	numNode, err := strconv.Atoi(string(node))
+	if err != nil {
+		return -1
+	}
+	return numNode
 }
 
 // IsNetlinkStatusUp returns 'false' if 'operstate' is not "up" for a Linux network device.
@@ -326,4 +348,39 @@ func GetDriverName(pciAddr string) (string, error) {
 		return "", fmt.Errorf("error getting driver info for device %s %v", pciAddr, err)
 	}
 	return filepath.Base(driverInfo), nil
+}
+
+// GetVFID returns VF ID index (within specific PF) based on PCI address
+func GetVFID(pciAddr string) (vfID int, err error) {
+	pfDir := filepath.Join(sysBusPci, pciAddr, "physfn")
+	vfID = -1
+	_, err = os.Lstat(pfDir)
+	if os.IsNotExist(err) {
+		return vfID, nil
+	}
+	if err != nil {
+		err = fmt.Errorf("Error. Could not get PF directory information for VF device: %s, Err: %v", pciAddr, err)
+		return vfID, err
+	}
+
+	vfDirs, err := filepath.Glob(filepath.Join(pfDir, "virtfn*"))
+	if err != nil {
+		err = fmt.Errorf("error reading VF directories %v", err)
+		return vfID, err
+	}
+
+	//Read all VF directory and get VF ID
+	for vfID := range vfDirs {
+		dirN := fmt.Sprintf("%s/virtfn%d", pfDir, vfID)
+		dirInfo, err := os.Lstat(dirN)
+		if err == nil && (dirInfo.Mode()&os.ModeSymlink != 0) {
+			linkName, err := filepath.EvalSymlinks(dirN)
+			if err == nil && strings.Contains(linkName, pciAddr) {
+				return vfID, err
+			}
+		}
+	}
+	// The requested VF not found
+	vfID = -1
+	return vfID, nil
 }
