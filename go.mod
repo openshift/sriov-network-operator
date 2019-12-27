@@ -14,9 +14,9 @@ require (
 	github.com/go-openapi/spec v0.19.0
 	github.com/gobuffalo/flect v0.1.6 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/intel/sriov-network-device-plugin v2.1.1-0.20190529155402-34d97db7c39b+incompatible
-	github.com/jaypipes/ghw v0.0.0-20190131082148-032dfb1f8cb2
-	github.com/jaypipes/pcidb v0.0.0-20181115143611-141a53e65d4a // indirect
+	github.com/intel/sriov-network-device-plugin v3.0.1-0.20191017093954-bf28fdc3e2d9+incompatible
+	github.com/jaypipes/ghw v0.5.0
+
 	github.com/onsi/gomega v1.5.0
 	github.com/openshift/kubernetes-drain v0.0.0-20190727205423-d20a33f09dbf
 	github.com/operator-framework/operator-sdk v0.12.1-0.20191112211508-82fc57de5e5b
@@ -25,7 +25,6 @@ require (
 	github.com/spf13/pflag v1.0.3
 	golang.org/x/text v0.3.2 // indirect
 	google.golang.org/genproto v0.0.0-20190415143225-d1146b9035b9 // indirect
-	howett.net/plist v0.0.0-20181124034731-591f970eefbb // indirect
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible

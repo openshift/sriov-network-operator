@@ -11,8 +11,18 @@ We currently [test](https://travis-ci.org/jaypipes/pcidb/) `pcidb` on Linux, Win
 developers to query for information about hardware device classes, vendor and
 product information.
 
-The `pcidb.New()` function returns a `pcidb.PCIDB` struct. The `pcidb.PCIDB`
-struct contains a number of fields that may be queried for PCI information:
+The `pcidb.New()` function returns a `pcidb.PCIDB` struct or an error if the
+PCI database could not be loaded.
+
+> `pcidb`'s default behaviour is to first search for pci-ids DB files on the
+> local host system in well-known filesystem paths. If `pcidb` cannot find a
+> pci-ids DB file on the local host system, it will then fetch a current
+> pci-ids DB file from the network. You can disable this network-fetching
+> behaviour with the `pcidb.WithDisableNetworkFetch()` function or set the
+> `PCIDB_DISABLE_NETWORK_FETCH` to a non-0 value.
+
+The `pcidb.PCIDB` struct contains a number of fields that may be queried for
+PCI information:
 
 * `pcidb.PCIDB.Classes` is a map, keyed by the PCI class ID (a hex-encoded
   string) of pointers to `pcidb.Class` structs, one for each class of PCI
@@ -82,26 +92,26 @@ Each `pcidb.ProgrammingInterface` struct contains the following fields:
 package main
 
 import (
-	"fmt"
+    "fmt"
 
-	"github.com/jaypipes/pcidb"
+    "github.com/jaypipes/pcidb"
 )
 
 func main() {
-	pci, err := pcidb.New()
-	if err != nil {
-		fmt.Printf("Error getting PCI info: %v", err)
-	}
+    pci, err := pcidb.New()
+    if err != nil {
+        fmt.Printf("Error getting PCI info: %v", err)
+    }
 
-	for _, devClass := range pci.Classes {
-		fmt.Printf(" Device class: %v ('%v')\n", devClass.Name, devClass.ID)
+    for _, devClass := range pci.Classes {
+        fmt.Printf(" Device class: %v ('%v')\n", devClass.Name, devClass.ID)
         for _, devSubclass := range devClass.Subclasses {
             fmt.Printf("    Device subclass: %v ('%v')\n", devSubclass.Name, devSubclass.ID)
             for _, progIface := range devSubclass.ProgrammingInterfaces {
                 fmt.Printf("        Programming interface: %v ('%v')\n", progIface.Name, progIface.ID)
             }
         }
-	}
+    }
 }
 ```
 
@@ -163,46 +173,46 @@ most known products:
 package main
 
 import (
-	"fmt"
-	"sort"
+    "fmt"
+    "sort"
 
-	"github.com/jaypipes/pcidb"
+    "github.com/jaypipes/pcidb"
 )
 
 type ByCountProducts []*pcidb.Vendor
 
 func (v ByCountProducts) Len() int {
-	return len(v)
+    return len(v)
 }
 
 func (v ByCountProducts) Swap(i, j int) {
-	v[i], v[j] = v[j], v[i]
+    v[i], v[j] = v[j], v[i]
 }
 
 func (v ByCountProducts) Less(i, j int) bool {
-	return len(v[i].Products) > len(v[j].Products)
+    return len(v[i].Products) > len(v[j].Products)
 }
 
 func main() {
-	pci, err := pcidb.New()
-	if err != nil {
-		fmt.Printf("Error getting PCI info: %v", err)
-	}
+    pci, err := pcidb.New()
+    if err != nil {
+        fmt.Printf("Error getting PCI info: %v", err)
+    }
 
-	vendors := make([]*pcidb.Vendor, len(pci.Vendors))
-	x := 0
-	for _, vendor := range pci.Vendors {
-		vendors[x] = vendor
-		x++
-	}
+    vendors := make([]*pcidb.Vendor, len(pci.Vendors))
+    x := 0
+    for _, vendor := range pci.Vendors {
+        vendors[x] = vendor
+        x++
+    }
 
-	sort.Sort(ByCountProducts(vendors))
+    sort.Sort(ByCountProducts(vendors))
 
-	fmt.Println("Top 5 vendors by product")
-	fmt.Println("====================================================")
-	for _, vendor := range vendors[0:5] {
-		fmt.Printf("%v ('%v') has %d products\n", vendor.Name, vendor.ID, len(vendor.Products))
-	}
+    fmt.Println("Top 5 vendors by product")
+    fmt.Println("====================================================")
+    for _, vendor := range vendors[0:5] {
+        fmt.Printf("%v ('%v') has %d products\n", vendor.Name, vendor.ID, len(vendor.Products))
+    }
 }
 ```
 
@@ -228,85 +238,85 @@ different companies.
 package main
 
 import (
-	"fmt"
-	"sort"
+    "fmt"
+    "sort"
 
-	"github.com/jaypipes/pcidb"
+    "github.com/jaypipes/pcidb"
 )
 
 type ByCountSeparateSubvendors []*pcidb.Product
 
 func (v ByCountSeparateSubvendors) Len() int {
-	return len(v)
+    return len(v)
 }
 
 func (v ByCountSeparateSubvendors) Swap(i, j int) {
-	v[i], v[j] = v[j], v[i]
+    v[i], v[j] = v[j], v[i]
 }
 
 func (v ByCountSeparateSubvendors) Less(i, j int) bool {
-	iVendor := v[i].VendorID
-	iSetSubvendors := make(map[string]bool, 0)
-	iNumDiffSubvendors := 0
-	jVendor := v[j].VendorID
-	jSetSubvendors := make(map[string]bool, 0)
-	jNumDiffSubvendors := 0
+    iVendor := v[i].VendorID
+    iSetSubvendors := make(map[string]bool, 0)
+    iNumDiffSubvendors := 0
+    jVendor := v[j].VendorID
+    jSetSubvendors := make(map[string]bool, 0)
+    jNumDiffSubvendors := 0
 
-	for _, sub := range v[i].Subsystems {
-		if sub.VendorID != iVendor {
-			iSetSubvendors[sub.VendorID] = true
-		}
-	}
-	iNumDiffSubvendors = len(iSetSubvendors)
+    for _, sub := range v[i].Subsystems {
+        if sub.VendorID != iVendor {
+            iSetSubvendors[sub.VendorID] = true
+        }
+    }
+    iNumDiffSubvendors = len(iSetSubvendors)
 
-	for _, sub := range v[j].Subsystems {
-		if sub.VendorID != jVendor {
-			jSetSubvendors[sub.VendorID] = true
-		}
-	}
-	jNumDiffSubvendors = len(jSetSubvendors)
+    for _, sub := range v[j].Subsystems {
+        if sub.VendorID != jVendor {
+            jSetSubvendors[sub.VendorID] = true
+        }
+    }
+    jNumDiffSubvendors = len(jSetSubvendors)
 
-	return iNumDiffSubvendors > jNumDiffSubvendors
+    return iNumDiffSubvendors > jNumDiffSubvendors
 }
 
 func main() {
-	pci, err := pcidb.New()
-	if err != nil {
-		fmt.Printf("Error getting PCI info: %v", err)
-	}
+    pci, err := pcidb.New()
+    if err != nil {
+        fmt.Printf("Error getting PCI info: %v", err)
+    }
 
-	products := make([]*pcidb.Product, len(pci.Products))
-	x := 0
-	for _, product := range pci.Products {
-		products[x] = product
-		x++
-	}
+    products := make([]*pcidb.Product, len(pci.Products))
+    x := 0
+    for _, product := range pci.Products {
+        products[x] = product
+        x++
+    }
 
-	sort.Sort(ByCountSeparateSubvendors(products))
+    sort.Sort(ByCountSeparateSubvendors(products))
 
-	fmt.Println("Top 2 products by # different subvendors")
-	fmt.Println("====================================================")
-	for _, product := range products[0:2] {
-		vendorID := product.VendorID
-		vendor := pci.Vendors[vendorID]
-		setSubvendors := make(map[string]bool, 0)
+    fmt.Println("Top 2 products by # different subvendors")
+    fmt.Println("====================================================")
+    for _, product := range products[0:2] {
+        vendorID := product.VendorID
+        vendor := pci.Vendors[vendorID]
+        setSubvendors := make(map[string]bool, 0)
 
-		for _, sub := range product.Subsystems {
-			if sub.VendorID != vendorID {
-				setSubvendors[sub.VendorID] = true
-			}
-		}
-		fmt.Printf("%v ('%v') from %v\n", product.Name, product.ID, vendor.Name)
-		fmt.Printf(" -> %d subsystems under the following different vendors:\n", len(setSubvendors))
-		for subvendorID, _ := range setSubvendors {
-			subvendor, exists := pci.Vendors[subvendorID]
-			subvendorName := "Unknown subvendor"
-			if exists {
-				subvendorName = subvendor.Name
-			}
-			fmt.Printf("      - %v ('%v')\n", subvendorName, subvendorID)
-		}
-	}
+        for _, sub := range product.Subsystems {
+            if sub.VendorID != vendorID {
+                setSubvendors[sub.VendorID] = true
+            }
+        }
+        fmt.Printf("%v ('%v') from %v\n", product.Name, product.ID, vendor.Name)
+        fmt.Printf(" -> %d subsystems under the following different vendors:\n", len(setSubvendors))
+        for subvendorID, _ := range setSubvendors {
+            subvendor, exists := pci.Vendors[subvendorID]
+            subvendorName := "Unknown subvendor"
+            if exists {
+                subvendorName = subvendor.Name
+            }
+            fmt.Printf("      - %v ('%v')\n", subvendorName, subvendorID)
+        }
+    }
 }
 ```
 
@@ -399,5 +409,5 @@ You can run unit tests easily using the `make test` command, like so:
 ```
 [jaypipes@uberbox pcidb]$ make test
 go test github.com/jaypipes/pcidb
-ok  	github.com/jaypipes/pcidb	0.045s
+ok      github.com/jaypipes/pcidb    0.045s
 ```
