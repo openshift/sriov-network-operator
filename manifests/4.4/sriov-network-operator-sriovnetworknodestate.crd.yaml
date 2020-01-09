@@ -12,7 +12,7 @@ spec:
   scope: Namespaced
   subresources:
     status: {}
-    preserveUnknownFields: false
+  preserveUnknownFields: false
   validation:
     openAPIV3Schema:
       description: SriovNetworkNodeState is the Schema for the sriovnetworknodestates
