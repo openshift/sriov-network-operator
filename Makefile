@@ -106,7 +106,7 @@ endif
 verify: verify-gofmt
 
 sync-manifests-%:
-	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
-	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
-	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
-	@cp deploy/crds/sriovnetwork.openshift.io_sriovoperatorconfigs_crd.yaml manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovoperatorconfigs_crd.yaml manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml

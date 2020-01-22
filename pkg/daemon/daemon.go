@@ -395,6 +395,17 @@ func rebootNode() {
 	}
 }
 
+type GlogLogger struct {
+}
+
+func (a GlogLogger) Log(v ...interface{}) {
+	glog.Info(v...)
+}
+
+func (a GlogLogger) Logf(format string, v ...interface{}) {
+	glog.Infof(format, v...)
+}
+
 func (dn *Daemon) drainNode(name string) {
 	glog.Info("drainNode(): Update prepared; beginning drain")
 	node, err := dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
@@ -409,12 +420,15 @@ func (dn *Daemon) drainNode(name string) {
 	}
 	var lastErr error
 
+	logger := GlogLogger{}
+
 	if err := wait.ExponentialBackoff(backoff, func() (bool, error) {
 		err := drain.Drain(dn.kubeClient, []*corev1.Node{node}, &drain.DrainOptions{
 			DeleteLocalData:    true,
 			Force:              true,
 			GracePeriodSeconds: 600,
 			IgnoreDaemonsets:   true,
+			Logger:             logger,
 		})
 		if err == nil {
 			return true, nil

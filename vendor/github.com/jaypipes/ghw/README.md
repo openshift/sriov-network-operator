@@ -1,6 +1,8 @@
 # `ghw` - Golang HardWare discovery/inspection library [![Build Status](https://travis-ci.org/jaypipes/ghw.svg?branch=master)](https://travis-ci.org/jaypipes/ghw)
 
-`ghw` is a small Golang library providing hardware inspection and discovery.
+`ghw` is a small Golang library providing hardware inspection and discovery
+for Linux. There currently exists partial support for MacOSX and Windows
+support is planned for a future release.
 
 ## Design Principles
 
@@ -10,9 +12,15 @@
   host hardware information as directly as possible without relying on shellouts
   to programs like `dmidecode` that require root privileges to execute.
 
+  Elevated privileges are indeed required to query for some information, but
+  `ghw` will never error out if blocked from reading that information. Instead,
+  `ghw` will print a warning message about the information that could not be
+  retrieved. You may disable these warning messages with `GHW_DISABLE_WARNINGS`
+  environment variable.
+
 * Well-documented code and plenty of example code
 
-  The code itself should be well-documented, of course, with lots of usage
+  The code itself should be well-documented with lots of usage
   examples.
 
 * Interfaces should be consistent across modules
@@ -33,6 +41,10 @@ information about the host computer:
 * [Network](#network)
 * [PCI](#pci)
 * [GPU](#gpu)
+* [Chassis](#chassis)
+* [BIOS](#bios)
+* [Baseboard](#baseboard)
+* [Product](#product)
 * [YAML and JSON serialization](#serialization)
 
 ### Overriding the root mountpoint `ghw` uses
@@ -250,10 +262,15 @@ Each `ghw.Disk` struct contains the following fields:
 * `ghw.Disk.SizeBytes` contains the amount of storage the disk provides
 * `ghw.Disk.PhysicalBlockSizeBytes` contains the size of the physical blocks
   used on the disk, in bytes
-* `ghw.Disk.BusType` is the type of bus used for the disk. It is of type
-  `ghw.BusType` which has a `ghw.BusType.String()` method that can be called to
-  return a string representation of the bus. This string will be "SCSI", "IDE",
-  "Virtio", or "NVMe"
+* `ghw.Disk.DriveType` is the type of drive. It is of type `ghw.DriveType`
+  which has a `ghw.DriveType.String()` method that can be called to return a
+  string representation of the bus. This string will be "HDD", "FDD", "ODD",
+  or "SSD", which correspond to a hard disk drive (rotational), floppy drive,
+  optical (CD/DVD) drive and solid-state drive.
+* `ghw.Disk.StorageController` is the type of storage controller/drive. It is
+  of type `ghw.StorageController` which has a `ghw.StorageController.String()`
+  method that can be called to return a string representation of the bus. This
+  string will be "SCSI", "IDE", "virtio", "MMC", or "NVMe"
 * `ghw.Disk.NUMANodeID` is the numeric index of the NUMA node this disk is
   local to, or -1
 * `ghw.Disk.Vendor` contains a string with the name of the hardware vendor for
@@ -310,7 +327,7 @@ Example output from my personal workstation:
 
 ```
 block storage (1 disk, 2TB physical storage)
- /dev/sda (2TB) [SCSI]  LSI - SN #3600508e000000000f8253aac9a1abd0c
+ /dev/sda HDD (2TB) SCSI [@pci-0000:04:00.0-scsi-0:1:0:0 (node #0)] vendor=LSI model=Logical_Volume serial=600508e000000000f8253aac9a1abd0c WWN=0x600508e000000000f8253aac9a1abd0c
   /dev/sda1 (100MB)
   /dev/sda2 (187GB)
   /dev/sda3 (449MB)
@@ -318,6 +335,11 @@ block storage (1 disk, 2TB physical storage)
   /dev/sda5 (15GB)
   /dev/sda6 (2TB) [ext4] mounted@/
 ```
+
+> Note that `ghw` looks in the udev runtime database for some information. If
+> you are using `ghw` in a container, remember to bind mount `/dev/disk` and
+> `/run` into your container, otherwise `ghw` won't be able to query the udev
+> DB or sysfs paths for information.
 
 ### Topology
 
@@ -811,6 +833,203 @@ information
 **NOTE**: You can [read more](#topology) about the fields of the
 `ghw.TopologyNode` struct if you'd like to dig deeper into the NUMA/topology
 subsystem
+
+### Chassis
+
+The host's chassis information is accessible with the `ghw.Chassis()` function.  This
+function returns a pointer to a `ghw.ChassisInfo` struct.
+
+The `ghw.ChassisInfo` struct contains multiple fields:
+
+* `ghw.ChassisInfo.AssetTag` is a string with the chassis asset tag
+* `ghw.ChassisInfo.SerialNumber` is a string with the chassis serial number
+* `ghw.ChassisInfo.Type` is a string with the chassis type *code*
+* `ghw.ChassisInfo.TypeDescription` is a string with a description of the chassis type
+* `ghw.ChassisInfo.Vendor` is a string with the chassis vendor
+* `ghw.ChassisInfo.Version` is a string with the chassis version
+
+**NOTE**: These fields are often missing for non-server hardware. Don't be
+surprised to see empty string or "None" values.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	chassis, err := ghw.Chassis()
+	if err != nil {
+		fmt.Printf("Error getting chassis info: %v", err)
+	}
+
+	fmt.Printf("%v\n", chassis)
+}
+```
+
+Example output from my personal workstation:
+
+```
+chassis type=Desktop vendor=System76 version=thelio-r1
+```
+
+**NOTE**: Some of the values such as serial numbers are shown as unknown because
+the Linux kernel by default disallows access to those fields if you're not running
+as root.  They will be populated if it runs as root or otherwise you may see warnings
+like the following:
+
+```
+WARNING: Unable to read chassis_serial: open /sys/class/dmi/id/chassis_serial: permission denied
+```
+
+You can ignore them or use the [Disabling warning messages](#disabling-warning-messages)
+feature to quiet things down.
+
+### BIOS
+
+The host's basis input/output system (BIOS) information is accessible with the `ghw.BIOS()` function.  This
+function returns a pointer to a `ghw.BIOSInfo` struct.
+
+The `ghw.BIOSInfo` struct contains multiple fields:
+
+* `ghw.BIOSInfo.Vendor` is a string with the BIOS vendor
+* `ghw.BIOSInfo.Version` is a string with the BIOS version
+* `ghw.BIOSInfo.Date` is a string with the date the BIOS was flashed/created
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	bios, err := ghw.BIOS()
+	if err != nil {
+		fmt.Printf("Error getting BIOS info: %v", err)
+	}
+
+	fmt.Printf("%v\n", bios)
+}
+```
+
+Example output from my personal workstation:
+
+```
+bios vendor=System76 version=F2 Z5 date=11/14/2018
+```
+
+### Baseboard
+
+The host's baseboard information is accessible with the `ghw.Baseboard()` function.  This
+function returns a pointer to a `ghw.BaseboardInfo` struct.
+
+The `ghw.BaseboardInfo` struct contains multiple fields:
+
+* `ghw.BaseboardInfo.AssetTag` is a string with the baseboard asset tag
+* `ghw.BaseboardInfo.SerialNumber` is a string with the baseboard serial number
+* `ghw.BaseboardInfo.Vendor` is a string with the baseboard vendor
+* `ghw.BaseboardInfo.Version` is a string with the baseboard version
+
+**NOTE**: These fields are often missing for non-server hardware. Don't be
+surprised to see empty string or "None" values.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	baseboard, err := ghw.Baseboard()
+	if err != nil {
+		fmt.Printf("Error getting baseboard info: %v", err)
+	}
+
+	fmt.Printf("%v\n", baseboard)
+}
+```
+
+Example output from my personal workstation:
+
+```
+baseboard vendor=System76 version=thelio-r1
+```
+
+**NOTE**: Some of the values such as serial numbers are shown as unknown because
+the Linux kernel by default disallows access to those fields if you're not running
+as root.  They will be populated if it runs as root or otherwise you may see warnings
+like the following:
+
+```
+WARNING: Unable to read board_serial: open /sys/class/dmi/id/board_serial: permission denied
+```
+
+You can ignore them or use the [Disabling warning messages](#disabling-warning-messages)
+feature to quiet things down.
+
+### Product
+
+The host's product information is accessible with the `ghw.Product()` function.  This
+function returns a pointer to a `ghw.ProductInfo` struct.
+
+The `ghw.ProductInfo` struct contains multiple fields:
+
+* `ghw.ProductInfo.Family` is a string describing the product family
+* `ghw.ProductInfo.Name` is a string with the product name
+* `ghw.ProductInfo.SerialNumber` is a string with the product serial number
+* `ghw.ProductInfo.UUID` is a string with the product UUID
+* `ghw.ProductInfo.SKU` is a string with the product stock unit identifier (SKU)
+* `ghw.ProductInfo.Vendor` is a string with the product vendor
+* `ghw.ProductInfo.Version` is a string with the product version
+
+**NOTE**: These fields are often missing for non-server hardware. Don't be
+surprised to see empty string, "Default string" or "None" values.
+
+```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/jaypipes/ghw"
+)
+
+func main() {
+	product, err := ghw.Product()
+	if err != nil {
+		fmt.Printf("Error getting product info: %v", err)
+	}
+
+	fmt.Printf("%v\n", product)
+}
+```
+
+Example output from my personal workstation:
+
+```
+product family=Default string name=Thelio vendor=System76 sku=Default string version=thelio-r1
+```
+
+**NOTE**: Some of the values such as serial numbers are shown as unknown because
+the Linux kernel by default disallows access to those fields if you're not running
+as root.  They will be populated if it runs as root or otherwise you may see warnings
+like the following:
+
+```
+WARNING: Unable to read product_serial: open /sys/class/dmi/id/product_serial: permission denied
+```
+
+You can ignore them or use the [Disabling warning messages](#disabling-warning-messages)
+feature to quiet things down.
 
 ## Serialization
 
