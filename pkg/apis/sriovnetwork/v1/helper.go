@@ -67,6 +67,16 @@ func StringInArray(val string, array []string) bool {
 	return false
 }
 
+func RemoveString(s string, slice []string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
+}
+
 func UniqueAppend(inSlice []string, strings ...string) []string {
 	for _, s := range strings {
 		if !StringInArray(s, inSlice) {
