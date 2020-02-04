@@ -241,6 +241,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	var err error
 	newState := new.(*sriovnetworkv1.SriovNetworkNodeState)
 	oldState := old.(*sriovnetworkv1.SriovNetworkNodeState)
+	glog.V(2).Infof("nodeStateChangeHandler(): current generation is %d", newState.GetObjectMeta().GetGeneration())
 	if newState.GetObjectMeta().GetGeneration() == oldState.GetObjectMeta().GetGeneration() {
 		glog.V(2).Infof("nodeStateChangeHandler(): Interface not changed")
 		return

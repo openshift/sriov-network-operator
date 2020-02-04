@@ -131,29 +131,37 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 }
 
 func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
-	if iface.Mtu != ifaceStatus.Mtu {
+	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
+		glog.V(2).Infof("needUpdate(): MTU needs update, desired=%d, current=%d", iface.Mtu, ifaceStatus.Mtu)
 		return true
 	}
 	if iface.NumVfs != ifaceStatus.NumVfs {
+		glog.V(2).Infof("needUpdate(): NumVfs needs update desired=%d, current=%d", iface.NumVfs, ifaceStatus.NumVfs)
 		return true
 	}
 	if iface.NumVfs > 0 {
 		for _, vf := range ifaceStatus.VFs {
-			for i := range iface.VfGroups {
-				if !sriovnetworkv1.IndexInRange(vf.VfID, iface.VfGroups[i].VfRange) {
-					if sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
-						return true
+			ingroup := false
+			for _, group := range iface.VfGroups {
+				if sriovnetworkv1.IndexInRange(vf.VfID, group.VfRange) {
+					ingroup = true
+					if group.DeviceType != "netdevice" {
+						if group.DeviceType != vf.Driver {
+							glog.V(2).Infof("needUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
+							return true
+						}
+					} else {
+						if sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
+							glog.V(2).Infof("needUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
+							return true
+						}
 					}
+					break
 				}
-				if iface.VfGroups[i].DeviceType != "netdevice" {
-					if iface.VfGroups[i].DeviceType != vf.Driver {
-						return true
-					}
-				} else {
-					if sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
-						return true
-					}
-				}
+			}
+			if !ingroup && sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
+				// VF which has DPDK driver loaded but not in any group, needs to be reset to default driver.
+				return true
 			}
 		}
 	}
@@ -162,23 +170,27 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 
 func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) error {
 	glog.V(2).Infof("configSriovDevice(): config interface %s with %v", iface.PciAddress, iface)
-
+	var err error
 	if iface.NumVfs > ifaceStatus.TotalVfs {
 		err := fmt.Errorf("cannot config SRIOV device: NumVfs is larger than TotalVfs")
 		glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s: %v", iface.PciAddress, err)
 		return err
 	}
-
-	err := setSriovNumVfs(iface.PciAddress, iface.NumVfs)
-	if err != nil {
-		glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
-		return err
+	// set numVFs
+	if iface.NumVfs != ifaceStatus.NumVfs {
+		err = setSriovNumVfs(iface.PciAddress, iface.NumVfs)
+		if err != nil {
+			glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
+			return err
+		}
 	}
 	// set PF mtu
-	err = setNetdevMTU(iface.PciAddress, iface.Mtu)
-	if err != nil {
-		glog.Warningf("configSriovDevice(): fail to set mtu for PF %s: %v", iface.PciAddress, err)
-		return err
+	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
+		err = setNetdevMTU(iface.PciAddress, iface.Mtu)
+		if err != nil {
+			glog.Warningf("configSriovDevice(): fail to set mtu for PF %s: %v", iface.PciAddress, err)
+			return err
+		}
 	}
 	// Config VFs
 	if iface.NumVfs > 0 {

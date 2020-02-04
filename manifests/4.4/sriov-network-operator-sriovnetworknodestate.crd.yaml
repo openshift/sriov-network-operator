@@ -79,7 +79,7 @@ spec:
                   Vfs:
                     items:
                       properties:
-                        VfID:
+                        vfID:
                           type: integer
                         Vlan:
                           type: integer
