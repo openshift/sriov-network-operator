@@ -9,11 +9,10 @@ import (
 
 // SriovNetworkNodePolicySpec defines the desired state of SriovNetworkNodePolicy
 // +k8s:openapi-gen=true
+// +kubebuilder:pruning:PreserveUnknownFields
 type SriovNetworkNodePolicySpec struct {
 	// SRIOV Network device plugin endpoint resource name
 	ResourceName string `json:"resourceName"`
-	// +kubebuilder:validation:MinItems=0
-	// +kubebuilder:validation:UniqueItems=true
 	// NodeSelector selects the nodes to be configured
 	NodeSelector map[string]string `json:"nodeSelector"`
 	// +kubebuilder:validation:Minimum=0

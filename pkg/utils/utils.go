@@ -68,12 +68,10 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			continue
 		}
 		iface := sriovnetworkv1.InterfaceExt{
-			InterfaceProperty: sriovnetworkv1.InterfaceProperty{
-				PciAddress: device.Address,
-				Driver:     driver,
-				Vendor:     device.Vendor.ID,
-				DeviceID:   device.Product.ID,
-			},
+			PciAddress: device.Address,
+			Driver:     driver,
+			Vendor:     device.Vendor.ID,
+			DeviceID:   device.Product.ID,
 		}
 		if mtu := getNetdevMTU(device.Address); mtu > 0 {
 			iface.Mtu = mtu
@@ -325,11 +323,9 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualF
 		glog.Warningf("getVfInfo(): unable to get VF index for device %s %q", pciAddr, err)
 	}
 	vf := sriovnetworkv1.VirtualFunction{
-		InterfaceProperty: sriovnetworkv1.InterfaceProperty{
-			PciAddress: pciAddr,
-			Driver:     driver,
-		},
-		VfID: id,
+		PciAddress: pciAddr,
+		Driver:     driver,
+		VfID:       id,
 	}
 
 	if mtu := getNetdevMTU(pciAddr); mtu > 0 {

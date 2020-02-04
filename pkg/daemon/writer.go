@@ -91,6 +91,9 @@ func updateNodeStateStatusRetry(client snclientset.Interface, nodeName string, f
 
 		var err error
 		nodeState, err = client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(n)
+		if err != nil {
+			glog.V(2).Infof("updateNodeStateStatusRetry(): fail to update the node status: %v", err)
+		}
 		return err
 	})
 	if err != nil {
