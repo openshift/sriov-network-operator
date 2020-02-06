@@ -349,8 +349,8 @@ func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv
 	ns := os.Getenv("NAMESPACE")
 
 	if len(pl.Items) < 2 {
-		r.tryDeleteDs(ns, "sriov-device-plugin")
-		r.tryDeleteDs(ns, "sriov-cni")
+		r.tryDeleteDsPods(ns, "sriov-device-plugin")
+		r.tryDeleteDsPods(ns, "sriov-cni")
 		return nil
 	}
 	// render RawCNIConfig manifests
@@ -406,8 +406,8 @@ func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv
 	return nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy) tryDeleteDs(namespace, name string) error {
-	logger := log.WithName("tryDeleteDsObject")
+func (r *ReconcileSriovNetworkNodePolicy) tryDeleteDsPods(namespace, name string) error {
+	logger := log.WithName("tryDeleteDsPods")
 	ds := &appsv1.DaemonSet{}
 	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, ds)
 	if err != nil {
@@ -418,9 +418,10 @@ func (r *ReconcileSriovNetworkNodePolicy) tryDeleteDs(namespace, name string) er
 			return err
 		}
 	} else {
-		err = r.client.Delete(context.TODO(), ds)
+		ds.Spec.Template.Spec.NodeSelector = map[string]string{"beta.kubernetes.io/os": "none"}
+		err = r.client.Update(context.TODO(), ds)
 		if err != nil {
-			logger.Error(err, "Fail to delete DaemonSet", "Namespace", namespace, "Name", name)
+			logger.Error(err, "Fail to update DaemonSet", "Namespace", namespace, "Name", name)
 			return err
 		}
 	}
