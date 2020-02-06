@@ -8,6 +8,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
+const invalidVfIndex = -1
+
 var SriovPfVfMap = map[string](string){
 	"1583": "154c",
 	"158b": "154c",
@@ -144,7 +146,7 @@ func generateVfGroup(ps *SriovNetworkNodePolicySpec, iface *InterfaceExt) (*VfGr
 		if err != nil {
 			return nil, err
 		}
-		if rngStart == 0 && rngEnd == 0 {
+		if rngStart == invalidVfIndex && rngEnd == invalidVfIndex {
 			rngEnd = ps.NumVfs - 1
 		}
 		if pfName == iface.Name {
@@ -185,6 +187,7 @@ func parseRange(r string) (rngSt, rngEnd int, err error) {
 
 // Parse PF name with VF range
 func ParsePFName(name string) (ifName string, rngSt, rngEnd int, err error) {
+	rngSt, rngEnd = invalidVfIndex, invalidVfIndex
 	if strings.Contains(name, "#") {
 		fields := strings.Split(name, "#")
 		ifName = fields[0]
