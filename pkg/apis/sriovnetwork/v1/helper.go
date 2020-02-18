@@ -156,6 +156,7 @@ func generateVfGroup(ps *SriovNetworkNodePolicySpec, iface *InterfaceExt) (*VfGr
 		}
 	}
 	if !found {
+		// assign the default vf index range if the pfName is not specified by the nicSelector
 		rngStart, rngEnd = 0, ps.NumVfs-1
 	}
 	rng := strconv.Itoa(rngStart) + "-" + strconv.Itoa(rngEnd)
