@@ -141,17 +141,23 @@ func generateVfGroup(ps *SriovNetworkNodePolicySpec, iface *InterfaceExt) (*VfGr
 	var err error
 	pfName := ""
 	var rngStart, rngEnd int
+	found := false
 	for _, selector := range ps.NicSelector.PfNames {
 		pfName, rngStart, rngEnd, err = ParsePFName(selector)
 		if err != nil {
 			return nil, err
 		}
 		if pfName == iface.Name {
+			found = true
 			if rngStart == invalidVfIndex && rngEnd == invalidVfIndex {
 				rngStart, rngEnd = 0, ps.NumVfs-1
 			}
 			break
 		}
+	}
+	if !found {
+		// assign the default vf index range if the pfName is not specified by the nicSelector
+		rngStart, rngEnd = 0, ps.NumVfs-1
 	}
 	rng := strconv.Itoa(rngStart) + "-" + strconv.Itoa(rngEnd)
 	return &VfGroup{
