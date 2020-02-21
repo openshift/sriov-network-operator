@@ -106,7 +106,7 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 			var group *VfGroup
 			if p.Spec.NumVfs > 0 {
 				result.NumVfs = p.Spec.NumVfs
-				group, _ = generateVfGroup(&p.Spec, &iface)
+				group, _ = p.generateVfGroup(&iface)
 				found := false
 				for i := range state.Spec.Interfaces {
 					if state.Spec.Interfaces[i].PciAddress == result.PciAddress {
@@ -137,12 +137,12 @@ func (iface Interface) mergeVfGroups(input *VfGroup) []VfGroup {
 	return groups
 }
 
-func generateVfGroup(ps *SriovNetworkNodePolicySpec, iface *InterfaceExt) (*VfGroup, error) {
+func (p *SriovNetworkNodePolicy) generateVfGroup(iface *InterfaceExt) (*VfGroup, error) {
 	var err error
 	pfName := ""
 	var rngStart, rngEnd int
 	found := false
-	for _, selector := range ps.NicSelector.PfNames {
+	for _, selector := range p.Spec.NicSelector.PfNames {
 		pfName, rngStart, rngEnd, err = ParsePFName(selector)
 		if err != nil {
 			return nil, err
@@ -150,20 +150,21 @@ func generateVfGroup(ps *SriovNetworkNodePolicySpec, iface *InterfaceExt) (*VfGr
 		if pfName == iface.Name {
 			found = true
 			if rngStart == invalidVfIndex && rngEnd == invalidVfIndex {
-				rngStart, rngEnd = 0, ps.NumVfs-1
+				rngStart, rngEnd = 0, p.Spec.NumVfs-1
 			}
 			break
 		}
 	}
 	if !found {
 		// assign the default vf index range if the pfName is not specified by the nicSelector
-		rngStart, rngEnd = 0, ps.NumVfs-1
+		rngStart, rngEnd = 0, p.Spec.NumVfs-1
 	}
 	rng := strconv.Itoa(rngStart) + "-" + strconv.Itoa(rngEnd)
 	return &VfGroup{
-		ResourceName: ps.ResourceName,
-		DeviceType:   ps.DeviceType,
+		ResourceName: p.Spec.ResourceName,
+		DeviceType:   p.Spec.DeviceType,
 		VfRange:      rng,
+		PolicyName:   p.GetName(),
 	}, nil
 }
 
