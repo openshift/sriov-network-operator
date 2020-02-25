@@ -131,10 +131,12 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 }
 
 func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
-	if iface.Mtu != ifaceStatus.Mtu {
+	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
+		glog.V(2).Infof("needUpdate(): MTU needs update, desired=%d, current=%d", iface.Mtu, ifaceStatus.Mtu)
 		return true
 	}
 	if iface.NumVfs != ifaceStatus.NumVfs {
+		glog.V(2).Infof("needUpdate(): NumVfs needs update desired=%d, current=%d", iface.NumVfs, ifaceStatus.NumVfs)
 		return true
 	}
 	if iface.NumVfs > 0 {
@@ -150,19 +152,20 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 
 func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) error {
 	glog.V(2).Infof("configSriovDevice(): config interface %s with %v", iface.PciAddress, iface)
-
+	var err error
 	if iface.NumVfs > ifaceStatus.TotalVfs {
 		err := fmt.Errorf("cannot config SRIOV device: NumVfs is larger than TotalVfs")
 		glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s: %v", iface.PciAddress, err)
 		return err
 	}
-
-	err := setSriovNumVfs(iface.PciAddress, iface.NumVfs)
-	if err != nil {
-		glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
-		return err
+	// set numVFs
+	if iface.NumVfs != ifaceStatus.NumVfs {
+		err = setSriovNumVfs(iface.PciAddress, iface.NumVfs)
+		if err != nil {
+			glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
+			return err
+		}
 	}
-
 	// Config VFs
 	if iface.NumVfs > 0 {
 		driver := ""
