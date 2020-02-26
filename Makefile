@@ -15,6 +15,8 @@ IMAGE_TAG?=nfvpe/$(APP_NAME):latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export ENABLE_ADMISSION_CONTROLLER?=true
+export GOFLAGS=-mod=vendor
+export GO111MODULE=on
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 
 # go source files, ignore vendor directory
@@ -104,7 +106,7 @@ endif
 verify: verify-gofmt
 
 sync-manifests-%:
-	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
-	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
-	@cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
-	@cp deploy/crds/sriovnetwork.openshift.io_sriovoperatorconfigs_crd.yaml manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovoperatorconfigs_crd.yaml manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml

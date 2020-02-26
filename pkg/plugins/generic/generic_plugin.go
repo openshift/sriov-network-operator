@@ -135,8 +135,10 @@ func (p *GenericPlugin) Apply() error {
 
 func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
 	for _, iface := range state.Spec.Interfaces {
-		if iface.DeviceType == "vfio-pci" {
-			return true
+		for i := range iface.VfGroups {
+			if iface.VfGroups[i].DeviceType == "vfio-pci" {
+				return true
+			}
 		}
 	}
 	return false
