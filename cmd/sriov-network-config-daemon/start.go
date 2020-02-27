@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"os"
 	"time"
 
@@ -9,7 +8,6 @@ import (
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
 	"github.com/openshift/sriov-network-operator/pkg/daemon"
-	"github.com/openshift/sriov-network-operator/pkg/version"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -38,12 +36,6 @@ func init() {
 }
 
 func runStartCmd(cmd *cobra.Command, args []string) {
-	flag.Set("logtostderr", "true")
-	flag.Parse()
-
-	// To help debugging, immediately log version
-	glog.V(2).Infof("Version: %+v", version.Version)
-
 	if startOpts.nodeName == "" {
 		name, ok := os.LookupEnv("NODE_NAME")
 		if !ok || name == "" {

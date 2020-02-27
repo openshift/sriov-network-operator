@@ -1,0 +1,11 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sriov-network-config-daemon
+  namespace: {{.Namespace}}
+data:
+  config.json: |-
+    {
+      "logLevel": "0"
+    }

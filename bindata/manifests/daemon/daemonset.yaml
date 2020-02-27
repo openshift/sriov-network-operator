@@ -37,7 +37,6 @@ spec:
         securityContext:
           privileged: true
         args:
-          - "--v=3"
           - "start"
         env:
           - name: NODE_NAME
@@ -51,6 +50,8 @@ spec:
         volumeMounts:
         - name: host
           mountPath: /host
+        - name: config-volume
+          mountPath: /etc/sriov-network-config-daemon
         # - name: hostetc
         #   mountPath: /host/etc
         # - name: hostdev
@@ -75,6 +76,9 @@ spec:
       - name: host
         hostPath:
           path: /
+      - name: config-volume
+        configMap:
+          name: sriov-network-config-daemon
       # - name: hostetc
       #   hostPath:
       #     path: /etc
