@@ -346,16 +346,15 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnet
 func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.WithName("syncPluginDaemonObjs")
 	logger.Info("Start to sync sriov daemons objects")
-	ns := os.Getenv("NAMESPACE")
 
 	if len(pl.Items) < 2 {
-		r.tryDeleteDsPods(ns, "sriov-device-plugin")
-		r.tryDeleteDsPods(ns, "sriov-cni")
+		r.tryDeleteDsPods(Namespace, "sriov-device-plugin")
+		r.tryDeleteDsPods(Namespace, "sriov-cni")
 		return nil
 	}
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
-	data.Data["Namespace"] = ns
+	data.Data["Namespace"] = Namespace
 	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
