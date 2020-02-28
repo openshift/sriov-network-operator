@@ -188,13 +188,18 @@ func testWithOneSriovNetworkNodePolicyCR(t *testing.T, ctx *framework.TestCtx) {
 	}
 
 	cm := &corev1.ConfigMap{}
-	err = waitForNamespacedObject(cm, t, f.Client, namespace, "device-plugin-config", retryInterval, timeout)
-	if err != nil {
-		t.Fatalf("fail to get ConfigMap: %v", err)
-	}
+	for i := 0; i < 3; i++ {
+		err = waitForNamespacedObject(cm, t, f.Client, namespace, "device-plugin-config", retryInterval, timeout)
+		if err != nil {
+			t.Fatalf("fail to get ConfigMap: %v", err)
+		}
 
-	if err = validateDevicePluginConfig(policy, cm.Data["config.json"]); err != nil {
-		t.Fatalf("failed to validate ConfigMap : %v", err)
+		if err = validateDevicePluginConfig(policy, cm.Data["config.json"]); err != nil && i == 2 {
+			t.Fatalf("failed to validate ConfigMap : %v", err)
+		} else if err == nil {
+			break
+		}
+		time.Sleep(300 * time.Millisecond)
 	}
 
 	daemon := &appsv1.DaemonSet{}
@@ -239,8 +244,8 @@ func testWithSriovNetworkCRDeletion(t *testing.T, ctx *framework.TestCtx, cr *sr
 	if err != nil {
 		t.Fatalf("fail to Delete SriovNetwork CR: %v", err)
 	}
-	// wait 100ms for object get deleted
-	time.Sleep(300 * time.Millisecond)
+	// wait 600ms for object get deleted
+	time.Sleep(600 * time.Millisecond)
 	nad := &netattdefv1.NetworkAttachmentDefinition{}
 	namespace := cr.GetNamespace()
 	if cr.Spec.NetworkNamespace != "" {
@@ -250,7 +255,7 @@ func testWithSriovNetworkCRDeletion(t *testing.T, ctx *framework.TestCtx, cr *sr
 	if err != nil && errors.IsNotFound(err) {
 		return
 	}
-	t.Fatalf("fail to Delete NetworkAttachmentDefinition CR: %v", err)
+	t.Fatalf("fail to Delete NetworkAttachmentDefinition CR: %s/%s: %v", namespace, cr.Name, err)
 }
 
 func testWithSriovNetworkCRUpdate(t *testing.T, ctx *framework.TestCtx, cr *sriovnetworkv1.SriovNetwork) {
@@ -285,8 +290,8 @@ func testWithSriovNetworkCRUpdate(t *testing.T, ctx *framework.TestCtx, cr *srio
 	if err != nil {
 		t.Fatalf("fail to update SriovNetwork CR: %v", err)
 	}
-	// wait 100ms for object get update
-	time.Sleep(300 * time.Millisecond)
+	// wait 600ms for object get update
+	time.Sleep(600 * time.Millisecond)
 	netAttDefCR, err := WaitForNetworkAttachmentDefinition(t, f.Client, cr.GetName(), cr.GetNamespace(), retryInterval, timeout)
 	if err != nil {
 		t.Fatalf("fail to get NetworkAttachmentDefinition after update: %v", err)

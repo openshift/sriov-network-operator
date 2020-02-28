@@ -3,19 +3,19 @@ package sriovnetwork
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -28,7 +28,9 @@ import (
 )
 
 const (
-	MANIFESTS_PATH = "./bindata/manifests/cni-config"
+	MANIFESTS_PATH       = "./bindata/manifests/cni-config"
+	LASTNETWORKNAMESPACE = "operator.sriovnetwork.openshift.io/last-network-namespace"
+	FINALIZERNAME        = "netattdef.finalizers.sriovnetwork.openshift.io"
 )
 
 var log = logf.Log.WithName("controller_sriovnetwork")
@@ -63,11 +65,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 	// Watch for changes to secondary resource NetworkAttachmentDefinition
-	err = c.Watch(&source.Kind{Type: &netattdefv1.NetworkAttachmentDefinition{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovNetwork{},
-	})
-
+	err = c.Watch(&source.Kind{Type: &netattdefv1.NetworkAttachmentDefinition{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -116,6 +114,37 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+	// name of our custom finalizer
+
+	// examine DeletionTimestamp to determine if object is under deletion
+	if instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !sriovnetworkv1.StringInArray(FINALIZERNAME, instance.ObjectMeta.Finalizers) {
+			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, FINALIZERNAME)
+			if err := r.client.Update(context.Background(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+	} else {
+		// The object is being deleted
+		if sriovnetworkv1.StringInArray(FINALIZERNAME, instance.ObjectMeta.Finalizers) {
+			// our finalizer is present, so lets handle any external dependency
+			reqLogger.Info("delete NetworkAttachmentDefinition CR", "Namespace", instance.Spec.NetworkNamespace, "Name", instance.Name)
+			if err := r.deleteNetAttDef(instance); err != nil {
+				// if fail to delete the external dependency here, return with error
+				// so that it can be retried
+				return reconcile.Result{}, err
+			}
+			// remove our finalizer from the list and update it.
+			instance.ObjectMeta.Finalizers = sriovnetworkv1.RemoveString(FINALIZERNAME, instance.ObjectMeta.Finalizers)
+			if err := r.client.Update(context.Background(), instance); err != nil {
+				return reconcile.Result{}, err
+			}
+		}
+		return reconcile.Result{}, err
+	}
 	raw, err := renderNetAttDef(instance)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -126,61 +155,72 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	// Set SriovNetwork instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, netAttDef, r.scheme); err != nil {
-		return reconcile.Result{}, err
+	if lnns, ok := instance.GetAnnotations()[LASTNETWORKNAMESPACE]; ok && netAttDef.GetNamespace() != lnns {
+		err = r.client.Delete(context.TODO(), &netattdefv1.NetworkAttachmentDefinition{
+			ObjectMeta: v1.ObjectMeta{
+				Name:      instance.GetName(),
+				Namespace: lnns,
+			},
+		})
+		if err != nil {
+			reqLogger.Error(err, "Couldn't delete NetworkAttachmentDefinition CR", "Namespace", instance.GetName(), "Name", lnns)
+			return reconcile.Result{}, err
+		}
 	}
-
 	// Check if this NetworkAttachmentDefinition already exists
 	found := &netattdefv1.NetworkAttachmentDefinition{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			reqLogger.Info("NetworkAttachmentDefinition not exist, creating")
+			reqLogger.Info("NetworkAttachmentDefinition CR not exist, creating")
 			err = r.client.Create(context.TODO(), netAttDef)
 			if err != nil {
-				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				return reconcile.Result{}, err
+			}
+			anno := map[string]string{LASTNETWORKNAMESPACE: netAttDef.Namespace}
+			instance.SetAnnotations(anno)
+			if err := r.client.Update(context.Background(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		} else {
-			reqLogger.Error(err, "Couldn't get NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+			reqLogger.Error(err, "Couldn't get NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 			return reconcile.Result{}, err
 		}
 	} else {
-		reqLogger.Info("NetworkAttachmentDefinition already exist, updating")
-		netAttDef.SetResourceVersion(found.GetResourceVersion())
-		err = r.client.Update(context.TODO(), netAttDef)
-		if err != nil {
-			reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
-			return reconcile.Result{}, err
-		}
-	}
-
-	// Check if there are more than one children for one SriovNetwork CR.
-	nadList := &netattdefv1.NetworkAttachmentDefinitionList{}
-	r.client.List(context.TODO(), nadList, &client.ListOptions{})
-	sriovNads := []netattdefv1.NetworkAttachmentDefinition{}
-	for _, cr := range nadList.Items {
-		refs := cr.GetOwnerReferences()
-		if refs != nil && refs[0].UID == instance.UID {
-			sriovNads = append(sriovNads, cr)
-		}
-	}
-	reqLogger.Info("NetworkAttachmentDefinition", "list", sriovNads)
-	if len(sriovNads) > 1 {
-		reqLogger.Info("more than one NetworkAttachmentDefinition CR exists for one SriovNetwork CR", "Namespace", instance.GetNamespace(), "Name", instance.GetName())
-		for _, nad := range sriovNads {
-			if nad.GetNamespace() != netAttDef.GetNamespace() {
-				reqLogger.Info("delete the NetworkAttachmentDefinition", "Namespace", nad.GetNamespace(), "Name", nad.GetName())
-				err = r.client.Delete(context.TODO(), &nad)
-				if err != nil {
-					reqLogger.Error(err, "Couldn't delete NetworkAttachmentDefinition", "Namespace", nad.GetNamespace(), "Name", nad.GetName())
-					return reconcile.Result{}, err
-				}
+		reqLogger.Info("NetworkAttachmentDefinition CR already exist")
+		if !reflect.DeepEqual(found.Spec, netAttDef.Spec) || !reflect.DeepEqual(found.GetAnnotations(), netAttDef.GetAnnotations()) {
+			reqLogger.Info("Update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+			netAttDef.SetResourceVersion(found.GetResourceVersion())
+			err = r.client.Update(context.TODO(), netAttDef)
+			if err != nil {
+				reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				return reconcile.Result{}, err
 			}
 		}
 	}
 	return reconcile.Result{}, nil
+}
+
+func (r *ReconcileSriovNetwork) deleteNetAttDef(sn *sriovnetworkv1.SriovNetwork) error {
+	// Fetch the NetworkAttachmentDefinition instance
+	instance := &netattdefv1.NetworkAttachmentDefinition{}
+	namespace := sn.GetNamespace()
+	if sn.Spec.NetworkNamespace != "" {
+		namespace = sn.Spec.NetworkNamespace
+	}
+	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: sn.GetName()}, instance)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	err = r.client.Delete(context.TODO(), instance)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // renderNetAttDef returns a busybox pod with the same name/namespace as the cr
@@ -271,7 +311,7 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 	}
 	for _, obj := range objs {
 		raw, _ := json.Marshal(obj)
-		fmt.Printf("manifest %s\n", raw)
+		logger.Info("render NetworkAttachementDefinition output", "raw", string(raw))
 	}
 	return objs[0], nil
 }
