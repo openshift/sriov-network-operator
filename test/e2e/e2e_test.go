@@ -276,7 +276,7 @@ func testWithSriovNetworkCRUpdate(t *testing.T, ctx *framework.TestCtx, cr *srio
 	}
 
 	var err error
-	expect := fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"sriov-net", "type":"sriov", "vlan":0,"vlanQoS":0,"ipam":%s }`, cr0.Spec.IPAM)
+	expect := fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"sriov", "vlan":0,"vlanQoS":0,"ipam":%s }`, cr0.Name, cr0.Spec.IPAM)
 
 	// get global framework variables
 	f := framework.Global
@@ -336,7 +336,7 @@ func testWithSriovNetworkCRCreation(t *testing.T, ctx *framework.TestCtx, cr *sr
 
 	vlanQoS := cr.Spec.VlanQoS
 
-	expect := fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"sriov-net", "type":"sriov", "vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, cr.Spec.IPAM)
+	expect := fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"sriov", "vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.Name, cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, cr.Spec.IPAM)
 
 	// get global framework variables
 	f := framework.Global
