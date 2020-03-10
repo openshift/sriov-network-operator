@@ -403,8 +403,11 @@ func (r *ReconcileSriovOperatorConfig) deleteK8sResource(in *uns.Unstructured) e
 }
 
 func (r *ReconcileSriovOperatorConfig) syncK8sResource(cr *sriovnetworkv1.SriovOperatorConfig, in *uns.Unstructured) error {
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
+	// set owner-reference only for namespaced objects
+	if in.GetKind() != "ClusterRole" && in.GetKind() != "ClusterRoleBinding" {
+		if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
+			return err
+		}
 	}
 	if err := apply.ApplyObject(context.TODO(), r.client, in); err != nil {
 		return fmt.Errorf("failed to apply object %v with err: %v", in, err)

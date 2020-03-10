@@ -31,29 +31,31 @@ type VfGroup struct {
 type Interfaces []Interface
 
 type InterfaceExt struct {
-	InterfaceProperty
-	NumVfs    int               `json:"numVfs,omitempty"`
-	LinkSpeed string            `json:"linkSpeed,omitempty"`
-	TotalVfs  int               `json:"totalvfs,omitempty"`
-	VFs       []VirtualFunction `json:"Vfs,omitempty"`
+	Name       string            `json:"name,omitempty"`
+	Mac        string            `json:"mac,omitempty"`
+	Driver     string            `json:"driver,omitempty"`
+	PciAddress string            `json:"pciAddress"`
+	Vendor     string            `json:"vendor,omitempty"`
+	DeviceID   string            `json:"deviceID,omitempty"`
+	Mtu        int               `json:"mtu,omitempty"`
+	NumVfs     int               `json:"numVfs,omitempty"`
+	LinkSpeed  string            `json:"linkSpeed,omitempty"`
+	TotalVfs   int               `json:"totalvfs,omitempty"`
+	VFs        []VirtualFunction `json:"Vfs,omitempty"`
 }
 type InterfaceExts []InterfaceExt
 
-type InterfaceProperty struct {
+type VirtualFunction struct {
 	Name       string `json:"name,omitempty"`
 	Mac        string `json:"mac,omitempty"`
 	Assigned   string `json:"assigned,omitempty"`
 	Driver     string `json:"driver,omitempty"`
-	PciAddress string `json:"pciAddress,omitempty"`
+	PciAddress string `json:"pciAddress"`
 	Vendor     string `json:"vendor,omitempty"`
 	DeviceID   string `json:"deviceID,omitempty"`
 	Vlan       int    `json:"Vlan,omitempty"`
 	Mtu        int    `json:"mtu,omitempty"`
-}
-
-type VirtualFunction struct {
-	InterfaceProperty
-	VfID int `json:"vfID"`
+	VfID       int    `json:"vfID"`
 }
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
