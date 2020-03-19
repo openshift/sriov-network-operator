@@ -166,6 +166,8 @@ func (r *ReconcileSriovOperatorConfig) syncConfigDaemonSet(dc *sriovnetworkv1.Sr
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
 	data.Data["Namespace"] = Namespace
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
+	data.Data["BondCniImage"] = os.Getenv("BOND_CNI_BINARY_DAEMON_IMAGE")
+	
 	objs, err := render.RenderDir(CONFIG_DAEMON_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render config daemon manifests")

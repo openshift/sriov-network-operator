@@ -71,10 +71,22 @@ spec:
         #   mountPath: /host/sbin
         # - name: hostsysmodule
         #   mountPath: /host/sys/module
+      initcontainers:
+      - name: bond-cni-binary-daemon
+        image: {{.BondCniImage}}
+        command: ["/bin/bash", "-c", "cp /bond /host/opt/cni/bin"]
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: optcni
+          mountPath: /host/opt/cni/bin
       volumes:
       - name: host
         hostPath:
           path: /
+      - name: optcni
+        hostPath:
+          path: /opt/cni/bin
+          type: Directory          
       # - name: hostetc
       #   hostPath:
       #     path: /etc
