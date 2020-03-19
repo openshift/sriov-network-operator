@@ -41,6 +41,8 @@ spec:
               value: sriov-network-operator
             - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
               value: $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
+            - name: BOND_CNI_BINARY_DAEMON_IMAGE
+              value: $BOND_CNI_BINARY_DAEMON_IMAGE              
             - name: SRIOV_NETWORK_WEBHOOK_IMAGE
               value: $SRIOV_NETWORK_WEBHOOK_IMAGE
             - name: RESOURCE_PREFIX

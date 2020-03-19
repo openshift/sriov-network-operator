@@ -1,4 +1,88 @@
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cni-binary-copy-script
+  namespace: {{.Namespace}}
+  annotations:
+    kubernetes.io/description: |
+      This is a script used to copy CNI binaries based on host OS
+    release.openshift.io/version: "{{.ReleaseVersion}}"
+data:
+  cnibincopy.sh: |-
+    #!/bin/bash
+
+    DESTINATION_DIRECTORY=/host/opt/cni/bin/
+
+    # Perform validation of usage
+    if [ -z "$RHEL7_SOURCE_DIRECTORY" ] ||
+       [ -z "$RHEL8_SOURCE_DIRECTORY" ] ||
+       [ -z "$DEFAULT_SOURCE_DIRECTORY" ]; then
+      echo "FATAL ERROR: You must set env variables: RHEL7_SOURCE_DIRECTORY, RHEL8_SOURCE_DIRECTORY, DEFAULT_SOURCE_DIRECTORY"
+      exit 1
+    fi
+
+    if [ ! -d "$DESTINATION_DIRECTORY" ]; then
+      echo "FATAL ERROR: Destination directory ($DESTINATION_DIRECTORY) does not exist"
+      exit 1
+    fi
+
+    # Collect host OS information
+    . /host/etc/os-release
+    rhelmajor=
+    # detect which version we're using in order to copy the proper binaries
+    case "${ID}" in
+      rhcos) rhelmajor=8
+      ;;
+      rhel) rhelmajor=$(echo "${VERSION_ID}" | cut -f 1 -d .)
+      ;;
+      fedora)
+        if [ "${VARIANT_ID}" == "coreos" ]; then
+          rhelmajor=8
+        else
+          echo "FATAL ERROR: Unsupported Fedora variant=${VARIANT_ID}"
+          exit 1
+        fi
+      ;;
+      *) echo "FATAL ERROR: Unsupported OS ID=${ID}"; exit 1
+      ;;
+    esac
+
+    # Set which directory we'll copy from, detect if it exists
+    sourcedir=
+    founddir=false
+    case "${rhelmajor}" in
+      7)
+        if [ -d "${RHEL7_SOURCE_DIRECTORY}" ]; then
+          sourcedir=${RHEL7_SOURCE_DIRECTORY}
+          founddir=true
+        fi
+      ;;
+      8)
+        if [ -d "${RHEL8_SOURCE_DIRECTORY}" ]; then
+          sourcedir=${RHEL8_SOURCE_DIRECTORY}
+          founddir=true
+        fi
+      ;;
+      *)
+        echo "ERROR: RHEL Major Version Unsupported, rhelmajor=${rhelmajor}"
+      ;;
+    esac
+
+    # When it doesn't exist, fall back to the original directory.
+    if [ "$founddir" == false ]; then
+      echo "Source directory unavailable for OS version: ${rhelmajor}"
+      sourcedir=$DEFAULT_SOURCE_DIRECTORY
+    fi
+
+    cp -rf ${sourcedir}* $DESTINATION_DIRECTORY
+    if [ $? -eq 0 ]; then
+        echo "Successfully copied files in ${sourcedir} to $DESTINATION_DIRECTORY"
+    else
+        echo "Failed to copy files in ${sourcedir} to $DESTINATION_DIRECTORY"
+        exit 1
+    fi
+---
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
@@ -70,10 +154,43 @@ spec:
         #   mountPath: /host/sbin
         # - name: hostsysmodule
         #   mountPath: /host/sys/module
+      initcontainers:
+      - name: bond-cni-binary
+        image: {{.BondCniImage}}
+        command: ["/entrypoint/cnibincopy.sh"]
+        imagePullPolicy: Always
+        securityContext:
+           privileged: true
+        volumeMounts:
+        - mountPath: /entrypoint
+          name: cni-binary-copy
+        - mountPath: /host/opt/cni/bin
+          name: cnibin
+        - mountPath: /host/etc/os-release
+          name: os-release
+          readOnly: true
+        env:
+        - name: RHEL7_SOURCE_DIRECTORY
+          value: "/bondcni/rhel7/bin"
+        - name: RHEL8_SOURCE_DIRECTORY
+          value: "/bondcni/rhel8/bin"
+        - name: DEFAULT_SOURCE_DIRECTORY
+          value: "/bondcni/bin"          
       volumes:
       - name: host
         hostPath:
           path: /
+        - name: cnibin
+          hostPath:
+            path: /var/lib/cni/bin
+        - name: cni-binary-copy
+          configMap:
+            name: cni-binary-copy-script
+            defaultMode: 0744
+        - name: os-release
+          hostPath:
+            path: /etc/os-release
+            type: File
       # - name: hostetc
       #   hostPath:
       #     path: /etc
