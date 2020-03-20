@@ -176,7 +176,7 @@ func createDefaultPolicy(cfg *rest.Config) error {
 	}
 	policy := &sriovnetworkv1.SriovNetworkNodePolicy{
 		Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
-			NumVfs:       0,
+			NumVfs:       1,
 			NodeSelector: make(map[string]string),
 			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
 		},
