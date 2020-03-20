@@ -22,7 +22,7 @@ PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
-.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test-e2e test-e2e-k8s run image fmt sync-manifests
+.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test test-e2e-k8s run image fmt sync-manifests
 
 all: build #check install
 
@@ -72,8 +72,8 @@ deploy-setup-k8s: deploy-setup
 test-e2e-local: operator-sdk
 	@hack/run-e2e-test-locally.sh
 
-test-e2e:
-	@hack/run-e2e-test.sh
+test-%:
+	@hack/run-test.sh $*
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
 deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
