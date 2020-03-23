@@ -110,8 +110,10 @@ func setNodeStateStatus(client snclientset.Interface, nodeName string, status sr
 		nodeState.Status.LastSyncError = msg.lastSyncError
 		nodeState.Status.SyncStatus = msg.syncStatus
 	})
-
-	glog.V(2).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
+	if err != nil {
+		glog.V(2).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s",
+			nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
+	}
 	return nodeState, err
 }
 
