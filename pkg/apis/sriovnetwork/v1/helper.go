@@ -107,19 +107,19 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 			if p.Spec.NumVfs > 0 {
 				result.NumVfs = p.Spec.NumVfs
 				group, _ = generateVfGroup(&p.Spec, &iface)
-			}
-			found := false
-			for i := range state.Spec.Interfaces {
-				if state.Spec.Interfaces[i].PciAddress == result.PciAddress {
-					found = true
-					result.VfGroups = state.Spec.Interfaces[i].mergeVfGroups(group)
-					state.Spec.Interfaces[i] = result
-					break
+				found := false
+				for i := range state.Spec.Interfaces {
+					if state.Spec.Interfaces[i].PciAddress == result.PciAddress {
+						found = true
+						result.VfGroups = state.Spec.Interfaces[i].mergeVfGroups(group)
+						state.Spec.Interfaces[i] = result
+						break
+					}
 				}
-			}
-			if !found {
-				result.VfGroups = []VfGroup{*group}
-				state.Spec.Interfaces = append(state.Spec.Interfaces, result)
+				if !found {
+					result.VfGroups = []VfGroup{*group}
+					state.Spec.Interfaces = append(state.Spec.Interfaces, result)
+				}
 			}
 		}
 	}
