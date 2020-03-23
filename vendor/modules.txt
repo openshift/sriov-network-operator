@@ -195,6 +195,8 @@ github.com/onsi/ginkgo/types
 # github.com/onsi/gomega v1.7.1
 github.com/onsi/gomega
 github.com/onsi/gomega/format
+github.com/onsi/gomega/gstruct
+github.com/onsi/gomega/gstruct/errors
 github.com/onsi/gomega/internal/assertion
 github.com/onsi/gomega/internal/asyncassertion
 github.com/onsi/gomega/internal/oraclematcher
@@ -205,7 +207,7 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad
+# github.com/openshift/api v3.9.1-0.20191213091414-3fbf6bcf78e8+incompatible => github.com/openshift/api v0.0.0-20190924102528-32369d4db2ad
 github.com/openshift/api/config/v1
 # github.com/openshift/client-go v0.0.0-20191205152420-9faca5198b4f
 github.com/openshift/client-go/config/clientset/versioned/scheme
@@ -216,6 +218,14 @@ github.com/openshift/kubernetes-drain
 github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1
 github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/scheme
 github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1
+# github.com/openshift/sriov-tests v0.0.0-20200320120304-f6541fccd16f
+github.com/openshift/sriov-tests/pkg/k8sreporter
+github.com/openshift/sriov-tests/pkg/util/client
+github.com/openshift/sriov-tests/pkg/util/cluster
+github.com/openshift/sriov-tests/pkg/util/execute
+github.com/openshift/sriov-tests/pkg/util/namespaces
+github.com/openshift/sriov-tests/pkg/util/network
+github.com/openshift/sriov-tests/pkg/util/pod
 # github.com/operator-framework/operator-sdk v0.15.1
 github.com/operator-framework/operator-sdk/internal/scaffold
 github.com/operator-framework/operator-sdk/internal/scaffold/input
@@ -281,7 +291,7 @@ go.uber.org/zap/internal/exit
 go.uber.org/zap/zapcore
 # go4.org v0.0.0-20200312051459-7028f7b4a332
 go4.org/errorutil
-# golang.org/x/crypto v0.0.0-20191028145041-f83a4685e152
+# golang.org/x/crypto v0.0.0-20200109152110-61a87790db17
 golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/scrypt
 golang.org/x/crypto/ssh/terminal
