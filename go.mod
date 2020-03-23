@@ -4,30 +4,39 @@ go 1.13
 
 require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
+	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cenkalti/backoff v2.2.1+incompatible
+	github.com/coreos/ignition v0.35.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/go-log/log v0.2.0 // indirect
 	github.com/go-openapi/spec v0.19.4
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/intel/sriov-network-device-plugin v3.0.1-0.20191017093954-bf28fdc3e2d9+incompatible
 	github.com/jaypipes/ghw v0.5.0
-
-	github.com/onsi/gomega v1.7.0
+	github.com/onsi/ginkgo v1.12.0
+	github.com/onsi/gomega v1.7.1
+	github.com/openshift/client-go v0.0.0-20191205152420-9faca5198b4f
 	github.com/openshift/kubernetes-drain v0.0.0-20190727205423-d20a33f09dbf
 	github.com/operator-framework/operator-sdk v0.15.1
 	github.com/pkg/errors v0.8.1
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
-	k8s.io/api v0.0.0
-	k8s.io/apimachinery v0.0.0
+	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
+	go4.org v0.0.0-20200312051459-7028f7b4a332 // indirect
+	k8s.io/api v0.17.1
+	k8s.io/apimachinery v0.17.1
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/kube-openapi v0.0.0-20190918143330-0270cf2f1c1d
+	k8s.io/kube-openapi v0.0.0-20191107075043-30be4d16710a
+	k8s.io/utils v0.0.0-20200109141947-94aeca20bf09
 	sigs.k8s.io/controller-runtime v0.4.0
 )
 
 // Pinned to kubernetes-1.16.2
 replace (
+	github.com/Azure/go-autorest => github.com/Azure/go-autorest v12.3.0+incompatible
+	github.com/go-log/log => github.com/go-log/log v0.1.1-0.20181211034820-a514cf01a3eb
+	github.com/openshift/machine-config-operator => github.com/openshift/machine-config-operator v0.0.1-0.20200317200916-d5d9a488c1e0
 	k8s.io/api => k8s.io/api v0.0.0-20191016110408-35e52d86657a
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20191016113550-5357c4baaf65
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20191004115801-a2eda9f80ab8
@@ -46,6 +55,7 @@ replace (
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.0.0-20191016114748-65049c67a58b
 	k8s.io/kubectl => k8s.io/kubectl v0.0.0-20191016120415-2ed914427d51
 	k8s.io/kubelet => k8s.io/kubelet v0.0.0-20191016114556-7841ed97f1b2
+	k8s.io/kubernetes => k8s.io/kubernetes v1.16.2
 	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.0.0-20191016115753-cf0698c3a16b
 	k8s.io/metrics => k8s.io/metrics v0.0.0-20191016113814-3b1a734dba6e
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.0.0-20191016112829-06bb3c9d77c9
