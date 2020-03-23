@@ -23,7 +23,7 @@ type SriovNetworkNodePolicySpec struct {
 	// +kubebuilder:validation:Maximum=9000
 	// MTU of VF
 	Mtu int `json:"mtu,omitempty"`
-	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Minimum=0
 	// Number of VFs for each PF
 	NumVfs int `json:"numVfs"`
 	// NicSelector selects the NICs to be configured
