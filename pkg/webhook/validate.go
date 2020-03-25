@@ -127,6 +127,9 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 	for _, iface := range state.Status.Interfaces {
 		if policy.Spec.NicSelector.Selected(&iface) {
 			interfaceSelected = true
+			if policy.GetName() != "default" && policy.Spec.NumVfs == 0 {
+				return false, fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
+			}
 			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID {
 				return false, fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), iface.TotalVfs)
 			}
