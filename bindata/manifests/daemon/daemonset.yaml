@@ -37,7 +37,6 @@ spec:
         securityContext:
           privileged: true
         args:
-          - "--v=3"
           - "start"
         env:
           - name: NODE_NAME

@@ -211,6 +211,7 @@ func createDefaultOperatorConfig(cfg *rest.Config) error {
 			EnableInjector:           func() *bool { b := true; return &b }(),
 			EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
 			ConfigDaemonNodeSelector: map[string]string{},
+			LogLevel:                 2,
 		},
 	}
 	name := "default"

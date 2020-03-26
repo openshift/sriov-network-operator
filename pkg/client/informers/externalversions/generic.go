@@ -55,6 +55,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 	// Group=sriovnetwork.openshift.io, Version=v1
 	case v1.SchemeGroupVersion.WithResource("sriovnetworknodestates"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Sriovnetwork().V1().SriovNetworkNodeStates().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("sriovoperatorconfigs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Sriovnetwork().V1().SriovOperatorConfigs().Informer()}, nil
 
 	}
 

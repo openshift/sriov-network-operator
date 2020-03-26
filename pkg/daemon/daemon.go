@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -108,8 +109,23 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 		UpdateFunc: dn.nodeStateChangeHandler,
 	})
 
+	cfgInformerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
+		time.Second*30,
+		namespace,
+		func(lo *v1.ListOptions) {
+			lo.FieldSelector = "metadata.name=" + "default"
+		},
+	)
+
+	cfgInformer := cfgInformerFactory.Sriovnetwork().V1().SriovOperatorConfigs().Informer()
+	cfgInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    dn.operatorConfigAddHandler,
+		UpdateFunc: dn.operatorConfigChangeHandler,
+	})
+
 	time.Sleep(5 * time.Second)
 	go informer.Run(dn.stopCh)
+	go cfgInformer.Run(dn.stopCh)
 
 	for {
 		select {
@@ -124,6 +140,19 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 			}
 			return err
 		}
+	}
+}
+
+func (dn *Daemon) operatorConfigAddHandler(obj interface{}) {
+	dn.operatorConfigChangeHandler(&sriovnetworkv1.SriovOperatorConfig{}, obj)
+}
+
+func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
+	newCfg := new.(*sriovnetworkv1.SriovOperatorConfig)
+	var level = glog.Level(newCfg.Spec.LogLevel)
+	if level != flag.Lookup("v").Value.(flag.Getter).Get() {
+		glog.Infof("Set log verbose level to: %d", level)
+		flag.Set("v", level.String())
 	}
 }
 

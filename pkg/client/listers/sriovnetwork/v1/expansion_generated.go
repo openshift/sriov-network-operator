@@ -25,3 +25,11 @@ type SriovNetworkNodeStateListerExpansion interface{}
 // SriovNetworkNodeStateNamespaceListerExpansion allows custom methods to be added to
 // SriovNetworkNodeStateNamespaceLister.
 type SriovNetworkNodeStateNamespaceListerExpansion interface{}
+
+// SriovOperatorConfigListerExpansion allows custom methods to be added to
+// SriovOperatorConfigLister.
+type SriovOperatorConfigListerExpansion interface{}
+
+// SriovOperatorConfigNamespaceListerExpansion allows custom methods to be added to
+// SriovOperatorConfigNamespaceLister.
+type SriovOperatorConfigNamespaceListerExpansion interface{}

@@ -32,6 +32,10 @@ func (c *FakeSriovnetworkV1) SriovNetworkNodeStates(namespace string) v1.SriovNe
 	return &FakeSriovNetworkNodeStates{c, namespace}
 }
 
+func (c *FakeSriovnetworkV1) SriovOperatorConfigs(namespace string) v1.SriovOperatorConfigInterface {
+	return &FakeSriovOperatorConfigs{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeSriovnetworkV1) RESTClient() rest.Interface {

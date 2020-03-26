@@ -16,6 +16,8 @@ type SriovOperatorConfigSpec struct {
 	EnableInjector *bool `json:"enableInjector,omitempty"`
 	// Flag to control whether the operator admission controller webhook shall be deployed
 	EnableOperatorWebhook *bool `json:"enableOperatorWebhook,omitempty"`
+	// Flag to control the log verbose level of the operator
+	LogLevel int `json:"logLevel,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
@@ -30,6 +32,7 @@ type SriovOperatorConfigStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SriovOperatorConfig is the Schema for the sriovoperatorconfigs API
+// +genclient
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=sriovoperatorconfigs,scope=Namespaced

@@ -26,6 +26,8 @@ import (
 type Interface interface {
 	// SriovNetworkNodeStates returns a SriovNetworkNodeStateInformer.
 	SriovNetworkNodeStates() SriovNetworkNodeStateInformer
+	// SriovOperatorConfigs returns a SriovOperatorConfigInformer.
+	SriovOperatorConfigs() SriovOperatorConfigInformer
 }
 
 type version struct {
@@ -42,4 +44,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // SriovNetworkNodeStates returns a SriovNetworkNodeStateInformer.
 func (v *version) SriovNetworkNodeStates() SriovNetworkNodeStateInformer {
 	return &sriovNetworkNodeStateInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// SriovOperatorConfigs returns a SriovOperatorConfigInformer.
+func (v *version) SriovOperatorConfigs() SriovOperatorConfigInformer {
+	return &sriovOperatorConfigInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
