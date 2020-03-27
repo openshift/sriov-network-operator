@@ -26,6 +26,7 @@ type VfGroup struct {
 	ResourceName string `json:"resourceName"`
 	DeviceType   string `json:"deviceType,omitempty"`
 	VfRange      string `json:"vfRange,omitempty"`
+	PolicyName   string `json:"policyName"`
 }
 
 type Interfaces []Interface
