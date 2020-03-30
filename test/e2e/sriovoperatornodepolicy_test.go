@@ -326,7 +326,7 @@ var _ = Describe("Operator", func() {
 				Namespace: namespace,
 			},
 			Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
-				ResourceName: "resource_1",
+				ResourceName: "resource1",
 				NodeSelector: map[string]string{
 					"feature.node.kubernetes.io/network-sriov.capable": "true",
 				},
@@ -424,12 +424,14 @@ var _ = Describe("Operator", func() {
 								ResourceName: policy1.Spec.ResourceName,
 								DeviceType:   "netdevice",
 								VfRange:      "0-1",
+								PolicyName:   policy1.GetName(),
 							}
 							Expect(vg1).To(BeElementOf(iface.VfGroups))
 							vg2 := sriovnetworkv1.VfGroup{
 								ResourceName: policy2.Spec.ResourceName,
 								DeviceType:   "netdevice",
 								VfRange:      "2-3",
+								PolicyName:   policy2.GetName(),
 							}
 							Expect(vg2).To(BeElementOf(iface.VfGroups))
 						}
