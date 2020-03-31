@@ -51,11 +51,14 @@ spec:
                       properties:
                         deviceType:
                           type: string
+                        policyName:
+                          type: string
                         resourceName:
                           type: string
                         vfRange:
                           type: string
                       required:
+                      - policyName
                       - resourceName
                       type: object
                     type: array
