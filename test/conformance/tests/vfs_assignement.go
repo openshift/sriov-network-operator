@@ -1,4 +1,4 @@
-package conformance
+package tests
 
 import (
 	"context"
@@ -11,11 +11,11 @@ import (
 
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	"github.com/openshift/sriov-tests/pkg/util/cluster"
-	"github.com/openshift/sriov-tests/pkg/util/execute"
-	"github.com/openshift/sriov-tests/pkg/util/namespaces"
-	"github.com/openshift/sriov-tests/pkg/util/network"
-	"github.com/openshift/sriov-tests/pkg/util/pod"
+	"github.com/openshift/sriov-network-operator/test/util/cluster"
+	"github.com/openshift/sriov-network-operator/test/util/execute"
+	"github.com/openshift/sriov-network-operator/test/util/namespaces"
+	"github.com/openshift/sriov-network-operator/test/util/network"
+	"github.com/openshift/sriov-network-operator/test/util/pod"
 	v1core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
@@ -25,7 +25,8 @@ import (
 var _ = Describe("pod", func() {
 	var sriovInfos *cluster.EnabledNodes
 	execute.BeforeAll(func() {
-		var err error
+		err := namespaces.Create(namespaces.Test, clients)
+		Expect(err).ToNot(HaveOccurred())
 		waitForSRIOVStable()
 		sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
 		Expect(err).ToNot(HaveOccurred())
@@ -35,7 +36,7 @@ var _ = Describe("pod", func() {
 		waitForSRIOVStable()
 	})
 
-	var _ = Describe("Configuration", func() {
+	Describe("Configuration", func() {
 		var testNode string
 		resourceName := "testresource"
 		networkName := "testnetwork"

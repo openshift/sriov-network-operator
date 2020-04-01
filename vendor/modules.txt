@@ -218,14 +218,6 @@ github.com/openshift/kubernetes-drain
 github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1
 github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/scheme
 github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1
-# github.com/openshift/sriov-tests v0.0.0-20200320120304-f6541fccd16f
-github.com/openshift/sriov-tests/pkg/k8sreporter
-github.com/openshift/sriov-tests/pkg/util/client
-github.com/openshift/sriov-tests/pkg/util/cluster
-github.com/openshift/sriov-tests/pkg/util/execute
-github.com/openshift/sriov-tests/pkg/util/namespaces
-github.com/openshift/sriov-tests/pkg/util/network
-github.com/openshift/sriov-tests/pkg/util/pod
 # github.com/operator-framework/operator-sdk v0.15.1
 github.com/operator-framework/operator-sdk/internal/scaffold
 github.com/operator-framework/operator-sdk/internal/scaffold/input
