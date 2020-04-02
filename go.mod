@@ -7,22 +7,26 @@ require (
 	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cenkalti/backoff v2.2.1+incompatible
+	github.com/coreos/ignition v0.35.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.7
+	github.com/go-log/log v0.2.0 // indirect
 	github.com/go-openapi/spec v0.19.4
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/intel/sriov-network-device-plugin v3.0.1-0.20191017093954-bf28fdc3e2d9+incompatible
 	github.com/jaypipes/ghw v0.5.0
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.7.1
+	github.com/openshift/api v3.9.1-0.20191213091414-3fbf6bcf78e8+incompatible // indirect
 	github.com/openshift/client-go v0.0.0-20191205152420-9faca5198b4f
 	github.com/openshift/kubernetes-drain v0.0.0-20190727205423-d20a33f09dbf
 	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
-	github.com/openshift/sriov-tests v0.0.0-20200320120304-f6541fccd16f
 	github.com/operator-framework/operator-sdk v0.15.1
 	github.com/pkg/errors v0.8.1
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
+	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
 	go4.org v0.0.0-20200312051459-7028f7b4a332 // indirect
+	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17 // indirect
 	k8s.io/api v0.17.1
 	k8s.io/apimachinery v0.17.1
 	k8s.io/client-go v12.0.0+incompatible

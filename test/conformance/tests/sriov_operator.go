@@ -1,4 +1,4 @@
-package conformance
+package tests
 
 import (
 	"bufio"
@@ -14,11 +14,11 @@ import (
 
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	"github.com/openshift/sriov-tests/pkg/util/cluster"
-	"github.com/openshift/sriov-tests/pkg/util/execute"
-	"github.com/openshift/sriov-tests/pkg/util/namespaces"
-	"github.com/openshift/sriov-tests/pkg/util/network"
-	"github.com/openshift/sriov-tests/pkg/util/pod"
+	"github.com/openshift/sriov-network-operator/test/util/cluster"
+	"github.com/openshift/sriov-network-operator/test/util/execute"
+	"github.com/openshift/sriov-network-operator/test/util/namespaces"
+	"github.com/openshift/sriov-network-operator/test/util/network"
+	"github.com/openshift/sriov-network-operator/test/util/pod"
 	corev1 "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -45,7 +45,7 @@ var _ = Describe("operator", func() {
 		waitForSRIOVStable()
 	})
 
-	var _ = Describe("Configuration", func() {
+	Describe("Configuration", func() {
 
 		Context("SR-IOV network config daemon can be set by nodeselector", func() {
 			// 26186
