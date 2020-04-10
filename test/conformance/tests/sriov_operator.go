@@ -3,6 +3,7 @@ package tests
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,9 +25,16 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type patchBody struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value string `json:"value"`
+}
 
 var _ = Describe("operator", func() {
 	var sriovInfos *cluster.EnabledNodes
@@ -911,6 +919,50 @@ var _ = Describe("operator", func() {
 				changeNodeInterfaceState(testNode, sriovDevice.Name, false)
 
 				createUnschedulableTestPod(testNode, []string{sriovNetworkName}, resourceName)
+			})
+		})
+
+		Context("NAD update", func() {
+			// 24713
+			It("NAD is updated when SriovNetwork spec/networkNamespace is changed", func() {
+				ns1 := "z1"
+				ns2 := "z2"
+				defer namespaces.WaitForDeletion(clients, ns1, 1*time.Minute)
+				defer namespaces.WaitForDeletion(clients, ns2, 1*time.Minute)
+				err := namespaces.Create(ns1, clients)
+				Expect(err).ToNot(HaveOccurred())
+				err = namespaces.Create(ns2, clients)
+				Expect(err).ToNot(HaveOccurred())
+
+				resourceName := "sriovnic"
+				sriovNetworkName := "sriovnetwork"
+				testNode := sriovInfos.Nodes[0]
+				sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
+				Expect(err).ToNot(HaveOccurred())
+
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, ns1, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns1}, netAttDef)
+				}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				body, _ := json.Marshal([]patchBody{{
+					Op:    "replace",
+					Path:  "/spec/networkNamespace",
+					Value: ns2,
+				}})
+				clients.SriovnetworkV1Interface.RESTClient().Patch(types.JSONPatchType).Namespace(operatorNamespace).Resource("sriovnetworks").Name(sriovNetworkName).Body(body).Do()
+
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns2}, netAttDef)
+				}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+				Consistently(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns1}, netAttDef)
+				}, 5*time.Second, 1*time.Second).Should(HaveOccurred())
 			})
 		})
 	})
