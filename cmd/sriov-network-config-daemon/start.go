@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"os"
-	"time"
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -79,8 +78,6 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		// creates the in-cluster config
 		config, err = rest.InClusterConfig()
 	}
-	// set client timeout to prevent REST call wait forever when not able to reach the API server.
-	config.Timeout = 15 * time.Second
 
 	if err != nil {
 		panic(err.Error())
