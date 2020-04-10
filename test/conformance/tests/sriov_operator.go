@@ -733,22 +733,9 @@ var _ = Describe("operator", func() {
 			Context("Multiple sriov device and attachment", func() {
 				// 25834
 				It("Should configure multiple network attachments", func() {
-					resourceName := "sriovnic"
 					sriovNetworkName := "sriovnetwork"
-					testNode := sriovInfos.Nodes[0]
-
-					sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
-
-					Expect(err).ToNot(HaveOccurred())
-					createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
-
 					ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-					err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
-					Expect(err).ToNot(HaveOccurred())
-					Eventually(func() error {
-						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "sriovnetwork", Namespace: namespaces.Test}, netAttDef)
-					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+					testNode, _ := initSriovEnv("sriovnic", sriovNetworkName, sriovInfos, false, ipam)
 
 					pod := createTestPod(testNode, []string{sriovNetworkName, sriovNetworkName})
 					nics, err := network.GetNicsByPrefix(pod, "net")
@@ -760,20 +747,9 @@ var _ = Describe("operator", func() {
 			Context("IPv6 configured secondary interfaces on pods", func() {
 				// 25874
 				It("should be able to ping each other", func() {
-					resourceName := "sriovnic"
 					ipv6NetworkName := "ipv6network"
-					testNode := sriovInfos.Nodes[0]
-					sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
-					Expect(err).ToNot(HaveOccurred())
-					createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
-
 					ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-					err = network.CreateSriovNetwork(clients, sriovDevice, ipv6NetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
-					Expect(err).ToNot(HaveOccurred())
-					Eventually(func() error {
-						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: ipv6NetworkName, Namespace: namespaces.Test}, netAttDef)
-					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+					testNode, _ := initSriovEnv("sriovnic", ipv6NetworkName, sriovInfos, false, ipam)
 
 					pod := createTestPod(testNode, []string{ipv6NetworkName})
 					ips, err := network.GetSriovNicIPs(pod, "net1")
@@ -885,27 +861,8 @@ var _ = Describe("operator", func() {
 			It(" Should not be able to create pod successfully if there are only unhealthy vfs", func() {
 				resourceName := "sriovnic"
 				sriovNetworkName := "sriovnetwork"
-				testNode := sriovInfos.Nodes[0]
-
-				sriovDevices, err := sriovInfos.FindSriovDevices(testNode)
-				Expect(err).ToNot(HaveOccurred())
-				unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDevices)
-				Expect(err).ToNot(HaveOccurred())
-				if len(unusedSriovDevices) == 0 {
-					Skip("No unused active sriov devices found. " +
-						"Sriov devices either not present, used as default route or used for as bridge slave. " +
-						"Executing the test could endanger node connectivity.")
-				}
-				sriovDevice := unusedSriovDevices[0]
-
-				createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
 				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
-				Expect(err).ToNot(HaveOccurred())
-				Eventually(func() error {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-				}, 3*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+				testNode, sriovDevice := initSriovEnv(resourceName, sriovNetworkName, sriovInfos, true, ipam)
 
 				defer changeNodeInterfaceState(testNode, sriovDevice.Name, true)
 				changeNodeInterfaceState(testNode, sriovDevice.Name, false)
@@ -915,6 +872,33 @@ var _ = Describe("operator", func() {
 		})
 	})
 })
+
+func initSriovEnv(resourceName string, sriovNetworkName string, sriovInfos *cluster.EnabledNodes, sriovDeviceUnused bool, ipam string) (node string, sriovDevice *sriovv1.InterfaceExt) {
+	testNode := sriovInfos.Nodes[0]
+	var err error
+	if sriovDeviceUnused {
+		sriovDevices, err := sriovInfos.FindSriovDevices(testNode)
+		unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDevices)
+		Expect(err).ToNot(HaveOccurred())
+		if len(unusedSriovDevices) == 0 {
+			Skip("No unused active sriov devices found. " +
+				"Sriov devices either not present, used as default route or used for as bridge slave. " +
+				"Executing the test could endanger node connectivity.")
+		}
+		sriovDevice = unusedSriovDevices[0]
+	} else {
+		sriovDevice, err = sriovInfos.FindOneSriovDevice(testNode)
+		Expect(err).ToNot(HaveOccurred())
+	}
+	createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
+	err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+	Expect(err).ToNot(HaveOccurred())
+	Eventually(func() error {
+		netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+		return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+	}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+	return testNode, sriovDevice
+}
 
 func changeNodeInterfaceState(testNode string, ifcName string, enable bool) {
 	state := "up"
