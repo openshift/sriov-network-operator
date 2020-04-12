@@ -2,6 +2,7 @@ package pod
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"strings"
 
@@ -117,4 +118,23 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 	}
 
 	return buf.String(), errbuf.String(), nil
+}
+
+// GetLog connects to a pod and fetches log
+func GetLog(cs *testclient.ClientSet, p *corev1.Pod) (string, error) {
+	req := cs.Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{})
+	log, err := req.Stream()
+	if err != nil {
+		return "", err
+	}
+	defer log.Close()
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, log)
+
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }
