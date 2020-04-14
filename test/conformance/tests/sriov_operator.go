@@ -3,6 +3,7 @@ package tests
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,9 +25,16 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type patchBody struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value string `json:"value"`
+}
 
 var _ = Describe("operator", func() {
 	var sriovInfos *cluster.EnabledNodes
@@ -913,8 +921,75 @@ var _ = Describe("operator", func() {
 				createUnschedulableTestPod(testNode, []string{sriovNetworkName}, resourceName)
 			})
 		})
+
+		Context("NAD update", func() {
+			// 24714
+			It("NAD default gateway is updated when SriovNetwork ipam is changed", func() {
+				resourceName := "sriovnic"
+				sriovNetworkName := "sriovnetwork"
+				testNode := sriovInfos.Nodes[0]
+				sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
+				Expect(err).ToNot(HaveOccurred())
+
+				ipam := `{
+					"type": "host-local",
+					"subnet": "10.11.11.0/24",
+					"rangeStart": "10.11.11.171",
+					"rangeEnd": "10.11.11.181",
+					"routes": [{
+					  "dst": "0.0.0.0/0"
+					}],
+					"gateway": "10.11.11.1"
+				  }`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+				}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+				Eventually(func() string {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+					nadConfig := nadConfig{}
+					json.Unmarshal([]byte(netAttDef.Spec.Config), &nadConfig)
+					return nadConfig.Ipam.Gateway
+				}, 30*time.Second, 1*time.Second).Should(Equal("10.11.11.1"))
+
+				ipam = `{
+					"type": "host-local",
+					"subnet": "10.11.11.0/24",
+					"rangeStart": "10.11.11.171",
+					"rangeEnd": "10.11.11.181",
+					"routes": [{
+					  "dst": "0.0.0.0/0"
+					}],
+					"gateway": "10.12.11.1"
+				  }`
+				body, _ := json.Marshal([]patchBody{{
+					Op:    "replace",
+					Path:  "/spec/ipam",
+					Value: ipam,
+				}})
+				clients.SriovnetworkV1Interface.RESTClient().Patch(types.JSONPatchType).Namespace(operatorNamespace).Resource("sriovnetworks").Name(sriovNetworkName).Body(body).Do()
+				Eventually(func() string {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+					nadConfig := nadConfig{}
+					json.Unmarshal([]byte(netAttDef.Spec.Config), &nadConfig)
+					return nadConfig.Ipam.Gateway
+				}, 30*time.Second, 1*time.Second).Should(Equal("10.12.11.1"))
+			})
+		})
 	})
 })
+
+type nadIpam struct {
+	Gateway string `json:"gateway"`
+}
+
+type nadConfig struct {
+	Ipam nadIpam `json:"ipam"`
+}
 
 func changeNodeInterfaceState(testNode string, ifcName string, enable bool) {
 	state := "up"
