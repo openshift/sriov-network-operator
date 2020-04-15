@@ -31,13 +31,16 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string) *NodeStateStatu
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
 func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, runonce bool) {
-	glog.V(0).Info("Run(): start writer")
-	if err := writer.pollNicStatus(); err != nil {
-		glog.Errorf("Run(): first poll failed: %v", err)
-	}
+	glog.V(0).Infof("Run(): start writer")
 	msg := Message{}
-	setNodeStateStatus(writer.client, writer.node, writer.status, msg)
-
+	if runonce {
+		glog.V(0).Info("Run(): once")
+		if err := writer.pollNicStatus(); err != nil {
+			glog.Errorf("Run(): first poll failed: %v", err)
+		}
+		setNodeStateStatus(writer.client, writer.node, writer.status, msg)
+		return
+	}
 	for {
 		select {
 		case <-stop:
@@ -59,10 +62,6 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 				continue
 			}
 			setNodeStateStatus(writer.client, writer.node, writer.status, msg)
-		}
-		if runonce {
-			glog.V(2).Info("Run(): once")
-			return
 		}
 	}
 }
@@ -92,7 +91,7 @@ func updateNodeStateStatusRetry(client snclientset.Interface, nodeName string, f
 		var err error
 		nodeState, err = client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(n)
 		if err != nil {
-			glog.V(2).Infof("updateNodeStateStatusRetry(): fail to update the node status: %v", err)
+			glog.V(0).Infof("updateNodeStateStatusRetry(): fail to update the node status: %v", err)
 		}
 		return err
 	})
@@ -106,15 +105,19 @@ func updateNodeStateStatusRetry(client snclientset.Interface, nodeName string, f
 
 func setNodeStateStatus(client snclientset.Interface, nodeName string, status sriovnetworkv1.SriovNetworkNodeStateStatus, msg Message) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	nodeState, err := updateNodeStateStatusRetry(client, nodeName, func(nodeState *sriovnetworkv1.SriovNetworkNodeState) {
-		nodeState.Status = status
-		nodeState.Status.LastSyncError = msg.lastSyncError
+		nodeState.Status.Interfaces = status.Interfaces
+		if msg.lastSyncError != "" || nodeState.Status.SyncStatus == "Succeeded" {
+			// clear lastSyncError when sync Succeeded
+			nodeState.Status.LastSyncError = msg.lastSyncError
+		}
 		nodeState.Status.SyncStatus = msg.syncStatus
+
+		glog.V(0).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
 	})
 	if err != nil {
-		glog.V(2).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s",
-			nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
+		return nil, err
 	}
-	return nodeState, err
+	return nodeState, nil
 }
 
 // getNodeState queries the kube apiserver to get the SriovNetworkNodeState CR
