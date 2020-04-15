@@ -22,7 +22,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("pod", func() {
+var _ = Describe("[sriov] pod", func() {
 	var sriovInfos *cluster.EnabledNodes
 	execute.BeforeAll(func() {
 		err := namespaces.Create(namespaces.Test, clients)
