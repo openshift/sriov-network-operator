@@ -28,7 +28,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("operator", func() {
+var _ = Describe("[sriov] operator", func() {
 	var sriovInfos *cluster.EnabledNodes
 	execute.BeforeAll(func() {
 		err := namespaces.Create(namespaces.Test, clients)
