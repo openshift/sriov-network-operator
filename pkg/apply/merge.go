@@ -10,11 +10,6 @@ import (
 // This is to be able to do a a meaningful comparison in apply,
 // since objects created on runtime do not have these fields populated.
 func MergeMetadataForUpdate(current, updated *uns.Unstructured) error {
-	updated.SetCreationTimestamp(current.GetCreationTimestamp())
-	updated.SetSelfLink(current.GetSelfLink())
-	updated.SetGeneration(current.GetGeneration())
-	updated.SetUID(current.GetUID())
-	updated.SetResourceVersion(current.GetResourceVersion())
 
 	mergeAnnotations(current, updated)
 	mergeLabels(current, updated)
@@ -133,8 +128,9 @@ func mergeAnnotations(current, updated *uns.Unstructured) {
 	for k, v := range updatedAnnotations {
 		curAnnotations[k] = v
 	}
-
-	updated.SetAnnotations(curAnnotations)
+	if len(curAnnotations) > 1 {
+		updated.SetAnnotations(curAnnotations)
+	}
 }
 
 // mergeLabels copies over any labels from current to updated,
@@ -150,8 +146,9 @@ func mergeLabels(current, updated *uns.Unstructured) {
 	for k, v := range updatedLabels {
 		curLabels[k] = v
 	}
-
-	updated.SetLabels(curLabels)
+	if len(curLabels) > 1 {
+		updated.SetLabels(curLabels)
+	}
 }
 
 // IsObjectSupported rejects objects with configurations we don't support.
