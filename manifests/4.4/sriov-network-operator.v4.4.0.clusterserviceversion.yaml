@@ -92,7 +92,7 @@ spec:
   description: |
       # SR-IOV Network Operator for Openshift
 
-      ## Introdution
+      ## Introduction
       The sriov-network-operator is generally responsible for configuring the sriov components in a openshift cluster.
 
       ### Supported Features
