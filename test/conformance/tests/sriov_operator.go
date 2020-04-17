@@ -36,7 +36,7 @@ type patchBody struct {
 	Value string `json:"value"`
 }
 
-var _ = Describe("operator", func() {
+var _ = Describe("[sriov] operator", func() {
 	var sriovInfos *cluster.EnabledNodes
 	execute.BeforeAll(func() {
 		err := namespaces.Create(namespaces.Test, clients)

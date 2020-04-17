@@ -2,7 +2,6 @@ reviewers:
   - pliurh
   - zshi-redhat
   - dougbtv
-  - squeed
   - fepan
   - s1061123
 approvers:
@@ -12,3 +11,5 @@ approvers:
   - squeed
   - fepan
   - s1061123
+component: "Networking"
+subcomponent: "SR-IOV"

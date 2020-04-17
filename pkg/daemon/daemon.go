@@ -2,9 +2,11 @@ package daemon
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,13 +18,18 @@ import (
 
 	"github.com/golang/glog"
 	drain "github.com/openshift/kubernetes-drain"
+	goerr "github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/wait"
-	// "k8s.io/client-go/informers"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	// "k8s.io/client-go/kubernetes/scheme"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -62,7 +69,12 @@ type Daemon struct {
 	mu *sync.Mutex
 }
 
-const scriptsPath = "/bindata/scripts/enable-rdma.sh"
+const (
+	scriptsPath  = "/bindata/scripts/enable-rdma.sh"
+	annoKey      = "sriovnetwork.openshift.io/state"
+	annoIdle     = "Idle"
+	annoDraining = "Draining"
+)
 
 var namespace = os.Getenv("NAMESPACE")
 var pluginsPath = os.Getenv("PLUGINSPATH")
@@ -93,13 +105,14 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	if err := tryCreateUdevRule(); err != nil {
 		return err
 	}
-
+	var timeout int64 = 5
 	dn.mu = &sync.Mutex{}
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
-		time.Second*30,
+		time.Second*15,
 		namespace,
 		func(lo *v1.ListOptions) {
 			lo.FieldSelector = "metadata.name=" + dn.name
+			lo.TimeoutSeconds = &timeout
 		},
 	)
 
@@ -267,11 +280,34 @@ func (dn *Daemon) uncordon(name string) {
 }
 
 func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
-	var err error
+	var err, lastErr error
 	newState := new.(*sriovnetworkv1.SriovNetworkNodeState)
 	oldState := old.(*sriovnetworkv1.SriovNetworkNodeState)
-	glog.V(2).Infof("nodeStateChangeHandler(): current generation is %d", newState.GetObjectMeta().GetGeneration())
-	if newState.GetObjectMeta().GetGeneration() == oldState.GetObjectMeta().GetGeneration() {
+	glog.V(2).Infof("nodeStateChangeHandler(): new generation is %d", newState.GetObjectMeta().GetGeneration())
+	// Get the latest NodeState
+	var latestState *sriovnetworkv1.SriovNetworkNodeState
+	err = wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
+		latestState, lastErr = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(dn.name, metav1.GetOptions{})
+		if lastErr == nil {
+			return true, nil
+		}
+		glog.Warningf("nodeStateChangeHandler(): Failed to fetch node state %s (%v); retrying...", dn.name, lastErr)
+		return false, nil
+	})
+	if err != nil {
+		if err == wait.ErrWaitTimeout {
+			dn.exitCh <- goerr.Wrapf(lastErr, "nodeStateChangeHandler(): Timed out trying to fetch the latest node state %s", dn.name)
+			return
+		}
+		dn.exitCh <- err
+		return
+	}
+	latest := latestState.GetObjectMeta().GetGeneration()
+	if latest != newState.GetObjectMeta().GetGeneration() {
+		glog.Errorf("nodeStateChangeHandler(): the lastet generation is %d, skip", latest)
+		return
+	}
+	if latest == oldState.GetObjectMeta().GetGeneration() {
 		glog.V(2).Infof("nodeStateChangeHandler(): Interface not changed")
 		return
 	}
@@ -281,9 +317,8 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 	reqReboot := false
 	reqDrain := false
-
 	for k, p := range dn.LoadedPlugins {
-		d, r, err := p.OnNodeStateChange(oldState, newState)
+		d, r, err := p.OnNodeStateChange(oldState, latestState)
 		if err != nil {
 			glog.Errorf("nodeStateChangeHandler(): plugin %s error: %v", k, err)
 			dn.exitCh <- err
@@ -296,8 +331,8 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 
 	if reqDrain {
 		glog.Info("nodeStateChangeHandler(): drain node")
-		dn.drainNode(newState.GetName())
-		defer dn.uncordon(newState.GetName())
+		dn.drainNode(latestState.GetName())
+		defer dn.uncordon(latestState.GetName())
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
@@ -327,7 +362,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 
 	// restart device plugin pod
-	if reqDrain || (newState.Spec.DpConfigVersion != oldState.Spec.DpConfigVersion) {
+	if reqDrain || (latestState.Spec.DpConfigVersion != oldState.Spec.DpConfigVersion) {
 		glog.Info("nodeStateChangeHandler(): restart device plugin pod")
 		if err := dn.restartDevicePluginPod(); err != nil {
 			glog.Errorf("nodeStateChangeHandler(): fail to restart device plugin pod: %v", err)
@@ -436,11 +471,87 @@ func (a GlogLogger) Logf(format string, v ...interface{}) {
 	glog.Infof(format, v...)
 }
 
+func (dn *Daemon) annotateNode(node, value string, lister listerv1.NodeLister) error {
+	glog.Infof("annotateNode(): Annotate node %s with: %s", node, value)
+	oldNode, err := lister.Get(dn.name)
+	if err != nil {
+		return err
+	}
+	oldData, err := json.Marshal(oldNode)
+	if err != nil {
+		return err
+	}
+
+	newNode := oldNode.DeepCopy()
+	if newNode.Annotations == nil {
+		newNode.Annotations = map[string]string{}
+	}
+	if newNode.Annotations[annoKey] != value {
+		newNode.Annotations[annoKey] = value
+		newData, err := json.Marshal(newNode)
+		if err != nil {
+			return err
+		}
+		patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, corev1.Node{})
+		if err != nil {
+			return err
+		}
+		_, err = dn.kubeClient.CoreV1().Nodes().Patch(dn.name, types.StrategicMergePatchType, patchBytes)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (dn *Daemon) drainNode(name string) {
-	glog.Info("drainNode(): Update prepared; beginning drain")
+	glog.Info("drainNode(): Update prepared")
 	node, err := dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
 	if err != nil {
-		glog.Errorf("nodeStateChangeHandler(): failed to get node: %v", err)
+		glog.Errorf("drainNode(): failed to get node: %v", err)
+	}
+	rand.Seed(time.Now().UnixNano())
+	informerFactory := informers.NewSharedInformerFactory(dn.kubeClient,
+		time.Second*15,
+	)
+	stop := make(chan struct{})
+	lister := informerFactory.Core().V1().Nodes().Lister()
+	informer := informerFactory.Core().V1().Nodes().Informer()
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			nn := newObj.(*corev1.Node)
+			if nn.Annotations[annoKey] == annoDraining || nn.GetName() == dn.name {
+				return
+			}
+			ok := true
+			// wait a random time to avoid all the nodes checking the nodes anno at the same time
+			time.Sleep(time.Duration(rand.Intn(6000)) * time.Millisecond)
+			nodes, err := lister.List(labels.Everything())
+			if err != nil {
+				return
+			}
+			glog.Infof("drainNode(): Check if any other node is draining")
+			for _, node := range nodes {
+				if node.GetName() != dn.name && node.Annotations[annoKey] == annoDraining {
+					glog.Infof("drainNode(): node %s is draining", node.Name)
+					ok = false
+				}
+			}
+			if ok {
+				glog.Info("drainNode(): No other node is draining, stop watching")
+				select {
+				case <-stop:
+				default:
+					close(stop)
+				}
+			}
+		},
+	})
+	informer.Run(stop)
+
+	err = dn.annotateNode(dn.name, annoDraining, lister)
+	if err != nil {
+		glog.Errorf("drainNode(): Failed to annotate node: %v", err)
 	}
 
 	backoff := wait.Backoff{
@@ -452,11 +563,12 @@ func (dn *Daemon) drainNode(name string) {
 
 	logger := GlogLogger{}
 
+	glog.Info("drainNode(): Start draining")
 	if err := wait.ExponentialBackoff(backoff, func() (bool, error) {
 		err := drain.Drain(dn.kubeClient, []*corev1.Node{node}, &drain.DrainOptions{
 			DeleteLocalData:    true,
 			Force:              true,
-			GracePeriodSeconds: 600,
+			GracePeriodSeconds: -1,
 			IgnoreDaemonsets:   true,
 			Logger:             logger,
 		})
@@ -473,25 +585,10 @@ func (dn *Daemon) drainNode(name string) {
 		glog.Errorf("drainNode(): failed to drain node: %v", err)
 	}
 	glog.Info("drainNode(): drain complete")
-}
-
-func needRestartDevicePlugin(oldState, newState *sriovnetworkv1.SriovNetworkNodeState) bool {
-	var found bool
-	for _, in := range newState.Spec.Interfaces {
-		found = false
-		for _, io := range oldState.Spec.Interfaces {
-			if in.PciAddress == io.PciAddress {
-				found = true
-				if in.NumVfs != io.NumVfs {
-					return true
-				}
-			}
-		}
-		if !found {
-			return true
-		}
+	err = dn.annotateNode(dn.name, annoIdle, lister)
+	if err != nil {
+		glog.Errorf("drainNode(): failed to annotate node: %v", err)
 	}
-	return false
 }
 
 func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
