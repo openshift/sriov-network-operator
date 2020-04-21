@@ -50,7 +50,7 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (
 func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
 	var validString = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	if !validString.MatchString(cr.Spec.ResourceName) {
-		return false, fmt.Errorf("resource name \"%s\" contains invalid characters", cr.Spec.ResourceName)
+		return false, fmt.Errorf("resource name \"%s\" contains invalid characters, the accepted syntax of the regular expressions is: \"^[a-zA-Z0-9_]+$\"", cr.Spec.ResourceName)
 	}
 
 	if cr.Spec.NicSelector.Vendor == "" && cr.Spec.NicSelector.DeviceID == "" && len(cr.Spec.NicSelector.PfNames) == 0 {
