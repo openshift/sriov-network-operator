@@ -3,7 +3,6 @@ package tests
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -25,7 +24,6 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -315,23 +313,29 @@ var _ = Describe("[sriov] operator", func() {
 				vfIndex, err := podVFIndexInHost(hostNetPod, podObj, "net1")
 				Expect(err).ToNot(HaveOccurred())
 
-				stdout, stderr, err := pod.ExecCommand(clients, hostNetPod, "ip", "link", "show")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(stderr).To(Equal(""))
+				Eventually(func() bool {
+					stdout, stderr, err := pod.ExecCommand(clients, hostNetPod, "ip", "link", "show")
+					Expect(err).ToNot(HaveOccurred())
+					Expect(stderr).To(Equal(""))
 
-				found := false
-				for _, line := range strings.Split(stdout, "\n") {
-					if strings.Contains(line, fmt.Sprintf("vf %d ", vfIndex)) && containsFunc(line) {
-						found = true
-						break
+					found := false
+					for _, line := range strings.Split(stdout, "\n") {
+						if strings.Contains(line, fmt.Sprintf("vf %d ", vfIndex)) && containsFunc(line) {
+							found = true
+							break
+						}
 					}
-				}
+					if !found {
+						return found
+					}
 
-				err = clients.Pods(namespaces.Test).Delete(podObj.Name, &metav1.DeleteOptions{
-					GracePeriodSeconds: pointer.Int64Ptr(0)})
-				Expect(err).ToNot(HaveOccurred())
+					err = clients.Pods(namespaces.Test).Delete(podObj.Name, &metav1.DeleteOptions{
+						GracePeriodSeconds: pointer.Int64Ptr(0)})
+					Expect(err).ToNot(HaveOccurred())
 
-				Expect(found).To(BeTrue())
+					return found
+				}, time.Minute, time.Second).Should(BeTrue())
+
 			}
 
 			validateNetworkFields := func(sriovNetwork *sriovv1.SriovNetwork, validationString string) {
@@ -399,6 +403,14 @@ var _ = Describe("[sriov] operator", func() {
 					})))
 
 				waitForSRIOVStable()
+
+				Eventually(func() int64 {
+					testedNode, err := clients.Nodes().Get(node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					resNum, _ := testedNode.Status.Allocatable["openshift.io/testresource"]
+					allocatable, _ := resNum.AsInt64()
+					return allocatable
+				}, 3*time.Minute, time.Second).Should(Equal(int64(numVfs)))
 
 				hostNetPod = pod.DefineWithHostNetwork(node)
 				err = clients.Create(context.Background(), hostNetPod)
@@ -865,8 +877,19 @@ var _ = Describe("[sriov] operator", func() {
 					return firstPod.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
 
-				stdout, stderr, err := pod.ExecCommand(clients, firstPod, "ip", "link", "show", "net1")
-				Expect(err).ToNot(HaveOccurred(), "Failed to show net1", stderr)
+				var stdout, stderr string
+				Eventually(func() error {
+					stdout, stderr, err = pod.ExecCommand(clients, firstPod, "ip", "link", "show", "net1")
+					if stdout == "" {
+						return fmt.Errorf("empty response from pod exec")
+					}
+
+					if err != nil {
+						return fmt.Errorf("Failed to show net1")
+					}
+
+					return nil
+				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
 				Expect(stdout).To(ContainSubstring("mtu 9000"))
 				firstPodIPs, err := network.GetSriovNicIPs(firstPod, "net1")
 				Expect(err).ToNot(HaveOccurred())
@@ -934,11 +957,6 @@ var _ = Describe("[sriov] operator", func() {
 				ipam := `{
 					"type": "host-local",
 					"subnet": "10.11.11.0/24",
-					"rangeStart": "10.11.11.171",
-					"rangeEnd": "10.11.11.181",
-					"routes": [{
-					  "dst": "0.0.0.0/0"
-					}],
 					"gateway": "%s"
 				  }`
 				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, fmt.Sprintf(ipam, "10.11.11.1"))
@@ -951,16 +969,17 @@ var _ = Describe("[sriov] operator", func() {
 					return strings.Contains(netAttDef.Spec.Config, "10.11.11.1")
 				}, 30*time.Second, 1*time.Second).Should(BeTrue())
 
-				body, _ := json.Marshal([]patchBody{{
-					Op:    "replace",
-					Path:  "/spec/ipam",
-					Value: fmt.Sprintf(ipam, "10.12.11.1"),
-				}})
-				clients.SriovnetworkV1Interface.RESTClient().Patch(types.JSONPatchType).Namespace(operatorNamespace).Resource("sriovnetworks").Name(sriovNetworkName).Body(body).Do()
+				sriovNetwork := &sriovv1.SriovNetwork{}
+				err = clients.Get(context.TODO(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: operatorNamespace}, sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+				sriovNetwork.Spec.IPAM = fmt.Sprintf(ipam, "10.11.11.100")
+				err = clients.Update(context.Background(), sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+
 				Eventually(func() bool {
 					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 					clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-					return strings.Contains(netAttDef.Spec.Config, "10.12.11.1")
+					return strings.Contains(netAttDef.Spec.Config, "10.11.11.100")
 				}, 30*time.Second, 1*time.Second).Should(BeTrue())
 			})
 		})
@@ -1039,10 +1058,21 @@ func isInterfaceSlave(ifcPod *k8sv1.Pod, ifcName string) (bool, error) {
 // podVFIndexInHost retrieves the vf index on the host network namespace related to the given
 // interface that was passed to the pod, using the name in the pod's namespace.
 func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceName string) (int, error) {
-	stdout, stderr, err := pod.ExecCommand(clients, targetPod, "readlink", "-f", fmt.Sprintf("/sys/class/net/%s", interfaceName))
-	if err != nil {
-		return 0, fmt.Errorf("Failed to find %s interface address %v - %s", interfaceName, err, stderr)
-	}
+	var stdout, stderr string
+	var err error
+	Eventually(func() error {
+		stdout, stderr, err = pod.ExecCommand(clients, targetPod, "readlink", "-f", fmt.Sprintf("/sys/class/net/%s", interfaceName))
+		if stdout == "" {
+			return fmt.Errorf("empty response from pod exec")
+		}
+
+		if err != nil {
+			return fmt.Errorf("Failed to find %s interface address %v - %s", interfaceName, err, stderr)
+		}
+
+		return nil
+	}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
+
 	// sysfs address looks like: /sys/devices/pci0000:17/0000:17:02.0/0000:19:00.5/net/net1
 	pathSegments := strings.Split(stdout, "/")
 	segNum := len(pathSegments)
@@ -1056,40 +1086,48 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 	devicePath := strings.Join(pathSegments[0:segNum-2], "/") // /sys/devices/pci0000:17/0000:17:02.0/0000:19:00.5/
 	findAllSiblingVfs := strings.Split(fmt.Sprintf("ls -gG %s/physfn/", devicePath), " ")
 
-	stdout, stderr, err = pod.ExecCommand(clients, hostNetPod, findAllSiblingVfs...)
-	if err != nil {
-		return 0, fmt.Errorf("Failed to find %s siblings %v - %s", devicePath, err, stderr)
-	}
-
-	// lines of the format of
-	// lrwxrwxrwx. 1        0 Mar  6 15:15 virtfn3 -> ../0000:19:00.5
-
-	scanner := bufio.NewScanner(strings.NewReader(stdout))
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.Contains(line, "virtfn") {
-			continue
+	res := 0
+	Eventually(func() error {
+		stdout, stderr, err = pod.ExecCommand(clients, hostNetPod, findAllSiblingVfs...)
+		if stdout == "" {
+			return fmt.Errorf("empty response from pod exec")
 		}
 
-		columns := strings.Fields(line)
-
-		if len(columns) != 9 {
-			return 0, fmt.Errorf("Expecting 9 columns in %s, found %d", line, len(columns))
+		if err != nil {
+			return fmt.Errorf("Failed to find %s siblings %v - %s", devicePath, err, stderr)
 		}
 
-		vfAddr := strings.TrimPrefix(columns[8], "../") // ../0000:19:00.2
-
-		if vfAddr == podVFAddr { // Found!
-			vfName := columns[6] // virtfn0
-			vfNumber := strings.TrimPrefix(vfName, "virtfn")
-			res, err := strconv.Atoi(vfNumber)
-			if err != nil {
-				return 0, fmt.Errorf("Could not get vf number from vfname %s", vfName)
+		// lines of the format of
+		// lrwxrwxrwx. 1        0 Mar  6 15:15 virtfn3 -> ../0000:19:00.5
+		scanner := bufio.NewScanner(strings.NewReader(stdout))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if !strings.Contains(line, "virtfn") {
+				continue
 			}
-			return res, nil
+
+			columns := strings.Fields(line)
+
+			if len(columns) != 9 {
+				return fmt.Errorf("Expecting 9 columns in %s, found %d", line, len(columns))
+			}
+
+			vfAddr := strings.TrimPrefix(columns[8], "../") // ../0000:19:00.2
+
+			if vfAddr == podVFAddr { // Found!
+				vfName := columns[6] // virtfn0
+				vfNumber := strings.TrimPrefix(vfName, "virtfn")
+				res, err = strconv.Atoi(vfNumber)
+				if err != nil {
+					return fmt.Errorf("Could not get vf number from vfname %s", vfName)
+				}
+				return nil
+			}
 		}
-	}
-	return 0, fmt.Errorf("Could not find %s index in %s", podVFAddr, stdout)
+		return fmt.Errorf("Could not find %s index in %s", podVFAddr, stdout)
+	}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
+
+	return res, nil
 }
 
 func daemonsScheduledOnNodes(selector string) bool {
