@@ -3,7 +3,7 @@
 ## Prerequisites
 
 1. A supported SRIOV hardware on the cluster nodes. Currently the supported models are:
-  
+
    | Vendor-ID   | Device-ID   |
    | ----------- | ----------- |
    | Intel       | 158b        |
@@ -39,7 +39,7 @@ cd $GOPATH/src/github.com/openshift/sriov-network-operator
 make operator-sdk
 ```
 
-Deploy the operator. 
+Deploy the operator.
 
 If you are running an Openshift cluster:
 
@@ -219,6 +219,9 @@ If you are running a Kubernetes cluster:
 ```bash
 make undeploy-k8s
 ```
+
+### Intel Dynamic Device Personalization (DDP) configuration
+Refer to [User Guide](doc/dynamic_device_personalization_guide.md) to configure DDP using this Operator
 
 ## Hack
 

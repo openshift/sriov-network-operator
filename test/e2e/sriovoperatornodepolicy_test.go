@@ -454,4 +454,152 @@ var _ = Describe("Operator", func() {
 				Expect(found).To(BeTrue())
 			})
 	})
+	Context("with single VF policy and DDP for X700 series", func() {
+
+		policy1 := &sriovnetworkv1.SriovNetworkNodePolicy{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "SriovNetworkNodePolicy",
+				APIVersion: "sriovnetwork.openshift.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "policy-1",
+				Namespace: namespace,
+			},
+			Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+				ResourceName: "resource_1",
+				NodeSelector: map[string]string{
+					"feature.node.kubernetes.io/network-sriov.capable": "true",
+				},
+				Priority:    99,
+				Mtu:         1500,
+				NumVfs:      6,
+				NicSelector: sriovnetworkv1.SriovNetworkNicSelector{},
+				DeviceType:  "vfio-pci",
+				DdpUrl:      "https://downloadmirror.intel.com/27587/eng/gtp.zip",
+			},
+		}
+		policy2 := &sriovnetworkv1.SriovNetworkNodePolicy{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "SriovNetworkNodePolicy",
+				APIVersion: "sriovnetwork.openshift.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "policy-2",
+				Namespace: namespace,
+			},
+			Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+				ResourceName: "resource_2",
+				NodeSelector: map[string]string{
+					"feature.node.kubernetes.io/network-sriov.capable": "true",
+				},
+				Priority:    99,
+				Mtu:         1500,
+				NumVfs:      6,
+				NicSelector: sriovnetworkv1.SriovNetworkNicSelector{},
+				DdpUrl:      "https://downloadmirror.intel.com/27587/eng/gtp.zip",
+			},
+		}
+
+		JustBeforeEach(func() {
+			oprctx.Cleanup()
+		})
+
+		DescribeTable("should config sriov",
+			func(policy *sriovnetworkv1.SriovNetworkNodePolicy) {
+				policy.Spec.NicSelector.RootDevices = []string{sriovIfaceX700.PciAddress}
+				//Martin: todo must first check that no DDP profile loaded
+				// get global framework variables
+				f := framework.Global
+				var err error
+				By("wait for the node state ready")
+				nodeList := &corev1.NodeList{}
+				lo := &dynclient.MatchingLabels{
+					"feature.node.kubernetes.io/network-sriov.capable": "true",
+				}
+				err = f.Client.List(goctx.TODO(), nodeList, lo)
+				Expect(err).NotTo(HaveOccurred())
+				// Expect(len(nodeList.Items)).To(Equal(1))
+
+				name := nodeList.Items[0].GetName()
+				nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
+				err = WaitForSriovNetworkNodeStateReady(nodeState, f.Client, namespace, name, RetryInterval, Timeout*15)
+				Expect(err).NotTo(HaveOccurred())
+				// Check initial conditions to ensure no DDP profile is loaded
+				for _, address := range policy.Spec.NicSelector.RootDevices {
+					for _, iface := range nodeState.Status.Interfaces {
+						if iface.PciAddress == address {
+							Expect(iface.Ddp).To(Equal("No DDP info"))
+						}
+					}
+				}
+				By("apply node policy CR")
+				err = f.Client.Create(goctx.TODO(), policy, &framework.CleanupOptions{TestContext: &oprctx, Timeout: ApiTimeout, RetryInterval: RetryInterval})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("generate the config for device plugin")
+				time.Sleep(30 * time.Second)
+				config := &corev1.ConfigMap{}
+				err = WaitForNamespacedObject(config, f.Client, namespace, "device-plugin-config", RetryInterval, Timeout)
+				Expect(err).NotTo(HaveOccurred())
+				err = ValidateDevicePluginConfig([]*sriovnetworkv1.SriovNetworkNodePolicy{policy}, config.Data["config.json"])
+
+				By("wait for the node state ready")
+				err = WaitForSriovNetworkNodeStateReady(nodeState, f.Client, namespace, name, RetryInterval, Timeout*15)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("provision the cni and device plugin daemonsets")
+				cniDaemonSet := &appsv1.DaemonSet{}
+				err = WaitForDaemonSetReady(cniDaemonSet, f.Client, namespace, "sriov-cni", RetryInterval, Timeout)
+				Expect(err).NotTo(HaveOccurred())
+
+				dpDaemonSet := &appsv1.DaemonSet{}
+				err = WaitForDaemonSetReady(dpDaemonSet, f.Client, namespace, "sriov-device-plugin", RetryInterval, Timeout)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("update the spec of SriovNetworkNodeState CR")
+				found := false
+				for _, address := range policy.Spec.NicSelector.RootDevices {
+					for _, iface := range nodeState.Spec.Interfaces {
+						if iface.PciAddress == address {
+							found = true
+							Expect(iface.NumVfs).To(Equal(policy.Spec.NumVfs))
+							Expect(iface.Mtu).To(Equal(policy.Spec.Mtu))
+							Expect(iface.Ddp).To(Equal(policy.Spec.DdpUrl))
+							Expect(iface.VfGroups[0].DeviceType).To(Equal(policy.Spec.DeviceType))
+							Expect(iface.VfGroups[0].ResourceName).To(Equal(policy.Spec.ResourceName))
+							Expect(iface.VfGroups[0].VfRange).To(Equal("0-" + strconv.Itoa(policy.Spec.NumVfs-1)))
+						}
+					}
+				}
+				Expect(found).To(BeTrue())
+
+				By("update the status of SriovNetworkNodeState CR")
+				found = false
+				for _, address := range policy.Spec.NicSelector.RootDevices {
+					for _, iface := range nodeState.Status.Interfaces {
+						if iface.PciAddress == address {
+							found = true
+							Expect(iface.NumVfs).To(Equal(policy.Spec.NumVfs))
+							Expect(iface.Mtu).To(Equal(policy.Spec.Mtu))
+							Expect(len(iface.VFs)).To(Equal(policy.Spec.NumVfs))
+							// Must check DDP using substring because profile name also includes version info which is dynamic
+							Expect(iface.Ddp).To(ContainSubstring("GTPv1-C/U IPv4/IPv6 payload"))
+							for _, vf := range iface.VFs {
+								if policy.Spec.DeviceType == "netdevice" || policy.Spec.DeviceType == "" {
+									Expect(vf.Mtu).To(Equal(policy.Spec.Mtu))
+								}
+								if policy.Spec.DeviceType == "vfio" {
+									Expect(vf.Driver).To(Equal(policy.Spec.DeviceType))
+								}
+							}
+							break
+						}
+					}
+				}
+				Expect(found).To(BeTrue())
+			},
+			Entry("Set DDP policy for X700 series NIC and vfio driver", policy1),
+			Entry("Set DDP policy for X700 series NIC and default driver", policy2),
+		)
+	})
 })

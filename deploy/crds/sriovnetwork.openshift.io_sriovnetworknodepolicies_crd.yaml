@@ -32,6 +32,9 @@ spec:
           spec:
             description: SriovNetworkNodePolicySpec defines the desired state of SriovNetworkNodePolicy
             properties:
+              ddpUrl:
+                description: URL of package containing DDP profile.
+                type: string
               deviceType:
                 description: The driver type for configured VFs. Allowed value "netdevice",
                   "vfio-pci". Defaults to netdevice.

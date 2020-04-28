@@ -1,6 +1,6 @@
 # sriov-network-operator
 
-The Sriov Network Operator is design to help user to provision and configure SR-IOV CNI plugin and Device plugin in Openshift cluster.
+The Sriov Network Operator is designed to help provision and configure SR-IOV CNI plugin and SR-IOV device plugin in an Openshift cluster.
 
 ## Motivation
 
@@ -9,10 +9,10 @@ SR-IOV network is an optional feature of Openshift cluster. To make it work, it 
 ## Features
 
 - Initialize the supported SR-IOV NIC types on selected nodes.
-- provision/upgrade SR-IOV device plugin executable on selected node.  
+- provision/upgrade SR-IOV device plugin executable on selected node.
 - provision/upgrade SR-IOV CNI plugin executable on selected nodes.
 - manage configuration of SR-IOV device plugin on host.
-- generate net-att-def CRs for SR-IOV CNI plugin
+- generate network-attachment-definitions CRs for SR-IOV CNI plugin.
 
 ## Quick Start
 
@@ -148,7 +148,7 @@ spec:
   resourceName: intelnics
 ```
 
-In this example, user selected the nice from vendor '8086' which is intel, device module is '1583' which is XL710 for 40GbE, on nodes labeled with 'network-sriov.capable' equals 'true'. Then for those PFs, create 4 VFs each, set mtu to 1500 and the load the vfio-pci driver to those virtual functions.
+In this example, user selected the NIC from vendor '8086' which is intel, device module is '1583' which is XL710 for 40GbE, on nodes labeled with 'network-sriov.capable' equals 'true'. Then for those PFs, create 4 VFs each, set mtu to 1500 and the load the vfio-pci driver to those virtual functions.
 
 ## Components and design
 

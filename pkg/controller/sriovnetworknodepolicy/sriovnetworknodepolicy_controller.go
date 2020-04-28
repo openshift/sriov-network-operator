@@ -2,7 +2,6 @@ package sriovnetworknodepolicy
 
 import (
 	"context"
-
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,6 +31,7 @@ import (
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	"github.com/openshift/sriov-network-operator/pkg/apply"
 	"github.com/openshift/sriov-network-operator/pkg/controller/sriovoperatorconfig"
+	"github.com/openshift/sriov-network-operator/pkg/plugins/intel/ddp"
 	render "github.com/openshift/sriov-network-operator/pkg/render"
 )
 
@@ -595,6 +595,14 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 				netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, p.Spec.DeviceType)
 			}
 
+			if p.Spec.DdpUrl != "" {
+				ddpProfileName, err := ddp.UrlToDdpProfile(p.Spec.DdpUrl)
+				if err != nil {
+					log.Error(err, "renderDevicePluginConfigData(): failed to render device plugin config")
+				}
+				netDeviceSelectors.DDPProfiles = sriovnetworkv1.UniqueAppend(netDeviceSelectors.DDPProfiles, ddpProfileName)
+			}
+
 			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
 			if err != nil {
 				return rcl, err
@@ -629,6 +637,14 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 			// Removed driver constraint for "netdevice" DeviceType
 			if p.Spec.DeviceType == "vfio-pci" {
 				netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, p.Spec.DeviceType)
+			}
+
+			if p.Spec.DdpUrl != "" {
+				ddpProfileName, err := ddp.UrlToDdpProfile(p.Spec.DdpUrl)
+				if err != nil {
+					log.Error(err, "renderDevicePluginConfigData(): failed to render device plugin config")
+				}
+				netDeviceSelectors.DDPProfiles = sriovnetworkv1.UniqueAppend(netDeviceSelectors.DDPProfiles, ddpProfileName)
 			}
 
 			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)

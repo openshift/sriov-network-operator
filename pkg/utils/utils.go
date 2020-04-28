@@ -18,6 +18,7 @@ import (
 	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
 	"github.com/jaypipes/ghw"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	"github.com/openshift/sriov-network-operator/pkg/plugins/intel/ddp"
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -92,12 +93,29 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			if dputils.SriovConfigured(device.Address) {
 				vfs, err := dputils.GetVFList(device.Address)
 				if err != nil {
-					glog.Warningf("DiscoverSriovDevices(): unable to parse VFs for device %+v %q", device, err)
+					glog.Warningf("DiscoverSriovDevices(): unable to parse VFs for device '%v' with error: '%v'", device, err)
 					continue
 				}
 				for _, vf := range vfs {
 					instance := getVfInfo(vf, devices)
 					iface.VFs = append(iface.VFs, instance)
+				}
+			}
+			// Get DDP information
+			if ok, _ := ddp.HasDdpSupport(device.Address); ok {
+				if ddpProfileInfo, err := dputils.GetDDPProfiles(device.Address); err != nil {
+					if err := ddp.CheckDdpToolOutput(device.Address, err); err != nil {
+						glog.Warningf("DiscoverSriovDevices(): DDPTool return code returned the following error: '%v'", err)
+					}
+					iface.Ddp = ddp.NoDdpState
+				} else {
+					if ddpProfileVer, err := ddp.GetDdpVersion(device.Address); err != nil {
+						glog.Warningf("DiscoverSriovDevices(): failed to get DDP profile version for device '%v' with error: '%v'", device, err)
+						iface.Ddp = ddpProfileInfo
+					} else {
+						iface.Ddp = ddpProfileInfo + " - v" + ddpProfileVer
+					}
+					glog.Infof("DiscoverSriovDevices(): DDP profile info added for device '%v': '%s'", device, ddpProfileInfo)
 				}
 			}
 		}

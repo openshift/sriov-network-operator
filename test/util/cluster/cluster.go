@@ -24,6 +24,7 @@ type EnabledNodes struct {
 var (
 	supportedDrivers = []string{"mlx5_core", "i40e", "ixgbe"}
 	supportedDevices = []string{"1583", "158b", "10fb", "1015", "1017"}
+	x700Devices      = []string{"158b"}
 )
 
 // DiscoverSriov retrieves Sriov related information of a given cluster.
@@ -109,6 +110,22 @@ func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.Interfa
 	}
 
 	return nil, fmt.Errorf("Unable to find a mellanox sriov devices in node %s", node)
+}
+
+// FindOneIntelX700Device retrieves a valid x700 sriov device for the given node
+func (n *EnabledNodes) FindOneIntelX700Device(node string) (*sriovv1.InterfaceExt, error) {
+	s, ok := n.States[node]
+	if !ok {
+		return nil, fmt.Errorf("Node %s not found", node)
+	}
+	for _, itf := range s.Status.Interfaces {
+		for _, devId := range x700Devices {
+			if devId == itf.DeviceID && itf.Driver == "i40e" {
+				return &itf, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("Unable to find at least one Intel X700 series sriov device from node %s", node)
 }
 
 // SriovStable tells if all the node states are in sync (and the cluster is ready for another round of tests)

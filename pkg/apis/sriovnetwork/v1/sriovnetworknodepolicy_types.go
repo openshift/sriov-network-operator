@@ -35,6 +35,8 @@ type SriovNetworkNodePolicySpec struct {
 	// +kubebuilder:validation:Enum=eth;ETH;ib;IB
 	// NIC Link Type. Allowed value "eth", "ETH", "ib", and "IB".
 	LinkType string `json:"linkType,omitempty"`
+	//URL of package containing DDP profile.
+	DdpUrl string `json:"ddpUrl,omitempty"`
 }
 
 // +k8s:openapi-gen=false

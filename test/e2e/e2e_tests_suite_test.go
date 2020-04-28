@@ -55,6 +55,7 @@ func TestSriovTests(t *testing.T) {
 
 var sriovInfos *cluster.EnabledNodes
 var sriovIface *sriovnetworkv1.InterfaceExt
+var sriovIfaceX700 *sriovnetworkv1.InterfaceExt
 
 var _ = BeforeSuite(func() {
 	// get global framework variables
@@ -77,6 +78,9 @@ var _ = BeforeSuite(func() {
 	sriovIface, err = sriovInfos.FindOneSriovDevice(sriovInfos.Nodes[0])
 	Expect(err).ToNot(HaveOccurred())
 	Expect(sriovIface).ToNot(BeNil())
+	sriovIfaceX700, err = sriovInfos.FindOneIntelX700Device(sriovInfos.Nodes[0])
+	Expect(err).ToNot(HaveOccurred())
+	Expect(sriovIfaceX700).ToNot(BeNil())
 })
 
 var _ = AfterSuite(func() {

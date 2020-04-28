@@ -37,6 +37,8 @@ spec:
               interfaces:
                 items:
                   properties:
+                    ddp:
+                      type: string
                     linkType:
                       type: string
                     mtu:
@@ -100,6 +102,8 @@ spec:
                         - vfID
                         type: object
                       type: array
+                    ddp:
+                      type: string
                     deviceID:
                       type: string
                     driver:

@@ -167,6 +167,7 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, merge bool)
 				Mtu:        p.Spec.Mtu,
 				Name:       iface.Name,
 				LinkType:   p.Spec.LinkType,
+				Ddp:        p.Spec.DdpUrl,
 			}
 			var group *VfGroup
 			if p.Spec.NumVfs > 0 {
