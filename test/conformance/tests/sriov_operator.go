@@ -31,6 +31,7 @@ import (
 var _ = Describe("[sriov] operator", func() {
 	var sriovInfos *cluster.EnabledNodes
 	execute.BeforeAll(func() {
+		Expect(clients).NotTo(BeNil(), "Client misconfigured, check the $KUBECONFIG env variable")
 		err := namespaces.Create(namespaces.Test, clients)
 		Expect(err).ToNot(HaveOccurred())
 

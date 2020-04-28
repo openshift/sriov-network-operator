@@ -1,8 +1,9 @@
 package client
 
 import (
-	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	"os"
+
+	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 
 	"github.com/golang/glog"
 	clientconfigv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
@@ -49,7 +50,7 @@ func New(kubeconfig string, addToScheme func(*runtime.Scheme)) *ClientSet {
 		config, err = rest.InClusterConfig()
 	}
 	if err != nil {
-		panic(err)
+		return nil
 	}
 
 	clientSet := &ClientSet{}
