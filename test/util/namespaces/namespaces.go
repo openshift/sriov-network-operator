@@ -3,6 +3,7 @@ package namespaces
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -69,7 +70,7 @@ func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet) error 
 	}
 
 	for _, p := range policies.Items {
-		if p.Name != "default" {
+		if p.Name != "default" && strings.HasPrefix(p.Name, "test-") {
 			err := cs.Delete(context.Background(), &p)
 			if err != nil {
 				return fmt.Errorf("Failed to delete policy %v", err)
@@ -77,6 +78,22 @@ func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet) error 
 		}
 	}
 
-	network := sriovv1.SriovNetwork{}
-	return cs.DeleteAllOf(context.Background(), &network, runtimeclient.InNamespace(operatorNamespace))
+	networks := sriovv1.SriovNetworkList{}
+	err = cs.List(context.Background(),
+		&networks,
+		runtimeclient.InNamespace(operatorNamespace))
+
+	if err != nil {
+		return err
+	}
+
+	for _, n := range networks.Items {
+		if strings.HasPrefix(n.Name, "test-") {
+			err := cs.Delete(context.Background(), &n)
+			if err != nil {
+				return fmt.Errorf("Failed to delete network %v", err)
+			}
+		}
+	}
+	return nil
 }
