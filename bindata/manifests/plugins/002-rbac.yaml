@@ -10,3 +10,46 @@ kind: ServiceAccount
 metadata:
   name: sriov-device-plugin
   namespace: {{.Namespace}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sriov-plugin
+  namespace: {{.Namespace}}
+rules:
+  - apiGroups:
+      - security.openshift.io
+    resourceNames:
+      - privileged
+    resources:
+      - securitycontextconstraints
+    verbs:
+      - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sriov-cni
+  namespace: {{.Namespace}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sriov-plugin
+subjects:
+  - kind: ServiceAccount
+    name: sriov-cni
+    namespace: {{.Namespace}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sriov-device-plugin
+  namespace: {{.Namespace}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sriov-plugin
+subjects:
+  - kind: ServiceAccount
+    name: sriov-device-plugin
+    namespace: {{.Namespace}}
