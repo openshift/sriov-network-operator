@@ -19,6 +19,12 @@ const (
 	MlxMaxVFs  = 128
 )
 
+// SupportedModels holds the NIC models officially supported
+var SupportedModels = map[string]([]string){
+	IntelID:    []string{"158b"},
+	MellanoxID: []string{"1015", "1017"},
+}
+
 var (
 	nodesSelected     bool
 	interfaceSelected bool
@@ -55,6 +61,21 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 
 	if cr.Spec.NicSelector.Vendor == "" && cr.Spec.NicSelector.DeviceID == "" && len(cr.Spec.NicSelector.PfNames) == 0 {
 		return false, fmt.Errorf("at least one of these parameters (Vendor, DeviceID or PfNames) has to be defined in nicSelector in CR %s", cr.GetName())
+	}
+
+	if cr.Spec.NicSelector.Vendor != "" {
+		if !sriovnetworkv1.StringInArray(cr.Spec.NicSelector.Vendor, keys(SupportedModels)) {
+			return false, fmt.Errorf("vendor %s is not supported", cr.Spec.NicSelector.Vendor)
+		}
+		if cr.Spec.NicSelector.DeviceID != "" {
+			if (cr.Spec.NicSelector.Vendor == IntelID && !sriovnetworkv1.StringInArray(cr.Spec.NicSelector.DeviceID, SupportedModels[IntelID])) || (cr.Spec.NicSelector.Vendor == MellanoxID && !sriovnetworkv1.StringInArray(cr.Spec.NicSelector.DeviceID, SupportedModels[MellanoxID])) {
+				return false, fmt.Errorf("vendor/device %s/%s is not supported", cr.Spec.NicSelector.Vendor, cr.Spec.NicSelector.DeviceID)
+			}
+		}
+	} else if cr.Spec.NicSelector.DeviceID != "" {
+		if !sriovnetworkv1.StringInArray(cr.Spec.NicSelector.DeviceID, append(SupportedModels[IntelID], SupportedModels[MellanoxID]...)) {
+			return false, fmt.Errorf("device %s is not supported", cr.Spec.NicSelector.DeviceID)
+		}
 	}
 
 	if len(cr.Spec.NicSelector.PfNames) > 0 {
@@ -125,7 +146,7 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	glog.V(2).Infof("validatePolicyForNodeState(): validate policy %s for node %s.", policy.GetName(), state.GetName())
 	for _, iface := range state.Status.Interfaces {
-		if policy.Spec.NicSelector.Selected(&iface) {
+		if validateNicModel(&policy.Spec.NicSelector, &iface) {
 			interfaceSelected = true
 			if policy.GetName() != "default" && policy.Spec.NumVfs == 0 {
 				return false, fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
@@ -161,4 +182,47 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 		}
 	}
 	return true, nil
+}
+
+func keys(m map[string]([]string)) []string {
+	keys := make([]string, len(m))
+	i := 0
+	for k := range m {
+		keys[i] = k
+		i++
+	}
+	return keys
+}
+
+func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt) bool {
+	if selector.Vendor != "" && selector.Vendor != iface.Vendor {
+		return false
+	}
+	if selector.DeviceID != "" && selector.DeviceID != iface.DeviceID {
+		return false
+	}
+	if len(selector.RootDevices) > 0 && !sriovnetworkv1.StringInArray(iface.PciAddress, selector.RootDevices) {
+		return false
+	}
+	if len(selector.PfNames) > 0 {
+		var pfNames []string
+		for _, p := range selector.PfNames {
+			if strings.Contains(p, "#") {
+				fields := strings.Split(p, "#")
+				pfNames = append(pfNames, fields[0])
+			} else {
+				pfNames = append(pfNames, p)
+			}
+		}
+		if !sriovnetworkv1.StringInArray(iface.Name, pfNames) {
+			return false
+		}
+	}
+	// check the vendor/device ID to make sure only devices in supported list are allowed.
+	for k, v := range SupportedModels {
+		if k == iface.Vendor && !sriovnetworkv1.StringInArray(iface.DeviceID, v) {
+			return false
+		}
+	}
+	return true
 }
