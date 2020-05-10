@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	// "k8s.io/client-go/kubernetes/scheme"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -471,9 +470,9 @@ func (a GlogLogger) Logf(format string, v ...interface{}) {
 	glog.Infof(format, v...)
 }
 
-func (dn *Daemon) annotateNode(node, value string, lister listerv1.NodeLister) error {
+func (dn *Daemon) annotateNode(node, value string) error {
 	glog.Infof("annotateNode(): Annotate node %s with: %s", node, value)
-	oldNode, err := lister.Get(dn.name)
+	oldNode, err := dn.kubeClient.CoreV1().Nodes().Get(dn.name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -549,7 +548,7 @@ func (dn *Daemon) drainNode(name string) {
 	})
 	informer.Run(stop)
 
-	err = dn.annotateNode(dn.name, annoDraining, lister)
+	err = dn.annotateNode(dn.name, annoDraining)
 	if err != nil {
 		glog.Errorf("drainNode(): Failed to annotate node: %v", err)
 	}
@@ -585,7 +584,7 @@ func (dn *Daemon) drainNode(name string) {
 		glog.Errorf("drainNode(): failed to drain node: %v", err)
 	}
 	glog.Info("drainNode(): drain complete")
-	err = dn.annotateNode(dn.name, annoIdle, lister)
+	err = dn.annotateNode(dn.name, annoIdle)
 	if err != nil {
 		glog.Errorf("drainNode(): failed to annotate node: %v", err)
 	}
