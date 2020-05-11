@@ -39,6 +39,7 @@ var _ = Describe("[sriov] pod", func() {
 
 	Describe("Configuration", func() {
 		var testNode string
+		var sriovPolicy *sriovv1.SriovNetworkNodePolicy
 		resourceName := "testresource"
 		networkName := "test-network"
 		numVfs := 5
@@ -48,7 +49,7 @@ var _ = Describe("[sriov] pod", func() {
 			intf, err := sriovInfos.FindOneSriovDevice(testNode)
 			Expect(err).ToNot(HaveOccurred(), "No SR-IOV supported devices detected")
 			Expect(intf.TotalVfs).To(BeNumerically(">=", numVfs), fmt.Sprintf("Cluster has less than %d VFs available.", numVfs))
-			err = network.CreateSriovPolicy(clients, "test-vfreleasedpolicy", operatorNamespace, intf.Name, testNode, numVfs, resourceName)
+			sriovPolicy, err = network.CreateSriovPolicy(clients, "test-vfreleasedpolicy", operatorNamespace, intf.Name, testNode, numVfs, resourceName)
 			Expect(err).ToNot(HaveOccurred(), "Error to create SriovNetworkNodePolicy")
 
 			Eventually(func() sriovv1.Interfaces {
@@ -60,7 +61,7 @@ var _ = Describe("[sriov] pod", func() {
 				Fields{
 					"Name":     Equal(intf.Name),
 					"NumVfs":   Equal(numVfs),
-					"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: resourceName, DeviceType: "netdevice", VfRange: "0-4"}),
+					"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: resourceName, DeviceType: "netdevice", VfRange: "0-4", PolicyName: sriovPolicy.Name}),
 				})), "Error SriovNetworkNodeState doesn't contain required elements")
 
 			waitForSRIOVStable()

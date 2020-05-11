@@ -143,7 +143,7 @@ var _ = Describe("[sriov] operator", func() {
 					Fields{
 						"Name":     Equal(intf.Name),
 						"NumVfs":   Equal(5),
-						"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "2-4"}),
+						"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "2-4", PolicyName: firstConfig.Name}),
 					})))
 
 				waitForSRIOVStable()
@@ -190,9 +190,9 @@ var _ = Describe("[sriov] operator", func() {
 						"NumVfs": Equal(5),
 						"VfGroups": SatisfyAll(
 							ContainElement(
-								sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "2-4"}),
+								sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "2-4", PolicyName: firstConfig.Name}),
 							ContainElement(
-								sriovv1.VfGroup{ResourceName: "testresource1", DeviceType: "vfio-pci", VfRange: "0-1"}),
+								sriovv1.VfGroup{ResourceName: "testresource1", DeviceType: "vfio-pci", VfRange: "0-1", PolicyName: secondConfig.Name}),
 						),
 					},
 				)))
@@ -262,7 +262,7 @@ var _ = Describe("[sriov] operator", func() {
 					Fields{
 						"Name":     Equal(intf.Name),
 						"NumVfs":   Equal(5),
-						"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "1-4"}),
+						"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "1-4", PolicyName: firstConfig.Name}),
 					})))
 
 				secondConfig := &sriovv1.SriovNetworkNodePolicy{
@@ -1114,7 +1114,7 @@ func daemonsScheduledOnNodes(selector string) bool {
 }
 
 func createSriovPolicy(sriovDevice string, testNode string, numVfs int, resourceName string) {
-	err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, sriovDevice, testNode, numVfs, resourceName)
+	_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, sriovDevice, testNode, numVfs, resourceName)
 	Expect(err).ToNot(HaveOccurred())
 	waitForSRIOVStable()
 
