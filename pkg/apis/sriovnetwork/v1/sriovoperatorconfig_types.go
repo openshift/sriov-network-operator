@@ -16,7 +16,9 @@ type SriovOperatorConfigSpec struct {
 	EnableInjector *bool `json:"enableInjector,omitempty"`
 	// Flag to control whether the operator admission controller webhook shall be deployed
 	EnableOperatorWebhook *bool `json:"enableOperatorWebhook,omitempty"`
-	// Flag to control the log verbose level of the operator
+	// Flag to control the log verbose level of the operator. Set to '0' to show only the basic logs. And set to '2' to show all the available logs.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=2
 	LogLevel int `json:"logLevel,omitempty"`
 }
 
