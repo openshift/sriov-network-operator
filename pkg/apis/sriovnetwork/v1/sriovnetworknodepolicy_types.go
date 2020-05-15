@@ -37,11 +37,9 @@ type SriovNetworkNodePolicySpec struct {
 
 // +k8s:openapi-gen=false
 type SriovNetworkNicSelector struct {
-	// +kubebuilder:validation:Enum={"8086","15b3"}
 	// The vendor hex code of SR-IoV device. Allowed value "8086", "15b3".
 	Vendor string `json:"vendor,omitempty"`
-	// The device hex code of SR-IoV device. Allowed value "1583", "158b", "10fb", "1015", "1017".
-	// +kubebuilder:validation:Enum={"1583","158b","10fb","1015","1017"}
+	// The device hex code of SR-IoV device. Allowed value "158b", "1015", "1017".
 	DeviceID string `json:"deviceID,omitempty"`
 	// PCI address of SR-IoV PF.
 	RootDevices []string `json:"rootDevices,omitempty"`
