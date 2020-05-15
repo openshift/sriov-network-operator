@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,16 @@ import (
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+var waitingTime time.Duration = 20 * time.Minute
+
+func init() {
+	waitingEnv := os.Getenv("SRIOV_WAITING_TIME")
+	newTime, err := strconv.Atoi(waitingEnv)
+	if err == nil && newTime != 0 {
+		waitingTime = time.Duration(newTime) * time.Minute
+	}
+}
 
 var _ = Describe("[sriov] operator", func() {
 	var sriovInfos *cluster.EnabledNodes
@@ -222,7 +233,7 @@ var _ = Describe("[sriov] operator", func() {
 			})
 
 			// 27630
-			It("Should not be possible to have overlapping pf ranges", func() {
+			/*It("Should not be possible to have overlapping pf ranges", func() {
 				// Skipping this test as blocking the override will
 				// be implemented in 4.5, as per bz #1798880
 				Skip("Overlapping is still not blocked")
@@ -287,7 +298,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				err = clients.Create(context.Background(), secondConfig)
 				Expect(err).To(HaveOccurred())
-			})
+			})*/
 		})
 
 		Context("VF flags", func() {
@@ -1216,11 +1227,11 @@ func waitForSRIOVStable() {
 		res, err := cluster.SriovStable(operatorNamespace, clients)
 		Expect(err).ToNot(HaveOccurred())
 		return res
-	}, 10*time.Minute, 1*time.Second).Should(BeTrue())
+	}, waitingTime, 1*time.Second).Should(BeTrue())
 
 	Eventually(func() bool {
 		isClusterReady, err := cluster.IsClusterStable(clients)
 		Expect(err).ToNot(HaveOccurred())
 		return isClusterReady
-	}, 10*time.Minute, 1*time.Second).Should(BeTrue())
+	}, waitingTime, 1*time.Second).Should(BeTrue())
 }
