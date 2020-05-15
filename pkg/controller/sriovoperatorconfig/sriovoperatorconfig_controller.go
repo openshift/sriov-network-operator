@@ -201,6 +201,12 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovO
 	logger := log.WithName("syncWebhookObjs")
 	logger.Info("Start to sync webhook objects")
 
+	enable := os.Getenv("ENABLE_ADMISSION_CONTROLLER")
+	if enable != "true" {
+		logger.Info("SR-IOV Network Resource Injector and Operator Webhook are disabled.")
+		return nil
+	}
+
 	for name, path := range Webhooks {
 		// Render Webhook manifests
 		data := render.MakeRenderData()

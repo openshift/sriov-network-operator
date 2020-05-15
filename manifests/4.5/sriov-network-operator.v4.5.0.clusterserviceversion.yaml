@@ -282,6 +282,8 @@ spec:
                       value: quay.io/openshift/origin-sriov-network-webhook:4.5
                     - name: RESOURCE_PREFIX
                       value: openshift.io
+                    - name: ENABLE_ADMISSION_CONTROLLER
+                      value: "true"
                     - name: NAMESPACE
                       valueFrom:
                         fieldRef:
