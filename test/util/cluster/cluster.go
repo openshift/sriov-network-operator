@@ -162,6 +162,14 @@ func CheckReadyGeneration(clients *testclient.ClientSet, operatorNamespace strin
 	logsList := strings.Split(logs, "\n")
 	for idx, log := range logsList {
 		// example output from the config-daemon
+
+		// I0412 09:46:26.041882 3910208 writer.go:111] setNodeStateStatus(): syncStatus: Succeeded, lastSyncError:
+		// I0412 09:46:35.293994 3910208 daemon.go:244] nodeStateChangeHandler(): current generation is 183
+		if strings.Contains(log, fmt.Sprintf("current generation is %d", state.Generation)) &&
+			strings.Contains(logsList[idx-1], "syncStatus: Succeeded") {
+			return true, nil
+		}
+
 		//I0510 11:57:10.178277 2462748 daemon.go:311] nodeStateChangeHandler(): Interface not changed
 		//I0510 11:57:10.178289 2462748 daemon.go:286] nodeStateChangeHandler(): new generation is 4
 		if strings.Contains(log, fmt.Sprintf("new generation is %d", state.Generation)) &&

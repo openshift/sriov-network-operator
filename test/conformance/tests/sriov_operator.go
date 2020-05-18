@@ -152,9 +152,16 @@ var _ = Describe("[sriov] operator", func() {
 				}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
 					IgnoreExtras,
 					Fields{
-						"Name":     Equal(intf.Name),
-						"NumVfs":   Equal(5),
-						"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "2-4", PolicyName: firstConfig.Name}),
+						"Name":   Equal(intf.Name),
+						"NumVfs": Equal(5),
+						"VfGroups": ContainElement(
+							MatchFields(
+								IgnoreExtras,
+								Fields{
+									"ResourceName": Equal("testresource"),
+									"DeviceType":   Equal("netdevice"),
+									"VfRange":      Equal("2-4"),
+								})),
 					})))
 
 				waitForSRIOVStable()
@@ -201,9 +208,21 @@ var _ = Describe("[sriov] operator", func() {
 						"NumVfs": Equal(5),
 						"VfGroups": SatisfyAll(
 							ContainElement(
-								sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "2-4", PolicyName: firstConfig.Name}),
+								MatchFields(
+									IgnoreExtras,
+									Fields{
+										"ResourceName": Equal("testresource"),
+										"DeviceType":   Equal("netdevice"),
+										"VfRange":      Equal("2-4"),
+									})),
 							ContainElement(
-								sriovv1.VfGroup{ResourceName: "testresource1", DeviceType: "vfio-pci", VfRange: "0-1", PolicyName: secondConfig.Name}),
+								MatchFields(
+									IgnoreExtras,
+									Fields{
+										"ResourceName": Equal("testresource1"),
+										"DeviceType":   Equal("vfio-pci"),
+										"VfRange":      Equal("0-1"),
+									})),
 						),
 					},
 				)))
