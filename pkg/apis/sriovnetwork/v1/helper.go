@@ -104,7 +104,7 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 				Name:       iface.Name,
 			}
 			var group *VfGroup
-			if p.Spec.NumVfs > 0 {
+			if p.Spec.NumVfs >= 0 && p.Name != "default" {
 				result.NumVfs = p.Spec.NumVfs
 				group, _ = p.generateVfGroup(&iface)
 				found := false
