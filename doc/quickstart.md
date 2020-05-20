@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-1. Kubernetes of Openshift cluster running on bare metal nodes.
+1. Kubernetes or Openshift cluster running on bare metal nodes.
 2. Multus-cni is deployed as default CNI plugin, and there is a default CNI plugin (flannel, openshift-sdn etc.) available for Multus-cni.
 
 ## Installation
@@ -31,10 +31,11 @@ make deploy-setup
 If you are running a Kubernetes cluster:
 ```bash
 export OPERATOR_EXEC=kubectl
+export ENABLE_ADMISSION_CONTROLLER=false
 make deploy-setup-k8s
 ```
 
-By default, the operator will be deployed in namespace 'sriov-network-operator', you can check if the deployment is finished successfully.
+By default, the operator will be deployed in namespace 'sriov-network-operator' for Kubernetes cluster, you can check if the deployment is finished successfully.
 
 ```bash
 $ kubectl get -n sriov-network-operator all
@@ -56,6 +57,8 @@ replicaset.apps/sriov-network-operator-54d7545f65   1         1         1       
 ```
 
 You may need to label SR-IOV worker nodes using `node-role.kubernetes.io/worker` label, if not already.
+
+**Note:** By default, SR-IOV Operator will be deployed in namespace 'openshift-sriov-network-operator' for OpenShift cluster.
 
 ## Configuration
 
@@ -186,8 +189,16 @@ spec:
 
 To remove the operator related resources.
 
+If you are running an Openshift cluster:
+
 ```bash
 make undeploy
+```
+
+If you are running a Kubernetes cluster:
+
+```bash
+make undeploy-k8s
 ```
 
 ## Hack
