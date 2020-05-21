@@ -79,6 +79,8 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 		}
 		if name := tryGetInterfaceName(device.Address); name != "" {
 			iface.Name = name
+			iface.Mac = getNetDevMac(name)
+			iface.LinkSpeed = getNetDevLinkSpeed(name)
 		}
 
 		if dputils.IsSriovPF(device.Address) {
@@ -306,6 +308,30 @@ func getNetdevMTU(pciAddr string) int {
 	return mtu
 }
 
+func getNetDevMac(ifaceName string) string {
+	glog.V(2).Infof("getNetDevMac(): get Mac for device %s", ifaceName)
+	macFilePath := filepath.Join(sysClassNet, ifaceName, "address")
+	data, err := ioutil.ReadFile(macFilePath)
+	if err != nil {
+		glog.Warningf("getNetDevMac(): fail to read Mac file %s", macFilePath)
+		return ""
+	}
+
+	return strings.TrimSpace(string(data))
+}
+
+func getNetDevLinkSpeed(ifaceName string) string {
+	glog.V(2).Infof("getNetDevLinkSpeed(): get LinkSpeed for device %s", ifaceName)
+	speedFilePath := filepath.Join(sysClassNet, ifaceName, "speed")
+	data, err := ioutil.ReadFile(speedFilePath)
+	if err != nil {
+		glog.Warningf("getNetDevLinkSpeed(): fail to read Link Speed file %s", speedFilePath)
+		return ""
+	}
+
+	return fmt.Sprintf("%s Mb/s", strings.TrimSpace(string(data)))
+}
+
 func resetSriovDevice(pciAddr string) error {
 	glog.V(2).Infof("resetSriovDevice(): reset sr-iov device %s", pciAddr)
 	if err := setSriovNumVfs(pciAddr, 0); err != nil {
@@ -334,6 +360,10 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualF
 
 	if mtu := getNetdevMTU(pciAddr); mtu > 0 {
 		vf.Mtu = mtu
+	}
+	if name := tryGetInterfaceName(pciAddr); name != "" {
+		vf.Name = name
+		vf.Mac = getNetDevMac(name)
 	}
 
 	for _, device := range devices {
