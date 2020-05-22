@@ -15,6 +15,7 @@ import (
 
 	"github.com/golang/glog"
 	drain "github.com/openshift/kubernetes-drain"
+	goerr "github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -238,11 +239,34 @@ func (dn *Daemon) uncordon(name string) {
 }
 
 func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
-	var err error
+	var err, lastErr error
 	newState := new.(*sriovnetworkv1.SriovNetworkNodeState)
 	oldState := old.(*sriovnetworkv1.SriovNetworkNodeState)
-	glog.V(2).Infof("nodeStateChangeHandler(): current generation is %d", newState.GetObjectMeta().GetGeneration())
-	if newState.GetObjectMeta().GetGeneration() == oldState.GetObjectMeta().GetGeneration() {
+	glog.V(2).Infof("nodeStateChangeHandler(): new generation is %d", newState.GetObjectMeta().GetGeneration())
+	// Get the latest NodeState
+	var latestState *sriovnetworkv1.SriovNetworkNodeState
+	err = wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
+		latestState, lastErr = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(dn.name, metav1.GetOptions{})
+		if lastErr == nil {
+			return true, nil
+		}
+		glog.Warningf("nodeStateChangeHandler(): Failed to fetch node state %s (%v); retrying...", dn.name, lastErr)
+		return false, nil
+	})
+	if err != nil {
+		if err == wait.ErrWaitTimeout {
+			dn.exitCh <- goerr.Wrapf(lastErr, "nodeStateChangeHandler(): Timed out trying to fetch the latest node state %s", dn.name)
+			return
+		}
+		dn.exitCh <- err
+		return
+	}
+	latest := latestState.GetObjectMeta().GetGeneration()
+	if latest != newState.GetObjectMeta().GetGeneration() {
+		glog.Errorf("nodeStateChangeHandler(): the lastet generation is %d, skip", latest)
+		return
+	}
+	if latest == oldState.GetObjectMeta().GetGeneration() {
 		glog.V(2).Infof("nodeStateChangeHandler(): Interface not changed")
 		return
 	}
@@ -252,9 +276,8 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 	reqReboot := false
 	reqDrain := false
-
 	for k, p := range dn.LoadedPlugins {
-		d, r, err := p.OnNodeStateChange(oldState, newState)
+		d, r, err := p.OnNodeStateChange(oldState, latestState)
 		if err != nil {
 			glog.Errorf("nodeStateChangeHandler(): plugin %s error: %v", k, err)
 			dn.exitCh <- err
@@ -267,8 +290,8 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 
 	if reqDrain {
 		glog.Info("nodeStateChangeHandler(): drain node")
-		dn.drainNode(newState.GetName())
-		defer dn.uncordon(newState.GetName())
+		dn.drainNode(latestState.GetName())
+		defer dn.uncordon(latestState.GetName())
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
@@ -298,7 +321,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	}
 
 	// restart device plugin pod
-	if reqDrain || (newState.Spec.DpConfigVersion != oldState.Spec.DpConfigVersion) {
+	if reqDrain || (latestState.Spec.DpConfigVersion != oldState.Spec.DpConfigVersion) {
 		glog.Info("nodeStateChangeHandler(): restart device plugin pod")
 		if err := dn.restartDevicePluginPod(); err != nil {
 			glog.Errorf("nodeStateChangeHandler(): fail to restart device plugin pod: %v", err)
@@ -444,25 +467,6 @@ func (dn *Daemon) drainNode(name string) {
 		glog.Errorf("drainNode(): failed to drain node: %v", err)
 	}
 	glog.Info("drainNode(): drain complete")
-}
-
-func needRestartDevicePlugin(oldState, newState *sriovnetworkv1.SriovNetworkNodeState) bool {
-	var found bool
-	for _, in := range newState.Spec.Interfaces {
-		found = false
-		for _, io := range oldState.Spec.Interfaces {
-			if in.PciAddress == io.PciAddress {
-				found = true
-				if in.NumVfs != io.NumVfs {
-					return true
-				}
-			}
-		}
-		if !found {
-			return true
-		}
-	}
-	return false
 }
 
 func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
