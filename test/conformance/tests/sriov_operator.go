@@ -936,39 +936,40 @@ var _ = Describe("[sriov] operator", func() {
 			})
 		})
 
-		Context("unhealthyVfs", func() {
-			// 25834
-			It(" Should not be able to create pod successfully if there are only unhealthy vfs", func() {
-				resourceName := "sriovnic"
-				sriovNetworkName := "test-sriovnetwork"
-				testNode := sriovInfos.Nodes[0]
-
-				sriovDevices, err := sriovInfos.FindSriovDevices(testNode)
-				Expect(err).ToNot(HaveOccurred())
-				unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDevices)
-				Expect(err).ToNot(HaveOccurred())
-				if len(unusedSriovDevices) == 0 {
-					Skip("No unused active sriov devices found. " +
-						"Sriov devices either not present, used as default route or used for as bridge slave. " +
-						"Executing the test could endanger node connectivity.")
-				}
-				sriovDevice := unusedSriovDevices[0]
-
-				createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
-				Expect(err).ToNot(HaveOccurred())
-				Eventually(func() error {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-				}, 3*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-
-				defer changeNodeInterfaceState(testNode, sriovDevice.Name, true)
-				changeNodeInterfaceState(testNode, sriovDevice.Name, false)
-
-				createUnschedulableTestPod(testNode, []string{sriovNetworkName}, resourceName)
-			})
-		})
+		//TODO: Add this back after making it stable
+		//Context("unhealthyVfs", func() {
+		//	// 25834
+		//	It(" Should not be able to create pod successfully if there are only unhealthy vfs", func() {
+		//		resourceName := "sriovnic"
+		//		sriovNetworkName := "test-sriovnetwork"
+		//		testNode := sriovInfos.Nodes[0]
+		//
+		//		sriovDevices, err := sriovInfos.FindSriovDevices(testNode)
+		//		Expect(err).ToNot(HaveOccurred())
+		//		unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDevices)
+		//		Expect(err).ToNot(HaveOccurred())
+		//		if len(unusedSriovDevices) == 0 {
+		//			Skip("No unused active sriov devices found. " +
+		//				"Sriov devices either not present, used as default route or used for as bridge slave. " +
+		//				"Executing the test could endanger node connectivity.")
+		//		}
+		//		sriovDevice := unusedSriovDevices[0]
+		//
+		//		createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
+		//		ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+		//		err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+		//		Expect(err).ToNot(HaveOccurred())
+		//		Eventually(func() error {
+		//			netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+		//			return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+		//		}, 3*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+		//
+		//		defer changeNodeInterfaceState(testNode, sriovDevice.Name, true)
+		//		changeNodeInterfaceState(testNode, sriovDevice.Name, false)
+		//
+		//		createUnschedulableTestPod(testNode, []string{sriovNetworkName}, resourceName)
+		//	})
+		//})
 	})
 })
 

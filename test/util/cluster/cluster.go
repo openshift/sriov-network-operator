@@ -151,7 +151,11 @@ func CheckReadyGeneration(clients *testclient.ClientSet, operatorNamespace strin
 	}
 
 	if podObj == nil {
-		return false, fmt.Errorf("failed to find config daemon on the node %s", state.Name)
+		return false, nil
+	}
+
+	if podObj.Status.Phase != corev1.PodRunning {
+		return false, nil
 	}
 
 	logs, err := pods.GetLog(clients, podObj)
