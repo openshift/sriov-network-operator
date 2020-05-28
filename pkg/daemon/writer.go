@@ -95,7 +95,8 @@ func updateNodeStateStatusRetry(client snclientset.Interface, nodeName string, f
 	})
 	if err != nil {
 		// may be conflict if max retries were hit
-		return nil, fmt.Errorf("Unable to update node %q: %v", nodeState, err)
+		glog.Warningf("updateNodeStateStatusRetry(): Unable to update node state: %v", err)
+		return nil, fmt.Errorf("Unable to update node state %q: %v", nodeState, err)
 	}
 
 	return nodeState, nil
@@ -108,7 +109,7 @@ func setNodeStateStatus(client snclientset.Interface, nodeName string, status sr
 		nodeState.Status.SyncStatus = msg.syncStatus
 	})
 
-	glog.V(2).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
+	glog.V(2).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", msg.syncStatus, msg.lastSyncError)
 	return nodeState, err
 }
 
