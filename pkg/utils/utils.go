@@ -251,7 +251,7 @@ func setSriovNumVfs(pciAddr string, numVfs int) error {
 func setNetdevMTU(pciAddr string, mtu int) error {
 	glog.V(2).Infof("setNetdevMTU(): set MTU for device %s", pciAddr)
 	if mtu <= 0 {
-		glog.V(2).Infof("setNetdevMTU(): not set MTU to %s", mtu)
+		glog.V(2).Infof("setNetdevMTU(): not set MTU to %d", mtu)
 		return nil
 	}
 	b := backoff.NewConstantBackOff(1 * time.Second)
