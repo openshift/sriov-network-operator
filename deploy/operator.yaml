@@ -12,6 +12,7 @@ spec:
       labels:
         name: sriov-network-operator
     spec:
+      hostNetwork: true
       nodeSelector:
         node-role.kubernetes.io/master: ""
       tolerations:
