@@ -152,6 +152,7 @@ func GenerateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 	spoofchk := ""
 	trust := ""
 	state := ""
+	ipam := "{}"
 
 	if cr.Spec.Trust == "on" {
 		trust = `"trust":"on",`
@@ -173,9 +174,48 @@ func GenerateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 		state = `"link_state":"disable",`
 	}
 
+	if cr.Spec.IPAM != "" {
+		ipam = cr.Spec.IPAM
+	}
 	vlanQoS := cr.Spec.VlanQoS
 
-	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"sriov", "vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.GetName(), cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, cr.Spec.IPAM)
+	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"sriov","vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.GetName(), cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, ipam)
+}
+
+func GenerateSriovIBNetworkCRs(namespace string, specs map[string]sriovnetworkv1.SriovIBNetworkSpec) map[string]sriovnetworkv1.SriovIBNetwork {
+	crs := make(map[string]sriovnetworkv1.SriovIBNetwork)
+
+	for k, v := range specs {
+		crs[k] = sriovnetworkv1.SriovIBNetwork{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "SriovIBNetwork",
+				APIVersion: "sriovnetwork.openshift.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      k,
+				Namespace: namespace,
+			},
+			Spec: v,
+		}
+	}
+	return crs
+}
+
+func GenerateExpectedIBNetConfig(cr *sriovnetworkv1.SriovIBNetwork) string {
+	state := ""
+	ipam := "{}"
+
+	if cr.Spec.LinkState == "auto" {
+		state = `"link_state":"auto",`
+	} else if cr.Spec.LinkState == "enable" {
+		state = `"link_state":"enable",`
+	} else if cr.Spec.LinkState == "disable" {
+		state = `"link_state":"disable",`
+	}
+	if cr.Spec.IPAM != "" {
+		ipam = cr.Spec.IPAM
+	}
+	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"ib-sriov",%s"ipam":%s }`, cr.GetName(), state, ipam)
 }
 
 func ValidateDevicePluginConfig(nps []*sriovnetworkv1.SriovNetworkNodePolicy, rawConfig string) error {
