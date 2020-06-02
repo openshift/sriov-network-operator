@@ -56,10 +56,10 @@ func (p *GenericPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeSta
 	needDrain = false
 	needReboot = false
 	err = nil
+	p.DesireState = state
 
-	if len(state.Spec.Interfaces) > 0 {
-		needDrain = true
-	}
+	needDrain = needDrainNode(state.Spec.Interfaces, state.Status.Interfaces)
+
 	if p.LoadVfioDriver != loaded {
 		if needVfioDriver(state) {
 			p.LoadVfioDriver = loading
@@ -72,8 +72,6 @@ func (p *GenericPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeSta
 			needDrain = true
 		}
 	}
-
-	p.DesireState = state
 	return
 }
 
@@ -82,28 +80,11 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 	glog.Info("generic-plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
-	p.DesireState = new
-	if new.Spec.DpConfigVersion != old.Spec.DpConfigVersion && (len(new.Spec.Interfaces) > 0 || len(old.Spec.Interfaces) > 0) {
-		glog.Infof("generic-plugin OnNodeStateChange(): CMRV changed %v -> %v", old.Spec.DpConfigVersion, new.Spec.DpConfigVersion)
-		needDrain = true
-	}
-
 	err = nil
-	found := false
-	for _, in := range new.Spec.Interfaces {
-		found = false
-		for _, io := range old.Spec.Interfaces {
-			if in.PciAddress == io.PciAddress {
-				found = true
-				if in.NumVfs != io.NumVfs {
-					needDrain = true
-				}
-			}
-		}
-		if !found {
-			needDrain = true
-		}
-	}
+	p.DesireState = new
+
+	needDrain = needDrainNode(new.Spec.Interfaces, old.Status.Interfaces)
+
 	if p.LoadVfioDriver != loaded {
 		if needVfioDriver(new) {
 			p.LoadVfioDriver = loading
@@ -154,8 +135,10 @@ func (p *GenericPlugin) Apply() error {
 
 func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
 	for _, iface := range state.Spec.Interfaces {
-		if iface.DeviceType == "vfio-pci" {
-			return true
+		for i := range iface.VfGroups {
+			if iface.VfGroups[i].DeviceType == "vfio-pci" {
+				return true
+			}
 		}
 	}
 	return false
@@ -196,4 +179,25 @@ func isCommandNotFound(err error) bool {
 		}
 	}
 	return false
+}
+
+func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool) {
+	needDrain = false
+	for _, ifaceStatus := range current {
+		configured := false
+		for _, iface := range desired {
+			if iface.PciAddress == ifaceStatus.PciAddress {
+				configured = true
+				if iface.NumVfs != ifaceStatus.NumVfs {
+					needDrain = true
+					return
+				}
+			}
+		}
+		if !configured && ifaceStatus.NumVfs > 0 {
+			needDrain = true
+			return
+		}
+	}
+	return
 }

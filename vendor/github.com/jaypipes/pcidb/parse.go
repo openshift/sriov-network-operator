@@ -102,8 +102,8 @@ func parseDBFile(db *PCIDB, scanner *bufio.Scanner) error {
 				subclassID := string(lineBytes[1:3])
 				subclassName := string(lineBytes[5:])
 				curSubclass = &Subclass{
-					ID:   subclassID,
-					Name: subclassName,
+					ID:                    subclassID,
+					Name:                  subclassName,
 					ProgrammingInterfaces: progIfaces,
 				}
 				subclasses = append(subclasses, curSubclass)

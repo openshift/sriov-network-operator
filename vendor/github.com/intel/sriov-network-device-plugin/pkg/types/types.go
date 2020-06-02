@@ -35,10 +35,11 @@ type ResourceConfig struct {
 	ResourceName string `json:"resourceName"` // the resource name will be added with resource prefix in K8s api
 	IsRdma       bool   // the resource support rdma
 	Selectors    struct {
-		Vendors []string `json:"vendors,omitempty"`
-		Devices []string `json:"devices,omitempty"`
-		Drivers []string `json:"drivers,omitempty"`
-		PfNames []string `json:"pfNames,omitempty"`
+		Vendors   []string `json:"vendors,omitempty"`
+		Devices   []string `json:"devices,omitempty"`
+		Drivers   []string `json:"drivers,omitempty"`
+		PfNames   []string `json:"pfNames,omitempty"`
+		LinkTypes []string `json:"linkTypes,omitempty"`
 	} `json:"selectors,omitempty"` // Whether devices have SRIOV virtual function capabilities or not
 }
 
@@ -91,12 +92,14 @@ type PciNetDevice interface {
 	GetNetName() string
 	IsSriovPF() bool
 	GetLinkSpeed() string
+	GetLinkType() string
 	GetSubClass() string
 	GetDeviceSpecs() []*pluginapi.DeviceSpec
 	GetEnvVal() string
 	GetMounts() []*pluginapi.Mount
 	GetAPIDevice() *pluginapi.Device
 	GetRdmaSpec() RdmaSpec
+	GetVFID() int
 }
 
 // DeviceInfoProvider is an interface to get Device Plugin API specific device information

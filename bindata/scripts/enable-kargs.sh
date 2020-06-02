@@ -5,11 +5,13 @@ REDHAT_RELEASE_FILE="/host/etc/redhat-release"
 
 declare -a kargs=( "$@" )
 ret=0
+args=$(chroot /host/ cat /proc/cmdline)
 if grep --quiet CoreOS "$REDHAT_RELEASE_FILE"; then
-    args=$(chroot /host/ rpm-ostree kargs)
     for t in "${kargs[@]}";do
         if [[ $args != *${t}* ]];then
-            chroot /host/ rpm-ostree kargs --append ${t} > /dev/null 2>&1
+            if chroot /host/ rpm-ostree kargs | grep -vq ${t}; then
+                chroot /host/ rpm-ostree kargs --append ${t} > /dev/null 2>&1
+            fi
             let ret++
         fi
     done
@@ -19,11 +21,11 @@ else
     if [ $? -ne 0 ]; then
         exit 127
     fi
-
-    eval `chroot /host/ grubby --info=DEFAULT | grep args`
     for t in "${kargs[@]}";do
         if [[ $args != *${t}* ]];then
-            chroot /host/ grubby --update-kernel=DEFAULT --args=${t} > /dev/null 2>&1
+            if chroot /host/ grubby --info=DEFAULT | grep args | grep -vq ${t}; then
+                chroot /host/ grubby --update-kernel=DEFAULT --args=${t} > /dev/null 2>&1
+            fi
             let ret++
         fi
     done

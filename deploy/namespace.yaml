@@ -4,4 +4,3 @@ metadata:
   name: $NAMESPACE
   labels:
     name: $NAMESPACE
-    openshift.io/run-level: "1"

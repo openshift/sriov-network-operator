@@ -15,12 +15,14 @@ IMAGE_TAG?=nfvpe/$(APP_NAME):latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export ENABLE_ADMISSION_CONTROLLER?=true
+export GOFLAGS=-mod=vendor
+export GO111MODULE=on
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
-.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test-e2e test-e2e-k8s run image fmt
+.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test test-e2e-k8s run image fmt sync-manifests test-e2e-conformance
 
 all: build #check install
 
@@ -54,8 +56,8 @@ fmt: ## Go fmt your code
 	CONTAINER_CMD=$(IMAGE_BUILDER) hack/go-fmt.sh .
 
 gencode: operator-sdk
-	@operator-sdk generate k8s
 	@operator-sdk generate openapi
+	@operator-sdk generate k8s
 
 deploy-setup:
 	@EXCLUSIONS=() hack/deploy-setup.sh $(NAMESPACE)
@@ -70,8 +72,11 @@ deploy-setup-k8s: deploy-setup
 test-e2e-local: operator-sdk
 	@hack/run-e2e-test-locally.sh
 
-test-e2e:
-	@hack/run-e2e-test.sh
+test-e2e-conformance:
+	./hack/run-e2e-conformance.sh
+
+test-%:
+	@hack/run-test.sh $*
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
 deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
@@ -102,3 +107,13 @@ else
 endif
 
 verify: verify-gofmt
+
+sync-manifests-%:
+	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
+	cp deploy/crds/sriovnetwork.openshift.io_sriovoperatorconfigs_crd.yaml manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
+
+deps-update:
+	go mod tidy && \
+	go mod vendor

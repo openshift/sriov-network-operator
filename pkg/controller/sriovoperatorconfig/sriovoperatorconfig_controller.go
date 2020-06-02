@@ -164,7 +164,7 @@ func (r *ReconcileSriovOperatorConfig) syncConfigDaemonSet(dc *sriovnetworkv1.Sr
 
 	data := render.MakeRenderData()
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
-	data.Data["Namespace"] = os.Getenv("NAMESPACE")
+	data.Data["Namespace"] = Namespace
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	objs, err := render.RenderDir(CONFIG_DAEMON_PATH, &data)
 	if err != nil {
@@ -204,7 +204,7 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovO
 	for name, path := range Webhooks {
 		// Render Webhook manifests
 		data := render.MakeRenderData()
-		data.Data["Namespace"] = os.Getenv("NAMESPACE")
+		data.Data["Namespace"] = Namespace
 		data.Data["InjectorServiceCAConfigMap"] = INJECTOR_SERVICE_CA_CONFIGMAP
 		data.Data["WebhookServiceCAConfigMap"] = WEBHOOK_SERVICE_CA_CONFIGMAP
 		data.Data["SRIOVMutatingWebhookName"] = name
@@ -403,8 +403,11 @@ func (r *ReconcileSriovOperatorConfig) deleteK8sResource(in *uns.Unstructured) e
 }
 
 func (r *ReconcileSriovOperatorConfig) syncK8sResource(cr *sriovnetworkv1.SriovOperatorConfig, in *uns.Unstructured) error {
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
+	// set owner-reference only for namespaced objects
+	if in.GetKind() != "ClusterRole" && in.GetKind() != "ClusterRoleBinding" {
+		if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
+			return err
+		}
 	}
 	if err := apply.ApplyObject(context.TODO(), r.client, in); err != nil {
 		return fmt.Errorf("failed to apply object %v with err: %v", in, err)

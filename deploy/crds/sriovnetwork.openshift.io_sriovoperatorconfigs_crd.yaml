@@ -12,6 +12,7 @@ spec:
   scope: Namespaced
   subresources:
     status: {}
+  preserveUnknownFields: false
   validation:
     openAPIV3Schema:
       description: SriovOperatorConfig is the Schema for the sriovoperatorconfigs
@@ -20,12 +21,12 @@ spec:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
             of an object. Servers should convert recognized schemas to the latest
-            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
           type: string
         kind:
           description: 'Kind is a string value representing the REST resource this
             object represents. Servers may infer this from the endpoint the client
-            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
           type: string
         metadata:
           type: object
@@ -49,6 +50,13 @@ spec:
               description: Flag to control whether the sriov-config-daemon is allowed
                 to reboot nodes
               type: boolean           
+            logLevel:
+              description: Flag to control the log verbose level of the operator.
+                Set to '0' to show only the basic logs. And set to '2' to show all
+                the available logs.
+              maximum: 2
+              minimum: 0
+              type: integer
           type: object
         status:
           description: SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig

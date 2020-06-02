@@ -21,13 +21,13 @@ package v1
 import (
 	v1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	"github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned/scheme"
-	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"
 )
 
 type SriovnetworkV1Interface interface {
 	RESTClient() rest.Interface
 	SriovNetworkNodeStatesGetter
+	SriovOperatorConfigsGetter
 }
 
 // SriovnetworkV1Client is used to interact with features provided by the sriovnetwork.openshift.io group.
@@ -37,6 +37,10 @@ type SriovnetworkV1Client struct {
 
 func (c *SriovnetworkV1Client) SriovNetworkNodeStates(namespace string) SriovNetworkNodeStateInterface {
 	return newSriovNetworkNodeStates(c, namespace)
+}
+
+func (c *SriovnetworkV1Client) SriovOperatorConfigs(namespace string) SriovOperatorConfigInterface {
+	return newSriovOperatorConfigs(c, namespace)
 }
 
 // NewForConfig creates a new SriovnetworkV1Client for the given config.
@@ -71,7 +75,7 @@ func setConfigDefaults(config *rest.Config) error {
 	gv := v1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: scheme.Codecs}
+	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()

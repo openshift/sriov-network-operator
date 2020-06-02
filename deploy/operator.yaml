@@ -54,6 +54,6 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: RELEASE_VERSION
-              value: 0.0.1-snapshot
+              value: 4.3.0
             - name: SRIOV_CNI_BIN_PATH
               value: $CNI_BIN_PATH

@@ -15,36 +15,49 @@ type SriovNetworkNodeStateSpec struct {
 }
 
 type Interface struct {
-	PciAddress string `json:"pciAddress"`
-	NumVfs     int    `json:"numVfs,omitempty"`
-	Mtu        int    `json:"mtu,omitempty"`
-	DeviceType string `json:"deviceType,omitempty"`
+	PciAddress string    `json:"pciAddress"`
+	NumVfs     int       `json:"numVfs,omitempty"`
+	Mtu        int       `json:"mtu,omitempty"`
+	Name       string    `json:"name, omitempty"`
+	VfGroups   []VfGroup `json:"vfGroups, omitempty"`
+}
+
+type VfGroup struct {
+	ResourceName string `json:"resourceName"`
+	DeviceType   string `json:"deviceType,omitempty"`
+	VfRange      string `json:"vfRange,omitempty"`
+	PolicyName   string `json:"policyName"`
 }
 
 type Interfaces []Interface
 
 type InterfaceExt struct {
-	InterfaceProperty
-	NumVfs    int               `json:"numVfs,omitempty"`
-	LinkSpeed string            `json:"linkSpeed,omitempty"`
-	TotalVfs  int               `json:"totalvfs,omitempty"`
-	VFs       []VirtualFunction `json:"Vfs,omitempty"`
+	Name       string            `json:"name,omitempty"`
+	Mac        string            `json:"mac,omitempty"`
+	Driver     string            `json:"driver,omitempty"`
+	PciAddress string            `json:"pciAddress"`
+	Vendor     string            `json:"vendor,omitempty"`
+	DeviceID   string            `json:"deviceID,omitempty"`
+	Mtu        int               `json:"mtu,omitempty"`
+	NumVfs     int               `json:"numVfs,omitempty"`
+	LinkSpeed  string            `json:"linkSpeed,omitempty"`
+	TotalVfs   int               `json:"totalvfs,omitempty"`
+	VFs        []VirtualFunction `json:"Vfs,omitempty"`
 }
 type InterfaceExts []InterfaceExt
 
-type InterfaceProperty struct {
+type VirtualFunction struct {
 	Name       string `json:"name,omitempty"`
 	Mac        string `json:"mac,omitempty"`
 	Assigned   string `json:"assigned,omitempty"`
 	Driver     string `json:"driver,omitempty"`
-	PciAddress string `json:"pciAddress,omitempty"`
+	PciAddress string `json:"pciAddress"`
 	Vendor     string `json:"vendor,omitempty"`
 	DeviceID   string `json:"deviceID,omitempty"`
 	Vlan       int    `json:"Vlan,omitempty"`
 	Mtu        int    `json:"mtu,omitempty"`
+	VfID       int    `json:"vfID"`
 }
-
-type VirtualFunction InterfaceProperty
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
 // +k8s:openapi-gen=true

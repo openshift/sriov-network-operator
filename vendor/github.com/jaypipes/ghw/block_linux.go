@@ -20,9 +20,6 @@ const (
 	sectorSize = 512
 )
 
-var regexNVMeDev = regexp.MustCompile(`^nvme\d+n\d+$`)
-var regexNVMePart = regexp.MustCompile(`^(nvme\d+n\d+)p\d+$`)
-
 func (ctx *context) blockFillInfo(info *BlockInfo) error {
 	info.Disks = ctx.disks()
 	var tpb uint64
@@ -55,11 +52,11 @@ func (ctx *context) diskPhysicalBlockSizeBytes(disk string) uint64 {
 	if err != nil {
 		return 0
 	}
-	i, err := strconv.Atoi(strings.TrimSpace(string(contents)))
+	size, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 10, 64)
 	if err != nil {
 		return 0
 	}
-	return uint64(i)
+	return size
 }
 
 // DiskSizeBytes has been deprecated in 0.2. Please use the Disk.SizeBytes
@@ -83,11 +80,11 @@ func (ctx *context) diskSizeBytes(disk string) uint64 {
 	if err != nil {
 		return 0
 	}
-	i, err := strconv.Atoi(strings.TrimSpace(string(contents)))
+	size, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 10, 64)
 	if err != nil {
 		return 0
 	}
-	return uint64(i) * sectorSize
+	return size * sectorSize
 }
 
 // DiskNUMANodeID has been deprecated in 0.2. Please use the Disk.NUMANodeID
@@ -282,11 +279,16 @@ The DiskPartitions() function has been DEPRECATED and will be removed in the
 	return ctx.diskPartitions(disk)
 }
 
+// diskPartitions takes the name of a disk (note: *not* the path of the disk,
+// but just the name. In other words, "sda", not "/dev/sda" and "nvme0n1" not
+// "/dev/nvme0n1") and returns a slice of pointers to Partition structs
+// representing the partitions in that disk
 func (ctx *context) diskPartitions(disk string) []*Partition {
 	out := make([]*Partition, 0)
 	path := filepath.Join(ctx.pathSysBlock(), disk)
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
+		warn("diskPartitions: failed to read %s: %s", path, err)
 		return nil
 	}
 	for _, file := range files {
@@ -294,7 +296,7 @@ func (ctx *context) diskPartitions(disk string) []*Partition {
 		if !strings.HasPrefix(fname, disk) {
 			continue
 		}
-		size := ctx.partitionSizeBytes(fname)
+		size := ctx.partitionSizeBytes(disk, fname)
 		mp, pt, ro := ctx.partitionInfo(fname)
 		p := &Partition{
 			Name:       fname,
@@ -332,21 +334,16 @@ func (ctx *context) disks() []*Disk {
 	}
 	for _, file := range files {
 		dname := file.Name()
-
-		busType := BUS_TYPE_UNKNOWN
-		if strings.HasPrefix(dname, "sd") {
-			busType = BUS_TYPE_SCSI
-		} else if strings.HasPrefix(dname, "hd") {
-			busType = BUS_TYPE_IDE
-		} else if strings.HasPrefix(dname, "vd") {
-			busType = BUS_TYPE_VIRTIO
-		} else if regexNVMeDev.MatchString(dname) {
-			busType = BUS_TYPE_NVME
-		}
-		if busType == BUS_TYPE_UNKNOWN {
+		if strings.HasPrefix(dname, "loop") {
 			continue
 		}
 
+		driveType, storageController, busType := diskTypes(dname)
+		// TODO(jaypipes): Move this into diskTypes() once abstracting
+		// diskIsRotational for ease of unit testing
+		if !ctx.diskIsRotational(dname) {
+			driveType = DRIVE_TYPE_SSD
+		}
 		size := ctx.diskSizeBytes(dname)
 		pbs := ctx.diskPhysicalBlockSizeBytes(dname)
 		busPath := ctx.diskBusPath(dname)
@@ -360,6 +357,8 @@ func (ctx *context) disks() []*Disk {
 			Name:                   dname,
 			SizeBytes:              size,
 			PhysicalBlockSizeBytes: pbs,
+			DriveType:              driveType,
+			StorageController:      storageController,
 			BusType:                busType,
 			BusPath:                busPath,
 			NUMANodeID:             node,
@@ -382,6 +381,59 @@ func (ctx *context) disks() []*Disk {
 	return disks
 }
 
+// diskTypes returns the drive type, storage controller and bus type of a disk
+func diskTypes(dname string) (
+	DriveType,
+	StorageController,
+	BusType,
+) {
+	// The conditionals below which set the controller and drive type are
+	// based on information listed here:
+	// https://en.wikipedia.org/wiki/Device_file
+	busType := BUS_TYPE_UNKNOWN
+	driveType := DRIVE_TYPE_UNKNOWN
+	storageController := STORAGE_CONTROLLER_UNKNOWN
+	if strings.HasPrefix(dname, "fd") {
+		driveType = DRIVE_TYPE_FDD
+	} else if strings.HasPrefix(dname, "sd") {
+		driveType = DRIVE_TYPE_HDD
+		busType = BUS_TYPE_SCSI
+		storageController = STORAGE_CONTROLLER_SCSI
+	} else if strings.HasPrefix(dname, "hd") {
+		driveType = DRIVE_TYPE_HDD
+		busType = BUS_TYPE_IDE
+		storageController = STORAGE_CONTROLLER_IDE
+	} else if strings.HasPrefix(dname, "vd") {
+		driveType = DRIVE_TYPE_HDD
+		busType = BUS_TYPE_VIRTIO
+		storageController = STORAGE_CONTROLLER_VIRTIO
+	} else if strings.HasPrefix(dname, "nvme") {
+		driveType = DRIVE_TYPE_SSD
+		busType = BUS_TYPE_NVME
+		storageController = STORAGE_CONTROLLER_NVME
+	} else if strings.HasPrefix(dname, "sr") {
+		driveType = DRIVE_TYPE_ODD
+		busType = BUS_TYPE_SCSI
+		storageController = STORAGE_CONTROLLER_SCSI
+	} else if strings.HasPrefix(dname, "xvd") {
+		driveType = DRIVE_TYPE_HDD
+		busType = BUS_TYPE_SCSI
+		storageController = STORAGE_CONTROLLER_SCSI
+	} else if strings.HasPrefix(dname, "mmc") {
+		driveType = DRIVE_TYPE_SSD
+		busType = BUS_TYPE_UNKNOWN
+		storageController = STORAGE_CONTROLLER_MMC
+	}
+
+	return driveType, storageController, busType
+}
+
+func (ctx *context) diskIsRotational(devName string) bool {
+	path := filepath.Join(ctx.pathSysBlock(), devName, "queue", "rotational")
+	contents := safeIntFromFile(path)
+	return contents == 1
+}
+
 // PartitionSizeBytes has been deprecated in 0.2. Please use the
 // Partition.SizeBytes attribute.  TODO(jaypipes): Remove in 1.0.
 func PartitionSizeBytes(part string) uint64 {
@@ -391,27 +443,52 @@ the 1.0 release of ghw. Please use the Partition.SizeBytes attribute.
 `
 	warn(msg)
 	ctx := contextFromEnv()
-	return ctx.partitionSizeBytes(part)
+	disk := strings.TrimPrefix(part, "/dev")
+	if len(disk) < 3 {
+		warn("PartitionSizeBytes: unknown disk %s, returning 0", disk)
+		return 0
+	}
+	switch disk[0:2] {
+	case "fd":
+	case "sd":
+	case "hd":
+	case "vd":
+	case "sr":
+	case "mm":
+		disk = disk[0:3]
+	case "xv":
+		disk = disk[0:4]
+	case "nv":
+		// NOTE(jaypipes): I'm putting this regex here instead of a const
+		// because this function is the only thing that uses it and I'm
+		// deprecating this function in 1.0
+		// nvme0n1p2
+		var regexNVMeDev = regexp.MustCompile(`^nvme\d+n\d+$`)
+		matches := regexNVMeDev.FindSubmatch([]byte(disk))
+		if len(matches) < 1 {
+			warn("PartitionSizeBytes: unknown disk %s, returning 0", disk)
+			return 0
+		}
+		disk = string(matches[0])
+	}
+	return ctx.partitionSizeBytes(disk, part)
 }
 
-func (ctx *context) partitionSizeBytes(part string) uint64 {
-	// Allow calling PartitionSize with either the full partition name
-	// "/dev/sda1" or just "sda1"
-	part = strings.TrimPrefix(part, "/dev")
-	disk := part[0:3]
-	if m := regexNVMePart.FindStringSubmatch(part); len(m) > 0 {
-		disk = m[1]
-	}
+// partitionSizeBytes returns the size in bytes of the partition given a disk
+// name and a partition name. Note: disk name and partition name do *not*
+// contain any leading "/dev" parts. In other words, they are *names*, not
+// paths.
+func (ctx *context) partitionSizeBytes(disk string, part string) uint64 {
 	path := filepath.Join(ctx.pathSysBlock(), disk, part, "size")
 	contents, err := ioutil.ReadFile(path)
 	if err != nil {
 		return 0
 	}
-	i, err := strconv.Atoi(strings.TrimSpace(string(contents)))
+	size, err := strconv.ParseUint(strings.TrimSpace(string(contents)), 10, 64)
 	if err != nil {
 		return 0
 	}
-	return uint64(i) * sectorSize
+	return size * sectorSize
 }
 
 // PartitionInfo has been deprecated in 0.2. Please use the Partition struct.

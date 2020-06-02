@@ -10,15 +10,18 @@ import (
 // SriovOperatorConfigSpec defines the desired state of SriovOperatorConfig
 // +k8s:openapi-gen=true
 type SriovOperatorConfigSpec struct {
-	// +kubebuilder:validation:MinItems=0
-	// +kubebuilder:validation:UniqueItems=true
 	// NodeSelector selects the nodes to be configured
 	ConfigDaemonNodeSelector map[string]string `json:"configDaemonNodeSelector,omitempty"`
 	// Flag to control whether the network resource injector webhook shall be deployed
 	EnableInjector *bool `json:"enableInjector,omitempty"`
 	// Flag to control whether the operator admission controller webhook shall be deployed
 	EnableOperatorWebhook *bool `json:"enableOperatorWebhook,omitempty"`
-	DisableReboot         *bool `json:"disableReboot,omitempty"`
+	// Flat to control reboot of nodes by the sriov-network-config-daemon
+	DisableReboot *bool `json:"disableReboot,omitempty"`
+	// Flag to control the log verbose level of the operator. Set to '0' to show only the basic logs. And set to '2' to show all the available logs.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=2
+	LogLevel int `json:"logLevel,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
@@ -33,6 +36,7 @@ type SriovOperatorConfigStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SriovOperatorConfig is the Schema for the sriovoperatorconfigs API
+// +genclient
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=sriovoperatorconfigs,scope=Namespaced

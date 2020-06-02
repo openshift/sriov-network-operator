@@ -15,29 +15,34 @@ import (
 )
 
 type NodeStateStatusWriter struct {
-	client snclientset.Interface
-	node   string
-	status sriovnetworkv1.SriovNetworkNodeStateStatus
+	client             snclientset.Interface
+	node               string
+	status             sriovnetworkv1.SriovNetworkNodeStateStatus
+	OnHeartbeatFailure func()
 }
 
 // NewNodeStateStatusWriter Create a new NodeStateStatusWriter
-func NewNodeStateStatusWriter(c snclientset.Interface, n string) *NodeStateStatusWriter {
+func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func()) *NodeStateStatusWriter {
 	return &NodeStateStatusWriter{
-		client: c,
-		node:   n,
+		client:             c,
+		node:               n,
+		OnHeartbeatFailure: f,
 	}
 }
 
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
-func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}) {
-	glog.V(0).Info("Run(): start writer")
-	if err := writer.pollNicStatus(); err != nil {
-		glog.Errorf("Run(): first poll failed: %v", err)
-	}
+func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, runonce bool) {
+	glog.V(0).Infof("Run(): start writer")
 	msg := Message{}
-	setNodeStateStatus(writer.client, writer.node, writer.status, msg)
-
+	if runonce {
+		glog.V(0).Info("Run(): once")
+		if err := writer.pollNicStatus(); err != nil {
+			glog.Errorf("Run(): first poll failed: %v", err)
+		}
+		writer.setNodeStateStatus(msg)
+		return
+	}
 	for {
 		select {
 		case <-stop:
@@ -48,7 +53,7 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 			if err := writer.pollNicStatus(); err != nil {
 				continue
 			}
-			setNodeStateStatus(writer.client, writer.node, writer.status, msg)
+			writer.setNodeStateStatus(msg)
 			if msg.syncStatus == "Failed" {
 				syncCh <- struct{}{}
 				return
@@ -58,7 +63,7 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 			if err := writer.pollNicStatus(); err != nil {
 				continue
 			}
-			setNodeStateStatus(writer.client, writer.node, writer.status, msg)
+			writer.setNodeStateStatus(msg)
 		}
 	}
 }
@@ -74,10 +79,10 @@ func (writer *NodeStateStatusWriter) pollNicStatus() error {
 	return nil
 }
 
-func updateNodeStateStatusRetry(client snclientset.Interface, nodeName string, f func(*sriovnetworkv1.SriovNetworkNodeState)) (*sriovnetworkv1.SriovNetworkNodeState, error) {
+func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv1.SriovNetworkNodeState)) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	var nodeState *sriovnetworkv1.SriovNetworkNodeState
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		n, getErr := getNodeState(client, nodeName)
+		n, getErr := w.getNodeState()
 		if getErr != nil {
 			return getErr
 		}
@@ -86,7 +91,10 @@ func updateNodeStateStatusRetry(client snclientset.Interface, nodeName string, f
 		f(n)
 
 		var err error
-		nodeState, err = client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(n)
+		nodeState, err = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(n)
+		if err != nil {
+			glog.V(0).Infof("updateNodeStateStatusRetry(): fail to update the node status: %v", err)
+		}
 		return err
 	})
 	if err != nil {
@@ -97,32 +105,40 @@ func updateNodeStateStatusRetry(client snclientset.Interface, nodeName string, f
 	return nodeState, nil
 }
 
-func setNodeStateStatus(client snclientset.Interface, nodeName string, status sriovnetworkv1.SriovNetworkNodeStateStatus, msg Message) (*sriovnetworkv1.SriovNetworkNodeState, error) {
-	nodeState, err := updateNodeStateStatusRetry(client, nodeName, func(nodeState *sriovnetworkv1.SriovNetworkNodeState) {
-		nodeState.Status = status
-		nodeState.Status.LastSyncError = msg.lastSyncError
+func (w *NodeStateStatusWriter) setNodeStateStatus(msg Message) (*sriovnetworkv1.SriovNetworkNodeState, error) {
+	nodeState, err := w.updateNodeStateStatusRetry(func(nodeState *sriovnetworkv1.SriovNetworkNodeState) {
+		nodeState.Status.Interfaces = w.status.Interfaces
+		if msg.lastSyncError != "" || nodeState.Status.SyncStatus == "Succeeded" {
+			// clear lastSyncError when sync Succeeded
+			nodeState.Status.LastSyncError = msg.lastSyncError
+		}
 		nodeState.Status.SyncStatus = msg.syncStatus
-	})
 
-	glog.V(2).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
-	return nodeState, err
+		glog.V(0).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return nodeState, nil
 }
 
 // getNodeState queries the kube apiserver to get the SriovNetworkNodeState CR
-func getNodeState(client snclientset.Interface, nodeName string) (*sriovnetworkv1.SriovNetworkNodeState, error) {
+func (w *NodeStateStatusWriter) getNodeState() (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	var lastErr error
 	var n *sriovnetworkv1.SriovNetworkNodeState
 	err := wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
-		n, lastErr = client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(nodeName, metav1.GetOptions{})
+		n, lastErr = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(w.node, metav1.GetOptions{})
 		if lastErr == nil {
 			return true, nil
 		}
-		glog.Warningf("Failed to fetch node %s (%v); retrying...", nodeName, lastErr)
+		glog.Warningf("getNodeState(): Failed to fetch node state %s (%v); close all connections and retry...", w.node, lastErr)
+		// Use the Get() also as an client-go keepalive indicator for the TCP connection.
+		w.OnHeartbeatFailure()
 		return false, nil
 	})
 	if err != nil {
 		if err == wait.ErrWaitTimeout {
-			return nil, errors.Wrapf(lastErr, "Timed out trying to fetch node %s", nodeName)
+			return nil, errors.Wrapf(lastErr, "Timed out trying to fetch node %s", w.node)
 		}
 		return nil, err
 	}

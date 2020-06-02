@@ -1,0 +1,10 @@
+FROM registry.svc.ci.openshift.org/ocp/builder:golang-1.12 AS builder
+WORKDIR /go/src/github.com/openshift/sriov-network-operator
+COPY . .
+
+FROM registry.svc.ci.openshift.org/ocp/4.0:cli
+LABEL io.k8s.display-name="sriov-network-operator-must-gather" \
+      io.k8s.description="This is a sriov must-gather image that collectes sriov network operator related resources."
+COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/must-gather/collection-scripts/* /usr/bin/
+
+ENTRYPOINT /usr/bin/gather
