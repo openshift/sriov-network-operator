@@ -2,7 +2,10 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"net"
 	"os"
+	"time"
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -14,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/connrotation"
 )
 
 var (
@@ -83,13 +87,20 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		panic(err.Error())
 	}
 
+	closeAllConns, err := updateDialer(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
 	sriovnetworkv1.AddToScheme(scheme.Scheme)
 
 	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
 
+	config.Timeout = 5 * time.Second
+	writerclient := snclientset.NewForConfigOrDie(config)
 	glog.V(0).Info("starting node writer")
-	nodeWriter := daemon.NewNodeStateStatusWriter(snclient, startOpts.nodeName)
+	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient, startOpts.nodeName, closeAllConns)
 	// block the deamon process until nodeWriter finish first its run
 	nodeWriter.Run(stopCh, refreshCh, syncCh, true)
 	go nodeWriter.Run(stopCh, refreshCh, syncCh, false)
@@ -108,4 +119,14 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	}
 	<-syncCh
 	glog.V(0).Info("Shutting down SriovNetworkConfigDaemon")
+}
+
+// updateDialer instruments a restconfig with a dial. the returned function allows forcefully closing all active connections.
+func updateDialer(clientConfig *rest.Config) (func(), error) {
+	if clientConfig.Transport != nil || clientConfig.Dial != nil {
+		return nil, fmt.Errorf("there is already a transport or dialer configured")
+	}
+	d := connrotation.NewDialer((&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext)
+	clientConfig.Dial = d.DialContext
+	return d.CloseAll, nil
 }

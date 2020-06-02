@@ -14,7 +14,6 @@ import (
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -31,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	"github.com/openshift/sriov-network-operator/pkg/apply"
 	"github.com/openshift/sriov-network-operator/pkg/controller/sriovoperatorconfig"
 	render "github.com/openshift/sriov-network-operator/pkg/render"
 )
@@ -428,139 +428,27 @@ func (r *ReconcileSriovNetworkNodePolicy) tryDeleteDsPods(namespace, name string
 }
 
 func (r *ReconcileSriovNetworkNodePolicy) syncDsObject(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, obj *uns.Unstructured) error {
-	var err error
 	logger := log.WithName("syncDsObject")
-	logger.Info("Start to sync Objects")
-	scheme := kscheme.Scheme
-	switch kind := obj.GetKind(); kind {
-	case "ServiceAccount":
-		sa := &corev1.ServiceAccount{}
-		err = scheme.Convert(obj, sa, nil)
-		r.syncServiceAccount(dp, sa)
-		if err != nil {
-			logger.Error(err, "Fail to sync ServiceAccount")
+	kind := obj.GetKind()
+	logger.Info("Start to sync Objects", "Kind", kind)
+	switch kind {
+	case "ServiceAccount", "Role", "RoleBinding":
+		if err := controllerutil.SetControllerReference(dp, obj, r.scheme); err != nil {
+			return err
+		}
+		if err := apply.ApplyObject(context.TODO(), r.client, obj); err != nil {
+			logger.Error(err, "Fail to sync", "Kind", kind)
 			return err
 		}
 	case "DaemonSet":
 		ds := &appsv1.DaemonSet{}
-		err = scheme.Convert(obj, ds, nil)
+		err := kscheme.Scheme.Convert(obj, ds, nil)
 		r.syncDaemonSet(dp, pl, ds)
 		if err != nil {
 			logger.Error(err, "Fail to sync DaemonSet", "Namespace", ds.Namespace, "Name", ds.Name)
 			return err
 		}
 	}
-	return nil
-}
-
-func (r *ReconcileSriovNetworkNodePolicy) syncService(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.Service) error {
-	logger := log.WithName("syncService")
-	logger.Info("Start to sync service", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
-	}
-	s := &corev1.Service{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, s)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create service: %v", err)
-			}
-			logger.Info("Create service for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get service: %v", err)
-		}
-	} else {
-		logger.Info("Service already exists, updating")
-		err = r.client.Update(context.TODO(), in)
-		if err != nil {
-			return fmt.Errorf("Couldn't update service: %v", err)
-		}
-	}
-	return nil
-}
-
-func (r *ReconcileSriovNetworkNodePolicy) syncClusterRole(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *rbacv1.ClusterRole) error {
-	logger := log.WithName("syncClusterRole")
-	logger.Info("Start to sync cluster role", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
-	}
-	clusterRole := &rbacv1.ClusterRole{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, clusterRole)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create cluster role: %v", err)
-			}
-			logger.Info("Create cluster role for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get cluster role: %v", err)
-		}
-	} else {
-		logger.Info("Cluster role already exists, updating")
-		err = r.client.Update(context.TODO(), in)
-		if err != nil {
-			return fmt.Errorf("Couldn't update cluster role: %v", err)
-		}
-	}
-	return nil
-}
-
-func (r *ReconcileSriovNetworkNodePolicy) syncClusterRoleBinding(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *rbacv1.ClusterRoleBinding) error {
-	logger := log.WithName("syncClusterRoleBinding")
-	logger.Info("Start to sync cluster role binding", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
-	}
-	clusterRoleBinding := &rbacv1.ClusterRoleBinding{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, clusterRoleBinding)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create cluster role binding: %v", err)
-			}
-			logger.Info("Create cluster role binding for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get cluster role binding: %v", err)
-		}
-	} else {
-		logger.Info("Cluster role binding already exists, updating")
-		err = r.client.Update(context.TODO(), in)
-		if err != nil {
-			return fmt.Errorf("Couldn't update cluster role binding: %v", err)
-		}
-	}
-	return nil
-}
-
-func (r *ReconcileSriovNetworkNodePolicy) syncServiceAccount(cr *sriovnetworkv1.SriovNetworkNodePolicy, in *corev1.ServiceAccount) error {
-	logger := log.WithName("syncServiceAccount")
-	logger.Info("Start to sync ServiceAccount", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
-		return err
-	}
-	sa := &corev1.ServiceAccount{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, sa)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create ServiceAccount: %v", err)
-			}
-			logger.Info("Create ServiceAccount for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get ServiceAccount: %v", err)
-		}
-	}
-	// No neet to update SA
 	return nil
 }
 
