@@ -13,6 +13,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
+	"github.com/openshift/sriov-network-operator/test/util/images"
 	"github.com/openshift/sriov-network-operator/test/util/namespaces"
 )
 
@@ -26,7 +27,7 @@ func getDefinition() *corev1.Pod {
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: pointer.Int64Ptr(0),
 			Containers: []corev1.Container{{Name: "test",
-				Image:   "quay.io/schseba/utility-container:latest",
+				Image:   images.Test(),
 				Command: []string{"/bin/bash", "-c", "sleep INF"}}}}}
 
 	return podObject
