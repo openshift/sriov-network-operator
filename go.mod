@@ -25,6 +25,7 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
 	github.com/vincent-petithory/dataurl v0.0.0-20191104211930-d1553a71de50 // indirect
+	github.com/vishvananda/netlink v1.1.0
 	go4.org v0.0.0-20200312051459-7028f7b4a332 // indirect
 	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17 // indirect
 	k8s.io/api v0.17.1
