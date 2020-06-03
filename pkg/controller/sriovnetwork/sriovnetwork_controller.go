@@ -303,7 +303,11 @@ func renderNetAttDef(cr *sriovnetworkv1.SriovNetwork) (*uns.Unstructured, error)
 		}
 	}
 
-	data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
+	if cr.Spec.IPAM != "" {
+		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
+	} else {
+		data.Data["SriovCniIpam"] = "\"ipam\":{}"
+	}
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {
