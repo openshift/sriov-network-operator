@@ -56,7 +56,7 @@ fmt: ## Go fmt your code
 	CONTAINER_CMD=$(IMAGE_BUILDER) hack/go-fmt.sh .
 
 gencode: operator-sdk
-	@operator-sdk generate openapi
+	@operator-sdk generate crds
 	@operator-sdk generate k8s
 
 deploy-setup:
