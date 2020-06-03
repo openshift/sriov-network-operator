@@ -19,6 +19,7 @@ import (
 	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
 	"github.com/jaypipes/ghw"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	"github.com/vishvananda/netlink"
 )
 
 const (
@@ -181,6 +182,9 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
 			return err
 		}
+		if err = setVfsAdminMac(ifaceStatus); err != nil {
+			return err
+		}
 	}
 	// set PF mtu
 	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
@@ -198,8 +202,8 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		}
 		for _, addr := range vfAddrs {
 			driver := ""
+			vfID, err := dputils.GetVFID(addr)
 			for _, group := range iface.VfGroups {
-				vfID, err := dputils.GetVFID(addr)
 				if err != nil {
 					glog.Warningf("configSriovDevice(): unable to get VF id %+v %q", iface.PciAddress, err)
 				}
@@ -372,4 +376,38 @@ func Chroot(path string) (func() error, error) {
 		}
 		return syscall.Chroot(".")
 	}, nil
+}
+
+func setVfsAdminMac(iface *sriovnetworkv1.InterfaceExt) error {
+	glog.Infof("setVfsAdminMac(): device %s", iface.PciAddress)
+	pfLink, err := netlink.LinkByName(iface.Name)
+	if err != nil {
+		glog.Errorf("setVfsAdminMac(): unable to get PF link for device %+v %q", iface, err)
+		return err
+	}
+	vfs, err := dputils.GetVFList(iface.PciAddress)
+	if err != nil {
+		return err
+	}
+	for _, addr := range vfs {
+		vfID, err := dputils.GetVFID(addr)
+		if err != nil {
+			glog.Errorf("setVfsAdminMac(): unable to get VF id %+v %q", iface.PciAddress, err)
+			return err
+		}
+		vfName := tryGetInterfaceName(addr)
+		vfLink, err := netlink.LinkByName(vfName)
+		if err != nil {
+			glog.Errorf("setVfsAdminMac(): unable to get VF link for device %+v %q", iface, err)
+			return err
+		}
+		if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
+			return err
+		}
+		if err = BindDefaultDriver(addr); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
