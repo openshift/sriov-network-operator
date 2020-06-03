@@ -46,6 +46,8 @@ spec:
                     type: integer
                   pciAddress:
                     type: string
+                  sriovMode:
+                    type: string
                   vfGroups:
                     items:
                       properties:
@@ -58,14 +60,14 @@ spec:
                         vfRange:
                           type: string
                       required:
-                      - policyName
-                      - resourceName
+                        - policyName
+                        - resourceName
                       type: object
                     type: array
                 required:
-                - name
-                - pciAddress
-                - vfGroups
+                  - name
+                  - pciAddress
+                  - vfGroups
                 type: object
               type: array
           type: object
@@ -99,8 +101,8 @@ spec:
                         vfID:
                           type: integer
                       required:
-                      - pciAddress
-                      - vfID
+                        - pciAddress
+                        - vfID
                       type: object
                     type: array
                   deviceID:
@@ -121,10 +123,12 @@ spec:
                     type: string
                   totalvfs:
                     type: integer
+                  sriovMode:
+                    type: string
                   vendor:
                     type: string
                 required:
-                - pciAddress
+                  - pciAddress
                 type: object
               type: array
             lastSyncError:
@@ -135,6 +139,6 @@ spec:
       type: object
   version: v1
   versions:
-  - name: v1
-    served: true
-    storage: true
+    - name: v1
+      served: true
+      storage: true

@@ -88,6 +88,12 @@ spec:
             resourceName:
               description: SRIOV Network device plugin endpoint resource name
               type: string
+            sriovMode:
+              description: SR-IOV mode for NIC. Allowed value "legacy", "switchdev"
+              enum:
+                - legacy
+                - switchdev
+              type: string
           required:
           - nicSelector
           - nodeSelector

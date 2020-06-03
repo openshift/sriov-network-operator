@@ -184,6 +184,13 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref common.Refer
 							Format:      "",
 						},
 					},
+					"sriovMode": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SR-IOV mode for NIC. Allowed value \"legacy\", \"switchdev\"",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"resourceName", "nodeSelector", "numVfs", "nicSelector"},
 			},

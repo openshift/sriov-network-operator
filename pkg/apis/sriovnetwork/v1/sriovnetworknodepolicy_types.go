@@ -33,6 +33,9 @@ type SriovNetworkNodePolicySpec struct {
 	DeviceType string `json:"deviceType,omitempty"`
 	// RDMA mode. Defaults to false.
 	IsRdma bool `json:"isRdma,omitempty"`
+	// +kubebuilder:validation:Enum=legacy;switchdev
+	// SR-IOV mode for NIC. Allowed value "legacy", "switchdev"
+	SriovMode string `json:"sriovMode,omitempty"`
 }
 
 // +k8s:openapi-gen=false

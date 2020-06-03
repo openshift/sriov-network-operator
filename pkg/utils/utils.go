@@ -1,14 +1,12 @@
 package utils
 
 import (
-	// "bytes"
+	"bytes"
 	"fmt"
 	"io/ioutil"
-	// "net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	// "regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -30,6 +28,12 @@ const (
 	netClass              = 0x02
 	numVfsFile            = "sriov_numvfs"
 	scriptsPath           = "bindata/scripts/load-kmod.sh"
+)
+
+const (
+	netlinkEthType     = "ether"
+	SriovLegacyMode    = "legacy"
+	SriovSwitchdevMode = "switchdev"
 )
 
 func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
@@ -86,6 +90,11 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 		if dputils.IsSriovPF(device.Address) {
 			iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
 			iface.NumVfs = dputils.GetVFconfigured(device.Address)
+			sriovMode, err := GetNicSriovMode(device.Address)
+			if err != nil {
+				glog.Warningf("DiscoverSriovDevices(): unable to read Sriov mode for device %+v %q", device, err)
+			}
+			iface.SriovMode = sriovMode
 			if dputils.SriovConfigured(device.Address) {
 				vfs, err := dputils.GetVFList(device.Address)
 				if err != nil {
@@ -141,6 +150,9 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 		return true
 	}
 	if iface.NumVfs > 0 {
+		if iface.SriovMode != ifaceStatus.SriovMode {
+			return true
+		}
 		for _, vf := range ifaceStatus.VFs {
 			ingroup := false
 			for _, group := range iface.VfGroups {
@@ -178,7 +190,8 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		return err
 	}
 	// set numVFs
-	if iface.NumVfs != ifaceStatus.NumVfs {
+	changeVfsNum := iface.NumVfs != ifaceStatus.NumVfs
+	if changeVfsNum {
 		err = setSriovNumVfs(iface.PciAddress, iface.NumVfs)
 		if err != nil {
 			glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
@@ -196,11 +209,24 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			return err
 		}
 	}
-	// Config VFs
+	// Config VFs and PF Sriov mode
 	if iface.NumVfs > 0 {
 		vfAddrs, err := dputils.GetVFList(iface.PciAddress)
 		if err != nil {
 			glog.Warningf("configSriovDevice(): unable to parse VFs for device %+v %q", iface.PciAddress, err)
+		}
+		// Set Sriov mode for ETH devices
+		// When create Vfs or reset them the sriov mode changes to be legacy by default
+		if (changeVfsNum && iface.SriovMode == SriovSwitchdevMode) || (!changeVfsNum && iface.SriovMode != ifaceStatus.SriovMode) {
+			// Unbind VFs to change sriov mode for PF then bind them again
+			for _, vf := range vfAddrs {
+				if err := Unbind(vf); err != nil {
+					glog.Warningf("configSriovDevice(): failed to unbind driver for device %s", vf)
+				}
+			}
+			if err = setNicSriovMode(iface.PciAddress, iface.SriovMode); err != nil {
+				return err
+			}
 		}
 		for _, addr := range vfAddrs {
 			driver := ""
@@ -440,4 +466,62 @@ func setVfsAdminMac(iface *sriovnetworkv1.InterfaceExt) error {
 	}
 
 	return nil
+}
+
+func RunCommand(command string, args ...string) (string, error) {
+	glog.V(2).Infof("RunCommand(): %s %v", command, args)
+	var stdout, stderr bytes.Buffer
+
+	cmd := exec.Command(command, args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	glog.V(2).Infof("RunCommand(): %s", stdout.String())
+	return stdout.String(), err
+}
+
+func IsEthernetNic(ifaceName string) (bool, error) {
+	glog.V(2).Infof("IsEthernetPort(): device %s", ifaceName)
+	if ifaceName == "" {
+		return false, nil
+	}
+	link, err := netlink.LinkByName(ifaceName)
+	if err != nil {
+		return false, err
+	}
+
+	return link.Attrs().EncapType == netlinkEthType, nil
+}
+
+func GetNicSriovMode(pciAddress string) (string, error) {
+	glog.V(2).Infof("GetNicSriovMode(): device %s", pciAddress)
+	devLink, err := netlink.DevLinkGetDeviceByName("pci", pciAddress)
+	if err != nil {
+		return "", err
+	}
+
+	return devLink.Attrs.Eswitch.Mode, nil
+}
+
+func setNicSriovMode(pciAddress, mode string) error {
+	glog.V(2).Infof("setNicSriovMode(): device %s mode %s", pciAddress, mode)
+	devLink, err := netlink.DevLinkGetDeviceByName("pci", pciAddress)
+	if err != nil {
+		return err
+	}
+	if err := netlink.DevLinkSetEswitchMode(devLink, mode); err != nil {
+		return err
+	}
+	pfName, err := dputils.GetPfName(pciAddress)
+	if err != nil {
+		return err
+	}
+	offloadStat := "off"
+	if mode == "switchdev" {
+		offloadStat = "on"
+	}
+	args := []string{"-K", pfName, "hw-tc-offload", offloadStat}
+	_, err = RunCommand("ethtool", args...)
+	return err
 }

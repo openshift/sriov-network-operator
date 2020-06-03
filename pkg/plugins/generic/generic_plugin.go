@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os/exec"
 	"reflect"
 	"strconv"
@@ -58,7 +59,10 @@ func (p *GenericPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeSta
 	err = nil
 	p.DesireState = state
 
-	needDrain = needDrainNode(state.Spec.Interfaces, state.Status.Interfaces)
+	needDrain, err = needDrainNode(state.Spec.Interfaces, state.Status.Interfaces)
+	if err != nil {
+		return false, false, err
+	}
 
 	if p.LoadVfioDriver != loaded {
 		if needVfioDriver(state) {
@@ -83,7 +87,10 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 	err = nil
 	p.DesireState = new
 
-	needDrain = needDrainNode(new.Spec.Interfaces, old.Status.Interfaces)
+	needDrain, err = needDrainNode(new.Spec.Interfaces, old.Status.Interfaces)
+	if err != nil {
+		return false, false, err
+	}
 
 	if p.LoadVfioDriver != loaded {
 		if needVfioDriver(new) {
@@ -181,7 +188,7 @@ func isCommandNotFound(err error) bool {
 	return false
 }
 
-func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool) {
+func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool, err error) {
 	needDrain = false
 	for _, ifaceStatus := range current {
 		configured := false
@@ -190,14 +197,45 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 				configured = true
 				if iface.NumVfs != ifaceStatus.NumVfs {
 					needDrain = true
-					return
 				}
+				needChange, err := handleSriovModeStateChange(iface, ifaceStatus)
+				if err != nil {
+					return false, err
+				}
+				needDrain = needDrain || needChange
 			}
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {
 			needDrain = true
-			return
 		}
 	}
 	return
+}
+
+func handleSriovModeStateChange(ifaceSpec sriovnetworkv1.Interface, ifaceStatus sriovnetworkv1.InterfaceExt) (bool, error) {
+	glog.Infof("generic-plugin handleSriovModeStateChange(): device %s", ifaceSpec.PciAddress)
+	if ifaceSpec.SriovMode != "" {
+		if ifaceSpec.SriovMode != utils.SriovLegacyMode && ifaceSpec.SriovMode != utils.SriovSwitchdevMode {
+			return false, fmt.Errorf("generic-plugin handleSriovModeStateChange(): Unsupported SR-IOV mode %s for "+
+				"device %s, supported modes [%s, %s]",
+				ifaceSpec.PciAddress, ifaceSpec.SriovMode, utils.SriovLegacyMode, utils.SriovSwitchdevMode)
+		}
+		if ifaceSpec.NumVfs == 0 {
+			return false, fmt.Errorf("generic-plugin handleSriovModeStateChange(): " +
+				"To change SR-IOV mode, number of VFs should be > 0")
+		}
+		if ifaceSpec.SriovMode == ifaceStatus.SriovMode {
+			return false, nil
+		}
+		isEth, err := utils.IsEthernetNic(ifaceStatus.Name)
+		if err != nil {
+			return false, err
+		}
+		if !isEth {
+			return false, fmt.Errorf("generic-plugin handleSriovModeStateChange(): " +
+				"Changing SR-IOV mode is supported only for ethernet ports")
+		}
+		return true, nil
+	}
+	return false, nil
 }
