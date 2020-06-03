@@ -20,10 +20,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+
 	// "k8s.io/client-go/informers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+
 	// "k8s.io/client-go/kubernetes/scheme"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
@@ -208,12 +210,7 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 
 func (dn *Daemon) uncordon(name string) {
 	glog.Info("uncordon(): uncordon node")
-	node, err := dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
-	if err != nil {
-		glog.Errorf("uncordon(): failed to get node: %v", err)
-		dn.exitCh <- err
-		return
-	}
+
 	backoff := wait.Backoff{
 		Steps:    5,
 		Duration: 10 * time.Second,
@@ -222,7 +219,14 @@ func (dn *Daemon) uncordon(name string) {
 	var lastErr error
 
 	if err := wait.ExponentialBackoff(backoff, func() (bool, error) {
-		err := drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
+		node, err := dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
+		if err != nil {
+			glog.Infof("uncordon(): failed to get node: %v", err)
+			lastErr = err
+			return false, nil
+		}
+
+		err = drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
 		if err == nil {
 			return true, nil
 		}
@@ -339,39 +343,75 @@ func (dn *Daemon) restartDevicePluginPod() error {
 	dn.mu.Lock()
 	defer dn.mu.Unlock()
 	glog.V(2).Infof("restartDevicePluginPod(): try to restart device plugin pod")
-	pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(metav1.ListOptions{
-		LabelSelector: "app=sriov-device-plugin",
-		FieldSelector: "spec.nodeName=" + dn.name,
-	})
-	if err != nil {
-		glog.Warningf("restartDevicePluginPod(): Failed to list device plugin pod: %s", err)
+
+	var podToDelete string
+	var foundPodToDelete bool
+	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
+		pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(metav1.ListOptions{
+			LabelSelector: "app=sriov-device-plugin",
+			FieldSelector: "spec.nodeName=" + dn.name,
+		})
+
+		if errors.IsNotFound(err) {
+			glog.Info("restartDevicePluginPod(): device plugin pod exited")
+			return true, nil
+		}
+
+		if err != nil {
+			glog.Warningf("restartDevicePluginPod(): Failed to list device plugin pod: %s, retrying", err)
+			return false, nil
+		}
+
+		if len(pods.Items) == 0 {
+			glog.Info("restartDevicePluginPod(): device plugin pod exited")
+			return true, nil
+		}
+		podToDelete = pods.Items[0].Name
+		foundPodToDelete = true
+		return true, nil
+	}, dn.stopCh); err != nil {
+		glog.Errorf("restartDevicePluginPod(): failed to wait for finding pod to delete: %v", err)
+		return err
+	}
+
+	if !foundPodToDelete {
+		glog.Info("restartDevicePluginPod(): device plugin pod was not there")
 		return nil
 	}
-	if len(pods.Items) > 0 {
-		glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s", pods.Items[0].GetName())
-		err = dn.kubeClient.CoreV1().Pods(namespace).Delete(pods.Items[0].GetName(), &metav1.DeleteOptions{})
+
+	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
+		glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s, deleting it", podToDelete)
+		err := dn.kubeClient.CoreV1().Pods(namespace).Delete(podToDelete, &metav1.DeleteOptions{})
+		if errors.IsNotFound(err) {
+			glog.Info("restartDevicePluginPod(): pod to delete not found")
+			return true, nil
+		}
 		if err != nil {
-			glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s", err)
-			return err
-		}
-
-		var lastErr error
-
-		if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
-			_, err := dn.kubeClient.CoreV1().Pods(namespace).Get(pods.Items[0].GetName(), metav1.GetOptions{})
-			if err != nil {
-				if errors.IsNotFound(err) {
-					return true, nil
-				}
-				lastErr = err
-				glog.Infof("restartDevicePluginPod(): unexpected error: %v, retrying", err)
-				return false, err
-			}
-			glog.Info("restartDevicePluginPod(): waiting for pod get deleted")
+			glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s, retrying", err)
 			return false, nil
-		}, dn.stopCh); err != nil {
-			glog.Errorf("restartDevicePluginPod(): failed to wait for pod deletion complete: %v", err)
 		}
+		return true, nil
+	}, dn.stopCh); err != nil {
+		glog.Errorf("restartDevicePluginPod(): failed to wait for pod deletion: %v", err)
+		return err
+	}
+
+	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
+		_, err := dn.kubeClient.CoreV1().Pods(namespace).Get(podToDelete, metav1.GetOptions{})
+		if errors.IsNotFound(err) {
+			glog.Info("restartDevicePluginPod(): device plugin pod exited")
+			return true, nil
+		}
+
+		if err != nil {
+			glog.Warningf("restartDevicePluginPod(): Failed to check for device plugin exit: %s, retrying", err)
+		} else {
+			glog.Infof("restartDevicePluginPod(): waiting for device plugin %s to exit", podToDelete)
+		}
+		return false, nil
+	}, dn.stopCh); err != nil {
+		glog.Errorf("restartDevicePluginPod(): failed to wait for checking pod deletion: %v", err)
+		return err
 	}
 
 	return nil
@@ -431,10 +471,21 @@ func (a GlogLogger) Logf(format string, v ...interface{}) {
 }
 
 func (dn *Daemon) drainNode(name string) {
-	glog.Info("drainNode(): Update prepared; beginning drain")
-	node, err := dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
+	glog.Info("drainNode(): Update prepared")
+	var node *corev1.Node
+	err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
+		var err error
+		node, err = dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
+		if err != nil {
+			glog.Infof("drainNode(): failed to get node: %v, retring", err)
+			return false, nil
+		}
+		return true, nil
+	})
 	if err != nil {
-		glog.Errorf("nodeStateChangeHandler(): failed to get node: %v", err)
+		glog.Errorf("drainNode(): failed to get node: %v", err)
+		dn.exitCh <- err
+		return
 	}
 
 	backoff := wait.Backoff{
