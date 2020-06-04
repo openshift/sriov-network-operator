@@ -48,6 +48,8 @@ type SriovNetworkNicSelector struct {
 	RootDevices []string `json:"rootDevices,omitempty"`
 	// Name of SR-IoV PF.
 	PfNames []string `json:"pfNames,omitempty"`
+	// Link type SR-IOV PF.
+	LinkTypes []string `json:"linkTypes,omitempty"`
 }
 
 // SriovNetworkNodePolicyStatus defines the observed state of SriovNetworkNodePolicy

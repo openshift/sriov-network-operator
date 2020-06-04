@@ -190,6 +190,11 @@ func (in *SriovNetworkNicSelector) DeepCopyInto(out *SriovNetworkNicSelector) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.LinkTypes != nil {
+		in, out := &in.LinkTypes, &out.LinkTypes
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

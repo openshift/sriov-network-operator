@@ -218,5 +218,10 @@ func validateSelector(rc *dptypes.ResourceConfig, ns *sriovnetworkv1.SriovNetwor
 			return false
 		}
 	}
+	if len(ns.LinkTypes) > 0 {
+		if !reflect.DeepEqual(ns.LinkTypes, rc.Selectors.LinkTypes) {
+			return false
+		}
+	}
 	return true
 }

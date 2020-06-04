@@ -18,6 +18,11 @@ var SriovPfVfMap = map[string](string){
 	"1017": "1018",
 }
 
+var LinkTypeMap = map[string](string){
+	"IB":  "infiniband",
+	"ETH": "ether",
+}
+
 var VfIds = []string{}
 
 func init() {
@@ -91,7 +96,7 @@ func UniqueAppend(inSlice []string, strings ...string) []string {
 // Apply policy to SriovNetworkNodeState CR
 func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 	s := p.Spec.NicSelector
-	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 {
+	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 && len(s.LinkTypes) == 0 {
 		// Empty NicSelector match none
 		return
 	}
@@ -215,6 +220,16 @@ func (selector *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool {
 	}
 	if len(selector.RootDevices) > 0 && !StringInArray(iface.PciAddress, selector.RootDevices) {
 		return false
+	}
+	if len(selector.LinkTypes) > 0 {
+		// Map link type to know link types
+		linkType, ok := LinkTypeMap[strings.ToUpper(iface.LinkType)]
+		if !ok {
+			linkType = iface.LinkType
+		}
+		if !StringInArray(linkType, selector.LinkTypes) {
+			return false
+		}
 	}
 	if len(selector.PfNames) > 0 {
 		var pfNames []string

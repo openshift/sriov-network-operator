@@ -32,7 +32,7 @@ import (
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	"github.com/openshift/sriov-network-operator/pkg/apply"
 	"github.com/openshift/sriov-network-operator/pkg/controller/sriovoperatorconfig"
-	render "github.com/openshift/sriov-network-operator/pkg/render"
+	"github.com/openshift/sriov-network-operator/pkg/render"
 )
 
 var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
@@ -567,6 +567,9 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 			if len(p.Spec.NicSelector.PfNames) > 0 {
 				rcl.ResourceList[i].Selectors.PfNames = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
+			if len(p.Spec.NicSelector.LinkTypes) > 0 {
+				rcl.ResourceList[i].Selectors.LinkTypes = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.LinkTypes, p.Spec.NicSelector.LinkTypes...)
+			}
 			if p.Spec.DeviceType == "vfio-pci" {
 				rcl.ResourceList[i].Selectors.Drivers = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.Drivers, p.Spec.DeviceType)
 			} else {
@@ -595,6 +598,9 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 			}
 			if l := len(p.Spec.NicSelector.PfNames); l > 0 {
 				rc.Selectors.PfNames = append(rc.Selectors.PfNames, p.Spec.NicSelector.PfNames...)
+			}
+			if l := len(p.Spec.NicSelector.LinkTypes); l > 0 {
+				rc.Selectors.LinkTypes = append(rc.Selectors.LinkTypes, p.Spec.NicSelector.LinkTypes...)
 			}
 
 			if p.Spec.DeviceType == "vfio-pci" {

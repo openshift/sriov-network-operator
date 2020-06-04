@@ -63,6 +63,11 @@ spec:
                   description: The device hex code of SR-IoV device. Allowed value
                     "158b", "1015", "1017".
                   type: string
+                linkTypes:
+                  description: Link type SR-IOV PF.
+                  items:
+                    type: string
+                  type: array
                 pfNames:
                   description: Name of SR-IoV PF.
                   items:

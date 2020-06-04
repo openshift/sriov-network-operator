@@ -53,6 +53,7 @@ func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, op
 			Priority:     99,
 			NicSelector: sriovv1.SriovNetworkNicSelector{
 				PfNames: []string{sriovDevice},
+				LinkTypes: []string{sriovDevice},
 			},
 			DeviceType: "netdevice",
 		},
