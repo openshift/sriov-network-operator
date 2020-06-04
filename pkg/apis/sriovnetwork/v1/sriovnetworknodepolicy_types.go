@@ -33,6 +33,9 @@ type SriovNetworkNodePolicySpec struct {
 	DeviceType string `json:"deviceType,omitempty"`
 	// RDMA mode. Defaults to false.
 	IsRdma bool `json:"isRdma,omitempty"`
+	// +kubebuilder:validation:Enum=eth;ETH;IB;ib
+	// NIC Link Type. Allowed value "eth", "ETH", "ib", and "IB".
+	LinkType string `json:"linkType,omitempty"`
 }
 
 // +k8s:openapi-gen=false

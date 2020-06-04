@@ -38,6 +38,8 @@ spec:
             interfaces:
               items:
                 properties:
+                  linkType:
+                    type: string
                   mtu:
                     type: integer
                   name:
@@ -108,6 +110,8 @@ spec:
                   driver:
                     type: string
                   linkSpeed:
+                    type: string
+                  linkType:
                     type: string
                   mac:
                     type: string

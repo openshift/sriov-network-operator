@@ -111,14 +111,9 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 		}
 		processedNics[pciPrefix] = true
 
-		fwCurrent, fwNext, err := getMlnxNicFwData(ifaceSpec.PciAddress)
+		fwData, err := getMlnxNicFwData(ifaceSpec.PciAddress)
 		if err != nil {
 			return false, false, err
-		}
-		if fwCurrent.enableSriov != fwNext.enableSriov || fwCurrent.totalVfs != fwNext.totalVfs ||
-			fwCurrent.linkTypeP1 != fwNext.linkTypeP1 || fwCurrent.linkTypeP2 != fwNext.linkTypeP2 {
-			needReboot = true
-			continue
 		}
 
 		isDualPort := isDualPort(ifaceSpec.PciAddress)
@@ -126,18 +121,14 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 		attrs := &mlnxNic{totalVfs: -1}
 
 		var totalVfs int
-		totalVfs, needReboot = handleTotalVfs(fwCurrent, attrs, ifaceSpec, isDualPort)
-		needReboot = handleEnableSriov(totalVfs, fwCurrent, attrs) || needReboot
-		if isLinkTypeRequireChange(fwCurrent.linkTypeP1) {
-			glog.V(2).Infof("Changing LinkTypeP1 %s to ETH, needs reboot", fwCurrent.linkTypeP1)
-			attrs.linkTypeP1 = EthLinkType
-			needReboot = true
+		totalVfs, needReboot = handleTotalVfs(fwData, attrs, ifaceSpec, isDualPort)
+		needReboot = handleEnableSriov(totalVfs, fwData, attrs) || needReboot
+		needLinkChange, err := handleLinkType(pciPrefix, fwData, attrs)
+		if err != nil {
+			return false, false, err
 		}
-		if isDualPort && isLinkTypeRequireChange(fwCurrent.linkTypeP2) {
-			glog.V(2).Infof("Changing LinkTypeP2 %s to ETH, needs reboot", fwCurrent.linkTypeP2)
-			attrs.linkTypeP2 = EthLinkType
-			needReboot = true
-		}
+
+		needReboot = needReboot || needLinkChange
 		if needReboot {
 			attributesToChange[ifaceSpec.PciAddress] = *attrs
 		}
@@ -169,10 +160,10 @@ func configFW() error {
 			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%d", TotalVfs, fwArgs.totalVfs))
 		}
 		if len(fwArgs.linkTypeP1) > 0 {
-			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", LinkTypeP1, EthLinkType))
+			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", LinkTypeP1, fwArgs.linkTypeP1))
 		}
 		if len(fwArgs.linkTypeP2) > 0 {
-			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", LinkTypeP2, EthLinkType))
+			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", LinkTypeP2, fwArgs.linkTypeP2))
 		}
 
 		glog.V(2).Infof("mellanox-plugin: configFW(): %v", cmdArgs)
@@ -209,29 +200,21 @@ func runCommand(command string, args ...string) (string, error) {
 	return stdout.String(), err
 }
 
-func getMlnxNicFwData(pciAddress string) (current, next *mlnxNic, err error) {
+func getMlnxNicFwData(pciAddress string) (mlnxNicInfo *mlnxNic, err error) {
 	glog.Infof("mellanox-plugin getMlnxNicFwData(): device %s", pciAddress)
 	err = nil
-	attrs := []string{TotalVfs, EnableSriov, LinkTypeP1}
-	isDualPort := isDualPort(pciAddress)
+	attrs := []string{TotalVfs, EnableSriov, LinkTypeP1, LinkTypeP2}
 
-	if isDualPort {
-		attrs = append(attrs, LinkTypeP2)
-	}
 	out, err := mstConfigReadData(pciAddress)
 	if err != nil {
 		glog.Errorf("mellanox-plugin getMlnxNicFwData(): failed %v", err)
 		return
 	}
-	mstCurrentData, mstNextData := parseMstconfigOutput(out, attrs)
-	current, err = mlnxNicFromMap(mstCurrentData)
+	mstData := parseMstconfigOutput(out, attrs)
+	mlnxNicInfo, err = mlnxNicFromMap(mstData)
 	if err != nil {
 		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
 		return
-	}
-	next, err = mlnxNicFromMap(mstNextData)
-	if err != nil {
-		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
 	}
 	return
 }
@@ -256,23 +239,21 @@ func mlnxNicFromMap(mstData map[string]string) (*mlnxNic, error) {
 	return fwData, nil
 }
 
-func parseMstconfigOutput(mstOutput string, attributes []string) (fwCurrent, fwNext map[string]string) {
+func parseMstconfigOutput(mstOutput string, attributes []string) map[string]string {
 	glog.Infof("mellanox-plugin parseMstconfigOutput(): Attributes %v", attributes)
-	fwCurrent = map[string]string{}
-	fwNext = map[string]string{}
-	formatRegex := regexp.MustCompile(`(?P<Attribute>\w+)\s+(?P<Default>\S+)\s+(?P<Current>\S+)\s+(?P<Next>\S+)`)
+	fwData := map[string]string{}
+	formatRegex := regexp.MustCompile(`(?P<Attribute>\w+)\s+(?P<Default>\S+)\s+(?P<Current>\S+)`)
 	mstOutputLines := strings.Split(mstOutput, "\n")
 	for _, attr := range attributes {
 		for _, line := range mstOutputLines {
 			if strings.Contains(line, attr) {
 				regexResult := formatRegex.FindStringSubmatch(line)
-				fwCurrent[attr] = regexResult[3]
-				fwNext[attr] = regexResult[4]
+				fwData[attr] = regexResult[3]
 				break
 			}
 		}
 	}
-	return
+	return fwData
 }
 
 func getPciAddressPrefix(pciAddress string) string {
@@ -300,9 +281,25 @@ func getLinkType(linkType string) string {
 	}
 }
 
-func isLinkTypeRequireChange(linkType string) bool {
-	glog.Infof("mellanox-plugin isLinkTypeRequireChange(): linkType %s", linkType)
-	return strings.EqualFold(linkType, InfinibandLinkType)
+func isLinkTypeRequireChange(iface sriovnetworkv1.Interface, fwLinkType string) (bool, error) {
+	glog.Infof("mellanox-plugin isLinkTypeRequireChange(): device %s", iface.PciAddress)
+	if iface.LinkType != "" {
+		if !strings.EqualFold(iface.LinkType, EthLinkType) && !strings.EqualFold(iface.LinkType, InfinibandLinkType) {
+			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Not supported link type: %s,"+
+				" supported link types: [eth, ETH, ib, and IB]", iface.LinkType)
+		}
+		if fwLinkType == UknownLinkType {
+			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Unknown link type: %s", fwLinkType)
+		}
+		if fwLinkType == PreconfiguredLinkType {
+			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Network card %s does not support link type change", iface.PciAddress)
+		}
+		if !strings.EqualFold(fwLinkType, iface.LinkType) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func getOtherPortSpec(pciAddress string) *sriovnetworkv1.Interface {
@@ -355,4 +352,36 @@ func handleEnableSriov(totalVfs int, fwCurrent, attrs *mlnxNic) bool {
 	}
 
 	return false
+}
+
+// handleLinkType based on existing linkType and requested link
+func handleLinkType(pciPrefix string, fwData, attr *mlnxNic) (bool, error) {
+	needReboot := false
+	if firstPortSpec, ok := mellanoxNicsSpec[pciPrefix+"0"]; ok {
+		needChange, err := isLinkTypeRequireChange(firstPortSpec, fwData.linkTypeP1)
+		if err != nil {
+			return false, err
+		}
+
+		if needChange {
+			glog.V(2).Infof("Changing LinkTypeP1 %s to %s, needs reboot", fwData.linkTypeP1, firstPortSpec.LinkType)
+			attr.linkTypeP1 = firstPortSpec.LinkType
+			needReboot = true
+		}
+	}
+
+	if secondPortSpec, ok := mellanoxNicsSpec[pciPrefix+"1"]; ok {
+		needChange, err := isLinkTypeRequireChange(secondPortSpec, fwData.linkTypeP2)
+		if err != nil {
+			return false, err
+		}
+
+		if needChange {
+			glog.V(2).Infof("Changing LinkTypeP2 %s to %s, needs reboot", fwData.linkTypeP2, secondPortSpec.LinkType)
+			attr.linkTypeP2 = secondPortSpec.LinkType
+			needReboot = true
+		}
+	}
+
+	return needReboot, nil
 }

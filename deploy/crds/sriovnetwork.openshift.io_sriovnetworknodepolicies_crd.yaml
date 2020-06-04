@@ -37,12 +37,20 @@ spec:
               description: The driver type for configured VFs. Allowed value "netdevice",
                 "vfio-pci". Defaults to netdevice.
               enum:
-              - netdevice
-              - vfio-pci
+                - netdevice
+                - vfio-pci
               type: string
             isRdma:
               description: RDMA mode. Defaults to false.
               type: boolean
+            linkType:
+              description: NIC Link Type. Allowed value "eth", "ETH", "ib", and "IB".
+              enum:
+                - eth
+                - ETH
+                - ib
+                - IB
+              type: string
             mtu:
               description: MTU of VF
               maximum: 9000
@@ -89,10 +97,10 @@ spec:
               description: SRIOV Network device plugin endpoint resource name
               type: string
           required:
-          - nicSelector
-          - nodeSelector
-          - numVfs
-          - resourceName
+            - nicSelector
+            - nodeSelector
+            - numVfs
+            - resourceName
           type: object
         status:
           description: SriovNetworkNodePolicyStatus defines the observed state of
@@ -101,6 +109,6 @@ spec:
       type: object
   version: v1
   versions:
-  - name: v1
-    served: true
-    storage: true
+    - name: v1
+      served: true
+      storage: true
