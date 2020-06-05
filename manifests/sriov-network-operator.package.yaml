@@ -1,4 +1,4 @@
 packageName: sriov-network-operator
 channels:
-- name: "4.5"
-  currentCSV: sriov-network-operator.v4.5.0
+- name: "4.6"
+  currentCSV: sriov-network-operator.v4.6.0
