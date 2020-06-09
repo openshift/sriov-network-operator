@@ -26,6 +26,10 @@ import (
 
 var waitingTime time.Duration = 20 * time.Minute
 
+const (
+	onlinePingableAddress = "8.8.8.8"
+)
+
 func init() {
 	waitingEnv := os.Getenv("SRIOV_WAITING_TIME")
 	newTime, err := strconv.Atoi(waitingEnv)
@@ -183,36 +187,44 @@ var _ = Describe("Bond-CNI", func() {
 				return runningPodA.Status.Phase
 			}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
 
-			// turn net1 off
-
+			By("Turning net1 off")
 			_, stderr, err := pod.ExecCommand(clients, runningPodA, "ifdown", "net1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stderr).To(Equal(""))
 
-			// check pod communication
+			By("Checking the pod communication")
+			checkPodCommunication(runningPodA, 4, onlinePingableAddress)
 
-			// turn net1 on
-
+			By("Turning net1 on after communication check")
 			_, stderr, err = pod.ExecCommand(clients, runningPodA, "ifup", "net1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stderr).To(Equal(""))
 
-			// turn net2 off
-
+			By("Turning net2 off")
 			_, stderr, err = pod.ExecCommand(clients, runningPodA, "ifdown", "net2")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stderr).To(Equal(""))
 
-			// check pod communication
+			By("Checking the pod communication")
+			checkPodCommunication(runningPodA, 4, onlinePingableAddress)
 
-			// turn net2 on
-
+			By("Turning net1 on after communication check")
 			_, stderr, err = pod.ExecCommand(clients, runningPodA, "ifup", "net2")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stderr).To(Equal(""))
 		})
 	})
 })
+
+func checkPodCommunication(runningPod *v1core.Pod, numberOfPings int, pingAddress string) {
+	_, stderr, err := pod.ExecCommand(clients, runningPod, "ping", "-c", strconv.Itoa(numberOfPings), pingAddress)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(stderr).To(Equal(""))
+	stdin, stderr, err := pod.ExecCommand(clients, runningPod, "echo", "$?")
+	Expect(err).ToNot(HaveOccurred())
+	Expect(stderr).To(Equal(""))
+	Expect(stdin).To(Equal("0"))
+}
 
 func waitForSRIOVStable() {
 	// This used to be to check for sriov not to be stable first,
