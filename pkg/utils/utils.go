@@ -184,7 +184,11 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
 			return err
 		}
-		if err = setVfsAdminMac(ifaceStatus); err != nil {
+
+		// VFs may not be immediately ready after setSriovNumVfs
+		time.Sleep(1 * time.Second)
+
+		if err = initVfs(ifaceStatus); err != nil {
 			return err
 		}
 	}
@@ -408,11 +412,10 @@ func Chroot(path string) (func() error, error) {
 	}, nil
 }
 
-func setVfsAdminMac(iface *sriovnetworkv1.InterfaceExt) error {
-	glog.Infof("setVfsAdminMac(): device %s", iface.PciAddress)
+func initVfs(iface *sriovnetworkv1.InterfaceExt) error {
 	pfLink, err := netlink.LinkByName(iface.Name)
 	if err != nil {
-		glog.Errorf("setVfsAdminMac(): unable to get PF link for device %+v %q", iface, err)
+		glog.Errorf("initVfs(): unable to get PF link for device %+v %q", iface, err)
 		return err
 	}
 	vfs, err := dputils.GetVFList(iface.PciAddress)
@@ -422,25 +425,32 @@ func setVfsAdminMac(iface *sriovnetworkv1.InterfaceExt) error {
 	for _, addr := range vfs {
 		vfID, err := dputils.GetVFID(addr)
 		if err != nil {
-			glog.Errorf("setVfsAdminMac(): unable to get VF id %+v %q", iface.PciAddress, err)
-			return err
+			glog.Errorf("initVfs(): unable to get VF(%d) id %+v %q", vfID, iface.PciAddress, err)
+			continue
 		}
 		vfName := tryGetInterfaceName(addr)
 		vfLink, err := netlink.LinkByName(vfName)
 		if err != nil {
-			glog.Errorf("setVfsAdminMac(): unable to get VF link for device %+v %q", iface, err)
-			return err
+			glog.Errorf("initVfs(): unable to get VF(%d) link for device %+v %q", vfID, iface, err)
+			continue
 		}
+		// Initialize vf admin MAC to follow effective MAC
 		if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
-			return err
+			glog.Errorf("initVfs(): unable to set VF(%d) admin MAC for device %+v %q", vfID, iface, err)
+			continue
+		}
+		// Initialize vf spoofChk to off
+		if err := netlink.LinkSetVfSpoofchk(pfLink, vfID, false); err != nil {
+			glog.Errorf("initVfs(): unable to set VF(%d) spoofChk for device %+v %q", vfID, iface, err)
+			continue
 		}
 		if err = Unbind(addr); err != nil {
 			return err
 		}
 		if err = BindDefaultDriver(addr); err != nil {
-			return err
+			glog.Errorf("initVfs(): unable to bind VF(%d) default driver for device %+v %q", vfID, iface, err)
+			continue
 		}
 	}
-
 	return nil
 }
