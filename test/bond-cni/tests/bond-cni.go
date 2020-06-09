@@ -9,8 +9,6 @@ import (
 
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-	"github.com/openshift/sriov-network-operator/test/util/network"
-	"github.com/openshift/sriov-network-operator/test/util/pod"
 	v1core "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,6 +20,8 @@ import (
 	"github.com/openshift/sriov-network-operator/test/util/cluster"
 	"github.com/openshift/sriov-network-operator/test/util/execute"
 	"github.com/openshift/sriov-network-operator/test/util/namespaces"
+	"github.com/openshift/sriov-network-operator/test/util/network"
+	"github.com/openshift/sriov-network-operator/test/util/pod"
 )
 
 var waitingTime time.Duration = 20 * time.Minute
@@ -193,13 +193,13 @@ var _ = Describe("Bond-CNI", func() {
 
 			// turn net1 on
 
-			_, stderr, err := pod.ExecCommand(clients, runningPodA, "ifup", "net1")
+			_, stderr, err = pod.ExecCommand(clients, runningPodA, "ifup", "net1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stderr).To(Equal(""))
 
 			// turn net2 off
 
-			_, stderr, err := pod.ExecCommand(clients, runningPodA, "ifdown", "net2")
+			_, stderr, err = pod.ExecCommand(clients, runningPodA, "ifdown", "net2")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stderr).To(Equal(""))
 
@@ -207,7 +207,7 @@ var _ = Describe("Bond-CNI", func() {
 
 			// turn net2 on
 
-			_, stderr, err := pod.ExecCommand(clients, runningPodA, "ifup", "net2")
+			_, stderr, err = pod.ExecCommand(clients, runningPodA, "ifup", "net2")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(stderr).To(Equal(""))
 		})
