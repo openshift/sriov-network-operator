@@ -359,7 +359,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 
 	if reqReboot {
 		glog.Info("nodeStateChangeHandler(): reboot node")
-		go rebootNode()
+		rebootNode()
 		return
 	}
 
