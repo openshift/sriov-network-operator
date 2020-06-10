@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	drain "github.com/openshift/kubernetes-drain"
 	goerr "github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -29,7 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/kubectl/pkg/drain"
 
 	// "k8s.io/client-go/kubernetes/scheme"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -67,6 +68,14 @@ type Daemon struct {
 	dpReboot bool
 
 	mu *sync.Mutex
+
+	drainer *drain.Helper
+
+	node *corev1.Node
+
+	drainable bool
+
+	nodeLister listerv1.NodeLister
 }
 
 const (
@@ -78,6 +87,17 @@ const (
 
 var namespace = os.Getenv("NAMESPACE")
 var pluginsPath = os.Getenv("PLUGINSPATH")
+
+// writer implements io.Writer interface as a pass-through for klog.
+type writer struct {
+	logFunc func(args ...interface{})
+}
+
+// Write passes string(p) into writer's logFunc and always returns len(p)
+func (w writer) Write(p []byte) (n int, err error) {
+	w.logFunc(string(p))
+	return len(p), nil
+}
 
 func New(
 	nodeName string,
@@ -94,6 +114,25 @@ func New(
 		exitCh:     exitCh,
 		stopCh:     stopCh,
 		refreshCh:  refreshCh,
+		drainable:  true,
+		drainer: &drain.Helper{
+			Client:              kubeClient,
+			Force:               true,
+			IgnoreAllDaemonSets: true,
+			DeleteLocalData:     true,
+			GracePeriodSeconds:  -1,
+			Timeout:             90 * time.Second,
+			OnPodDeletedOrEvicted: func(pod *corev1.Pod, usingEviction bool) {
+				verbStr := "Deleted"
+				if usingEviction {
+					verbStr = "Evicted"
+				}
+				glog.Info(fmt.Sprintf("%s pod from Node", verbStr),
+					"pod", fmt.Sprintf("%s/%s", pod.Name, pod.Namespace))
+			},
+			Out:    writer{glog.Info},
+			ErrOut: writer{glog.Error},
+		},
 	}
 }
 
@@ -136,9 +175,20 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 		UpdateFunc: dn.operatorConfigChangeHandler,
 	})
 
+	rand.Seed(time.Now().UnixNano())
+	nodeInformerFactory := informers.NewSharedInformerFactory(dn.kubeClient,
+		time.Second*15,
+	)
+	dn.nodeLister = nodeInformerFactory.Core().V1().Nodes().Lister()
+	nodeInformer := nodeInformerFactory.Core().V1().Nodes().Informer()
+	nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    dn.nodeAddHandler,
+		UpdateFunc: dn.nodeUpdateHandler,
+	})
+	go cfgInformer.Run(dn.stopCh)
+	go nodeInformer.Run(dn.stopCh)
 	time.Sleep(5 * time.Second)
 	go informer.Run(dn.stopCh)
-	go cfgInformer.Run(dn.stopCh)
 
 	for {
 		select {
@@ -152,6 +202,35 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 				lastSyncError: err.Error(),
 			}
 			return err
+		}
+	}
+}
+
+func (dn *Daemon) nodeAddHandler(obj interface{}) {
+	dn.nodeUpdateHandler(nil, obj)
+}
+
+func (dn *Daemon) nodeUpdateHandler(old, new interface{}) {
+	nn := new.(*corev1.Node)
+	if nn.Annotations[annoKey] == annoDraining || nn.GetName() == dn.name {
+		return
+	}
+	node, err := dn.nodeLister.Get(dn.name)
+	if errors.IsNotFound(err) {
+		glog.V(2).Infof("nodeUpdateHandler(): node %v has been deleted", dn.name)
+		return
+	}
+	dn.node = node.DeepCopy()
+	// wait a random time to avoid all the nodes checking the nodes anno at the same time
+	time.Sleep(time.Duration(rand.Intn(6000)) * time.Millisecond)
+	nodes, err := dn.nodeLister.List(labels.Everything())
+	if err != nil {
+		return
+	}
+	for _, node := range nodes {
+		if node.GetName() != dn.name && node.Annotations[annoKey] == annoDraining {
+			glog.Infof("nodeUpdateHandler(): node %s is draining", node.Name)
+			dn.drainable = false
 		}
 	}
 }
@@ -203,7 +282,6 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	if reqDrain {
 		glog.Info("nodeStateAddHandler(): drain node")
 		dn.drainNode(nodeState.GetName())
-		defer dn.uncordon(nodeState.GetName())
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
@@ -241,44 +319,11 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 		}
 	}
 
+	dn.completeDrain()
 	dn.refreshCh <- Message{
 		syncStatus:    "Succeeded",
 		lastSyncError: "",
 	}
-}
-
-func (dn *Daemon) uncordon(name string) {
-	glog.Info("uncordon(): uncordon node")
-
-	backoff := wait.Backoff{
-		Steps:    5,
-		Duration: 10 * time.Second,
-		Factor:   2,
-	}
-	var lastErr error
-
-	if err := wait.ExponentialBackoff(backoff, func() (bool, error) {
-		node, err := dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
-		if err != nil {
-			glog.Infof("uncordon(): failed to get node: %v", err)
-			lastErr = err
-			return false, nil
-		}
-
-		err = drain.Uncordon(dn.kubeClient.CoreV1().Nodes(), node, nil)
-		if err == nil {
-			return true, nil
-		}
-		lastErr = err
-		glog.Infof("uncordon(): uncordon failed with: %v, retrying", err)
-		return false, nil
-	}); err != nil {
-		if err == wait.ErrWaitTimeout {
-			glog.Errorf("uncordon(): failed to uncordon node (%d tries): %v :%v", backoff.Steps, err, lastErr)
-		}
-		glog.Errorf("uncordon(): failed to uncordon node: %v", err)
-	}
-	glog.Info("uncordon(): uncordon complete")
 }
 
 func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
@@ -334,7 +379,6 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	if reqDrain {
 		glog.Info("nodeStateChangeHandler(): drain node")
 		dn.drainNode(latestState.GetName())
-		defer dn.uncordon(latestState.GetName())
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
@@ -372,10 +416,26 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 			return
 		}
 	}
+
+	dn.completeDrain()
 	dn.refreshCh <- Message{
 		syncStatus:    "Succeeded",
 		lastSyncError: "",
 	}
+}
+
+func (dn *Daemon) completeDrain() {
+	if err := drain.RunCordonOrUncordon(dn.drainer, dn.node, false); err != nil {
+		glog.Errorf("nodeStateChangeHandler(): fail to uncordon node: %v", err)
+		dn.exitCh <- err
+		return
+	}
+	if err := dn.annotateNode(dn.name, annoIdle); err != nil {
+		glog.Errorf("drainNode(): failed to annotate node: %v", err)
+		dn.exitCh <- err
+		return
+	}
+	dn.drainable = true
 }
 
 func (dn *Daemon) restartDevicePluginPod() error {
@@ -550,60 +610,17 @@ func (dn *Daemon) annotateNode(node, value string) error {
 
 func (dn *Daemon) drainNode(name string) {
 	glog.Info("drainNode(): Update prepared")
-	var node *corev1.Node
-	err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
-		var err error
-		node, err = dn.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
-		if err != nil {
-			glog.Infof("drainNode(): failed to get node: %v, retring", err)
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		glog.Errorf("drainNode(): failed to get node: %v", err)
-		dn.exitCh <- err
-		return
-	}
+	var err error
 
-	rand.Seed(time.Now().UnixNano())
-	informerFactory := informers.NewSharedInformerFactory(dn.kubeClient,
-		time.Second*15,
-	)
-	stop := make(chan struct{})
-	lister := informerFactory.Core().V1().Nodes().Lister()
-	informer := informerFactory.Core().V1().Nodes().Informer()
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			nn := newObj.(*corev1.Node)
-			if nn.Annotations[annoKey] == annoDraining || nn.GetName() == dn.name {
-				return
-			}
-			ok := true
-			// wait a random time to avoid all the nodes checking the nodes anno at the same time
-			time.Sleep(time.Duration(rand.Intn(6000)) * time.Millisecond)
-			nodes, err := lister.List(labels.Everything())
-			if err != nil {
-				return
-			}
-			glog.Infof("drainNode(): Check if any other node is draining")
-			for _, node := range nodes {
-				if node.GetName() != dn.name && node.Annotations[annoKey] == annoDraining {
-					glog.Infof("drainNode(): node %s is draining", node.Name)
-					ok = false
-				}
-			}
-			if ok {
-				glog.Info("drainNode(): No other node is draining, stop watching")
-				select {
-				case <-stop:
-				default:
-					close(stop)
-				}
-			}
-		},
-	})
-	informer.Run(stop)
+	err = wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
+		if !dn.drainable {
+			glog.Info("drainNode(): other node is draining, waiting...")
+		}
+		return dn.drainable, nil
+	}, dn.stopCh)
+	if err != nil {
+		glog.Errorf("drainNode(): Failed to wait for node drainable: %v", err)
+	}
 
 	err = dn.annotateNode(dn.name, annoDraining)
 	if err != nil {
@@ -617,22 +634,20 @@ func (dn *Daemon) drainNode(name string) {
 	}
 	var lastErr error
 
-	logger := GlogLogger{}
-
 	glog.Info("drainNode(): Start draining")
-	if err := wait.ExponentialBackoff(backoff, func() (bool, error) {
-		err := drain.Drain(dn.kubeClient, []*corev1.Node{node}, &drain.DrainOptions{
-			DeleteLocalData:    true,
-			Force:              true,
-			GracePeriodSeconds: -1,
-			IgnoreDaemonsets:   true,
-			Logger:             logger,
-		})
+	if err = wait.ExponentialBackoff(backoff, func() (bool, error) {
+		err := drain.RunCordonOrUncordon(dn.drainer, dn.node, true)
+		if err != nil {
+			lastErr = err
+			glog.Infof("Cordon failed with: %v, retrying", err)
+			return false, nil
+		}
+		err = drain.RunNodeDrain(dn.drainer, dn.name)
 		if err == nil {
 			return true, nil
 		}
 		lastErr = err
-		glog.Infof("drainNode(): Draining failed with: %v, retrying", err)
+		glog.Infof("Draining failed with: %v, retrying", err)
 		return false, nil
 	}); err != nil {
 		if err == wait.ErrWaitTimeout {
@@ -641,10 +656,6 @@ func (dn *Daemon) drainNode(name string) {
 		glog.Errorf("drainNode(): failed to drain node: %v", err)
 	}
 	glog.Info("drainNode(): drain complete")
-	err = dn.annotateNode(dn.name, annoIdle)
-	if err != nil {
-		glog.Errorf("drainNode(): failed to annotate node: %v", err)
-	}
 }
 
 func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
