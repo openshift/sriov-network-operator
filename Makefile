@@ -32,8 +32,8 @@ operator-sdk:
 	  then git clone https://github.com/operator-framework/operator-sdk --branch master $(GOPATH)/src/github.com/operator-framework/operator-sdk ; \
 	  fi ; \
 	  cd $(GOPATH)/src/github.com/operator-framework/operator-sdk ; \
-	  make dep ; \
-	  make install ; \
+	  make tidy ; \
+	  GOFLAGS="" make install ; \
 	fi
 
 all: build plugins
@@ -56,7 +56,7 @@ fmt: ## Go fmt your code
 	CONTAINER_CMD=$(IMAGE_BUILDER) hack/go-fmt.sh .
 
 gencode: operator-sdk
-	@operator-sdk generate openapi
+	@operator-sdk generate crds
 	@operator-sdk generate k8s
 
 deploy-setup:

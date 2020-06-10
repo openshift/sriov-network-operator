@@ -38,7 +38,7 @@ func CreateSriovNetwork(clientSet *testclient.ClientSet, intf *sriovv1.Interface
 	return err
 }
 
-func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string) error {
+func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string) (*sriovv1.SriovNetworkNodePolicy, error) {
 	nodePolicy := &sriovv1.SriovNetworkNodePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: generatedName,
@@ -58,7 +58,7 @@ func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, op
 		},
 	}
 	err := clientSet.Create(context.Background(), nodePolicy)
-	return err
+	return nodePolicy, err
 }
 
 // GetNicsByPrefix returns a list of pod nic names, filtered by the given

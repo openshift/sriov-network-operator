@@ -92,7 +92,7 @@ spec:
   description: |
       # SR-IOV Network Operator for Openshift
 
-      ## Introdution
+      ## Introduction
       The sriov-network-operator is generally responsible for configuring the sriov components in a openshift cluster.
 
       ### Supported Features
@@ -105,14 +105,7 @@ spec:
       This operator has to run in namespace 'openshift-sriov-network-operator'. An Operator Group is also required to install this operator:
 
       ```
-      $ oc create -f - <<EOF
-      apiVersion: v1
-      kind: Namespace
-      metadata:
-        name: openshift-sriov-network-operator
-        labels:
-          openshift.io/run-level: "1"
-      EOF
+      $ oc create namespace openshift-sriov-network-operator
 
       $ oc create -f - <<EOF
       apiVersion: operators.coreos.com/v1
@@ -207,6 +200,14 @@ spec:
           - deployments/finalizers
           verbs:
           - update
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - serviceaccounts
+          - roles
+          - rolebindings
+          verbs:
+          - '*'
         serviceAccountName: sriov-network-operator
       - rules:
         - apiGroups:
@@ -228,6 +229,14 @@ spec:
           - sriovnetworknodestates
           verbs:
           - '*'
+        - apiGroups:
+          - security.openshift.io
+          resources:
+          - securitycontextconstraints
+          verbs:
+          - use
+          resourceNames:
+          - privileged
         serviceAccountName: sriov-network-config-daemon
       deployments:
       - name: sriov-network-operator
@@ -273,6 +282,8 @@ spec:
                       value: quay.io/openshift/origin-sriov-network-webhook:4.5
                     - name: RESOURCE_PREFIX
                       value: openshift.io
+                    - name: ENABLE_ADMISSION_CONTROLLER
+                      value: "true"
                     - name: NAMESPACE
                       valueFrom:
                         fieldRef:

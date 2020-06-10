@@ -2,9 +2,13 @@ package cluster
 
 import (
 	"fmt"
+	"strings"
+
+	corev1 "k8s.io/api/core/v1"
 
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
+	pods "github.com/openshift/sriov-network-operator/test/util/pod"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,7 +34,11 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 	}
 
 	for _, state := range nodeStates.Items {
-		if !stateStable(state) {
+		isStable, err := stateStable(state, clients, operatorNamespace)
+		if err != nil {
+			return nil, err
+		}
+		if !isStable {
 			return nil, fmt.Errorf("Sync status still in progress")
 		}
 
@@ -105,23 +113,76 @@ func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool,
 		return false, nil
 	}
 	for _, state := range nodeStates.Items {
-		if !stateStable(state) {
+		nodeReady, err := stateStable(state, clients, operatorNamespace)
+		if err != nil {
+			return false, err
+		}
+		if !nodeReady {
 			return false, nil
 		}
 	}
 	return true, nil
 }
 
-func stateStable(state sriovv1.SriovNetworkNodeState) bool {
+func stateStable(state sriovv1.SriovNetworkNodeState, clients *testclient.ClientSet, operatorNamespace string) (bool, error) {
 	switch state.Status.SyncStatus {
 	case "Succeeded":
-		return true
+		return CheckReadyGeneration(clients, operatorNamespace, state)
 	// When the config daemon is restarted the status will be empty
 	// This doesn't mean the config was applied
 	case "":
-		return false
+		return false, nil
 	}
-	return false
+	return false, nil
+}
+
+func CheckReadyGeneration(clients *testclient.ClientSet, operatorNamespace string, state sriovv1.SriovNetworkNodeState) (bool, error) {
+	podList, err := clients.Pods(operatorNamespace).List(metav1.ListOptions{LabelSelector: "app=sriov-network-config-daemon"})
+	if err != nil {
+		return false, err
+	}
+
+	var podObj *corev1.Pod
+	for _, pod := range podList.Items {
+		if pod.Spec.NodeName == state.Name {
+			podObj = &pod
+			break
+		}
+	}
+
+	if podObj == nil {
+		return false, nil
+	}
+
+	if podObj.Status.Phase != corev1.PodRunning {
+		return false, nil
+	}
+
+	logs, err := pods.GetLog(clients, podObj)
+	if err != nil {
+		return false, err
+	}
+
+	logsList := strings.Split(logs, "\n")
+	for idx, log := range logsList {
+		// example output from the config-daemon
+
+		// I0412 09:46:26.041882 3910208 writer.go:111] setNodeStateStatus(): syncStatus: Succeeded, lastSyncError:
+		// I0412 09:46:35.293994 3910208 daemon.go:244] nodeStateChangeHandler(): current generation is 183
+		if strings.Contains(log, fmt.Sprintf("current generation is %d", state.Generation)) &&
+			strings.Contains(logsList[idx-1], "syncStatus: Succeeded") {
+			return true, nil
+		}
+
+		//I0510 11:57:10.178277 2462748 daemon.go:311] nodeStateChangeHandler(): Interface not changed
+		//I0510 11:57:10.178289 2462748 daemon.go:286] nodeStateChangeHandler(): new generation is 4
+		if strings.Contains(log, fmt.Sprintf("new generation is %d", state.Generation)) &&
+			strings.Contains(logsList[idx-1], "Interface not changed") {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func isDriverSupported(driver string) bool {

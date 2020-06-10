@@ -2,6 +2,7 @@ package pod
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
+	"github.com/openshift/sriov-network-operator/test/util/images"
 	"github.com/openshift/sriov-network-operator/test/util/namespaces"
 )
 
@@ -25,7 +27,7 @@ func getDefinition() *corev1.Pod {
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: pointer.Int64Ptr(0),
 			Containers: []corev1.Container{{Name: "test",
-				Image:   "quay.io/schseba/utility-container:latest",
+				Image:   images.Test(),
 				Command: []string{"/bin/bash", "-c", "sleep INF"}}}}}
 
 	return podObject
@@ -117,4 +119,23 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 	}
 
 	return buf.String(), errbuf.String(), nil
+}
+
+// GetLog connects to a pod and fetches log
+func GetLog(cs *testclient.ClientSet, p *corev1.Pod) (string, error) {
+	req := cs.Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{})
+	log, err := req.Stream()
+	if err != nil {
+		return "", err
+	}
+	defer log.Close()
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, log)
+
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }
