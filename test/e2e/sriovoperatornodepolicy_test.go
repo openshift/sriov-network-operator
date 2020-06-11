@@ -107,7 +107,7 @@ var _ = Describe("Operator", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("generate the config for device plugin")
-				time.Sleep(3 * time.Second)
+				time.Sleep(15 * time.Second)
 				config := &corev1.ConfigMap{}
 				err = WaitForNamespacedObject(config, f.Client, namespace, "device-plugin-config", RetryInterval, Timeout)
 				Expect(err).NotTo(HaveOccurred())
@@ -247,7 +247,7 @@ var _ = Describe("Operator", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("generate the config for device plugin")
-				time.Sleep(3 * time.Second)
+				time.Sleep(15 * time.Second)
 				config := &corev1.ConfigMap{}
 				err = WaitForNamespacedObject(config, f.Client, namespace, "device-plugin-config", RetryInterval, Timeout)
 				Expect(err).NotTo(HaveOccurred())
@@ -393,7 +393,7 @@ var _ = Describe("Operator", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				By("generate the config for device plugin")
-				time.Sleep(3 * time.Second)
+				time.Sleep(15 * time.Second)
 				config := &corev1.ConfigMap{}
 				err = WaitForNamespacedObject(config, f.Client, namespace, "device-plugin-config", RetryInterval, Timeout)
 				Expect(err).NotTo(HaveOccurred())
