@@ -31,6 +31,12 @@ import (
 
 var waitingTime time.Duration = 20 * time.Minute
 
+type patchBody struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value string `json:"value"`
+}
+
 func init() {
 	waitingEnv := os.Getenv("SRIOV_WAITING_TIME")
 	newTime, err := strconv.Atoi(waitingEnv)
@@ -970,6 +976,45 @@ var _ = Describe("[sriov] operator", func() {
 		//		createUnschedulableTestPod(testNode, []string{sriovNetworkName}, resourceName)
 		//	})
 		//})
+
+		Context("NAD update", func() {
+			// 24714
+			It("NAD default gateway is updated when SriovNetwork ipam is changed", func() {
+				resourceName := "sriovnic"
+				sriovNetworkName := "sriovnetwork"
+				testNode := sriovInfos.Nodes[0]
+				sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
+				Expect(err).ToNot(HaveOccurred())
+
+				ipam := `{
+					"type": "host-local",
+					"subnet": "10.11.11.0/24",
+					"gateway": "%s"
+				  }`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, fmt.Sprintf(ipam, "10.11.11.1"))
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+					Expect(err).ToNot(HaveOccurred())
+					return strings.Contains(netAttDef.Spec.Config, "10.11.11.1")
+				}, 30*time.Second, 1*time.Second).Should(BeTrue())
+
+				sriovNetwork := &sriovv1.SriovNetwork{}
+				err = clients.Get(context.TODO(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: operatorNamespace}, sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+				sriovNetwork.Spec.IPAM = fmt.Sprintf(ipam, "10.11.11.100")
+				err = clients.Update(context.Background(), sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+					return strings.Contains(netAttDef.Spec.Config, "10.11.11.100")
+				}, 30*time.Second, 1*time.Second).Should(BeTrue())
+			})
+		})
 	})
 })
 
