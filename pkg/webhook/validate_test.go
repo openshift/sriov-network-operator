@@ -265,6 +265,29 @@ func TestStaticValidateSriovNetworkNodePolicyWithInvalidVendorDevice(t *testing.
 	g.Expect(ok).To(Equal(false))
 }
 
+func TestStaticValidateSriovNetworkNodePolicyWithConflictIsRdmaAndDeviceType(t *testing.T) {
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "vfio-pci",
+			NicSelector: SriovNetworkNicSelector{
+				Vendor:   "8086",
+				DeviceID: "158b",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:       1,
+			Priority:     99,
+			ResourceName: "p0",
+			IsRdma:       true,
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(MatchError(ContainSubstring("'deviceType: vfio-pci' conflicts with 'isRdma: true'")))
+	g.Expect(ok).To(Equal(false))
+}
+
 func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
 	state := newNodeState()
 	policy := &SriovNetworkNodePolicy{
