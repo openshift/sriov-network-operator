@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/juju/errors"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -25,6 +26,8 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
+	admission "k8s.io/api/admissionregistration/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
@@ -1059,6 +1062,111 @@ var _ = Describe("[sriov] operator", func() {
 					clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
 					return strings.Contains(netAttDef.Spec.Config, "10.11.11.100")
 				}, 30*time.Second, 1*time.Second).Should(BeTrue())
+			})
+		})
+
+		Context("Resource Injector", func() {
+			// 25834
+			AfterEach(func() {
+				cfg := sriovv1.SriovOperatorConfig{}
+				clients.Get(context.TODO(), runtimeclient.ObjectKey{
+					Name:      "default",
+					Namespace: operatorNamespace,
+				}, &cfg)
+				if *cfg.Spec.EnableInjector == false {
+					cfg.Spec.EnableInjector = pointer.BoolPtr(true)
+					clients.Update(context.TODO(), &cfg)
+				}
+			})
+
+			It(" SR-IOV resource injector can be disabled by editing SR-IOV Operator Config	", func() {
+
+				networkResourcesInjector := "network-resources-injector"
+				cfg := sriovv1.SriovOperatorConfig{}
+				err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+					Name:      "default",
+					Namespace: operatorNamespace,
+				}, &cfg)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(*cfg.Spec.EnableInjector).To(BeTrue())
+
+				cfg.Spec.EnableInjector = pointer.BoolPtr(false)
+				err = clients.Update(context.TODO(), &cfg)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					_, err := clients.DaemonSets(operatorNamespace).Get(networkResourcesInjector, metav1.GetOptions{})
+					if errors.IsNotFound(err) {
+						return true
+					}
+					Expect(err).ToNot(HaveOccurred())
+					return false
+				}, 3*time.Minute, 20*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+
+					podsList, err := clients.Pods(operatorNamespace).List(metav1.ListOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					for _, pod := range podsList.Items {
+						if strings.Contains(pod.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					serviceList, err := clients.Services(operatorNamespace).List(metav1.ListOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					for _, svc := range serviceList.Items {
+						if strings.Contains(svc.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					crs := rbacv1.ClusterRoleList{}
+					err = clients.List(context.Background(), &crs, runtimeclient.InNamespace("openshift-sriov-network-operator"))
+					Expect(err).ToNot(HaveOccurred())
+					for _, cr := range crs.Items {
+						if strings.Contains(cr.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					crbs := rbacv1.ClusterRoleBindingList{}
+					err = clients.List(context.Background(), &crbs, runtimeclient.InNamespace("openshift-sriov-network-operator"))
+					Expect(err).ToNot(HaveOccurred())
+					for _, crb := range crbs.Items {
+						if strings.Contains(crb.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					mwc := &admission.MutatingWebhookConfiguration{}
+					err = clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "network-resources-injector-config", Namespace: operatorNamespace}, mwc)
+					return err != nil && errors.IsNotFound(err)
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					cms := corev1.ConfigMapList{}
+					err = clients.List(context.Background(), &cms, runtimeclient.InNamespace("openshift-sriov-network-operator"))
+					Expect(err).ToNot(HaveOccurred())
+					for _, cm := range cms.Items {
+						if strings.Contains(cm.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
 			})
 		})
 	})
