@@ -46,6 +46,15 @@ func Create(namespace string, cs *testclient.ClientSet) error {
 	return err
 }
 
+// DeleteAndWait deletes a namespace and waits until delete
+func DeleteAndWait(cs *testclient.ClientSet, namespace string, timeout time.Duration) error {
+	err := cs.Namespaces().Delete(namespace, &metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return WaitForDeletion(cs, namespace, timeout)
+}
+
 // Clean cleans all dangling objects from the given namespace.
 func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet) error {
 	_, err := cs.Namespaces().Get(namespace, metav1.GetOptions{})
