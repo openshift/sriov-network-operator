@@ -18,12 +18,12 @@ type Interface struct {
 	PciAddress string    `json:"pciAddress"`
 	NumVfs     int       `json:"numVfs,omitempty"`
 	Mtu        int       `json:"mtu,omitempty"`
-	Name       string    `json:"name, omitempty"`
-	VfGroups   []VfGroup `json:"vfGroups, omitempty"`
+	Name       string    `json:"name,omitempty"`
+	VfGroups   []VfGroup `json:"vfGroups,omitempty"`
 }
 
 type VfGroup struct {
-	ResourceName string `json:"resourceName"`
+	ResourceName string `json:"resourceName,omitempty"`
 	DeviceType   string `json:"deviceType,omitempty"`
 	VfRange      string `json:"vfRange,omitempty"`
 }
