@@ -44,7 +44,7 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 
 		node := state.Name
 		for _, itf := range state.Status.Interfaces {
-			if isDriverSupported(itf.Driver) {
+			if IsDriverSupported(itf.Driver) {
 				res.Nodes = append(res.Nodes, node)
 				res.States[node] = state
 				break
@@ -65,7 +65,7 @@ func (n *EnabledNodes) FindOneSriovDevice(node string) (*sriovv1.InterfaceExt, e
 		return nil, fmt.Errorf("Node %s not found", node)
 	}
 	for _, itf := range s.Status.Interfaces {
-		if isDriverSupported(itf.Driver) && isDeviceSupported(itf.DeviceID) {
+		if IsDriverSupported(itf.Driver) && isDeviceSupported(itf.DeviceID) {
 			return &itf, nil
 		}
 	}
@@ -81,7 +81,7 @@ func (n *EnabledNodes) FindSriovDevices(node string) ([]*sriovv1.InterfaceExt, e
 		return nil, fmt.Errorf("Node %s not found", node)
 	}
 	for _, itf := range s.Status.Interfaces {
-		if isDriverSupported(itf.Driver) {
+		if IsDriverSupported(itf.Driver) {
 			devices = append(devices, &itf)
 		}
 	}
@@ -185,7 +185,7 @@ func CheckReadyGeneration(clients *testclient.ClientSet, operatorNamespace strin
 	return false, nil
 }
 
-func isDriverSupported(driver string) bool {
+func IsDriverSupported(driver string) bool {
 	for _, supportedDriver := range supportedDrivers {
 		if driver == supportedDriver {
 			return true

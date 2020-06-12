@@ -1169,8 +1169,71 @@ var _ = Describe("[sriov] operator", func() {
 				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
 			})
 		})
+
+		Context("SRIOV and macvlan", func() {
+			// 25834
+			It("Should be able to create a pod with both sriov and macvlan interfaces", func() {
+
+				resourceName := "sriovnic"
+				sriovNetworkName := "sriovnetwork"
+				testNode := sriovInfos.Nodes[0]
+
+				sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
+
+				Expect(err).ToNot(HaveOccurred())
+				createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
+
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "sriovnetwork", Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				macvlanNadName := "macvlan-nad"
+				nodeNicName := sriovInfos.States[testNode].Status.Interfaces[0].Name
+				macvlanNad := network.CreateMacvlanNetworkAttachmentDefinition(macvlanNadName, namespaces.Test, nodeNicName)
+				defer clients.Delete(context.Background(), &macvlanNad)
+				err = clients.Create(context.Background(), &macvlanNad)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: macvlanNadName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				createdPod := createTestPod(testNode, []string{sriovNetworkName, macvlanNadName})
+
+				nics, err := network.GetNicsByPrefix(createdPod, "net")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(nics)).To(Equal(2), "Pod should have two multus nics.")
+
+				stdout, _, err := pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net1")
+				Expect(err).ToNot(HaveOccurred())
+				sriovVfDriver := getDriver(stdout)
+				Expect(cluster.IsDriverSupported(sriovVfDriver[:len(sriovVfDriver)-2])).To(BeTrue())
+
+				stdout, _, err = pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net2")
+				macvlanDriver := getDriver(stdout)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(macvlanDriver).To(Equal("macvlan"))
+
+			})
+		})
 	})
 })
+
+func getDriver(ethtoolstdout string) string {
+	lines := strings.Split(ethtoolstdout, "\n")
+	Expect(len(lines)).To(BeNumerically(">", 0))
+	for _, line := range lines {
+		if strings.HasPrefix(line, "driver:") {
+			return strings.TrimSpace(line[len("driver:"):])
+		}
+	}
+	Fail("Could not find device driver")
+	return ""
+}
 
 func changeNodeInterfaceState(testNode string, ifcName string, enable bool) {
 	state := "up"
