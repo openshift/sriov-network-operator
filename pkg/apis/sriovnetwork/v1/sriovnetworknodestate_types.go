@@ -19,6 +19,7 @@ type Interface struct {
 	NumVfs     int       `json:"numVfs,omitempty"`
 	Mtu        int       `json:"mtu,omitempty"`
 	Name       string    `json:"name,omitempty"`
+	LinkType   string    `json:"linkType,omitempty"`
 	VfGroups   []VfGroup `json:"vfGroups,omitempty"`
 }
 
@@ -41,6 +42,7 @@ type InterfaceExt struct {
 	Mtu        int               `json:"mtu,omitempty"`
 	NumVfs     int               `json:"numVfs,omitempty"`
 	LinkSpeed  string            `json:"linkSpeed,omitempty"`
+	LinkType   string            `json:"linkType,omitempty"`
 	TotalVfs   int               `json:"totalvfs,omitempty"`
 	VFs        []VirtualFunction `json:"Vfs,omitempty"`
 }

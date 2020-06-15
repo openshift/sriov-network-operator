@@ -102,6 +102,7 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 				PciAddress: iface.PciAddress,
 				Mtu:        p.Spec.Mtu,
 				Name:       iface.Name,
+				LinkType:   p.Spec.LinkType,
 			}
 			var group *VfGroup
 			if p.Spec.NumVfs > 0 {
