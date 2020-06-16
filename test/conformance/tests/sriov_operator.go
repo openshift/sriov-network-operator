@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juju/errors"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -1096,7 +1095,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				Eventually(func() bool {
 					_, err := clients.DaemonSets(operatorNamespace).Get(networkResourcesInjector, metav1.GetOptions{})
-					if errors.IsNotFound(err) {
+					if k8serrors.IsNotFound(err) {
 						return true
 					}
 					Expect(err).ToNot(HaveOccurred())
@@ -1153,7 +1152,7 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() bool {
 					mwc := &admission.MutatingWebhookConfiguration{}
 					err = clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "network-resources-injector-config", Namespace: operatorNamespace}, mwc)
-					return err != nil && errors.IsNotFound(err)
+					return err != nil && k8serrors.IsNotFound(err)
 				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
 
 				Eventually(func() bool {
