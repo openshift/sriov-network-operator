@@ -1,9 +1,10 @@
 apiVersion: sriovnetwork.openshift.io/v1
-kind: SriovNetwork
+kind: SriovIBNetwork
 metadata:
-  name: example-sriovnetwork
+  name: example-sriovibnetwork
 spec:
-  # networkNamespace: default
+  networkNamespace: default
+  resourceName: test
   ipam: |
     {
       "type": "host-local",
@@ -15,5 +16,3 @@ spec:
       }],
       "gateway": "10.56.217.1"
     }
-  vlan: 0
-  resourceName: intelnics

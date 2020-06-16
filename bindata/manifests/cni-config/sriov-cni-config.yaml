@@ -9,19 +9,14 @@ spec:
   config: '{
   "cniVersion":"0.3.1",
   "name":"{{.SriovNetworkName}}",
-  "type":"sriov",
+  "type":"{{.CniType}}",
+{{- if eq .CniType "sriov" -}}
   "vlan":{{.SriovCniVlan}},
-{{- if .CapabilitiesConfigured -}}
-  "capabilities":{{.SriovCniCapabilities}},
-{{- end -}}
 {{- if .SpoofChkConfigured -}}
   "spoofchk":"{{.SriovCniSpoofChk}}",
 {{- end -}}
 {{- if .TrustConfigured -}}
   "trust":"{{.SriovCniTrust}}",
-{{- end -}}
-{{- if .StateConfigured -}}
-  "link_state":"{{.SriovCniState}}",
 {{- end -}}
 {{- if .VlanQoSConfigured -}}
   "vlanQoS":{{.SriovCniVlanQoS}},
@@ -31,6 +26,13 @@ spec:
 {{- end -}}
 {{- if .MaxTxRateConfigured -}}
   "max_tx_rate":{{.SriovCniMaxTxRate}},
+{{- end -}}
+{{- end -}}
+{{- if .CapabilitiesConfigured -}}
+  "capabilities":{{.SriovCniCapabilities}},
+{{- end -}}
+{{- if .StateConfigured -}}
+  "link_state":"{{.SriovCniState}}",
 {{- end -}}
   {{.SriovCniIpam}}
 }'
