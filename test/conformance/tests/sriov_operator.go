@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juju/errors"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -479,6 +478,134 @@ var _ = Describe("[sriov] operator", func() {
 				for _, ip := range ips {
 					pingPod(ip, testNode, ipv6NetworkName)
 				}
+			})
+		})
+
+		Context("NAD update", func() {
+			// 24713
+			It("NAD is updated when SriovNetwork spec/networkNamespace is changed", func() {
+				ns1 := "test-z1"
+				ns2 := "test-z2"
+				defer namespaces.DeleteAndWait(clients, ns1, 1*time.Minute)
+				defer namespaces.DeleteAndWait(clients, ns2, 1*time.Minute)
+				err := namespaces.Create(ns1, clients)
+				Expect(err).ToNot(HaveOccurred())
+				err = namespaces.Create(ns2, clients)
+				Expect(err).ToNot(HaveOccurred())
+
+				sriovNetworkName := "test-sriovnetwork"
+				testNode := sriovInfos.Nodes[0]
+				sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
+				Expect(err).ToNot(HaveOccurred())
+
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, ns1, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns1}, netAttDef)
+				}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				body, _ := json.Marshal([]patchBody{{
+					Op:    "replace",
+					Path:  "/spec/networkNamespace",
+					Value: ns2,
+				}})
+				clients.SriovnetworkV1Interface.RESTClient().Patch(types.JSONPatchType).Namespace(operatorNamespace).Resource("sriovnetworks").Name(sriovNetworkName).Body(body).Do()
+
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns2}, netAttDef)
+				}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+				Consistently(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns1}, netAttDef)
+				}, 5*time.Second, 1*time.Second).Should(HaveOccurred())
+			})
+		})
+
+		Context("NAD update", func() {
+			// 24714
+			It("NAD default gateway is updated when SriovNetwork ipam is changed", func() {
+				sriovNetworkName := "test-sriovnetwork"
+				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
+				Expect(err).ToNot(HaveOccurred())
+
+				ipam := `{
+					"type": "host-local",
+					"subnet": "10.11.11.0/24",
+					"gateway": "%s"
+				  }`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, fmt.Sprintf(ipam, "10.11.11.1"))
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+					Expect(err).ToNot(HaveOccurred())
+					return strings.Contains(netAttDef.Spec.Config, "10.11.11.1")
+				}, 30*time.Second, 1*time.Second).Should(BeTrue())
+
+				sriovNetwork := &sriovv1.SriovNetwork{}
+				err = clients.Get(context.TODO(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: operatorNamespace}, sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+				sriovNetwork.Spec.IPAM = fmt.Sprintf(ipam, "10.11.11.100")
+				err = clients.Update(context.Background(), sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+					return strings.Contains(netAttDef.Spec.Config, "10.11.11.100")
+				}, 30*time.Second, 1*time.Second).Should(BeTrue())
+			})
+		})
+
+		Context("SRIOV and macvlan", func() {
+			// 25834
+			It("Should be able to create a pod with both sriov and macvlan interfaces", func() {
+
+				sriovNetworkName := "test-sriovnetwork"
+				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
+
+				Expect(err).ToNot(HaveOccurred())
+				createSriovPolicy(sriovDevice.Name, node, 5, resourceName)
+
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				macvlanNadName := "macvlan-nad"
+				nodeNicName := sriovInfos.States[node].Status.Interfaces[0].Name
+				macvlanNad := network.CreateMacvlanNetworkAttachmentDefinition(macvlanNadName, namespaces.Test, nodeNicName)
+				defer clients.Delete(context.Background(), &macvlanNad)
+				err = clients.Create(context.Background(), &macvlanNad)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: macvlanNadName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				createdPod := createTestPod(node, []string{sriovNetworkName, macvlanNadName})
+
+				nics, err := network.GetNicsByPrefix(createdPod, "net")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(nics)).To(Equal(2), "Pod should have two multus nics.")
+
+				stdout, _, err := pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net1")
+				Expect(err).ToNot(HaveOccurred())
+				sriovVfDriver := getDriver(stdout)
+				Expect(cluster.IsDriverSupported(sriovVfDriver[:len(sriovVfDriver)-2])).To(BeTrue())
+
+				stdout, _, err = pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net2")
+				macvlanDriver := getDriver(stdout)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(macvlanDriver).To(Equal("macvlan"))
+
 			})
 		})
 	})
@@ -957,124 +1084,6 @@ var _ = Describe("[sriov] operator", func() {
 			})
 		})
 
-		Context("NAD update", func() {
-			// 24713
-			It("NAD is updated when SriovNetwork spec/networkNamespace is changed", func() {
-				ns1 := "test-z1"
-				ns2 := "test-z2"
-				defer namespaces.DeleteAndWait(clients, ns1, 1*time.Minute)
-				defer namespaces.DeleteAndWait(clients, ns2, 1*time.Minute)
-				err := namespaces.Create(ns1, clients)
-				Expect(err).ToNot(HaveOccurred())
-				err = namespaces.Create(ns2, clients)
-				Expect(err).ToNot(HaveOccurred())
-
-				resourceName := "sriovnic"
-				sriovNetworkName := "sriovnetwork"
-				testNode := sriovInfos.Nodes[0]
-				sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
-				Expect(err).ToNot(HaveOccurred())
-
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, ns1, operatorNamespace, resourceName, ipam)
-				Expect(err).ToNot(HaveOccurred())
-				Eventually(func() error {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns1}, netAttDef)
-				}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-
-				body, _ := json.Marshal([]patchBody{{
-					Op:    "replace",
-					Path:  "/spec/networkNamespace",
-					Value: ns2,
-				}})
-				clients.SriovnetworkV1Interface.RESTClient().Patch(types.JSONPatchType).Namespace(operatorNamespace).Resource("sriovnetworks").Name(sriovNetworkName).Body(body).Do()
-
-				Eventually(func() error {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns2}, netAttDef)
-				}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-				Consistently(func() error {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns1}, netAttDef)
-				}, 5*time.Second, 1*time.Second).Should(HaveOccurred())
-			})
-		})
-
-		//TODO: Add this back after making it stable
-		//Context("unhealthyVfs", func() {
-		//	// 25834
-		//	It(" Should not be able to create pod successfully if there are only unhealthy vfs", func() {
-		//		resourceName := "sriovnic"
-		//		sriovNetworkName := "test-sriovnetwork"
-		//		testNode := sriovInfos.Nodes[0]
-		//
-		//		sriovDevices, err := sriovInfos.FindSriovDevices(testNode)
-		//		Expect(err).ToNot(HaveOccurred())
-		//		unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDevices)
-		//		Expect(err).ToNot(HaveOccurred())
-		//		if len(unusedSriovDevices) == 0 {
-		//			Skip("No unused active sriov devices found. " +
-		//				"Sriov devices either not present, used as default route or used for as bridge slave. " +
-		//				"Executing the test could endanger node connectivity.")
-		//		}
-		//		sriovDevice := unusedSriovDevices[0]
-		//
-		//		createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
-		//		ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-		//		err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
-		//		Expect(err).ToNot(HaveOccurred())
-		//		Eventually(func() error {
-		//			netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-		//			return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-		//		}, 3*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-		//
-		//		defer changeNodeInterfaceState(testNode, sriovDevice.Name, true)
-		//		changeNodeInterfaceState(testNode, sriovDevice.Name, false)
-		//
-		//		createUnschedulableTestPod(testNode, []string{sriovNetworkName}, resourceName)
-		//	})
-		//})
-
-		Context("NAD update", func() {
-			// 24714
-			It("NAD default gateway is updated when SriovNetwork ipam is changed", func() {
-				resourceName := "sriovnic"
-				sriovNetworkName := "sriovnetwork"
-				testNode := sriovInfos.Nodes[0]
-				sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
-				Expect(err).ToNot(HaveOccurred())
-
-				ipam := `{
-					"type": "host-local",
-					"subnet": "10.11.11.0/24",
-					"gateway": "%s"
-				  }`
-				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, fmt.Sprintf(ipam, "10.11.11.1"))
-				Expect(err).ToNot(HaveOccurred())
-
-				Eventually(func() bool {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-					Expect(err).ToNot(HaveOccurred())
-					return strings.Contains(netAttDef.Spec.Config, "10.11.11.1")
-				}, 30*time.Second, 1*time.Second).Should(BeTrue())
-
-				sriovNetwork := &sriovv1.SriovNetwork{}
-				err = clients.Get(context.TODO(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: operatorNamespace}, sriovNetwork)
-				Expect(err).ToNot(HaveOccurred())
-				sriovNetwork.Spec.IPAM = fmt.Sprintf(ipam, "10.11.11.100")
-				err = clients.Update(context.Background(), sriovNetwork)
-				Expect(err).ToNot(HaveOccurred())
-
-				Eventually(func() bool {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-					return strings.Contains(netAttDef.Spec.Config, "10.11.11.100")
-				}, 30*time.Second, 1*time.Second).Should(BeTrue())
-			})
-		})
-
 		Context("Resource Injector", func() {
 			// 25834
 			AfterEach(func() {
@@ -1106,7 +1115,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				Eventually(func() bool {
 					_, err := clients.DaemonSets(operatorNamespace).Get(networkResourcesInjector, metav1.GetOptions{})
-					if errors.IsNotFound(err) {
+					if k8serrors.IsNotFound(err) {
 						return true
 					}
 					Expect(err).ToNot(HaveOccurred())
@@ -1163,7 +1172,7 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() bool {
 					mwc := &admission.MutatingWebhookConfiguration{}
 					err = clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "network-resources-injector-config", Namespace: operatorNamespace}, mwc)
-					return err != nil && errors.IsNotFound(err)
+					return err != nil && k8serrors.IsNotFound(err)
 				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
 
 				Eventually(func() bool {
@@ -1180,56 +1189,6 @@ var _ = Describe("[sriov] operator", func() {
 			})
 		})
 
-		Context("SRIOV and macvlan", func() {
-			// 25834
-			It("Should be able to create a pod with both sriov and macvlan interfaces", func() {
-
-				resourceName := "sriovnic"
-				sriovNetworkName := "sriovnetwork"
-				testNode := sriovInfos.Nodes[0]
-
-				sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
-
-				Expect(err).ToNot(HaveOccurred())
-				createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
-
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
-				Expect(err).ToNot(HaveOccurred())
-				Eventually(func() error {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "sriovnetwork", Namespace: namespaces.Test}, netAttDef)
-				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-
-				macvlanNadName := "macvlan-nad"
-				nodeNicName := sriovInfos.States[testNode].Status.Interfaces[0].Name
-				macvlanNad := network.CreateMacvlanNetworkAttachmentDefinition(macvlanNadName, namespaces.Test, nodeNicName)
-				defer clients.Delete(context.Background(), &macvlanNad)
-				err = clients.Create(context.Background(), &macvlanNad)
-				Expect(err).ToNot(HaveOccurred())
-				Eventually(func() error {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: macvlanNadName, Namespace: namespaces.Test}, netAttDef)
-				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-
-				createdPod := createTestPod(testNode, []string{sriovNetworkName, macvlanNadName})
-
-				nics, err := network.GetNicsByPrefix(createdPod, "net")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(nics)).To(Equal(2), "Pod should have two multus nics.")
-
-				stdout, _, err := pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net1")
-				Expect(err).ToNot(HaveOccurred())
-				sriovVfDriver := getDriver(stdout)
-				Expect(cluster.IsDriverSupported(sriovVfDriver[:len(sriovVfDriver)-2])).To(BeTrue())
-
-				stdout, _, err = pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net2")
-				macvlanDriver := getDriver(stdout)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(macvlanDriver).To(Equal("macvlan"))
-
-			})
-		})
 	})
 })
 
