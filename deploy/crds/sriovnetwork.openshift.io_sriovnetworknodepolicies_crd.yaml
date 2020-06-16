@@ -43,6 +43,14 @@ spec:
             isRdma:
               description: RDMA mode. Defaults to false.
               type: boolean
+            linkType:
+              description: NIC Link Type. Allowed value "eth", "ETH", "ib", and "IB".
+              enum:
+                - eth
+                - ETH
+                - ib
+                - IB
+              type: string
             mtu:
               description: MTU of VF
               maximum: 9000

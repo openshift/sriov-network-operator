@@ -82,6 +82,7 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			iface.Mac = getNetDevMac(name)
 			iface.LinkSpeed = getNetDevLinkSpeed(name)
 		}
+		iface.LinkType = getLinkType(iface)
 
 		if dputils.IsSriovPF(device.Address) {
 			iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
@@ -443,4 +444,23 @@ func setVfsAdminMac(iface *sriovnetworkv1.InterfaceExt) error {
 	}
 
 	return nil
+}
+
+func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
+	glog.Infof("getLinkType(): Device %s", ifaceStatus.PciAddress)
+	if ifaceStatus.Name != "" {
+		link, err := netlink.LinkByName(ifaceStatus.Name)
+		if err != nil {
+			glog.Warningf("getLinkType(): %v", err)
+			return ""
+		}
+		linkType := link.Attrs().EncapType
+		if linkType == "ether" {
+			return "ETH"
+		} else if linkType == "infiniband" {
+			return "IB"
+		}
+	}
+
+	return ""
 }
