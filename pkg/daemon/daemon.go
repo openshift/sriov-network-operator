@@ -229,10 +229,13 @@ func (dn *Daemon) nodeUpdateHandler(old, new interface{}) {
 	}
 	for _, node := range nodes {
 		if node.GetName() != dn.name && node.Annotations[annoKey] == annoDraining {
-			glog.Infof("nodeUpdateHandler(): node %s is draining", node.Name)
+			glog.V(2).Infof("nodeUpdateHandler(): node %s is draining", node.Name)
 			dn.drainable = false
+			return
 		}
 	}
+	glog.V(2).Infof("nodeUpdateHandler(): no other node is draining")
+	dn.drainable = true
 }
 
 func (dn *Daemon) operatorConfigAddHandler(obj interface{}) {
@@ -417,7 +420,15 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 		}
 	}
 
-	dn.completeDrain()
+	if anno, ok := dn.node.Annotations[annoKey]; ok && anno == annoDraining {
+		dn.completeDrain()
+	} else if !ok {
+		if err := dn.annotateNode(dn.name, annoIdle); err != nil {
+			glog.Errorf("drainNode(): failed to annotate node: %v", err)
+			dn.exitCh <- err
+			return
+		}
+	}
 	dn.refreshCh <- Message{
 		syncStatus:    "Succeeded",
 		lastSyncError: "",
@@ -435,7 +446,6 @@ func (dn *Daemon) completeDrain() {
 		dn.exitCh <- err
 		return
 	}
-	dn.drainable = true
 }
 
 func (dn *Daemon) restartDevicePluginPod() error {
