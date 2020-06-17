@@ -55,29 +55,35 @@ func DeleteAndWait(cs *testclient.ClientSet, namespace string, timeout time.Dura
 	return WaitForDeletion(cs, namespace, timeout)
 }
 
-// Clean cleans all dangling objects from the given namespace.
-func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet) error {
+func namespaceExists(namespace string, cs *testclient.ClientSet) bool {
 	_, err := cs.Namespaces().Get(namespace, metav1.GetOptions{})
-	if err != nil && k8serrors.IsNotFound(err) {
+	return err == nil || !k8serrors.IsNotFound(err)
+}
+
+// CleanPods deletes all pods in namespace
+func CleanPods(namespace string, cs *testclient.ClientSet) error {
+	if !namespaceExists(namespace, cs) {
 		return nil
 	}
-
-	err = cs.Pods(namespace).DeleteCollection(&metav1.DeleteOptions{
+	err := cs.Pods(namespace).DeleteCollection(&metav1.DeleteOptions{
 		GracePeriodSeconds: pointer.Int64Ptr(0),
 	}, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("Failed to delete pods %v", err)
 	}
+	return err
+}
 
+// CleanPolicies deletes all SriovNetworkNodePolicies in operatorNamespace
+func CleanPolicies(operatorNamespace string, cs *testclient.ClientSet) error {
 	policies := sriovv1.SriovNetworkNodePolicyList{}
-	err = cs.List(context.Background(),
+	err := cs.List(context.Background(),
 		&policies,
-		runtimeclient.InNamespace(operatorNamespace))
-
+		runtimeclient.InNamespace(operatorNamespace),
+	)
 	if err != nil {
 		return err
 	}
-
 	for _, p := range policies.Items {
 		if p.Name != "default" && strings.HasPrefix(p.Name, "test-") {
 			err := cs.Delete(context.Background(), &p)
@@ -86,16 +92,18 @@ func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet) error 
 			}
 		}
 	}
+	return err
+}
 
+// CleanNetworks deletes all network in operatorNamespace
+func CleanNetworks(operatorNamespace string, cs *testclient.ClientSet) error {
 	networks := sriovv1.SriovNetworkList{}
-	err = cs.List(context.Background(),
+	err := cs.List(context.Background(),
 		&networks,
 		runtimeclient.InNamespace(operatorNamespace))
-
 	if err != nil {
 		return err
 	}
-
 	for _, n := range networks.Items {
 		if strings.HasPrefix(n.Name, "test-") {
 			err := cs.Delete(context.Background(), &n)
@@ -104,5 +112,19 @@ func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet) error 
 			}
 		}
 	}
-	return nil
+	return err
+}
+
+// Clean cleans all dangling objects from the given namespace.
+func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet) error {
+	err := CleanPods(namespace, cs)
+	if err != nil {
+		return err
+	}
+	err = CleanPolicies(operatorNamespace, cs)
+	if err != nil {
+		return err
+	}
+	err = CleanNetworks(operatorNamespace, cs)
+	return err
 }
