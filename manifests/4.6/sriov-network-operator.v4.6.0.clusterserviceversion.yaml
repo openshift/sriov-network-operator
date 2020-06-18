@@ -89,6 +89,11 @@ spec:
       kind: SriovNetworkNodeState
       name: sriovnetworknodestates.sriovnetwork.openshift.io
       version: v1
+    - description: Represents an policy of configuring SR-IOV IB network components on a node
+      displayName: Sriov IB Network
+      kind: SriovIBNetwork
+      name: sriovibnetworks.sriovnetwork.openshift.io
+      version: v1
   description: |
       # SR-IOV Network Operator for Openshift
 
