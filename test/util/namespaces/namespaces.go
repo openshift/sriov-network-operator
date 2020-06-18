@@ -112,7 +112,25 @@ func CleanNetworks(operatorNamespace string, cs *testclient.ClientSet) error {
 			}
 		}
 	}
-	return err
+	return waitForSriovNetworkDeletion(operatorNamespace, cs, 15*time.Second)
+}
+
+func waitForSriovNetworkDeletion(operatorNamespace string, cs *testclient.ClientSet, timeout time.Duration) error {
+	return wait.PollImmediate(time.Second, timeout, func() (bool, error) {
+		networks := sriovv1.SriovNetworkList{}
+		err := cs.List(context.Background(),
+			&networks,
+			runtimeclient.InNamespace(operatorNamespace))
+		if err != nil {
+			return false, err
+		}
+		for _, network := range networks.Items {
+			if strings.HasPrefix(network.Name, "test-") {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
 }
 
 // Clean cleans all dangling objects from the given namespace.
