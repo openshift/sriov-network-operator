@@ -61,6 +61,65 @@ var _ = Describe("[sriov] operator", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
+	Describe("No SriovNetworkNodePolicy", func() {
+
+		Context("SR-IOV network config daemon can be set by nodeselector", func() {
+			// 26186
+			It("Should schedule the config daemon on selected nodes", func() {
+
+				By("Checking that a daemon is scheduled on each worker node")
+				Eventually(func() bool {
+					return daemonsScheduledOnNodes("node-role.kubernetes.io/worker=")
+				}, 3*time.Minute, 1*time.Second).Should(Equal(true))
+
+				By("Labelling one worker node with the label needed for the daemon")
+				allNodes, err := clients.Nodes().List(metav1.ListOptions{
+					LabelSelector: "node-role.kubernetes.io/worker",
+				})
+				Expect(len(allNodes.Items)).To(BeNumerically(">", 0), "There must be at least one worker")
+				candidate := allNodes.Items[0]
+				candidate.Labels["sriovenabled"] = "true"
+				_, err = clients.Nodes().Update(&candidate)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Setting the node selector for each daemon")
+				cfg := sriovv1.SriovOperatorConfig{}
+				err = clients.Get(context.TODO(), runtimeclient.ObjectKey{
+					Name:      "default",
+					Namespace: operatorNamespace,
+				}, &cfg)
+				Expect(err).ToNot(HaveOccurred())
+				cfg.Spec.ConfigDaemonNodeSelector = map[string]string{
+					"sriovenabled": "true",
+				}
+				err = clients.Update(context.TODO(), &cfg)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Checking that a daemon is scheduled only on selected node")
+				Eventually(func() bool {
+					return !daemonsScheduledOnNodes("sriovenabled!=true") &&
+						daemonsScheduledOnNodes("sriovenabled=true")
+				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
+
+				By("Restoring the node selector for daemons")
+				err = clients.Get(context.TODO(), runtimeclient.ObjectKey{
+					Name:      "default",
+					Namespace: operatorNamespace,
+				}, &cfg)
+				Expect(err).ToNot(HaveOccurred())
+				cfg.Spec.ConfigDaemonNodeSelector = map[string]string{}
+				err = clients.Update(context.TODO(), &cfg)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("Checking that a daemon is scheduled on each worker node")
+				Eventually(func() bool {
+					return daemonsScheduledOnNodes("node-role.kubernetes.io/worker")
+				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
+			})
+		})
+
+	})
+
 	Describe("Generic SriovNetworkNodePolicy", func() {
 		numVfs := 5
 		resourceName := "testresource"
@@ -619,62 +678,6 @@ var _ = Describe("[sriov] operator", func() {
 		})
 
 		Describe("Configuration", func() {
-
-			Context("SR-IOV network config daemon can be set by nodeselector", func() {
-				// 26186
-				It("Should schedule the config daemon on selected nodes", func() {
-
-					By("Checking that a daemon is scheduled on each worker node")
-					Eventually(func() bool {
-						return daemonsScheduledOnNodes("node-role.kubernetes.io/worker=")
-					}, 3*time.Minute, 1*time.Second).Should(Equal(true))
-
-					By("Labelling one worker node with the label needed for the daemon")
-					allNodes, err := clients.Nodes().List(metav1.ListOptions{
-						LabelSelector: "node-role.kubernetes.io/worker",
-					})
-					Expect(len(allNodes.Items)).To(BeNumerically(">", 0), "There must be at least one worker")
-					candidate := allNodes.Items[0]
-					candidate.Labels["sriovenabled"] = "true"
-					_, err = clients.Nodes().Update(&candidate)
-					Expect(err).ToNot(HaveOccurred())
-
-					By("Setting the node selector for each daemon")
-					cfg := sriovv1.SriovOperatorConfig{}
-					err = clients.Get(context.TODO(), runtimeclient.ObjectKey{
-						Name:      "default",
-						Namespace: operatorNamespace,
-					}, &cfg)
-					Expect(err).ToNot(HaveOccurred())
-					cfg.Spec.ConfigDaemonNodeSelector = map[string]string{
-						"sriovenabled": "true",
-					}
-					err = clients.Update(context.TODO(), &cfg)
-					Expect(err).ToNot(HaveOccurred())
-
-					By("Checking that a daemon is scheduled only on selected node")
-					Eventually(func() bool {
-						return !daemonsScheduledOnNodes("sriovenabled!=true") &&
-							daemonsScheduledOnNodes("sriovenabled=true")
-					}, 1*time.Minute, 1*time.Second).Should(Equal(true))
-
-					By("Restoring the node selector for daemons")
-					err = clients.Get(context.TODO(), runtimeclient.ObjectKey{
-						Name:      "default",
-						Namespace: operatorNamespace,
-					}, &cfg)
-					Expect(err).ToNot(HaveOccurred())
-					cfg.Spec.ConfigDaemonNodeSelector = map[string]string{}
-					err = clients.Update(context.TODO(), &cfg)
-					Expect(err).ToNot(HaveOccurred())
-
-					By("Checking that a daemon is scheduled on each worker node")
-					Eventually(func() bool {
-						return daemonsScheduledOnNodes("node-role.kubernetes.io/worker")
-					}, 1*time.Minute, 1*time.Second).Should(Equal(true))
-
-				})
-			})
 
 			Context("PF Partitioning", func() {
 				// 27633
