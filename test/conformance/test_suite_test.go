@@ -10,9 +10,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 
-	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
-	"k8s.io/apimachinery/pkg/runtime"
 
 	_ "github.com/openshift/sriov-network-operator/test/conformance/tests"
 	"github.com/openshift/sriov-network-operator/test/util/k8sreporter"
@@ -38,9 +36,7 @@ func TestTest(t *testing.T) {
 
 	reporterFile := os.Getenv("REPORTER_OUTPUT")
 
-	clients := testclient.New("", func(scheme *runtime.Scheme) {
-		sriovv1.AddToScheme(scheme)
-	})
+	clients := testclient.New("")
 
 	if reporterFile != "" {
 		f, err := os.OpenFile(reporterFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)

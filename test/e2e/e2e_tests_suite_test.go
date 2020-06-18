@@ -16,7 +16,6 @@ import (
 	// corev1 "k8s.io/api/core/v1"
 	// "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	// "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	// dynclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,9 +63,7 @@ var _ = BeforeSuite(func() {
 	deploy := &appsv1.Deployment{}
 	err := WaitForNamespacedObject(deploy, f.Client, namespace, "sriov-network-operator", RetryInterval, Timeout)
 	Expect(err).NotTo(HaveOccurred())
-	clients := testclient.New("", func(scheme *runtime.Scheme) {
-		sriovnetworkv1.AddToScheme(scheme)
-	})
+	clients := testclient.New("")
 	var sriovInfos *cluster.EnabledNodes
 	err = wait.PollImmediate(RetryInterval, Timeout*15, func() (done bool, err error) {
 		sriovInfos, err = cluster.DiscoverSriov(clients, namespace)
