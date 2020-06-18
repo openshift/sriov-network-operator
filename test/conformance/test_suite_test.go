@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/openshift/sriov-network-operator/test/util/clean"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -53,3 +55,8 @@ func TestTest(t *testing.T) {
 
 	RunSpecsWithDefaultAndCustomReporters(t, "SRIOV Operator conformance tests", rr)
 }
+
+var _ = AfterSuite(func() {
+	err := clean.All()
+	Expect(err).NotTo(HaveOccurred())
+})

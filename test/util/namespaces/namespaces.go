@@ -55,14 +55,15 @@ func DeleteAndWait(cs *testclient.ClientSet, namespace string, timeout time.Dura
 	return WaitForDeletion(cs, namespace, timeout)
 }
 
-func namespaceExists(namespace string, cs *testclient.ClientSet) bool {
+// Exists tells whether the given namespace exists
+func Exists(namespace string, cs *testclient.ClientSet) bool {
 	_, err := cs.Namespaces().Get(context.Background(), namespace, metav1.GetOptions{})
 	return err == nil || !k8serrors.IsNotFound(err)
 }
 
 // CleanPods deletes all pods in namespace
 func CleanPods(namespace string, cs *testclient.ClientSet) error {
-	if !namespaceExists(namespace, cs) {
+	if !Exists(namespace, cs) {
 		return nil
 	}
 	err := cs.Pods(namespace).DeleteCollection(context.Background(), metav1.DeleteOptions{
