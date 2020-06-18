@@ -657,8 +657,9 @@ var _ = Describe("[sriov] operator", func() {
 
 				stdout, _, err := pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net1")
 				Expect(err).ToNot(HaveOccurred())
+
 				sriovVfDriver := getDriver(stdout)
-				Expect(cluster.IsDriverSupported(sriovVfDriver[:len(sriovVfDriver)-2])).To(BeTrue())
+				Expect(cluster.IsDriverSupported(sriovVfDriver)).To(BeTrue())
 
 				stdout, _, err = pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net2")
 				macvlanDriver := getDriver(stdout)

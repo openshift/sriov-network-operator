@@ -187,11 +187,10 @@ func CheckReadyGeneration(clients *testclient.ClientSet, operatorNamespace strin
 
 func IsDriverSupported(driver string) bool {
 	for _, supportedDriver := range supportedDrivers {
-		if driver == supportedDriver {
+		if strings.Contains(driver, supportedDriver) {
 			return true
 		}
 	}
-
 	return false
 }
 
