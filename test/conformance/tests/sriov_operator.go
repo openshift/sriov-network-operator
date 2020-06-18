@@ -62,7 +62,6 @@ var _ = Describe("[sriov] operator", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-<<<<<<< HEAD
 	Describe("No SriovNetworkNodePolicy", func() {
 
 		Context("SR-IOV network config daemon can be set by nodeselector", func() {
@@ -123,9 +122,6 @@ var _ = Describe("[sriov] operator", func() {
 	})
 
 	Describe("Generic SriovNetworkNodePolicy", func() {
-=======
-	FDescribe("Generic SriovNetworkNodePolicy", func() {
->>>>>>> Sriov test optimizations
 		numVfs := 5
 		resourceName := "testresource"
 		var node string
