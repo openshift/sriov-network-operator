@@ -75,7 +75,7 @@ func (r *KubernetesReporter) Cleanup() {
 func (r *KubernetesReporter) logPods(namespace string) {
 	fmt.Fprintf(r.dumpOutput, "Logging pods for %s", namespace)
 
-	pods, err := r.clients.Pods(namespace).List(metav1.ListOptions{})
+	pods, err := r.clients.Pods(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to fetch pods: %v\n", err)
 		return
@@ -92,7 +92,7 @@ func (r *KubernetesReporter) logPods(namespace string) {
 func (r *KubernetesReporter) logNodes() {
 	fmt.Fprintf(r.dumpOutput, "Logging nodes")
 
-	nodes, err := r.clients.Nodes().List(metav1.ListOptions{})
+	nodes, err := r.clients.Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to fetch nodes: %v\n", err)
 		return
@@ -109,7 +109,7 @@ func (r *KubernetesReporter) logNodes() {
 func (r *KubernetesReporter) logLogs(filterPods func(*corev1.Pod) bool) {
 	fmt.Fprintf(r.dumpOutput, "Logging pods logs")
 
-	pods, err := r.clients.Pods(v1.NamespaceAll).List(metav1.ListOptions{})
+	pods, err := r.clients.Pods(v1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to fetch pods: %v\n", err)
 		return
@@ -120,7 +120,7 @@ func (r *KubernetesReporter) logLogs(filterPods func(*corev1.Pod) bool) {
 			continue
 		}
 		for _, container := range pod.Spec.Containers {
-			logs, err := r.clients.Pods(pod.Namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: container.Name}).DoRaw()
+			logs, err := r.clients.Pods(pod.Namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: container.Name}).DoRaw(context.Background())
 			if err == nil {
 				fmt.Fprintf(r.dumpOutput, "Dumping logs for pod %s-%s-%s", pod.Namespace, pod.Name, container.Name)
 				fmt.Fprintln(r.dumpOutput, string(logs))
@@ -173,7 +173,7 @@ func (r *KubernetesReporter) logNetworks() {
 func (r *KubernetesReporter) logSriovNodeState() {
 	fmt.Fprintf(r.dumpOutput, "Logging node states")
 
-	nodeStates, err := r.clients.SriovNetworkNodeStates("openshift-sriov-network-operator").List(metav1.ListOptions{})
+	nodeStates, err := r.clients.SriovNetworkNodeStates("openshift-sriov-network-operator").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to fetch node states: %v\n", err)
 		return

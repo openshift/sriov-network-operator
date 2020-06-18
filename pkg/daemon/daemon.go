@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -21,7 +22,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
@@ -149,7 +149,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
 		time.Second*15,
 		namespace,
-		func(lo *v1.ListOptions) {
+		func(lo *metav1.ListOptions) {
 			lo.FieldSelector = "metadata.name=" + dn.name
 			lo.TimeoutSeconds = &timeout
 		},
@@ -164,7 +164,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	cfgInformerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
 		time.Second*30,
 		namespace,
-		func(lo *v1.ListOptions) {
+		func(lo *metav1.ListOptions) {
 			lo.FieldSelector = "metadata.name=" + "default"
 		},
 	)
@@ -337,7 +337,7 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 	// Get the latest NodeState
 	var latestState *sriovnetworkv1.SriovNetworkNodeState
 	err = wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
-		latestState, lastErr = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(dn.name, metav1.GetOptions{})
+		latestState, lastErr = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), dn.name, metav1.GetOptions{})
 		if lastErr == nil {
 			return true, nil
 		}
@@ -456,7 +456,7 @@ func (dn *Daemon) restartDevicePluginPod() error {
 	var podToDelete string
 	var foundPodToDelete bool
 	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
-		pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(metav1.ListOptions{
+		pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
 			LabelSelector: "app=sriov-device-plugin",
 			FieldSelector: "spec.nodeName=" + dn.name,
 		})
@@ -490,7 +490,7 @@ func (dn *Daemon) restartDevicePluginPod() error {
 
 	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
 		glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s, deleting it", podToDelete)
-		err := dn.kubeClient.CoreV1().Pods(namespace).Delete(podToDelete, &metav1.DeleteOptions{})
+		err := dn.kubeClient.CoreV1().Pods(namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
 		if errors.IsNotFound(err) {
 			glog.Info("restartDevicePluginPod(): pod to delete not found")
 			return true, nil
@@ -506,7 +506,7 @@ func (dn *Daemon) restartDevicePluginPod() error {
 	}
 
 	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
-		_, err := dn.kubeClient.CoreV1().Pods(namespace).Get(podToDelete, metav1.GetOptions{})
+		_, err := dn.kubeClient.CoreV1().Pods(namespace).Get(context.Background(), podToDelete, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
 			glog.Info("restartDevicePluginPod(): device plugin pod exited")
 			return true, nil
@@ -548,7 +548,7 @@ func rebootNode() {
 	glog.Infof("rebootNode(): trigger node reboot")
 	exit, err := utils.Chroot("/host")
 	if err != nil {
-		glog.Error("rebootNode(): %v", err)
+		glog.Errorf("rebootNode(): %v", err)
 	}
 	// creates a new transient systemd unit to reboot the system.
 	// We explictily try to stop kubelet.service first, before anything else; this
@@ -561,10 +561,10 @@ func rebootNode() {
 		"--description", fmt.Sprintf("sriov-network-config-daemon reboot node"), "/bin/sh", "-c", "systemctl stop kubelet.service; reboot")
 
 	if err := cmd.Run(); err != nil {
-		glog.Error("failed to reboot node: %v", err)
+		glog.Errorf("failed to reboot node: %v", err)
 	}
 	if err := exit(); err != nil {
-		glog.Error("rebootNode(): %v", err)
+		glog.Errorf("rebootNode(): %v", err)
 	}
 }
 
@@ -583,7 +583,7 @@ func (dn *Daemon) annotateNode(node, value string) error {
 	glog.Infof("annotateNode(): Annotate node %s with: %s", node, value)
 
 	err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
-		oldNode, err := dn.kubeClient.CoreV1().Nodes().Get(dn.name, metav1.GetOptions{})
+		oldNode, err := dn.kubeClient.CoreV1().Nodes().Get(context.Background(), dn.name, metav1.GetOptions{})
 		if err != nil {
 			glog.Infof("annotateNode(): Failed to get node %s %v, retrying", node, err)
 			return false, nil
@@ -607,7 +607,11 @@ func (dn *Daemon) annotateNode(node, value string) error {
 			if err != nil {
 				return false, err
 			}
-			_, err = dn.kubeClient.CoreV1().Nodes().Patch(dn.name, types.StrategicMergePatchType, patchBytes)
+			_, err = dn.kubeClient.CoreV1().Nodes().Patch(context.Background(),
+				dn.name,
+				types.StrategicMergePatchType,
+				patchBytes,
+				metav1.PatchOptions{})
 			if err != nil {
 				glog.Infof("annotateNode(): Failed to patch node %s %v, retrying", node, err)
 				return false, nil

@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -91,7 +92,7 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 		f(n)
 
 		var err error
-		nodeState, err = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(n)
+		nodeState, err = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(context.Background(), n, metav1.UpdateOptions{})
 		if err != nil {
 			glog.V(0).Infof("updateNodeStateStatusRetry(): fail to update the node status: %v", err)
 		}
@@ -99,7 +100,7 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 	})
 	if err != nil {
 		// may be conflict if max retries were hit
-		return nil, fmt.Errorf("Unable to update node %q: %v", nodeState, err)
+		return nil, fmt.Errorf("Unable to update node %v: %v", nodeState, err)
 	}
 
 	return nodeState, nil
@@ -127,7 +128,7 @@ func (w *NodeStateStatusWriter) getNodeState() (*sriovnetworkv1.SriovNetworkNode
 	var lastErr error
 	var n *sriovnetworkv1.SriovNetworkNodeState
 	err := wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
-		n, lastErr = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(w.node, metav1.GetOptions{})
+		n, lastErr = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), w.node, metav1.GetOptions{})
 		if lastErr == nil {
 			return true, nil
 		}

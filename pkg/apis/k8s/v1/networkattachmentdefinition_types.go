@@ -7,26 +7,9 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// NetworkAttachmentDefinitionSpec defines the desired state of NetworkAttachmentDefinition
-type NetworkAttachmentDefinitionSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
-	// Config contains a standard JSON-encoded CNI configuration
-	// or configuration list which defines the plugin chain to
-	// execute.  If present, this key takes precedence over
-	// ‘Plugin’.
-	// +optional
-	Config string `json:"config"`
-}
-
-// NetworkAttachmentDefinitionStatus defines the observed state of NetworkAttachmentDefinition
-type NetworkAttachmentDefinitionStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
-}
-
+// +genclient
+// +genclient:noStatus
+// +resourceName=network-attachment-definitions
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NetworkAttachmentDefinition is the Schema for the networkattachmentdefinitions API
@@ -41,8 +24,20 @@ type NetworkAttachmentDefinition struct {
 	// or .config (in that order) file on-disk whose JSON
 	// “name” key matches this Network object’s name.
 	// +optional
-	Spec   NetworkAttachmentDefinitionSpec   `json:"spec,omitempty"`
-	Status NetworkAttachmentDefinitionStatus `json:"status,omitempty"`
+	Spec NetworkAttachmentDefinitionSpec `json:"spec,omitempty"`
+}
+
+// NetworkAttachmentDefinitionSpec defines the desired state of NetworkAttachmentDefinition
+type NetworkAttachmentDefinitionSpec struct {
+	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
+	// Config contains a standard JSON-encoded CNI configuration
+	// or configuration list which defines the plugin chain to
+	// execute.  If present, this key takes precedence over
+	// ‘Plugin’.
+	// +optional
+	Config string `json:"config"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
