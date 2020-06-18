@@ -115,26 +115,52 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 		if err != nil {
 			return false, false, err
 		}
-		if fwCurrent.enableSriov != fwNext.enableSriov || fwCurrent.totalVfs != fwNext.totalVfs {
-			needReboot = true
-			continue
-		}
 
 		isDualPort := isDualPort(ifaceSpec.PciAddress)
 		// Attributes to change
 		attrs := &mlnxNic{totalVfs: -1}
+		var changeWithoutReboot bool
 
 		var totalVfs int
-		totalVfs, needReboot = handleTotalVfs(fwCurrent, attrs, ifaceSpec, isDualPort)
-		needReboot = handleEnableSriov(totalVfs, fwCurrent, attrs) || needReboot
+		totalVfs, needReboot, changeWithoutReboot = handleTotalVfs(fwCurrent, fwNext, attrs, ifaceSpec, isDualPort)
+		sriovEnNeedReboot, sriovEnChangeWithoutReboot := handleEnableSriov(totalVfs, fwCurrent, fwNext, attrs)
+		needReboot = needReboot || sriovEnNeedReboot
+		changeWithoutReboot = changeWithoutReboot || sriovEnChangeWithoutReboot
+
 		needLinkChange, err := handleLinkType(pciPrefix, fwCurrent, attrs)
 		if err != nil {
 			return false, false, err
 		}
 
 		needReboot = needReboot || needLinkChange
-		if needReboot {
+		if needReboot || changeWithoutReboot {
 			attributesToChange[ifaceSpec.PciAddress] = *attrs
+		}
+	}
+
+	// Set total VFs to 0 for mellanox interfaces with no spec
+	for pciPrefix, portsMap := range mellanoxNicsStatus {
+		if _, ok := processedNics[pciPrefix]; ok {
+			continue
+		}
+
+		// Add the nic to processed Nics to not repeat the process for dual nic ports
+		processedNics[pciPrefix] = true
+		pciAddress := pciPrefix + "0"
+
+		// Skip unsupported devices
+		if _, ok := sriovnetworkv1.SriovPfVfMap[portsMap[pciAddress].DeviceID]; !ok {
+			continue
+		}
+
+		_, fwNext, err := getMlnxNicFwData(pciAddress)
+		if err != nil {
+			return false, false, err
+		}
+
+		if fwNext.totalVfs > 0 || fwNext.enableSriov {
+			attributesToChange[pciAddress] = mlnxNic{totalVfs: 0}
+			glog.V(2).Infof("Changing TotalVfs %d to 0, doesn't require rebooting", fwNext.totalVfs)
 		}
 	}
 
@@ -326,7 +352,9 @@ func getOtherPortSpec(pciAddress string) *sriovnetworkv1.Interface {
 }
 
 // handleTotalVfs return required total VFs or max (required VFs for dual port NIC) and needReboot if totalVfs will change
-func handleTotalVfs(fwCurrent, attrs *mlnxNic, ifaceSpec sriovnetworkv1.Interface, isDualPort bool) (totalVfs int, needReboot bool) {
+func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.Interface, isDualPort bool) (
+	totalVfs int, needReboot, changeWithoutReboot bool) {
+
 	totalVfs = ifaceSpec.NumVfs
 	// Check if the other port is changing the number of VF
 	if isDualPort {
@@ -344,23 +372,33 @@ func handleTotalVfs(fwCurrent, attrs *mlnxNic, ifaceSpec sriovnetworkv1.Interfac
 		needReboot = true
 	}
 
+	// Remove policy then re-apply it
+	if !needReboot && fwNext.totalVfs != totalVfs {
+		glog.V(2).Infof("Changing TotalVfs %d to 0, doesn't require rebooting", fwCurrent.totalVfs)
+		attrs.totalVfs = totalVfs
+		changeWithoutReboot = true
+	}
+
 	return
 }
 
 // handleEnableSriov based on totalVfs it decide to disable (totalVfs=0) or enable (totalVfs changed from 0) sriov
 // and need reboot if enableSriov will change
-func handleEnableSriov(totalVfs int, fwCurrent, attrs *mlnxNic) bool {
+func handleEnableSriov(totalVfs int, fwCurrent, fwNext, attrs *mlnxNic) (needReboot, changeWithoutReboot bool) {
 	if totalVfs == 0 && fwCurrent.enableSriov {
 		glog.V(2).Info("disabling Sriov, needs reboot")
 		attrs.enableSriov = false
-		return true
+		return true, false
 	} else if totalVfs > 0 && !fwCurrent.enableSriov {
 		glog.V(2).Info("enabling Sriov, needs reboot")
 		attrs.enableSriov = true
-		return true
+		return true, false
+	} else if totalVfs > 0 && !fwNext.enableSriov {
+		attrs.enableSriov = true
+		return false, true
 	}
 
-	return false
+	return false, false
 }
 
 func getIfaceStatus(pciAddress string) sriovnetworkv1.InterfaceExt {
