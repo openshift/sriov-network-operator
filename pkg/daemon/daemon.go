@@ -211,18 +211,12 @@ func (dn *Daemon) nodeAddHandler(obj interface{}) {
 }
 
 func (dn *Daemon) nodeUpdateHandler(old, new interface{}) {
-	nn := new.(*corev1.Node)
-	if nn.Annotations[annoKey] == annoDraining || nn.GetName() == dn.name {
-		return
-	}
 	node, err := dn.nodeLister.Get(dn.name)
 	if errors.IsNotFound(err) {
 		glog.V(2).Infof("nodeUpdateHandler(): node %v has been deleted", dn.name)
 		return
 	}
 	dn.node = node.DeepCopy()
-	// wait a random time to avoid all the nodes checking the nodes anno at the same time
-	time.Sleep(time.Duration(rand.Intn(6000)) * time.Millisecond)
 	nodes, err := dn.nodeLister.List(labels.Everything())
 	if err != nil {
 		return
@@ -621,16 +615,13 @@ func (dn *Daemon) annotateNode(node, value string) error {
 func (dn *Daemon) drainNode(name string) {
 	glog.Info("drainNode(): Update prepared")
 	var err error
-
-	err = wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
+	// wait a random time to avoid all the nodes drain at the same time
+	wait.PollUntil(time.Duration(rand.Intn(15)+1)*time.Second, func() (bool, error) {
 		if !dn.drainable {
 			glog.Info("drainNode(): other node is draining, waiting...")
 		}
 		return dn.drainable, nil
 	}, dn.stopCh)
-	if err != nil {
-		glog.Errorf("drainNode(): Failed to wait for node drainable: %v", err)
-	}
 
 	err = dn.annotateNode(dn.name, annoDraining)
 	if err != nil {
