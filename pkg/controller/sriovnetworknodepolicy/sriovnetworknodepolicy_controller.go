@@ -418,6 +418,7 @@ func (r *ReconcileSriovNetworkNodePolicy) tryDeleteDsPods(namespace, name string
 		}
 	} else {
 		ds.Spec.Template.Spec.NodeSelector = map[string]string{"beta.kubernetes.io/os": "none"}
+		ds.Spec.Template.Spec.Affinity = &corev1.Affinity{}
 		err = r.client.Update(context.TODO(), ds)
 		if err != nil {
 			logger.Error(err, "Fail to update DaemonSet", "Namespace", namespace, "Name", name)
