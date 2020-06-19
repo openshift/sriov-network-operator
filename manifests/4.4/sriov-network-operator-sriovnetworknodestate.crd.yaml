@@ -55,14 +55,10 @@ spec:
                           type: string
                         vfRange:
                           type: string
-                      required:
-                      - resourceName
                       type: object
                     type: array
                 required:
-                - name
                 - pciAddress
-                - vfGroups
                 type: object
               type: array
           type: object
