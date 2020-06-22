@@ -50,14 +50,13 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 			glog.V(0).Info("Run(): stop writer")
 			return
 		case msg = <-refresh:
-			glog.V(2).Info("Run(): refresh trigger")
+			glog.V(0).Info("Run(): refresh trigger")
 			if err := writer.pollNicStatus(); err != nil {
 				continue
 			}
 			writer.setNodeStateStatus(msg)
-			if msg.syncStatus == "Failed" {
+			if msg.syncStatus == "Succeeded" || msg.syncStatus == "Failed" {
 				syncCh <- struct{}{}
-				return
 			}
 		case <-time.After(30 * time.Second):
 			glog.V(2).Info("Run(): period refresh")
@@ -109,7 +108,7 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 func (w *NodeStateStatusWriter) setNodeStateStatus(msg Message) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	nodeState, err := w.updateNodeStateStatusRetry(func(nodeState *sriovnetworkv1.SriovNetworkNodeState) {
 		nodeState.Status.Interfaces = w.status.Interfaces
-		if msg.lastSyncError != "" || nodeState.Status.SyncStatus == "Succeeded" {
+		if msg.lastSyncError != "" || msg.syncStatus == "Succeeded" {
 			// clear lastSyncError when sync Succeeded
 			nodeState.Status.LastSyncError = msg.lastSyncError
 		}

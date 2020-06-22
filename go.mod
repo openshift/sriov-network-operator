@@ -10,6 +10,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/go-openapi/spec v0.19.4
+	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/intel/sriov-network-device-plugin v0.0.0-20200603101849-e116e9c7d0b8
 	github.com/jaypipes/ghw v0.6.0
@@ -23,6 +24,7 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/vishvananda/netlink v1.1.0
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	k8s.io/api v0.18.2
 	k8s.io/apimachinery v0.18.2
 	k8s.io/client-go v12.0.0+incompatible

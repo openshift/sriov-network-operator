@@ -83,7 +83,7 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 	err = nil
 	p.DesireState = new
 
-	needDrain = needDrainNode(new.Spec.Interfaces, old.Status.Interfaces)
+	needDrain = needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
 
 	if p.LoadVfioDriver != loaded {
 		if needVfioDriver(new) {
@@ -122,10 +122,8 @@ func (p *GenericPlugin) Apply() error {
 	if err != nil {
 		return err
 	}
+	defer exit()
 	if err := utils.SyncNodeState(p.DesireState); err != nil {
-		return err
-	}
-	if err := exit(); err != nil {
 		return err
 	}
 	p.LastState = &sriovnetworkv1.SriovNetworkNodeState{}
