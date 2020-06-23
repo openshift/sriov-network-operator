@@ -234,7 +234,19 @@ func ValidateDevicePluginConfig(nps []*sriovnetworkv1.SriovNetworkNodePolicy, ra
 			if rc.ResourceName != np.Spec.ResourceName {
 				continue
 			}
-			if rc.IsRdma != np.Spec.IsRdma || rc.ResourceName != np.Spec.ResourceName || !validateSelector(&rc, &np.Spec.NicSelector) {
+
+			netDeviceSelectors := &dptypes.NetDeviceSelectors{}
+			raw, err := rc.Selectors.MarshalJSON()
+			if err != nil {
+				return err
+			}
+
+			err = json.Unmarshal(raw, netDeviceSelectors)
+			if err != nil {
+				return err
+			}
+
+			if netDeviceSelectors.IsRdma != np.Spec.IsRdma || rc.ResourceName != np.Spec.ResourceName || !validateSelector(netDeviceSelectors, &np.Spec.NicSelector) {
 				return fmt.Errorf("content of config is incorrect")
 			}
 		}
@@ -242,19 +254,19 @@ func ValidateDevicePluginConfig(nps []*sriovnetworkv1.SriovNetworkNodePolicy, ra
 	return nil
 }
 
-func validateSelector(rc *dptypes.ResourceConfig, ns *sriovnetworkv1.SriovNetworkNicSelector) bool {
+func validateSelector(rc *dptypes.NetDeviceSelectors, ns *sriovnetworkv1.SriovNetworkNicSelector) bool {
 	if ns.DeviceID != "" {
-		if len(rc.Selectors.Devices) != 1 || ns.DeviceID != rc.Selectors.Devices[0] {
+		if len(rc.Devices) != 1 || ns.DeviceID != rc.Devices[0] {
 			return false
 		}
 	}
 	if ns.Vendor != "" {
-		if len(rc.Selectors.Vendors) != 1 || ns.Vendor != rc.Selectors.Vendors[0] {
+		if len(rc.Vendors) != 1 || ns.Vendor != rc.Vendors[0] {
 			return false
 		}
 	}
 	if len(ns.PfNames) > 0 {
-		if !reflect.DeepEqual(ns.PfNames, rc.Selectors.PfNames) {
+		if !reflect.DeepEqual(ns.PfNames, rc.PfNames) {
 			return false
 		}
 	}

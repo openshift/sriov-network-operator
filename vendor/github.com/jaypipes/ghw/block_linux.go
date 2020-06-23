@@ -288,8 +288,8 @@ func (ctx *context) diskPartitions(disk string) []*Partition {
 	path := filepath.Join(ctx.pathSysBlock(), disk)
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		warn("diskPartitions: failed to read %s: %s", path, err)
-		return nil
+		warn("failed to read disk partitions: %s\n", err)
+		return out
 	}
 	for _, file := range files {
 		fname := file.Name()
@@ -308,6 +308,19 @@ func (ctx *context) diskPartitions(disk string) []*Partition {
 		out = append(out, p)
 	}
 	return out
+}
+
+func (ctx *context) diskIsRemovable(disk string) bool {
+        path := filepath.Join(ctx.pathSysBlock(), disk, "removable")
+        contents, err := ioutil.ReadFile(path)
+        if err != nil {
+                return false
+        }
+        removable := strings.TrimSpace(string(contents))
+        if removable == "1" {
+                return true
+        }
+        return false
 }
 
 // Disks has been deprecated in 0.2. Please use the BlockInfo.Disks attribute.
@@ -352,12 +365,14 @@ func (ctx *context) disks() []*Disk {
 		model := ctx.diskModel(dname)
 		serialNo := ctx.diskSerialNumber(dname)
 		wwn := ctx.diskWWN(dname)
+		removable := ctx.diskIsRemovable(dname)
 
 		d := &Disk{
 			Name:                   dname,
 			SizeBytes:              size,
 			PhysicalBlockSizeBytes: pbs,
 			DriveType:              driveType,
+			IsRemovable:            removable,
 			StorageController:      storageController,
 			BusType:                busType,
 			BusPath:                busPath,
@@ -445,7 +460,7 @@ the 1.0 release of ghw. Please use the Partition.SizeBytes attribute.
 	ctx := contextFromEnv()
 	disk := strings.TrimPrefix(part, "/dev")
 	if len(disk) < 3 {
-		warn("PartitionSizeBytes: unknown disk %s, returning 0", disk)
+		warn("PartitionSizeBytes: unknown disk %s, returning 0\n", disk)
 		return 0
 	}
 	switch disk[0:2] {
@@ -466,7 +481,7 @@ the 1.0 release of ghw. Please use the Partition.SizeBytes attribute.
 		var regexNVMeDev = regexp.MustCompile(`^nvme\d+n\d+$`)
 		matches := regexNVMeDev.FindSubmatch([]byte(disk))
 		if len(matches) < 1 {
-			warn("PartitionSizeBytes: unknown disk %s, returning 0", disk)
+			warn("PartitionSizeBytes: unknown disk %s, returning 0\n", disk)
 			return 0
 		}
 		disk = string(matches[0])

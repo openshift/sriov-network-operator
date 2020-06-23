@@ -52,7 +52,7 @@ var _ = Describe("[sriov] pod", func() {
 			Expect(err).ToNot(HaveOccurred(), "Error to create SriovNetworkNodePolicy")
 
 			Eventually(func() sriovv1.Interfaces {
-				nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(testNode, metav1.GetOptions{})
+				nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), testNode, metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				return nodeState.Spec.Interfaces
 			}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -73,7 +73,7 @@ var _ = Describe("[sriov] pod", func() {
 			waitForSRIOVStable()
 
 			Eventually(func() int64 {
-				testedNode, err := clients.Nodes().Get(testNode, metav1.GetOptions{})
+				testedNode, err := clients.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				resNum, _ := testedNode.Status.Capacity["openshift.io/testresource"]
 				capacity, _ := resNum.AsInt64()
@@ -100,11 +100,11 @@ var _ = Describe("[sriov] pod", func() {
 					pod.DefineWithNetworks([]string{networkName, networkName, networkName, networkName, networkName}),
 					testNode,
 				)
-				runningPodA, err := clients.Pods(testPodA.Namespace).Create(testPodA)
+				runningPodA, err := clients.Pods(testPodA.Namespace).Create(context.Background(), testPodA, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodA.Name))
 				By("Checking that first Pod is in Running state")
 				Eventually(func() v1core.PodPhase {
-					runningPodA, err = clients.Pods(namespaces.Test).Get(runningPodA.Name, metav1.GetOptions{})
+					runningPodA, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodA.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodA.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
@@ -114,18 +114,18 @@ var _ = Describe("[sriov] pod", func() {
 					pod.DefineWithNetworks([]string{networkName}),
 					testNode,
 				)
-				runningPodB, err := clients.Pods(testPodB.Namespace).Create(testPodB)
+				runningPodB, err := clients.Pods(testPodB.Namespace).Create(context.Background(), testPodB, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodB.Name))
 				By("Checking second that pod is in Pending state")
 				Eventually(func() v1core.PodPhase {
-					runningPodB, err = clients.Pods(namespaces.Test).Get(runningPodB.Name, metav1.GetOptions{})
+					runningPodB, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodB.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodB.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodPending))
 
 				By("Checking that relevant error event was originated")
 				Eventually(func() string {
-					events, err := clients.Events(namespaces.Test).List(metav1.ListOptions{})
+					events, err := clients.Events(namespaces.Test).List(context.Background(), metav1.ListOptions{})
 					Expect(err).ToNot(HaveOccurred())
 
 					for _, val := range events.Items {
@@ -137,13 +137,13 @@ var _ = Describe("[sriov] pod", func() {
 				}, 2*time.Minute, 10*time.Second).Should(ContainSubstring("Insufficient openshift.io/%s", resourceName),
 					"Error to detect Required Event")
 				By("Delete first pod and release all VFs")
-				err = clients.Pods(namespaces.Test).Delete(runningPodA.Name, &metav1.DeleteOptions{
+				err = clients.Pods(namespaces.Test).Delete(context.Background(), runningPodA.Name, metav1.DeleteOptions{
 					GracePeriodSeconds: pointer.Int64Ptr(0),
 				})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to delete pod %s", runningPodA.Name))
 				By("Checking that second pod is able to use released VF")
 				Eventually(func() v1core.PodPhase {
-					runningPodB, err = clients.Pods(namespaces.Test).Get(runningPodB.Name, metav1.GetOptions{})
+					runningPodB, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodB.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodB.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))

@@ -2,6 +2,7 @@ package pod
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -124,7 +125,7 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 // GetLog connects to a pod and fetches log
 func GetLog(cs *testclient.ClientSet, p *corev1.Pod) (string, error) {
 	req := cs.Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{})
-	log, err := req.Stream()
+	log, err := req.Stream(context.Background())
 	if err != nil {
 		return "", err
 	}

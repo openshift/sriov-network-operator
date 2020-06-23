@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -25,7 +26,7 @@ var (
 
 // DiscoverSriov retrieves Sriov related information of a given cluster.
 func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*EnabledNodes, error) {
-	nodeStates, err := clients.SriovNetworkNodeStates(operatorNamespace).List(metav1.ListOptions{})
+	nodeStates, err := clients.SriovNetworkNodeStates(operatorNamespace).List(context.Background(), metav1.ListOptions{})
 	res := &EnabledNodes{}
 	res.States = make(map[string]sriovv1.SriovNetworkNodeState)
 	res.Nodes = make([]string, 0)
@@ -105,7 +106,7 @@ func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.Interfa
 
 // SriovStable tells if all the node states are in sync (and the cluster is ready for another round of tests)
 func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool, error) {
-	nodeStates, err := clients.SriovNetworkNodeStates(operatorNamespace).List(metav1.ListOptions{})
+	nodeStates, err := clients.SriovNetworkNodeStates(operatorNamespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return false, fmt.Errorf("Failed to fetch nodes state %v", err)
 	}
@@ -137,7 +138,7 @@ func stateStable(state sriovv1.SriovNetworkNodeState, clients *testclient.Client
 }
 
 func CheckReadyGeneration(clients *testclient.ClientSet, operatorNamespace string, state sriovv1.SriovNetworkNodeState) (bool, error) {
-	podList, err := clients.Pods(operatorNamespace).List(metav1.ListOptions{LabelSelector: "app=sriov-network-config-daemon"})
+	podList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=sriov-network-config-daemon"})
 	if err != nil {
 		return false, err
 	}
@@ -205,7 +206,7 @@ func isDeviceSupported(deviceID string) bool {
 }
 
 func IsClusterStable(clients *testclient.ClientSet) (bool, error) {
-	nodes, err := clients.Nodes().List(metav1.ListOptions{})
+	nodes, err := clients.Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return false, err
 	}

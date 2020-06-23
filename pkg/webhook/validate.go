@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -32,11 +33,10 @@ var (
 
 func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
 	glog.V(2).Infof("validateSriovNetworkNodePolicy: %v", cr)
-	admit := true
 
 	if cr.GetName() == "default" {
 		// skip the default policy
-		return admit, nil
+		return true, nil
 	}
 
 	admit, err := staticValidateSriovNetworkNodePolicy(cr)
@@ -120,10 +120,10 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	nodesSelected = false
 	interfaceSelected = false
 
-	nodeList, err := kubeclient.CoreV1().Nodes().List(metav1.ListOptions{
+	nodeList, err := kubeclient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: labels.Set(cr.Spec.NodeSelector).String(),
 	})
-	nsList, err := snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(metav1.ListOptions{})
+	nsList, err := snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return false, err
 	}
