@@ -12,12 +12,14 @@ import (
 
 	"github.com/juju/errors"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	"github.com/openshift/sriov-network-operator/test/util/cluster"
+	"github.com/openshift/sriov-network-operator/test/util/connectivity"
 	"github.com/openshift/sriov-network-operator/test/util/execute"
 	"github.com/openshift/sriov-network-operator/test/util/namespaces"
 	"github.com/openshift/sriov-network-operator/test/util/network"
@@ -52,6 +54,15 @@ func init() {
 
 var _ = Describe("[sriov] operator", func() {
 	var sriovInfos *cluster.EnabledNodes
+	describe := func(desc string) func(int, int, bool, *connectivity.ConnectivityTest) string {
+		return func(x, y int, expected bool, connectivityParameters *connectivity.ConnectivityTest) string {
+			myPrams, err := json.Marshal(connectivityParameters)
+			if err != nil {
+				fmt.Printf("Error: %s", err)
+			}
+			return fmt.Sprintf("%s %s", desc, string(myPrams))
+		}
+	}
 	execute.BeforeAll(func() {
 		Expect(clients).NotTo(BeNil(), "Client misconfigured, check the $KUBECONFIG env variable")
 		err := namespaces.Create(namespaces.Test, clients)
@@ -1219,6 +1230,38 @@ var _ = Describe("[sriov] operator", func() {
 				Expect(macvlanDriver).To(Equal("macvlan"))
 
 			})
+		})
+
+		Context("SRIOV CNF", func() {
+			DescribeTable("Ipam type:",
+				func(x int, y int, expected bool, connectivityParameters *connectivity.ConnectivityTest) {
+					if connectivityParameters.EnvValidation() {
+						fmt.Println("Exec tests")
+						connectivityParameters.RunTest()
+					} else {
+						Skip("Env is not ready")
+					}
+					Expect(x > y).To(Equal(expected))
+				},
+
+				FEntry(describe("IP Static, Ip Stack: Dual-stack, Mac address: MAC static"), 1, 0, true,
+					&connectivity.ConnectivityTest{Parameter: []connectivity.Parameters{
+						{Name: "Protocol", Value: "unicast-icmp"},
+						{Name: "Connectivity", Value: "2 pods on the same node"},
+						{Name: "MTU", Value: "Usual 1500"}}}),
+
+				FEntry(describe("IP Static, Ip Stack: Dual-stack, Mac address: MAC static"), 1, 0, true,
+					&connectivity.ConnectivityTest{Parameter: []connectivity.Parameters{
+						{Name: "Protocol", Value: "unicast-icmp"},
+						{Name: "Connectivity", Value: "2 pods on the same node"},
+						{Name: "MTU", Value: "Usual 1450"}}}),
+
+				FEntry(describe("IP Static, Ip Stack: Dual-stack, Mac address: MAC static"), 1, 0, true,
+					&connectivity.ConnectivityTest{Parameter: []connectivity.Parameters{
+						{Name: "Protocol", Value: "unicast-icmp"},
+						{Name: "Connectivity", Value: "2 pods on the same node"},
+						{Name: "MTU", Value: "Usual 9000"}}}),
+			)
 		})
 	})
 })
