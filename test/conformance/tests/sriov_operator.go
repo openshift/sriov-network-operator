@@ -34,6 +34,7 @@ import (
 )
 
 var waitingTime time.Duration = 20 * time.Minute
+var sriovNetworkName = "test-sriovnetwork"
 
 type patchBody struct {
 	Op    string `json:"op"`
@@ -124,9 +125,13 @@ var _ = Describe("[sriov] operator", func() {
 		numVfs := 5
 		resourceName := "testresource"
 		var node string
+		var sriovDevice *sriovv1.InterfaceExt
 
 		execute.BeforeAll(func() {
 			node = sriovInfos.Nodes[0]
+			var err error
+			sriovDevice, err = sriovInfos.FindOneSriovDevice(node)
+			Expect(err).ToNot(HaveOccurred())
 
 			// For the context of tests is better to use a Mellanox card
 			// as they support all the virtual function flags
@@ -497,10 +502,8 @@ var _ = Describe("[sriov] operator", func() {
 		Context("Multiple sriov device and attachment", func() {
 			// 25834
 			It("Should configure multiple network attachments", func() {
-				sriovNetworkName := "test-sriovnetwork"
-				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
 				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() error {
 					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
@@ -518,24 +521,21 @@ var _ = Describe("[sriov] operator", func() {
 			// 25874
 			It("should be able to ping each other", func() {
 				ipv6NetworkName := "test-ipv6network"
-				testNode := sriovInfos.Nodes[0]
-				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
-
 				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-				err = network.CreateSriovNetwork(clients, sriovDevice, ipv6NetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				err := network.CreateSriovNetwork(clients, sriovDevice, ipv6NetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() error {
 					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: ipv6NetworkName, Namespace: namespaces.Test}, netAttDef)
 				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
-				pod := createTestPod(testNode, []string{ipv6NetworkName})
+				pod := createTestPod(node, []string{ipv6NetworkName})
 				ips, err := network.GetSriovNicIPs(pod, "net1")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ips).NotTo(BeNil(), "No sriov network interface found.")
 				Expect(len(ips)).Should(Equal(1))
 				for _, ip := range ips {
-					pingPod(ip, testNode, ipv6NetworkName)
+					pingPod(ip, node, ipv6NetworkName)
 				}
 			})
 		})
@@ -550,11 +550,6 @@ var _ = Describe("[sriov] operator", func() {
 				err := namespaces.Create(ns1, clients)
 				Expect(err).ToNot(HaveOccurred())
 				err = namespaces.Create(ns2, clients)
-				Expect(err).ToNot(HaveOccurred())
-
-				sriovNetworkName := "test-sriovnetwork"
-				testNode := sriovInfos.Nodes[0]
-				sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
 				Expect(err).ToNot(HaveOccurred())
 
 				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
@@ -586,16 +581,13 @@ var _ = Describe("[sriov] operator", func() {
 		Context("NAD update", func() {
 			// 24714
 			It("NAD default gateway is updated when SriovNetwork ipam is changed", func() {
-				sriovNetworkName := "test-sriovnetwork"
-				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
-				Expect(err).ToNot(HaveOccurred())
 
 				ipam := `{
 					"type": "host-local",
 					"subnet": "10.11.11.0/24",
 					"gateway": "%s"
 				  }`
-				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, fmt.Sprintf(ipam, "10.11.11.1"))
+				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, fmt.Sprintf(ipam, "10.11.11.1"))
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(func() bool {
@@ -623,15 +615,8 @@ var _ = Describe("[sriov] operator", func() {
 		Context("SRIOV and macvlan", func() {
 			// 25834
 			It("Should be able to create a pod with both sriov and macvlan interfaces", func() {
-
-				sriovNetworkName := "test-sriovnetwork"
-				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
-
-				Expect(err).ToNot(HaveOccurred())
-				createSriovPolicy(sriovDevice.Name, node, 5, resourceName)
-
 				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() error {
 					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
