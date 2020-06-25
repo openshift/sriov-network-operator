@@ -9,6 +9,7 @@ import (
 
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
+	"github.com/openshift/sriov-network-operator/test/util/nodes"
 	pods "github.com/openshift/sriov-network-operator/test/util/pod"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -34,7 +35,12 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 		return nil, fmt.Errorf("Failed to retrieve note states %v", err)
 	}
 
-	for _, state := range nodeStates.Items {
+	ss, err := nodes.MatchingOptionalSelectorState(clients, nodeStates.Items)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find matching node states %v", err)
+	}
+
+	for _, state := range ss {
 		isStable, err := stateStable(state, clients, operatorNamespace)
 		if err != nil {
 			return nil, err

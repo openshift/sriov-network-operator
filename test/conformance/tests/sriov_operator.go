@@ -20,6 +20,7 @@ import (
 	"github.com/openshift/sriov-network-operator/test/util/execute"
 	"github.com/openshift/sriov-network-operator/test/util/namespaces"
 	"github.com/openshift/sriov-network-operator/test/util/network"
+	"github.com/openshift/sriov-network-operator/test/util/nodes"
 	"github.com/openshift/sriov-network-operator/test/util/pod"
 	corev1 "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/api/core/v1"
@@ -52,6 +53,7 @@ func init() {
 
 var _ = Describe("[sriov] operator", func() {
 	var sriovInfos *cluster.EnabledNodes
+	var initPassed bool
 	execute.BeforeAll(func() {
 		Expect(clients).NotTo(BeNil(), "Client misconfigured, check the $KUBECONFIG env variable")
 		err := namespaces.Create(namespaces.Test, clients)
@@ -60,6 +62,11 @@ var _ = Describe("[sriov] operator", func() {
 		waitForSRIOVStable()
 		sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
 		Expect(err).ToNot(HaveOccurred())
+		initPassed = true
+	})
+
+	BeforeEach(func() {
+		Expect(initPassed).To(BeTrue(), "Global setup failed")
 	})
 
 	Describe("No SriovNetworkNodePolicy", func() {
@@ -77,8 +84,13 @@ var _ = Describe("[sriov] operator", func() {
 				allNodes, err := clients.Nodes().List(context.Background(), metav1.ListOptions{
 					LabelSelector: "node-role.kubernetes.io/worker",
 				})
-				Expect(len(allNodes.Items)).To(BeNumerically(">", 0), "There must be at least one worker")
-				candidate := allNodes.Items[0]
+				Expect(err).ToNot(HaveOccurred())
+
+				selectedNodes, err := nodes.MatchingOptionalSelector(clients, allNodes.Items)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(len(selectedNodes)).To(BeNumerically(">", 0), "There must be at least one worker")
+				candidate := selectedNodes[0]
 				candidate.Labels["sriovenabled"] = "true"
 				_, err = clients.Nodes().Update(context.Background(), &candidate, metav1.UpdateOptions{})
 				Expect(err).ToNot(HaveOccurred())
