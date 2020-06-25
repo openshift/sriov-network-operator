@@ -868,7 +868,43 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).To(HaveOccurred())
 				})*/
 			})
-
+			Context("PF shutdown", func() {
+				// 29398
+				It("Should be able to create pods successfully if PF is down.Pods are able to communicate with each other on the same node", func() {
+					resourceName := "testresource"
+					sriovNetworkName := "sriovnetwork"
+					testNode := sriovInfos.Nodes[0]
+					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
+					Expect(err).ToNot(HaveOccurred())
+					unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
+					defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
+					Expect(err).ToNot(HaveOccurred())
+					createSriovPolicy(unusedSriovDevices[0].Name, testNode, 2, resourceName)
+					ipam := `{
+						"type":"host-local",
+						"subnet":"10.10.10.0/24",
+						"rangeStart":"10.10.10.171",
+						"rangeEnd":"10.10.10.181",
+						"routes":[{"dst":"0.0.0.0/0"}],
+						"gateway":"10.10.10.1"
+						}`
+					err = network.CreateSriovNetwork(clients, unusedSriovDevices[0], sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+					Expect(err).ToNot(HaveOccurred())
+					Eventually(func() error {
+						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+					changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, false)
+					pod := createTestPod(testNode, []string{sriovNetworkName})
+					ips, err := network.GetSriovNicIPs(pod, "net1")
+					Expect(err).ToNot(HaveOccurred())
+					Expect(ips).NotTo(BeNil(), "No sriov network interface found.")
+					Expect(len(ips)).Should(Equal(1))
+					for _, ip := range ips {
+						pingPod(ip, testNode, sriovNetworkName)
+					}
+				})
+			})
 			Context("Resource Injector", func() {
 				// 25815
 				It("Should inject downward api volume", func() {
@@ -1435,11 +1471,15 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool) *k8sv
 }
 
 func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
+	ipProtocolVersion := "6"
+	if len(strings.Split(ip, ".")) == 4 {
+		ipProtocolVersion = "4"
+	}
 	podDefinition := pod.RedefineWithNodeSelector(
 		pod.RedefineWithRestartPolicy(
 			pod.RedefineWithCommand(
 				pod.DefineWithNetworks([]string{sriovNetworkAttachment}),
-				[]string{"sh", "-c", "ping -6 -c 3 " + ip}, []string{},
+				[]string{"sh", "-c", fmt.Sprintf("ping -%s -c 3 %s", ipProtocolVersion, ip)}, []string{},
 			),
 			k8sv1.RestartPolicyNever,
 		),
