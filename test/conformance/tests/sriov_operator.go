@@ -24,6 +24,7 @@ import (
 	"github.com/openshift/sriov-network-operator/test/util/pod"
 	corev1 "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/api/core/v1"
+	v1core "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	admission "k8s.io/api/admissionregistration/v1"
@@ -663,6 +664,74 @@ var _ = Describe("[sriov] operator", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(macvlanDriver).To(Equal("macvlan"))
 
+			})
+		})
+
+		Context("Virtual Functions", func() {
+			// 21396
+			It("should release the VFs once the pod deleted and same VFs can be used by the new created pods", func() {
+				By("Create first Pod which consumes all available VFs")
+				sriovNetworkName := "test-sriovnetwork"
+				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				testPodA := pod.RedefineWithNodeSelector(
+					pod.DefineWithNetworks([]string{sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName}),
+					node,
+				)
+				runningPodA, err := clients.Pods(testPodA.Namespace).Create(testPodA)
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodA.Name))
+				By("Checking that first Pod is in Running state")
+				Eventually(func() v1core.PodPhase {
+					runningPodA, err = clients.Pods(namespaces.Test).Get(runningPodA.Name, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return runningPodA.Status.Phase
+				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
+				By("Create second Pod which consumes one more VF")
+
+				testPodB := pod.RedefineWithNodeSelector(
+					pod.DefineWithNetworks([]string{sriovNetworkName}),
+					node,
+				)
+				runningPodB, err := clients.Pods(testPodB.Namespace).Create(testPodB)
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodB.Name))
+				By("Checking second that pod is in Pending state")
+				Eventually(func() v1core.PodPhase {
+					runningPodB, err = clients.Pods(namespaces.Test).Get(runningPodB.Name, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return runningPodB.Status.Phase
+				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodPending))
+
+				By("Checking that relevant error event was originated")
+				Eventually(func() string {
+					events, err := clients.Events(namespaces.Test).List(metav1.ListOptions{})
+					Expect(err).ToNot(HaveOccurred())
+
+					for _, val := range events.Items {
+						if val.InvolvedObject.Name == runningPodB.Name {
+							return val.Message
+						}
+					}
+					return ""
+				}, 2*time.Minute, 10*time.Second).Should(ContainSubstring("Insufficient openshift.io/%s", resourceName),
+					"Error to detect Required Event")
+				By("Delete first pod and release all VFs")
+				err = clients.Pods(namespaces.Test).Delete(runningPodA.Name, &metav1.DeleteOptions{
+					GracePeriodSeconds: pointer.Int64Ptr(0),
+				})
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to delete pod %s", runningPodA.Name))
+				By("Checking that second pod is able to use released VF")
+				Eventually(func() v1core.PodPhase {
+					runningPodB, err = clients.Pods(namespaces.Test).Get(runningPodB.Name, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return runningPodB.Status.Phase
+				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
 			})
 		})
 	})
