@@ -685,11 +685,11 @@ var _ = Describe("[sriov] operator", func() {
 					pod.DefineWithNetworks([]string{sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName}),
 					node,
 				)
-				runningPodA, err := clients.Pods(testPodA.Namespace).Create(testPodA)
+				runningPodA, err := clients.Pods(testPodA.Namespace).Create(context.Background(), testPodA, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodA.Name))
 				By("Checking that first Pod is in Running state")
 				Eventually(func() v1core.PodPhase {
-					runningPodA, err = clients.Pods(namespaces.Test).Get(runningPodA.Name, metav1.GetOptions{})
+					runningPodA, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodA.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodA.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
@@ -699,18 +699,18 @@ var _ = Describe("[sriov] operator", func() {
 					pod.DefineWithNetworks([]string{sriovNetworkName}),
 					node,
 				)
-				runningPodB, err := clients.Pods(testPodB.Namespace).Create(testPodB)
+				runningPodB, err := clients.Pods(testPodB.Namespace).Create(context.Background(), testPodB, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodB.Name))
 				By("Checking second that pod is in Pending state")
 				Eventually(func() v1core.PodPhase {
-					runningPodB, err = clients.Pods(namespaces.Test).Get(runningPodB.Name, metav1.GetOptions{})
+					runningPodB, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodB.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodB.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodPending))
 
 				By("Checking that relevant error event was originated")
 				Eventually(func() string {
-					events, err := clients.Events(namespaces.Test).List(metav1.ListOptions{})
+					events, err := clients.Events(namespaces.Test).List(context.Background(), metav1.ListOptions{})
 					Expect(err).ToNot(HaveOccurred())
 
 					for _, val := range events.Items {
@@ -722,13 +722,13 @@ var _ = Describe("[sriov] operator", func() {
 				}, 2*time.Minute, 10*time.Second).Should(ContainSubstring("Insufficient openshift.io/%s", resourceName),
 					"Error to detect Required Event")
 				By("Delete first pod and release all VFs")
-				err = clients.Pods(namespaces.Test).Delete(runningPodA.Name, &metav1.DeleteOptions{
+				err = clients.Pods(namespaces.Test).Delete(context.Background(), runningPodA.Name, metav1.DeleteOptions{
 					GracePeriodSeconds: pointer.Int64Ptr(0),
 				})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to delete pod %s", runningPodA.Name))
 				By("Checking that second pod is able to use released VF")
 				Eventually(func() v1core.PodPhase {
-					runningPodB, err = clients.Pods(namespaces.Test).Get(runningPodB.Name, metav1.GetOptions{})
+					runningPodB, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodB.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodB.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
