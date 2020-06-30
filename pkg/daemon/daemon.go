@@ -349,30 +349,16 @@ func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 }
 
 func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
-	var err, lastErr error
+	var err error
 	glog.V(0).Infof("nodeStateSyncHandler(): new generation is %d", generation)
 	// Get the latest NodeState
 	var latestState *sriovnetworkv1.SriovNetworkNodeState
-	err = wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
-		latestState, lastErr = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), dn.name, metav1.GetOptions{})
-		if lastErr == nil {
-			return true, nil
-		}
-		glog.Warningf("nodeStateSyncHandler(): Failed to fetch node state %s (%v); retrying...", dn.name, lastErr)
-		return false, nil
-	})
+	latestState, err = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), dn.name, metav1.GetOptions{})
 	if err != nil {
-		if err == wait.ErrWaitTimeout {
-			return fmt.Errorf("nodeStateSyncHandler(): Timed out trying to fetch the latest node state: %v", lastErr)
-		}
-		return fmt.Errorf("%v: %v", err, lastErr)
+		glog.Warningf("nodeStateSyncHandler(): Failed to fetch node state %s: %v", dn.name, err)
+		return err
 	}
 	latest := latestState.GetGeneration()
-	if latest != generation {
-		glog.Infof("nodeStateSyncHandler(): the latest generation is %d, skip", latest)
-		return nil
-	}
-
 	if dn.nodeState.GetGeneration() == latest {
 		glog.V(0).Infof("nodeStateSyncHandler(): Interface not changed")
 		return nil
@@ -473,18 +459,11 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 }
 
 func (dn *Daemon) completeDrain() error {
-	var lastErr error
-	err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
-		if lastErr = drain.RunCordonOrUncordon(dn.drainer, dn.node, false); lastErr != nil {
-			return false, nil
-		}
-		return true, nil
-	})
-	if err != nil {
-		glog.Errorf("drainNode(): fail to uncordon node: %v: %v", err, lastErr)
+	if err := drain.RunCordonOrUncordon(dn.drainer, dn.node, false); err != nil {
 		return err
 	}
-	if err = dn.annotateNode(dn.name, annoIdle); err != nil {
+
+	if err := dn.annotateNode(dn.name, annoIdle); err != nil {
 		glog.Errorf("drainNode(): failed to annotate node: %v", err)
 		return err
 	}
@@ -497,54 +476,33 @@ func (dn *Daemon) restartDevicePluginPod() error {
 	glog.V(2).Infof("restartDevicePluginPod(): try to restart device plugin pod")
 
 	var podToDelete string
-	var foundPodToDelete bool
-	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
-		pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
-			LabelSelector: "app=sriov-device-plugin",
-			FieldSelector: "spec.nodeName=" + dn.name,
-		})
-
+	pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
+		LabelSelector: "app=sriov-device-plugin",
+		FieldSelector: "spec.nodeName=" + dn.name,
+	})
+	if err != nil {
 		if errors.IsNotFound(err) {
 			glog.Info("restartDevicePluginPod(): device plugin pod exited")
-			return true, nil
+			return nil
 		}
-
-		if err != nil {
-			glog.Warningf("restartDevicePluginPod(): Failed to list device plugin pod: %s, retrying", err)
-			return false, nil
-		}
-
-		if len(pods.Items) == 0 {
-			glog.Info("restartDevicePluginPod(): device plugin pod exited")
-			return true, nil
-		}
-		podToDelete = pods.Items[0].Name
-		foundPodToDelete = true
-		return true, nil
-	}, dn.stopCh); err != nil {
-		glog.Errorf("restartDevicePluginPod(): failed to wait for finding pod to delete: %v", err)
+		glog.Warningf("restartDevicePluginPod(): Failed to list device plugin pod: %s, retrying", err)
 		return err
 	}
 
-	if !foundPodToDelete {
-		glog.Info("restartDevicePluginPod(): device plugin pod was not there")
+	if len(pods.Items) == 0 {
+		glog.Info("restartDevicePluginPod(): device plugin pod exited")
 		return nil
 	}
+	podToDelete = pods.Items[0].Name
 
-	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
-		glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s, deleting it", podToDelete)
-		err := dn.kubeClient.CoreV1().Pods(namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
-		if errors.IsNotFound(err) {
-			glog.Info("restartDevicePluginPod(): pod to delete not found")
-			return true, nil
-		}
-		if err != nil {
-			glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s, retrying", err)
-			return false, nil
-		}
-		return true, nil
-	}, dn.stopCh); err != nil {
-		glog.Errorf("restartDevicePluginPod(): failed to wait for pod deletion: %v", err)
+	glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s, deleting it", podToDelete)
+	err = dn.kubeClient.CoreV1().Pods(namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
+	if errors.IsNotFound(err) {
+		glog.Info("restartDevicePluginPod(): pod to delete not found")
+		return nil
+	}
+	if err != nil {
+		glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s, retrying", err)
 		return err
 	}
 
@@ -623,44 +581,41 @@ func (a GlogLogger) Logf(format string, v ...interface{}) {
 func (dn *Daemon) annotateNode(node, value string) error {
 	glog.Infof("annotateNode(): Annotate node %s with: %s", node, value)
 
-	err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
-		oldNode, err := dn.kubeClient.CoreV1().Nodes().Get(context.Background(), dn.name, metav1.GetOptions{})
-		if err != nil {
-			glog.Infof("annotateNode(): Failed to get node %s %v, retrying", node, err)
-			return false, nil
-		}
-		oldData, err := json.Marshal(oldNode)
-		if err != nil {
-			return false, err
-		}
+	oldNode, err := dn.kubeClient.CoreV1().Nodes().Get(context.Background(), dn.name, metav1.GetOptions{})
+	if err != nil {
+		glog.Infof("annotateNode(): Failed to get node %s %v, retrying", node, err)
+		return err
+	}
+	oldData, err := json.Marshal(oldNode)
+	if err != nil {
+		return err
+	}
 
-		newNode := oldNode.DeepCopy()
-		if newNode.Annotations == nil {
-			newNode.Annotations = map[string]string{}
+	newNode := oldNode.DeepCopy()
+	if newNode.Annotations == nil {
+		newNode.Annotations = map[string]string{}
+	}
+	if newNode.Annotations[annoKey] != value {
+		newNode.Annotations[annoKey] = value
+		newData, err := json.Marshal(newNode)
+		if err != nil {
+			return err
 		}
-		if newNode.Annotations[annoKey] != value {
-			newNode.Annotations[annoKey] = value
-			newData, err := json.Marshal(newNode)
-			if err != nil {
-				return false, err
-			}
-			patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, corev1.Node{})
-			if err != nil {
-				return false, err
-			}
-			_, err = dn.kubeClient.CoreV1().Nodes().Patch(context.Background(),
-				dn.name,
-				types.StrategicMergePatchType,
-				patchBytes,
-				metav1.PatchOptions{})
-			if err != nil {
-				glog.Infof("annotateNode(): Failed to patch node %s %v, retrying", node, err)
-				return false, nil
-			}
+		patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, corev1.Node{})
+		if err != nil {
+			return err
 		}
-		return true, nil
-	})
-	return err
+		_, err = dn.kubeClient.CoreV1().Nodes().Patch(context.Background(),
+			dn.name,
+			types.StrategicMergePatchType,
+			patchBytes,
+			metav1.PatchOptions{})
+		if err != nil {
+			glog.Infof("annotateNode(): Failed to patch node %s: %v", node, err)
+			return err
+		}
+	}
+	return nil
 }
 
 func (dn *Daemon) drainNode(name string) error {
