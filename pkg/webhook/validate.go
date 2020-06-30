@@ -168,19 +168,17 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 	}
 
 	for _, iface := range state.Spec.Interfaces {
-		if sriovnetworkv1.StringInArray(iface.PciAddress, policy.Spec.NicSelector.RootDevices) {
-			if len(policy.Spec.NicSelector.PfNames) > 0 {
-				for _, pf := range policy.Spec.NicSelector.PfNames {
-					name, rngSt, rngEnd, err := sriovnetworkv1.ParsePFName(pf)
-					if err != nil {
-						return false, fmt.Errorf("invalid PF name: %s", pf)
-					}
-					if name == iface.Name {
-						for _, group := range iface.VfGroups {
-							if sriovnetworkv1.IndexInRange(rngSt, group.VfRange) || sriovnetworkv1.IndexInRange(rngEnd, group.VfRange) {
-								if group.PolicyName != policy.GetName() {
-									return false, fmt.Errorf("Vf index range in %s is overlapped with existing policies", pf)
-								}
+		if len(policy.Spec.NicSelector.PfNames) > 0 {
+			for _, pf := range policy.Spec.NicSelector.PfNames {
+				name, rngSt, rngEnd, err := sriovnetworkv1.ParsePFName(pf)
+				if err != nil {
+					return false, fmt.Errorf("invalid PF name: %s", pf)
+				}
+				if name == iface.Name {
+					for _, group := range iface.VfGroups {
+						if sriovnetworkv1.IndexInRange(rngSt, group.VfRange) || sriovnetworkv1.IndexInRange(rngEnd, group.VfRange) {
+							if group.PolicyName != policy.GetName() {
+								return false, fmt.Errorf("Vf index range in %s is overlapped with existing policies", pf)
 							}
 						}
 					}

@@ -132,9 +132,8 @@ func TestValidatePolicyForNodeStateWithOverlappedVfRange(t *testing.T) {
 		Spec: SriovNetworkNodePolicySpec{
 			DeviceType: "netdevice",
 			NicSelector: SriovNetworkNicSelector{
-				PfNames:     []string{"ens803f1#1-2"},
-				RootDevices: []string{"0000:86:00.1"},
-				Vendor:      "8086",
+				PfNames: []string{"ens803f1#1-2"},
+				Vendor:  "8086",
 			},
 			NodeSelector: map[string]string{
 				"feature.node.kubernetes.io/network-sriov.capable": "true",
