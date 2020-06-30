@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -165,7 +166,7 @@ func CheckReadyGeneration(clients *testclient.ClientSet, operatorNamespace strin
 		return false, nil
 	}
 
-	logs, err := pods.GetLog(clients, podObj)
+	logs, err := pods.GetLog(clients, podObj, 5*time.Minute)
 	if err != nil {
 		return false, err
 	}
