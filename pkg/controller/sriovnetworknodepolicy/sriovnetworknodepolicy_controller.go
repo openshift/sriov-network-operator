@@ -325,13 +325,25 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnet
 	} else {
 		logger.Info("SriovNetworkNodeState already exists, updating")
 		found.Spec = ns.Spec
+
+		// Previous Policy Priority(ppp) records the priority of previous evaluated policy in node policy list.
+		// Since node policy list is already sorted with priority number, comparing current priority with ppp shall
+		// be sufficient.
+		// ppp is set to 100 as initial value to avoid matching with the first policy in policy list, although
+		// it should not matter since the flag used in p.Apply() will only be applied when VF partition is detected.
+		ppp := 100
 		for _, p := range npl.Items {
 			if p.Name == "default" {
 				continue
 			}
 			if p.Selected(node) {
 				fmt.Printf("apply policy %s for node %s\n", p.Name, node.Name)
-				p.Apply(found)
+				// Merging only for policies with the same priority (ppp == p.Spec.Priority)
+				// This boolean flag controls merging of PF configuration (e.g. mtu, numvfs etc)
+				// when VF partition is configured.
+				p.Apply(found, bool(ppp == p.Spec.Priority))
+				// record the evaluated policy priority for next loop
+				ppp = p.Spec.Priority
 			}
 		}
 		found.Spec.DpConfigVersion = cksum

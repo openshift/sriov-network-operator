@@ -105,7 +105,7 @@ func UniqueAppend(inSlice []string, strings ...string) []string {
 }
 
 // Apply policy to SriovNetworkNodeState CR
-func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
+func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, merge bool) {
 	s := p.Spec.NicSelector
 	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 {
 		// Empty NicSelector match none
@@ -128,6 +128,10 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 				for i := range state.Spec.Interfaces {
 					if state.Spec.Interfaces[i].PciAddress == result.PciAddress {
 						found = true
+						// merge PF configurations when:
+						// 1. SR-IOV partition is configured
+						// 2. SR-IOV partition policies have the same priority
+						result = state.Spec.Interfaces[i].mergePfConfigs(result, merge)
 						result.VfGroups = state.Spec.Interfaces[i].mergeVfGroups(group)
 						state.Spec.Interfaces[i] = result
 						break
@@ -140,6 +144,18 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 			}
 		}
 	}
+}
+
+func (iface Interface) mergePfConfigs(input Interface, merge bool) Interface {
+	if merge {
+		if input.Mtu < iface.Mtu {
+			input.Mtu = iface.Mtu
+		}
+		if input.NumVfs < iface.NumVfs {
+			input.NumVfs = iface.NumVfs
+		}
+	}
+	return input
 }
 
 func (iface Interface) mergeVfGroups(input *VfGroup) []VfGroup {
