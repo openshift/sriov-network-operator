@@ -127,7 +127,7 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 			}
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {
-			if err = resetSriovDevice(ifaceStatus.PciAddress); err != nil {
+			if err = resetSriovDevice(ifaceStatus); err != nil {
 				return err
 			}
 		}
@@ -340,13 +340,19 @@ func getNetDevLinkSpeed(ifaceName string) string {
 	return fmt.Sprintf("%s Mb/s", strings.TrimSpace(string(data)))
 }
 
-func resetSriovDevice(pciAddr string) error {
-	glog.V(2).Infof("resetSriovDevice(): reset sr-iov device %s", pciAddr)
-	if err := setSriovNumVfs(pciAddr, 0); err != nil {
+func resetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error {
+	glog.V(2).Infof("resetSriovDevice(): reset SRIOV device %s", ifaceStatus.PciAddress)
+	if err := setSriovNumVfs(ifaceStatus.PciAddress, 0); err != nil {
 		return err
 	}
-	if err := setNetdevMTU(pciAddr, 1500); err != nil {
-		return err
+	if ifaceStatus.LinkType == "ETH" {
+		if err := setNetdevMTU(ifaceStatus.PciAddress, 1500); err != nil {
+			return err
+		}
+	} else if ifaceStatus.LinkType == "IB" {
+		if err := setNetdevMTU(ifaceStatus.PciAddress, 2048); err != nil {
+			return err
+		}
 	}
 	return nil
 }
