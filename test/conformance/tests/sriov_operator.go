@@ -17,7 +17,9 @@ import (
 	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	"github.com/openshift/sriov-network-operator/test/util/cluster"
+	"github.com/openshift/sriov-network-operator/test/util/discovery"
 	"github.com/openshift/sriov-network-operator/test/util/execute"
+
 	"github.com/openshift/sriov-network-operator/test/util/namespaces"
 	"github.com/openshift/sriov-network-operator/test/util/network"
 	"github.com/openshift/sriov-network-operator/test/util/nodes"
@@ -71,7 +73,6 @@ var _ = Describe("[sriov] operator", func() {
 	})
 
 	Describe("No SriovNetworkNodePolicy", func() {
-
 		Context("SR-IOV network config daemon can be set by nodeselector", func() {
 			// 26186
 			It("Should schedule the config daemon on selected nodes", func() {
@@ -139,61 +140,35 @@ var _ = Describe("[sriov] operator", func() {
 		resourceName := "testresource"
 		var node string
 		var sriovDevice *sriovv1.InterfaceExt
+		var discoveryFailed bool
 
 		execute.BeforeAll(func() {
-			node = sriovInfos.Nodes[0]
 			var err error
+
+			if discovery.Enabled() {
+				node, resourceName, numVfs, err = discovery.DiscoveredResources(clients,
+					sriovInfos.Nodes, operatorNamespace, func(policy sriovv1.SriovNetworkNodePolicy) bool {
+						if policy.Spec.DeviceType != "netdevice" {
+							return false
+						}
+						return true
+					})
+
+				Expect(err).ToNot(HaveOccurred())
+				discoveryFailed = node == "" || resourceName == "" || numVfs < 5
+			} else {
+				node = sriovInfos.Nodes[0]
+				createVanillaNetworkPolicy(node, sriovInfos, numVfs, resourceName)
+				waitForSRIOVStable()
+			}
 			sriovDevice, err = sriovInfos.FindOneSriovDevice(node)
 			Expect(err).ToNot(HaveOccurred())
-
-			// For the context of tests is better to use a Mellanox card
-			// as they support all the virtual function flags
-			// if we don't find a Mellanox card we fall back to any sriov
-			// capability interface and skip the rate limit test.
-			intf, err := sriovInfos.FindOneMellanoxSriovDevice(node)
-			if err != nil {
-				intf, err = sriovInfos.FindOneSriovDevice(node)
-				Expect(err).ToNot(HaveOccurred())
-			}
-
-			config := &sriovv1.SriovNetworkNodePolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "test-policy",
-					Namespace:    operatorNamespace,
-				},
-
-				Spec: sriovv1.SriovNetworkNodePolicySpec{
-					NodeSelector: map[string]string{
-						"kubernetes.io/hostname": node,
-					},
-					NumVfs:       numVfs,
-					ResourceName: resourceName,
-					Priority:     99,
-					NicSelector: sriovv1.SriovNetworkNicSelector{
-						PfNames: []string{intf.Name},
-					},
-					DeviceType: "netdevice",
-				},
-			}
-
-			err = clients.Create(context.Background(), config)
-			Expect(err).ToNot(HaveOccurred())
-
-			Eventually(func() sriovv1.Interfaces {
-				nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
-				Expect(err).ToNot(HaveOccurred())
-				return nodeState.Spec.Interfaces
-			}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
-				IgnoreExtras,
-				Fields{
-					"Name":   Equal(intf.Name),
-					"NumVfs": Equal(numVfs),
-				})))
-
-			waitForSRIOVStable()
 		})
 
 		BeforeEach(func() {
+			if discovery.Enabled() && discoveryFailed {
+				Skip("Insufficient resources to run tests in discovery mode")
+			}
 			err := namespaces.CleanPods(namespaces.Test, clients)
 			Expect(err).ToNot(HaveOccurred())
 			err = namespaces.CleanNetworks(operatorNamespace, clients)
@@ -262,7 +237,7 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() int64 {
 					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
-					resNum, _ := testedNode.Status.Allocatable["openshift.io/testresource"]
+					resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 					allocatable, _ := resNum.AsInt64()
 					return allocatable
 				}, 3*time.Minute, time.Second).Should(Equal(int64(numVfs)))
@@ -1595,4 +1570,49 @@ func waitForSRIOVStable() {
 		Expect(err).ToNot(HaveOccurred())
 		return isClusterReady
 	}, waitingTime, 1*time.Second).Should(BeTrue())
+}
+
+func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, numVfs int, resourceName string) {
+	// For the context of tests is better to use a Mellanox card
+	// as they support all the virtual function flags
+	// if we don't find a Mellanox card we fall back to any sriov
+	// capability interface and skip the rate limit test.
+	intf, err := sriovInfos.FindOneMellanoxSriovDevice(node)
+	if err != nil {
+		intf, err = sriovInfos.FindOneSriovDevice(node)
+		Expect(err).ToNot(HaveOccurred())
+	}
+
+	config := &sriovv1.SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "test-policy",
+			Namespace:    operatorNamespace,
+		},
+
+		Spec: sriovv1.SriovNetworkNodePolicySpec{
+			NodeSelector: map[string]string{
+				"kubernetes.io/hostname": node,
+			},
+			NumVfs:       numVfs,
+			ResourceName: resourceName,
+			Priority:     99,
+			NicSelector: sriovv1.SriovNetworkNicSelector{
+				PfNames: []string{intf.Name},
+			},
+			DeviceType: "netdevice",
+		},
+	}
+	err = clients.Create(context.Background(), config)
+	Expect(err).ToNot(HaveOccurred())
+
+	Eventually(func() sriovv1.Interfaces {
+		nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		return nodeState.Spec.Interfaces
+	}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+		IgnoreExtras,
+		Fields{
+			"Name":   Equal(intf.Name),
+			"NumVfs": Equal(numVfs),
+		})))
 }
