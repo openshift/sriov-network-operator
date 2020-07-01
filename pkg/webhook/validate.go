@@ -113,6 +113,9 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	if cr.Spec.DeviceType == "vfio-pci" && cr.Spec.IsRdma {
 		return false, fmt.Errorf("'deviceType: vfio-pci' conflicts with 'isRdma: true'; Set 'deviceType' to (string)'netdevice' Or Set 'isRdma' to (bool)'false'")
 	}
+	if strings.ToLower(cr.Spec.LinkType) == "ib" && !cr.Spec.IsRdma {
+		return false, fmt.Errorf("'linkType: ib or IB' requires 'isRdma: true'; Set 'isRdma' to (bool)'true'")
+	}
 	return true, nil
 }
 
