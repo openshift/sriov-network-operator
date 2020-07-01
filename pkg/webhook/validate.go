@@ -127,12 +127,24 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	if err != nil {
 		return false, err
 	}
+	npList, err := snclient.SriovnetworkV1().SriovNetworkNodePolicies(namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return false, err
+	}
 	for _, node := range nodeList.Items {
 		if cr.Selected(&node) {
 			nodesSelected = true
 			for _, ns := range nsList.Items {
 				if ns.GetName() == node.GetName() {
 					if ok, err := validatePolicyForNodeState(cr, &ns); err != nil || !ok {
+						return false, err
+					}
+				}
+			}
+			// validate current policy against policies in API (may not be converted to SriovNetworkNodeState yet)
+			for _, np := range npList.Items {
+				if np.GetName() != cr.GetName() && np.Selected(&node) {
+					if ok, err := validatePolicyForNodePolicy(cr, &np); err != nil || !ok {
 						return false, err
 					}
 				}
@@ -166,22 +178,34 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 			}
 		}
 	}
+	return true, nil
+}
 
-	for _, iface := range state.Spec.Interfaces {
-		if len(policy.Spec.NicSelector.PfNames) > 0 {
-			for _, pf := range policy.Spec.NicSelector.PfNames {
-				name, rngSt, rngEnd, err := sriovnetworkv1.ParsePFName(pf)
-				if err != nil {
-					return false, fmt.Errorf("invalid PF name: %s", pf)
-				}
-				if name == iface.Name {
-					for _, group := range iface.VfGroups {
-						if sriovnetworkv1.IndexInRange(rngSt, group.VfRange) || sriovnetworkv1.IndexInRange(rngEnd, group.VfRange) {
-							if group.PolicyName != policy.GetName() {
-								return false, fmt.Errorf("Vf index range in %s is overlapped with existing policies", pf)
-							}
-						}
-					}
+func validatePolicyForNodePolicy(
+	current *sriovnetworkv1.SriovNetworkNodePolicy,
+	previous *sriovnetworkv1.SriovNetworkNodePolicy,
+) (bool, error) {
+	glog.V(2).Infof("validateConflictPolicy(): validate policy %s against policy %s",
+		current.GetName(), previous.GetName())
+
+	if current.GetName() == previous.GetName() {
+		return true, nil
+	}
+
+	for _, curPf := range current.Spec.NicSelector.PfNames {
+		curName, curRngSt, curRngEnd, err := sriovnetworkv1.ParsePFName(curPf)
+		if err != nil {
+			return false, fmt.Errorf("invalid PF name: %s", curPf)
+		}
+		for _, prePf := range previous.Spec.NicSelector.PfNames {
+			// Not validate return err of ParsePFName for previous PF
+			// since it should already be evaluated in previous run.
+			preName, preRngSt, preRngEnd, _ := sriovnetworkv1.ParsePFName(prePf)
+			if curName == preName {
+				if curRngEnd < preRngSt || curRngSt > preRngEnd {
+					return true, nil
+				} else {
+					return false, fmt.Errorf("VF index range in %s is overlapped with existing policy %s", curPf, previous.GetName())
 				}
 			}
 		}
