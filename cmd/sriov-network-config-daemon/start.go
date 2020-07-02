@@ -112,12 +112,12 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		kubeclient,
 		exitCh,
 		stopCh,
+		syncCh,
 		refreshCh,
 	).Run(stopCh, exitCh)
 	if err != nil {
 		glog.Errorf("failed to run daemon: %v", err)
 	}
-	<-syncCh
 	glog.V(0).Info("Shutting down SriovNetworkConfigDaemon")
 }
 

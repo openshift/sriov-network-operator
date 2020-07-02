@@ -18,18 +18,20 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	goerr "github.com/pkg/errors"
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubectl/pkg/drain"
 
 	// "k8s.io/client-go/kubernetes/scheme"
@@ -37,6 +39,15 @@ import (
 	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
 	sninformer "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions"
 	"github.com/openshift/sriov-network-operator/pkg/utils"
+)
+
+const (
+	// updateDelay is the baseline speed at which we react to changes.  We don't
+	// need to react in milliseconds as any change would involve rebooting the node.
+	updateDelay = 5 * time.Second
+	// maxUpdateBackoff is the maximum time to react to a change as we back off
+	// in the face of errors.
+	maxUpdateBackoff = 60 * time.Second
 )
 
 type Message struct {
@@ -63,6 +74,8 @@ type Daemon struct {
 	// channel used to ensure all spawned goroutines exit when we exit.
 	stopCh <-chan struct{}
 
+	syncCh <-chan struct{}
+
 	refreshCh chan<- Message
 
 	dpReboot bool
@@ -76,6 +89,12 @@ type Daemon struct {
 	drainable bool
 
 	nodeLister listerv1.NodeLister
+
+	workqueue workqueue.RateLimitingInterface
+}
+
+type workItem struct {
+	old, new *sriovnetworkv1.SriovNetworkNodeState
 }
 
 const (
@@ -105,6 +124,7 @@ func New(
 	kubeClient *kubernetes.Clientset,
 	exitCh chan<- error,
 	stopCh <-chan struct{},
+	syncCh <-chan struct{},
 	refreshCh chan<- Message,
 ) *Daemon {
 	return &Daemon{
@@ -113,8 +133,10 @@ func New(
 		kubeClient: kubeClient,
 		exitCh:     exitCh,
 		stopCh:     stopCh,
+		syncCh:     syncCh,
 		refreshCh:  refreshCh,
 		drainable:  true,
+		nodeState:  &sriovnetworkv1.SriovNetworkNodeState{},
 		drainer: &drain.Helper{
 			Client:              kubeClient,
 			Force:               true,
@@ -133,12 +155,18 @@ func New(
 			Out:    writer{glog.Info},
 			ErrOut: writer{glog.Error},
 		},
+		workqueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
+			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(updateDelay), 1)},
+			workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, maxUpdateBackoff)), "SriovNetworkNodeState"),
 	}
 }
 
+// Run the config daemon
 func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	glog.V(0).Info("Run(): start daemon")
 	// Only watch own SriovNetworkNodeState CR
+	defer utilruntime.HandleCrash()
+	defer dn.workqueue.ShutDown()
 
 	tryEnableRdma()
 	if err := tryCreateUdevRule(); err != nil {
@@ -157,8 +185,10 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 
 	informer := informerFactory.Sriovnetwork().V1().SriovNetworkNodeStates().Informer()
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    dn.nodeStateAddHandler,
-		UpdateFunc: dn.nodeStateChangeHandler,
+		AddFunc: dn.enqueueNodeState,
+		UpdateFunc: func(old, new interface{}) {
+			dn.enqueueNodeState(new)
+		},
 	})
 
 	cfgInformerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
@@ -189,6 +219,14 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	go nodeInformer.Run(dn.stopCh)
 	time.Sleep(5 * time.Second)
 	go informer.Run(dn.stopCh)
+	if ok := cache.WaitForCacheSync(stopCh, cfgInformer.HasSynced, nodeInformer.HasSynced, informer.HasSynced); !ok {
+		return fmt.Errorf("failed to wait for caches to sync")
+	}
+
+	glog.Info("Starting workers")
+	// Launch one workers to process
+	go wait.Until(dn.runWorker, time.Second, stopCh)
+	glog.Info("Started workers")
 
 	for {
 		select {
@@ -204,6 +242,71 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 			return err
 		}
 	}
+}
+
+func (dn *Daemon) runWorker() {
+	for dn.processNextWorkItem() {
+	}
+}
+
+func (dn *Daemon) enqueueNodeState(obj interface{}) {
+	var ns *sriovnetworkv1.SriovNetworkNodeState
+	var ok bool
+	if ns, ok = obj.(*sriovnetworkv1.SriovNetworkNodeState); !ok {
+		utilruntime.HandleError(fmt.Errorf("expected SriovNetworkNodeState but got %#v", obj))
+		return
+	}
+	key := ns.GetGeneration()
+	dn.workqueue.Add(key)
+}
+
+func (dn *Daemon) processNextWorkItem() bool {
+	glog.V(2).Infof("worker queue size: %d", dn.workqueue.Len())
+	obj, shutdown := dn.workqueue.Get()
+	glog.V(2).Infof("get item: %d", obj.(int64))
+	if shutdown {
+		return false
+	}
+
+	// We wrap this block in a func so we can defer c.workqueue.Done.
+	err := func(obj interface{}) error {
+		// We call Done here so the workqueue knows we have finished
+		// processing this item.
+		defer dn.workqueue.Done(obj)
+		var key int64
+		var ok bool
+		if key, ok = obj.(int64); !ok {
+			// As the item in the workqueue is actually invalid, we call
+			// Forget here.
+			dn.workqueue.Forget(obj)
+			utilruntime.HandleError(fmt.Errorf("expected workItem in workqueue but got %#v", obj))
+			return nil
+		}
+		var err error
+
+		err = dn.nodeStateSyncHandler(key)
+		if err != nil {
+			// Ereport error message, and put the item back to work queue for retry.
+			dn.refreshCh <- Message{
+				syncStatus:    "Failed",
+				lastSyncError: err.Error(),
+			}
+			<-dn.syncCh
+			dn.workqueue.AddRateLimited(key)
+			return fmt.Errorf("error syncing: %s, requeuing", err.Error())
+		}
+		// Finally, if no error occurs we Forget this item so it does not
+		// get queued again until another change happens.
+		dn.workqueue.Forget(obj)
+		glog.Infof("Successfully synced")
+		return nil
+	}(obj)
+
+	if err != nil {
+		utilruntime.HandleError(err)
+	}
+
+	return true
 }
 
 func (dn *Daemon) nodeAddHandler(obj interface{}) {
@@ -245,145 +348,66 @@ func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 	}
 }
 
-func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
-	// "k8s.io/apimachinery/pkg/apis/meta/v1" provides an Object
-	// interface that allows us to get metadata easily
-	nodeState := obj.(*sriovnetworkv1.SriovNetworkNodeState)
-	glog.V(2).Infof("nodeStateAddHandler(): New SriovNetworkNodeState Added to Store: %s", nodeState.GetName())
-	dn.refreshCh <- Message{
-		syncStatus:    "InProgress",
-		lastSyncError: "",
-	}
-	err := dn.loadVendorPlugins(nodeState)
-	if err != nil {
-		glog.Errorf("nodeStateAddHandler(): failed to load vendor plugin: %v", err)
-		dn.exitCh <- err
-		return
-	}
-
-	reqReboot := false
-	reqDrain := false
-
-	for k, p := range dn.LoadedPlugins {
-		d, r, err := p.OnNodeStateAdd(nodeState)
-		if err != nil {
-			glog.Errorf("nodeStateAddHandler(): plugin %s error: %v", k, err)
-			dn.exitCh <- err
-			return
-		}
-		reqDrain = reqDrain || d
-		reqReboot = reqReboot || r
-	}
-	glog.V(2).Infof("nodeStateAddHandler(): reqDrain %v, reqReboot %v", reqDrain, reqReboot)
-
-	if reqDrain {
-		glog.Info("nodeStateAddHandler(): drain node")
-		dn.drainNode(nodeState.GetName())
-	}
-	for k, p := range dn.LoadedPlugins {
-		if k != GenericPlugin {
-			err := p.Apply()
-			if err != nil {
-				glog.Errorf("nodeStateAddHandler(): plugin %s fail to apply: %v", k, err)
-				dn.exitCh <- err
-				return
-			}
-		}
-	}
-
-	if len(dn.LoadedPlugins) > 1 && !reqReboot {
-		// Apply generic_plugin last
-		err = dn.LoadedPlugins[GenericPlugin].Apply()
-		if err != nil {
-			glog.Errorf("nodeStateAddHandler(): generic_plugin fail to apply: %v", err)
-			dn.exitCh <- err
-			return
-		}
-	}
-
-	if reqReboot {
-		glog.Info("nodeStateAddHandler(): reboot node")
-		rebootNode()
-		return
-	}
-
-	// restart device plugin pod
-	if reqDrain {
-		if err := dn.restartDevicePluginPod(); err != nil {
-			glog.Errorf("nodeStateAddHandler(): fail to restart device plugin pod: %v", err)
-			dn.exitCh <- err
-			return
-		}
-	}
-
-	dn.completeDrain()
-	dn.refreshCh <- Message{
-		syncStatus:    "Succeeded",
-		lastSyncError: "",
-	}
-}
-
-func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
-	var err, lastErr error
-	newState := new.(*sriovnetworkv1.SriovNetworkNodeState)
-	oldState := old.(*sriovnetworkv1.SriovNetworkNodeState)
-	glog.V(2).Infof("nodeStateChangeHandler(): new generation is %d", newState.GetObjectMeta().GetGeneration())
+func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
+	var err error
+	glog.V(0).Infof("nodeStateSyncHandler(): new generation is %d", generation)
 	// Get the latest NodeState
 	var latestState *sriovnetworkv1.SriovNetworkNodeState
-	err = wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
-		latestState, lastErr = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), dn.name, metav1.GetOptions{})
-		if lastErr == nil {
-			return true, nil
-		}
-		glog.Warningf("nodeStateChangeHandler(): Failed to fetch node state %s (%v); retrying...", dn.name, lastErr)
-		return false, nil
-	})
+	latestState, err = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), dn.name, metav1.GetOptions{})
 	if err != nil {
-		if err == wait.ErrWaitTimeout {
-			dn.exitCh <- goerr.Wrapf(lastErr, "nodeStateChangeHandler(): Timed out trying to fetch the latest node state %s", dn.name)
-			return
-		}
-		dn.exitCh <- err
-		return
+		glog.Warningf("nodeStateSyncHandler(): Failed to fetch node state %s: %v", dn.name, err)
+		return err
 	}
-	latest := latestState.GetObjectMeta().GetGeneration()
-	if latest != newState.GetObjectMeta().GetGeneration() {
-		glog.Errorf("nodeStateChangeHandler(): the lastet generation is %d, skip", latest)
-		return
+	latest := latestState.GetGeneration()
+	if dn.nodeState.GetGeneration() == latest {
+		glog.V(0).Infof("nodeStateSyncHandler(): Interface not changed")
+		return nil
 	}
-	if latest == oldState.GetObjectMeta().GetGeneration() {
-		glog.V(2).Infof("nodeStateChangeHandler(): Interface not changed")
-		return
-	}
+
 	dn.refreshCh <- Message{
 		syncStatus:    "InProgress",
 		lastSyncError: "",
 	}
+
+	// load plugins if has not loaded
+	if len(dn.LoadedPlugins) == 0 {
+		err = dn.loadVendorPlugins(latestState)
+		if err != nil {
+			glog.Errorf("nodeStateSyncHandler(): failed to load vendor plugin: %v", err)
+			return err
+		}
+	}
+
 	reqReboot := false
 	reqDrain := false
 	for k, p := range dn.LoadedPlugins {
-		d, r, err := p.OnNodeStateChange(oldState, latestState)
+		d, r := false, false
+		if dn.nodeState.GetName() == "" {
+			d, r, err = p.OnNodeStateAdd(latestState)
+		} else {
+			d, r, err = p.OnNodeStateChange(dn.nodeState, latestState)
+		}
 		if err != nil {
-			glog.Errorf("nodeStateChangeHandler(): plugin %s error: %v", k, err)
-			dn.exitCh <- err
-			return
+			glog.Errorf("nodeStateSyncHandler(): plugin %s error: %v", k, err)
+			return err
 		}
 		reqDrain = reqDrain || d
 		reqReboot = reqReboot || r
 	}
-	glog.V(2).Infof("nodeStateChangeHandler(): reqDrain %v, reqReboot %v", reqDrain, reqReboot)
+	glog.V(0).Infof("nodeStateSyncHandler(): reqDrain %v, reqReboot %v", reqDrain, reqReboot)
 
 	if reqDrain {
-		glog.Info("nodeStateChangeHandler(): drain node")
-		dn.drainNode(latestState.GetName())
+		glog.Info("nodeStateSyncHandler(): drain node")
+		if err := dn.drainNode(dn.name); err != nil {
+			return err
+		}
 	}
 	for k, p := range dn.LoadedPlugins {
 		if k != GenericPlugin {
 			err := p.Apply()
 			if err != nil {
-				glog.Errorf("nodeStateChangeHandler(): plugin %s fail to apply: %v", k, err)
-				dn.exitCh <- err
-				return
+				glog.Errorf("nodeStateSyncHandler(): plugin %s fail to apply: %v", k, err)
+				return err
 			}
 		}
 	}
@@ -392,54 +416,58 @@ func (dn *Daemon) nodeStateChangeHandler(old, new interface{}) {
 		// Apply generic_plugin last
 		err = dn.LoadedPlugins[GenericPlugin].Apply()
 		if err != nil {
-			glog.Errorf("nodeStateChangeHandler(): generic_plugin fail to apply: %v", err)
-			dn.exitCh <- err
-			return
+			glog.Errorf("nodeStateSyncHandler(): generic_plugin fail to apply: %v", err)
+			return err
 		}
 	}
 
 	if reqReboot {
-		glog.Info("nodeStateChangeHandler(): reboot node")
-		go rebootNode()
-		return
+		glog.Info("nodeStateSyncHandler(): reboot node")
+		rebootNode()
+		return nil
 	}
 
 	// restart device plugin pod
-	if reqDrain || (latestState.Spec.DpConfigVersion != oldState.Spec.DpConfigVersion) {
-		glog.Info("nodeStateChangeHandler(): restart device plugin pod")
+	if reqDrain || (dn.nodeState.GetName() != "" && latestState.Spec.DpConfigVersion != dn.nodeState.Spec.DpConfigVersion) {
+		glog.Info("nodeStateSyncHandler(): restart device plugin pod")
 		if err := dn.restartDevicePluginPod(); err != nil {
-			glog.Errorf("nodeStateChangeHandler(): fail to restart device plugin pod: %v", err)
-			dn.exitCh <- err
-			return
+			glog.Errorf("nodeStateSyncHandler(): fail to restart device plugin pod: %v", err)
+			return err
 		}
 	}
 
 	if anno, ok := dn.node.Annotations[annoKey]; ok && anno == annoDraining {
-		dn.completeDrain()
+		if err := dn.completeDrain(); err != nil {
+			glog.Errorf("nodeStateSyncHandler(): failed to complete draining: %v", err)
+			return err
+		}
 	} else if !ok {
 		if err := dn.annotateNode(dn.name, annoIdle); err != nil {
-			glog.Errorf("drainNode(): failed to annotate node: %v", err)
-			dn.exitCh <- err
-			return
+			glog.Errorf("nodeStateSyncHandler(): failed to annotate node: %v", err)
+			return err
 		}
 	}
+	glog.Info("nodeStateSyncHandler(): sync succeeded")
+	dn.nodeState = latestState.DeepCopy()
 	dn.refreshCh <- Message{
 		syncStatus:    "Succeeded",
 		lastSyncError: "",
 	}
+	// wait for writer to refresh the status
+	<-dn.syncCh
+	return nil
 }
 
-func (dn *Daemon) completeDrain() {
+func (dn *Daemon) completeDrain() error {
 	if err := drain.RunCordonOrUncordon(dn.drainer, dn.node, false); err != nil {
-		glog.Errorf("nodeStateChangeHandler(): fail to uncordon node: %v", err)
-		dn.exitCh <- err
-		return
+		return err
 	}
+
 	if err := dn.annotateNode(dn.name, annoIdle); err != nil {
 		glog.Errorf("drainNode(): failed to annotate node: %v", err)
-		dn.exitCh <- err
-		return
+		return err
 	}
+	return nil
 }
 
 func (dn *Daemon) restartDevicePluginPod() error {
@@ -448,54 +476,33 @@ func (dn *Daemon) restartDevicePluginPod() error {
 	glog.V(2).Infof("restartDevicePluginPod(): try to restart device plugin pod")
 
 	var podToDelete string
-	var foundPodToDelete bool
-	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
-		pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
-			LabelSelector: "app=sriov-device-plugin",
-			FieldSelector: "spec.nodeName=" + dn.name,
-		})
-
+	pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
+		LabelSelector: "app=sriov-device-plugin",
+		FieldSelector: "spec.nodeName=" + dn.name,
+	})
+	if err != nil {
 		if errors.IsNotFound(err) {
 			glog.Info("restartDevicePluginPod(): device plugin pod exited")
-			return true, nil
+			return nil
 		}
-
-		if err != nil {
-			glog.Warningf("restartDevicePluginPod(): Failed to list device plugin pod: %s, retrying", err)
-			return false, nil
-		}
-
-		if len(pods.Items) == 0 {
-			glog.Info("restartDevicePluginPod(): device plugin pod exited")
-			return true, nil
-		}
-		podToDelete = pods.Items[0].Name
-		foundPodToDelete = true
-		return true, nil
-	}, dn.stopCh); err != nil {
-		glog.Errorf("restartDevicePluginPod(): failed to wait for finding pod to delete: %v", err)
+		glog.Warningf("restartDevicePluginPod(): Failed to list device plugin pod: %s, retrying", err)
 		return err
 	}
 
-	if !foundPodToDelete {
-		glog.Info("restartDevicePluginPod(): device plugin pod was not there")
+	if len(pods.Items) == 0 {
+		glog.Info("restartDevicePluginPod(): device plugin pod exited")
 		return nil
 	}
+	podToDelete = pods.Items[0].Name
 
-	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
-		glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s, deleting it", podToDelete)
-		err := dn.kubeClient.CoreV1().Pods(namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
-		if errors.IsNotFound(err) {
-			glog.Info("restartDevicePluginPod(): pod to delete not found")
-			return true, nil
-		}
-		if err != nil {
-			glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s, retrying", err)
-			return false, nil
-		}
-		return true, nil
-	}, dn.stopCh); err != nil {
-		glog.Errorf("restartDevicePluginPod(): failed to wait for pod deletion: %v", err)
+	glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s, deleting it", podToDelete)
+	err = dn.kubeClient.CoreV1().Pods(namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
+	if errors.IsNotFound(err) {
+		glog.Info("restartDevicePluginPod(): pod to delete not found")
+		return nil
+	}
+	if err != nil {
+		glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s, retrying", err)
 		return err
 	}
 
@@ -544,6 +551,7 @@ func rebootNode() {
 	if err != nil {
 		glog.Errorf("rebootNode(): %v", err)
 	}
+	defer exit()
 	// creates a new transient systemd unit to reboot the system.
 	// We explictily try to stop kubelet.service first, before anything else; this
 	// way we ensure the rest of system stays running, because kubelet may need
@@ -556,9 +564,6 @@ func rebootNode() {
 
 	if err := cmd.Run(); err != nil {
 		glog.Errorf("failed to reboot node: %v", err)
-	}
-	if err := exit(); err != nil {
-		glog.Errorf("rebootNode(): %v", err)
 	}
 }
 
@@ -576,47 +581,44 @@ func (a GlogLogger) Logf(format string, v ...interface{}) {
 func (dn *Daemon) annotateNode(node, value string) error {
 	glog.Infof("annotateNode(): Annotate node %s with: %s", node, value)
 
-	err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (bool, error) {
-		oldNode, err := dn.kubeClient.CoreV1().Nodes().Get(context.Background(), dn.name, metav1.GetOptions{})
-		if err != nil {
-			glog.Infof("annotateNode(): Failed to get node %s %v, retrying", node, err)
-			return false, nil
-		}
-		oldData, err := json.Marshal(oldNode)
-		if err != nil {
-			return false, err
-		}
+	oldNode, err := dn.kubeClient.CoreV1().Nodes().Get(context.Background(), dn.name, metav1.GetOptions{})
+	if err != nil {
+		glog.Infof("annotateNode(): Failed to get node %s %v, retrying", node, err)
+		return err
+	}
+	oldData, err := json.Marshal(oldNode)
+	if err != nil {
+		return err
+	}
 
-		newNode := oldNode.DeepCopy()
-		if newNode.Annotations == nil {
-			newNode.Annotations = map[string]string{}
+	newNode := oldNode.DeepCopy()
+	if newNode.Annotations == nil {
+		newNode.Annotations = map[string]string{}
+	}
+	if newNode.Annotations[annoKey] != value {
+		newNode.Annotations[annoKey] = value
+		newData, err := json.Marshal(newNode)
+		if err != nil {
+			return err
 		}
-		if newNode.Annotations[annoKey] != value {
-			newNode.Annotations[annoKey] = value
-			newData, err := json.Marshal(newNode)
-			if err != nil {
-				return false, err
-			}
-			patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, corev1.Node{})
-			if err != nil {
-				return false, err
-			}
-			_, err = dn.kubeClient.CoreV1().Nodes().Patch(context.Background(),
-				dn.name,
-				types.StrategicMergePatchType,
-				patchBytes,
-				metav1.PatchOptions{})
-			if err != nil {
-				glog.Infof("annotateNode(): Failed to patch node %s %v, retrying", node, err)
-				return false, nil
-			}
+		patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, corev1.Node{})
+		if err != nil {
+			return err
 		}
-		return true, nil
-	})
-	return err
+		_, err = dn.kubeClient.CoreV1().Nodes().Patch(context.Background(),
+			dn.name,
+			types.StrategicMergePatchType,
+			patchBytes,
+			metav1.PatchOptions{})
+		if err != nil {
+			glog.Infof("annotateNode(): Failed to patch node %s: %v", node, err)
+			return err
+		}
+	}
+	return nil
 }
 
-func (dn *Daemon) drainNode(name string) {
+func (dn *Daemon) drainNode(name string) error {
 	glog.Info("drainNode(): Update prepared")
 	var err error
 	// wait a random time to avoid all the nodes drain at the same time
@@ -630,6 +632,7 @@ func (dn *Daemon) drainNode(name string) {
 	err = dn.annotateNode(dn.name, annoDraining)
 	if err != nil {
 		glog.Errorf("drainNode(): Failed to annotate node: %v", err)
+		return err
 	}
 
 	backoff := wait.Backoff{
@@ -659,8 +662,10 @@ func (dn *Daemon) drainNode(name string) {
 			glog.Errorf("drainNode(): failed to drain node (%d tries): %v :%v", backoff.Steps, err, lastErr)
 		}
 		glog.Errorf("drainNode(): failed to drain node: %v", err)
+		return err
 	}
 	glog.Info("drainNode(): drain complete")
+	return nil
 }
 
 func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
