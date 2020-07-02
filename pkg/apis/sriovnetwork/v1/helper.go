@@ -1,11 +1,27 @@
 package v1
 
 import (
+	"context"
+	"encoding/json"
+	"os"
 	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+
+	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
+	render "github.com/openshift/sriov-network-operator/pkg/render"
+)
+
+const (
+	MANIFESTS_PATH       = "./bindata/manifests/cni-config"
+	LASTNETWORKNAMESPACE = "operator.sriovnetwork.openshift.io/last-network-namespace"
+	FINALIZERNAME        = "netattdef.finalizers.sriovnetwork.openshift.io"
 )
 
 const invalidVfIndex = -1
@@ -89,7 +105,7 @@ func UniqueAppend(inSlice []string, strings ...string) []string {
 }
 
 // Apply policy to SriovNetworkNodeState CR
-func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
+func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, merge bool) {
 	s := p.Spec.NicSelector
 	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 {
 		// Empty NicSelector match none
@@ -102,6 +118,7 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 				PciAddress: iface.PciAddress,
 				Mtu:        p.Spec.Mtu,
 				Name:       iface.Name,
+				LinkType:   p.Spec.LinkType,
 			}
 			var group *VfGroup
 			if p.Spec.NumVfs > 0 {
@@ -111,6 +128,10 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 				for i := range state.Spec.Interfaces {
 					if state.Spec.Interfaces[i].PciAddress == result.PciAddress {
 						found = true
+						// merge PF configurations when:
+						// 1. SR-IOV partition is configured
+						// 2. SR-IOV partition policies have the same priority
+						result = state.Spec.Interfaces[i].mergePfConfigs(result, merge)
 						result.VfGroups = state.Spec.Interfaces[i].mergeVfGroups(group)
 						state.Spec.Interfaces[i] = result
 						break
@@ -123,6 +144,18 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState) {
 			}
 		}
 	}
+}
+
+func (iface Interface) mergePfConfigs(input Interface, merge bool) Interface {
+	if merge {
+		if input.Mtu < iface.Mtu {
+			input.Mtu = iface.Mtu
+		}
+		if input.NumVfs < iface.NumVfs {
+			input.NumVfs = iface.NumVfs
+		}
+	}
+	return input
 }
 
 func (iface Interface) mergeVfGroups(input *VfGroup) []VfGroup {
@@ -248,4 +281,200 @@ func (s *SriovNetworkNodeState) GetDriverByPciAddress(addr string) string {
 		}
 	}
 	return ""
+}
+
+// RenderNetAttDef renders a net-att-def for ib-sriov CNI
+func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
+	logger := log.WithName("renderNetAttDef")
+	logger.Info("Start to render IB SRIOV CNI NetworkAttachementDefinition")
+	var err error
+	objs := []*uns.Unstructured{}
+
+	// render RawCNIConfig manifests
+	data := render.MakeRenderData()
+	data.Data["CniType"] = "ib-sriov"
+	data.Data["SriovNetworkName"] = cr.Name
+	if cr.Spec.NetworkNamespace == "" {
+		data.Data["SriovNetworkNamespace"] = cr.Namespace
+	} else {
+		data.Data["SriovNetworkNamespace"] = cr.Spec.NetworkNamespace
+	}
+	data.Data["SriovCniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
+
+	data.Data["StateConfigured"] = true
+	switch cr.Spec.LinkState {
+	case "enable":
+		data.Data["SriovCniState"] = "enable"
+	case "disable":
+		data.Data["SriovCniState"] = "disable"
+	case "auto":
+		data.Data["SriovCniState"] = "auto"
+	default:
+		data.Data["StateConfigured"] = false
+	}
+
+	if cr.Spec.Capabilities == "" {
+		data.Data["CapabilitiesConfigured"] = false
+	} else {
+		data.Data["CapabilitiesConfigured"] = true
+		data.Data["SriovCniCapabilities"] = cr.Spec.Capabilities
+	}
+
+	if cr.Spec.IPAM != "" {
+		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
+	} else {
+		data.Data["SriovCniIpam"] = "\"ipam\":{}"
+	}
+
+	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
+	if err != nil {
+		return nil, err
+	}
+	for _, obj := range objs {
+		raw, _ := json.Marshal(obj)
+		logger.Info("render NetworkAttachementDefinition output", "raw", string(raw))
+	}
+	return objs[0], nil
+}
+
+// DeleteNetAttDef deletes the generated net-att-def CR
+func (cr *SriovIBNetwork) DeleteNetAttDef(c client.Client) error {
+	// Fetch the NetworkAttachmentDefinition instance
+	instance := &netattdefv1.NetworkAttachmentDefinition{}
+	namespace := cr.GetNamespace()
+	if cr.Spec.NetworkNamespace != "" {
+		namespace = cr.Spec.NetworkNamespace
+	}
+	err := c.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: cr.GetName()}, instance)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	err = c.Delete(context.TODO(), instance)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// RenderNetAttDef renders a net-att-def for sriov CNI
+func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
+	logger := log.WithName("renderNetAttDef")
+	logger.Info("Start to render SRIOV CNI NetworkAttachementDefinition")
+	var err error
+	objs := []*uns.Unstructured{}
+
+	// render RawCNIConfig manifests
+	data := render.MakeRenderData()
+	data.Data["CniType"] = "sriov"
+	data.Data["SriovNetworkName"] = cr.Name
+	if cr.Spec.NetworkNamespace == "" {
+		data.Data["SriovNetworkNamespace"] = cr.Namespace
+	} else {
+		data.Data["SriovNetworkNamespace"] = cr.Spec.NetworkNamespace
+	}
+	data.Data["SriovCniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
+	data.Data["SriovCniVlan"] = cr.Spec.Vlan
+
+	if cr.Spec.VlanQoS <= 7 && cr.Spec.VlanQoS >= 0 {
+		data.Data["VlanQoSConfigured"] = true
+		data.Data["SriovCniVlanQoS"] = cr.Spec.VlanQoS
+	} else {
+		data.Data["VlanQoSConfigured"] = false
+	}
+
+	if cr.Spec.Capabilities == "" {
+		data.Data["CapabilitiesConfigured"] = false
+	} else {
+		data.Data["CapabilitiesConfigured"] = true
+		data.Data["SriovCniCapabilities"] = cr.Spec.Capabilities
+	}
+
+	data.Data["SpoofChkConfigured"] = true
+	switch cr.Spec.SpoofChk {
+	case "off":
+		data.Data["SriovCniSpoofChk"] = "off"
+	case "on":
+		data.Data["SriovCniSpoofChk"] = "on"
+	default:
+		data.Data["SpoofChkConfigured"] = false
+	}
+
+	data.Data["TrustConfigured"] = true
+	switch cr.Spec.Trust {
+	case "on":
+		data.Data["SriovCniTrust"] = "on"
+	case "off":
+		data.Data["SriovCniTrust"] = "off"
+	default:
+		data.Data["TrustConfigured"] = false
+	}
+
+	data.Data["StateConfigured"] = true
+	switch cr.Spec.LinkState {
+	case "enable":
+		data.Data["SriovCniState"] = "enable"
+	case "disable":
+		data.Data["SriovCniState"] = "disable"
+	case "auto":
+		data.Data["SriovCniState"] = "auto"
+	default:
+		data.Data["StateConfigured"] = false
+	}
+
+	data.Data["MinTxRateConfigured"] = false
+	if cr.Spec.MinTxRate != nil {
+		if *cr.Spec.MinTxRate >= 0 {
+			data.Data["MinTxRateConfigured"] = true
+			data.Data["SriovCniMinTxRate"] = *cr.Spec.MinTxRate
+		}
+	}
+
+	data.Data["MaxTxRateConfigured"] = false
+	if cr.Spec.MaxTxRate != nil {
+		if *cr.Spec.MaxTxRate >= 0 {
+			data.Data["MaxTxRateConfigured"] = true
+			data.Data["SriovCniMaxTxRate"] = *cr.Spec.MaxTxRate
+		}
+	}
+
+	if cr.Spec.IPAM != "" {
+		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
+	} else {
+		data.Data["SriovCniIpam"] = "\"ipam\":{}"
+	}
+
+	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
+	if err != nil {
+		return nil, err
+	}
+	for _, obj := range objs {
+		raw, _ := json.Marshal(obj)
+		logger.Info("render NetworkAttachementDefinition output", "raw", string(raw))
+	}
+	return objs[0], nil
+}
+
+// DeleteNetAttDef deletes the generated net-att-def CR
+func (cr *SriovNetwork) DeleteNetAttDef(c client.Client) error {
+	// Fetch the NetworkAttachmentDefinition instance
+	instance := &netattdefv1.NetworkAttachmentDefinition{}
+	namespace := cr.GetNamespace()
+	if cr.Spec.NetworkNamespace != "" {
+		namespace = cr.Spec.NetworkNamespace
+	}
+	err := c.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: cr.GetName()}, instance)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	err = c.Delete(context.TODO(), instance)
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -32,3 +32,23 @@ spec:
     rootDevices: ['0000:02:00.0', '0000:02:00.1']
   deviceType: netdevice
   isRdma: true
+
+---
+# Changing mtu for Mellanox IB NICs is out of scope
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: mlnx-ib-nics
+  namespace: sriov-network-operator
+spec:
+  resourceName: mlxibnics
+  nodeSelector:
+    feature.node.kubernetes.io/network-ib-sriov.capable: "true"
+  priority: 99
+  numVfs: 16
+  nicSelector:
+    vendor: "15b3"
+    rootDevices: ['0000:02:00.0', '0000:02:00.1']
+  deviceType: netdevice
+  isRdma: true
+  linkType: IB

@@ -3,9 +3,7 @@ package tests
 import (
 	"os"
 
-	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 var (
@@ -19,8 +17,6 @@ func init() {
 		operatorNamespace = "openshift-sriov-network-operator"
 	}
 
-	clients = testclient.New("", func(scheme *runtime.Scheme) {
-		sriovv1.AddToScheme(scheme)
-	})
+	clients = testclient.New("")
 
 }

@@ -5,8 +5,8 @@
 package v1
 
 import (
-	spec "github.com/go-openapi/spec"
-	common "k8s.io/kube-openapi/pkg/common"
+	"github.com/go-openapi/spec"
+	"k8s.io/kube-openapi/pkg/common"
 )
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
@@ -181,6 +181,13 @@ func schema_pkg_apis_sriovnetwork_v1_SriovNetworkNodePolicySpec(ref common.Refer
 						SchemaProps: spec.SchemaProps{
 							Description: "RDMA mode. Defaults to false.",
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"linkType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NIC Link Type. Allowed value \"eth\", \"ETH\", \"ib\", and \"IB\".",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},

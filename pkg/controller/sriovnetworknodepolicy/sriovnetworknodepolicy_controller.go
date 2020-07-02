@@ -325,13 +325,25 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnet
 	} else {
 		logger.Info("SriovNetworkNodeState already exists, updating")
 		found.Spec = ns.Spec
+
+		// Previous Policy Priority(ppp) records the priority of previous evaluated policy in node policy list.
+		// Since node policy list is already sorted with priority number, comparing current priority with ppp shall
+		// be sufficient.
+		// ppp is set to 100 as initial value to avoid matching with the first policy in policy list, although
+		// it should not matter since the flag used in p.Apply() will only be applied when VF partition is detected.
+		ppp := 100
 		for _, p := range npl.Items {
 			if p.Name == "default" {
 				continue
 			}
 			if p.Selected(node) {
 				fmt.Printf("apply policy %s for node %s\n", p.Name, node.Name)
-				p.Apply(found)
+				// Merging only for policies with the same priority (ppp == p.Spec.Priority)
+				// This boolean flag controls merging of PF configuration (e.g. mtu, numvfs etc)
+				// when VF partition is configured.
+				p.Apply(found, bool(ppp == p.Spec.Priority))
+				// record the evaluated policy priority for next loop
+				ppp = p.Spec.Priority
 			}
 		}
 		found.Spec.DpConfigVersion = cksum
@@ -418,6 +430,7 @@ func (r *ReconcileSriovNetworkNodePolicy) tryDeleteDsPods(namespace, name string
 		}
 	} else {
 		ds.Spec.Template.Spec.NodeSelector = map[string]string{"beta.kubernetes.io/os": "none"}
+		ds.Spec.Template.Spec.Affinity = &corev1.Affinity{}
 		err = r.client.Update(context.TODO(), ds)
 		if err != nil {
 			logger.Error(err, "Fail to update DaemonSet", "Namespace", namespace, "Name", name)
@@ -548,9 +561,10 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 		}
 
 		found, i := resourceNameInList(p.Spec.ResourceName, &rcl)
+		netDeviceSelectors := dptypes.NetDeviceSelectors{}
 		if found {
-			if p.Spec.NicSelector.Vendor != "" && !sriovnetworkv1.StringInArray(p.Spec.NicSelector.Vendor, rcl.ResourceList[i].Selectors.Vendors) {
-				rcl.ResourceList[i].Selectors.Vendors = append(rcl.ResourceList[i].Selectors.Vendors, p.Spec.NicSelector.Vendor)
+			if p.Spec.NicSelector.Vendor != "" && !sriovnetworkv1.StringInArray(p.Spec.NicSelector.Vendor, netDeviceSelectors.Vendors) {
+				netDeviceSelectors.Vendors = append(netDeviceSelectors.Vendors, p.Spec.NicSelector.Vendor)
 			}
 			if p.Spec.NicSelector.DeviceID != "" {
 				var deviceID string
@@ -560,53 +574,67 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 					deviceID = sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID]
 				}
 
-				if !sriovnetworkv1.StringInArray(p.Spec.NicSelector.DeviceID, rcl.ResourceList[i].Selectors.Devices) {
-					rcl.ResourceList[i].Selectors.Devices = append(rcl.ResourceList[i].Selectors.Devices, deviceID)
+				if !sriovnetworkv1.StringInArray(p.Spec.NicSelector.DeviceID, netDeviceSelectors.Devices) {
+					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, deviceID)
 				}
 			}
 			if len(p.Spec.NicSelector.PfNames) > 0 {
-				rcl.ResourceList[i].Selectors.PfNames = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.PfNames, p.Spec.NicSelector.PfNames...)
+				netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
 			if p.Spec.DeviceType == "vfio-pci" {
-				rcl.ResourceList[i].Selectors.Drivers = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.Drivers, p.Spec.DeviceType)
+				netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, p.Spec.DeviceType)
 			} else {
 				if p.Spec.NumVfs > 0 {
 					///////////////////////////////////
 					// TODO: remove unsupport VF driver
 					///////////////////////////////////
-					rcl.ResourceList[i].Selectors.Drivers = sriovnetworkv1.UniqueAppend(rcl.ResourceList[i].Selectors.Drivers, "iavf", "mlx5_core", "ixgbevf", "i40evf")
+					netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, "iavf", "mlx5_core", "ixgbevf", "i40evf")
 				}
 			}
+
+			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
+			if err != nil {
+				return rcl, err
+			}
+			rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
+			rcl.ResourceList[i].Selectors = &rawNetDeviceSelectors
 			logger.Info("Update resource", "Resource", rcl.ResourceList[i])
 		} else {
 			rc := &dptypes.ResourceConfig{
 				ResourceName: p.Spec.ResourceName,
-				IsRdma:       p.Spec.IsRdma,
 			}
+			netDeviceSelectors.IsRdma = p.Spec.IsRdma
+
 			if p.Spec.NicSelector.Vendor != "" {
-				rc.Selectors.Vendors = append(rc.Selectors.Vendors, p.Spec.NicSelector.Vendor)
+				netDeviceSelectors.Vendors = append(netDeviceSelectors.Vendors, p.Spec.NicSelector.Vendor)
 			}
 			if p.Spec.NicSelector.DeviceID != "" {
 				if p.Spec.NumVfs == 0 {
-					rc.Selectors.Devices = append(rc.Selectors.Devices, p.Spec.NicSelector.DeviceID)
+					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, p.Spec.NicSelector.DeviceID)
 				} else {
-					rc.Selectors.Devices = append(rc.Selectors.Devices, sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID])
+					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID])
 				}
 			}
 			if l := len(p.Spec.NicSelector.PfNames); l > 0 {
-				rc.Selectors.PfNames = append(rc.Selectors.PfNames, p.Spec.NicSelector.PfNames...)
+				netDeviceSelectors.PfNames = append(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
 
 			if p.Spec.DeviceType == "vfio-pci" {
-				rc.Selectors.Drivers = append(rc.Selectors.Drivers, p.Spec.DeviceType)
+				netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, p.Spec.DeviceType)
 			} else {
 				if p.Spec.NumVfs > 0 {
 					///////////////////////////////////
 					// TODO: remove unsupport VF driver
 					///////////////////////////////////
-					rc.Selectors.Drivers = append(rc.Selectors.Drivers, "iavf", "mlx5_core", "i40evf", "ixgbevf")
+					netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, "iavf", "mlx5_core", "i40evf", "ixgbevf")
 				}
 			}
+			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
+			if err != nil {
+				return rcl, err
+			}
+			rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
+			rc.Selectors = &rawNetDeviceSelectors
 			rcl.ResourceList = append(rcl.ResourceList, *rc)
 			logger.Info("Add resource", "Resource", *rc, "Resource list", rcl.ResourceList)
 		}

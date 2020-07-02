@@ -19,6 +19,7 @@ limitations under the License.
 package v1
 
 import (
+	"context"
 	time "time"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
@@ -61,13 +62,13 @@ func NewFilteredSriovNetworkNodeStateInformer(client versioned.Interface, namesp
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(options)
+				return client.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Watch(options)
+				return client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&sriovnetworkv1.SriovNetworkNodeState{},

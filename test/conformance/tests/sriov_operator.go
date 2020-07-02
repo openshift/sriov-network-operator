@@ -3,6 +3,7 @@ package tests
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -19,17 +20,29 @@ import (
 	"github.com/openshift/sriov-network-operator/test/util/execute"
 	"github.com/openshift/sriov-network-operator/test/util/namespaces"
 	"github.com/openshift/sriov-network-operator/test/util/network"
+	"github.com/openshift/sriov-network-operator/test/util/nodes"
 	"github.com/openshift/sriov-network-operator/test/util/pod"
 	corev1 "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/api/core/v1"
+	v1core "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
+	admission "k8s.io/api/admissionregistration/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var waitingTime time.Duration = 20 * time.Minute
+var sriovNetworkName = "test-sriovnetwork"
+
+type patchBody struct {
+	Op    string `json:"op"`
+	Path  string `json:"path"`
+	Value string `json:"value"`
+}
 
 func init() {
 	waitingEnv := os.Getenv("SRIOV_WAITING_TIME")
@@ -41,6 +54,7 @@ func init() {
 
 var _ = Describe("[sriov] operator", func() {
 	var sriovInfos *cluster.EnabledNodes
+	var initPassed bool
 	execute.BeforeAll(func() {
 		Expect(clients).NotTo(BeNil(), "Client misconfigured, check the $KUBECONFIG env variable")
 		err := namespaces.Create(namespaces.Test, clients)
@@ -49,15 +63,14 @@ var _ = Describe("[sriov] operator", func() {
 		waitForSRIOVStable()
 		sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
 		Expect(err).ToNot(HaveOccurred())
+		initPassed = true
 	})
 
 	BeforeEach(func() {
-		err := namespaces.Clean(operatorNamespace, namespaces.Test, clients)
-		Expect(err).ToNot(HaveOccurred())
-		waitForSRIOVStable()
+		Expect(initPassed).To(BeTrue(), "Global setup failed")
 	})
 
-	Describe("Configuration", func() {
+	Describe("No SriovNetworkNodePolicy", func() {
 
 		Context("SR-IOV network config daemon can be set by nodeselector", func() {
 			// 26186
@@ -69,13 +82,18 @@ var _ = Describe("[sriov] operator", func() {
 				}, 3*time.Minute, 1*time.Second).Should(Equal(true))
 
 				By("Labelling one worker node with the label needed for the daemon")
-				allNodes, err := clients.Nodes().List(metav1.ListOptions{
+				allNodes, err := clients.Nodes().List(context.Background(), metav1.ListOptions{
 					LabelSelector: "node-role.kubernetes.io/worker",
 				})
-				Expect(len(allNodes.Items)).To(BeNumerically(">", 0), "There must be at least one worker")
-				candidate := allNodes.Items[0]
+				Expect(err).ToNot(HaveOccurred())
+
+				selectedNodes, err := nodes.MatchingOptionalSelector(clients, allNodes.Items)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(len(selectedNodes)).To(BeNumerically(">", 0), "There must be at least one worker")
+				candidate := selectedNodes[0]
 				candidate.Labels["sriovenabled"] = "true"
-				_, err = clients.Nodes().Update(&candidate)
+				_, err = clients.Nodes().Update(context.Background(), &candidate, metav1.UpdateOptions{})
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Setting the node selector for each daemon")
@@ -111,226 +129,86 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() bool {
 					return daemonsScheduledOnNodes("node-role.kubernetes.io/worker")
 				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
-
 			})
 		})
 
-		Context("PF Partitioning", func() {
-			// 27633
-			It("Should be possible to partition the pf's vfs", func() {
-				node := sriovInfos.Nodes[0]
-				intf, err := sriovInfos.FindOneSriovDevice(node)
+	})
+
+	Describe("Generic SriovNetworkNodePolicy", func() {
+		numVfs := 5
+		resourceName := "testresource"
+		var node string
+		var sriovDevice *sriovv1.InterfaceExt
+
+		execute.BeforeAll(func() {
+			node = sriovInfos.Nodes[0]
+			var err error
+			sriovDevice, err = sriovInfos.FindOneSriovDevice(node)
+			Expect(err).ToNot(HaveOccurred())
+
+			// For the context of tests is better to use a Mellanox card
+			// as they support all the virtual function flags
+			// if we don't find a Mellanox card we fall back to any sriov
+			// capability interface and skip the rate limit test.
+			intf, err := sriovInfos.FindOneMellanoxSriovDevice(node)
+			if err != nil {
+				intf, err = sriovInfos.FindOneSriovDevice(node)
 				Expect(err).ToNot(HaveOccurred())
+			}
 
-				firstConfig := &sriovv1.SriovNetworkNodePolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: "test-policy",
-						Namespace:    operatorNamespace,
+			config := &sriovv1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "test-policy",
+					Namespace:    operatorNamespace,
+				},
+
+				Spec: sriovv1.SriovNetworkNodePolicySpec{
+					NodeSelector: map[string]string{
+						"kubernetes.io/hostname": node,
 					},
-
-					Spec: sriovv1.SriovNetworkNodePolicySpec{
-						NodeSelector: map[string]string{
-							"kubernetes.io/hostname": node,
-						},
-						NumVfs:       5,
-						ResourceName: "testresource",
-						Priority:     99,
-						NicSelector: sriovv1.SriovNetworkNicSelector{
-							PfNames: []string{intf.Name + "#2-4"},
-						},
-						DeviceType: "netdevice",
+					NumVfs:       numVfs,
+					ResourceName: resourceName,
+					Priority:     99,
+					NicSelector: sriovv1.SriovNetworkNicSelector{
+						PfNames: []string{intf.Name},
 					},
-				}
+					DeviceType: "netdevice",
+				},
+			}
 
-				err = clients.Create(context.Background(), firstConfig)
+			err = clients.Create(context.Background(), config)
+			Expect(err).ToNot(HaveOccurred())
+
+			Eventually(func() sriovv1.Interfaces {
+				nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
+				return nodeState.Spec.Interfaces
+			}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+				IgnoreExtras,
+				Fields{
+					"Name":   Equal(intf.Name),
+					"NumVfs": Equal(numVfs),
+				})))
 
-				Eventually(func() sriovv1.Interfaces {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(node, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					return nodeState.Spec.Interfaces
-				}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
-					IgnoreExtras,
-					Fields{
-						"Name":   Equal(intf.Name),
-						"NumVfs": Equal(5),
-						"VfGroups": ContainElement(
-							MatchFields(
-								IgnoreExtras,
-								Fields{
-									"ResourceName": Equal("testresource"),
-									"DeviceType":   Equal("netdevice"),
-									"VfRange":      Equal("2-4"),
-								})),
-					})))
-
-				waitForSRIOVStable()
-
-				Eventually(func() int64 {
-					testedNode, err := clients.Nodes().Get(node, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					resNum, _ := testedNode.Status.Allocatable["openshift.io/testresource"]
-					capacity, _ := resNum.AsInt64()
-					return capacity
-				}, 3*time.Minute, time.Second).Should(Equal(int64(3)))
-
-				secondConfig := &sriovv1.SriovNetworkNodePolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: "test-policy",
-						Namespace:    operatorNamespace,
-					},
-
-					Spec: sriovv1.SriovNetworkNodePolicySpec{
-						NodeSelector: map[string]string{
-							"kubernetes.io/hostname": node,
-						},
-						NumVfs:       5,
-						ResourceName: "testresource1",
-						Priority:     99,
-						NicSelector: sriovv1.SriovNetworkNicSelector{
-							PfNames: []string{intf.Name + "#0-1"},
-						},
-						DeviceType: "vfio-pci",
-					},
-				}
-
-				err = clients.Create(context.Background(), secondConfig)
-				Expect(err).ToNot(HaveOccurred())
-
-				Eventually(func() sriovv1.Interfaces {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(node, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					return nodeState.Spec.Interfaces
-				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
-					IgnoreExtras,
-					Fields{
-						"Name":   Equal(intf.Name),
-						"NumVfs": Equal(5),
-						"VfGroups": SatisfyAll(
-							ContainElement(
-								MatchFields(
-									IgnoreExtras,
-									Fields{
-										"ResourceName": Equal("testresource"),
-										"DeviceType":   Equal("netdevice"),
-										"VfRange":      Equal("2-4"),
-									})),
-							ContainElement(
-								MatchFields(
-									IgnoreExtras,
-									Fields{
-										"ResourceName": Equal("testresource1"),
-										"DeviceType":   Equal("vfio-pci"),
-										"VfRange":      Equal("0-1"),
-									})),
-						),
-					},
-				)))
-
-				// The node may reset here so we put a larger timeout here
-				Eventually(func() bool {
-					res, err := cluster.SriovStable(operatorNamespace, clients)
-					Expect(err).ToNot(HaveOccurred())
-					return res
-				}, 15*time.Minute, 5*time.Second).Should(BeTrue())
-
-				Eventually(func() map[string]int64 {
-					testedNode, err := clients.Nodes().Get(node, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					resNum, _ := testedNode.Status.Allocatable["openshift.io/testresource"]
-					capacity, _ := resNum.AsInt64()
-					res := make(map[string]int64)
-					res["openshift.io/testresource"] = capacity
-					resNum, _ = testedNode.Status.Allocatable["openshift.io/testresource1"]
-					capacity, _ = resNum.AsInt64()
-					res["openshift.io/testresource1"] = capacity
-					return res
-				}, 2*time.Minute, time.Second).Should(Equal(map[string]int64{
-					"openshift.io/testresource":  int64(3),
-					"openshift.io/testresource1": int64(2),
-				}))
-			})
-
-			// 27630
-			/*It("Should not be possible to have overlapping pf ranges", func() {
-				// Skipping this test as blocking the override will
-				// be implemented in 4.5, as per bz #1798880
-				Skip("Overlapping is still not blocked")
-				node := sriovInfos.Nodes[0]
-				intf, err := sriovInfos.FindOneSriovDevice(node)
-				Expect(err).ToNot(HaveOccurred())
-
-				firstConfig := &sriovv1.SriovNetworkNodePolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: "test-policy",
-						Namespace:    operatorNamespace,
-					},
-
-					Spec: sriovv1.SriovNetworkNodePolicySpec{
-						NodeSelector: map[string]string{
-							"kubernetes.io/hostname": node,
-						},
-						NumVfs:       5,
-						ResourceName: "testresource",
-						Priority:     99,
-						NicSelector: sriovv1.SriovNetworkNicSelector{
-							PfNames: []string{intf.Name + "#1-4"},
-						},
-						DeviceType: "netdevice",
-					},
-				}
-
-				err = clients.Create(context.Background(), firstConfig)
-				Expect(err).ToNot(HaveOccurred())
-
-				Eventually(func() sriovv1.Interfaces {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(node, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					return nodeState.Spec.Interfaces
-				}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
-					IgnoreExtras,
-					Fields{
-						"Name":     Equal(intf.Name),
-						"NumVfs":   Equal(5),
-						"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "1-4", PolicyName: firstConfig.Name}),
-					})))
-
-				secondConfig := &sriovv1.SriovNetworkNodePolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: "test-policy",
-						Namespace:    operatorNamespace,
-					},
-
-					Spec: sriovv1.SriovNetworkNodePolicySpec{
-						NodeSelector: map[string]string{
-							"kubernetes.io/hostname": node,
-						},
-						NumVfs:       5,
-						ResourceName: "testresource1",
-						Priority:     99,
-						NicSelector: sriovv1.SriovNetworkNicSelector{
-							PfNames: []string{intf.Name + "#0-2"},
-						},
-						DeviceType: "vfio-pci",
-					},
-				}
-
-				err = clients.Create(context.Background(), secondConfig)
-				Expect(err).To(HaveOccurred())
-			})*/
+			waitForSRIOVStable()
 		})
 
+		BeforeEach(func() {
+			err := namespaces.CleanPods(namespaces.Test, clients)
+			Expect(err).ToNot(HaveOccurred())
+			err = namespaces.CleanNetworks(operatorNamespace, clients)
+			Expect(err).ToNot(HaveOccurred())
+		})
 		Context("VF flags", func() {
 			hostNetPod := &corev1.Pod{} // Initialized in BeforeEach
 			intf := &sriovv1.InterfaceExt{}
-			numVfs := 5
 
 			validationFunction := func(networks []string, containsFunc func(line string) bool) {
 				podObj := pod.DefineWithNetworks(networks)
 				err := clients.Create(context.Background(), podObj)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() corev1.PodPhase {
-					podObj, err = clients.Pods(namespaces.Test).Get(podObj.Name, metav1.GetOptions{})
+					podObj, err = clients.Pods(namespaces.Test).Get(context.Background(), podObj.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return podObj.Status.Phase
 				}, 5*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
@@ -354,7 +232,7 @@ var _ = Describe("[sriov] operator", func() {
 						return found
 					}
 
-					err = clients.Pods(namespaces.Test).Delete(podObj.Name, &metav1.DeleteOptions{
+					err = clients.Pods(namespaces.Test).Delete(context.Background(), podObj.Name, metav1.DeleteOptions{
 						GracePeriodSeconds: pointer.Int64Ptr(0)})
 					Expect(err).ToNot(HaveOccurred())
 
@@ -380,57 +258,9 @@ var _ = Describe("[sriov] operator", func() {
 			}
 
 			BeforeEach(func() {
-				var err error
 				node := sriovInfos.Nodes[0]
-
-				// For the context of tests is better to use a Mellanox card
-				// as they support all the virtual function flags
-				// if we don't find a Mellanox card we fall back to any sriov
-				// capability interface and skip the rate limit test.
-				intf, err = sriovInfos.FindOneMellanoxSriovDevice(node)
-				if err != nil {
-					intf, err = sriovInfos.FindOneSriovDevice(node)
-					Expect(err).ToNot(HaveOccurred())
-				}
-
-				config := &sriovv1.SriovNetworkNodePolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: "test-policy",
-						Namespace:    operatorNamespace,
-					},
-
-					Spec: sriovv1.SriovNetworkNodePolicySpec{
-						NodeSelector: map[string]string{
-							"kubernetes.io/hostname": node,
-						},
-						NumVfs:       numVfs,
-						ResourceName: "testresource",
-						Priority:     99,
-						NicSelector: sriovv1.SriovNetworkNicSelector{
-							PfNames: []string{intf.Name},
-						},
-						DeviceType: "netdevice",
-					},
-				}
-
-				err = clients.Create(context.Background(), config)
-				Expect(err).ToNot(HaveOccurred())
-
-				Eventually(func() sriovv1.Interfaces {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(node, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					return nodeState.Spec.Interfaces
-				}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
-					IgnoreExtras,
-					Fields{
-						"Name":   Equal(intf.Name),
-						"NumVfs": Equal(numVfs),
-					})))
-
-				waitForSRIOVStable()
-
 				Eventually(func() int64 {
-					testedNode, err := clients.Nodes().Get(node, metav1.GetOptions{})
+					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					resNum, _ := testedNode.Status.Allocatable["openshift.io/testresource"]
 					allocatable, _ := resNum.AsInt64()
@@ -438,10 +268,10 @@ var _ = Describe("[sriov] operator", func() {
 				}, 3*time.Minute, time.Second).Should(Equal(int64(numVfs)))
 
 				hostNetPod = pod.DefineWithHostNetwork(node)
-				err = clients.Create(context.Background(), hostNetPod)
+				err := clients.Create(context.Background(), hostNetPod)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() corev1.PodPhase {
-					hostNetPod, err = clients.Pods(namespaces.Test).Get(hostNetPod.Name, metav1.GetOptions{})
+					hostNetPod, err = clients.Pods(namespaces.Test).Get(context.Background(), hostNetPod.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return hostNetPod.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
@@ -452,13 +282,13 @@ var _ = Describe("[sriov] operator", func() {
 				sriovNetwork := &sriovv1.SriovNetwork{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-spoofnetwork", Namespace: operatorNamespace},
 					Spec: sriovv1.SriovNetworkSpec{
-						ResourceName: "testresource",
+						ResourceName: resourceName,
 						IPAM: `{"type":"host-local",
-									"subnet":"10.10.10.0/24",
-									"rangeStart":"10.10.10.171",
-									"rangeEnd":"10.10.10.181",
-									"routes":[{"dst":"0.0.0.0/0"}],
-									"gateway":"10.10.10.1"}`,
+								"subnet":"10.10.10.0/24",
+								"rangeStart":"10.10.10.171",
+								"rangeEnd":"10.10.10.181",
+								"routes":[{"dst":"0.0.0.0/0"}],
+								"gateway":"10.10.10.1"}`,
 						NetworkNamespace: namespaces.Test,
 					}}
 
@@ -497,13 +327,13 @@ var _ = Describe("[sriov] operator", func() {
 				sriovNetwork := &sriovv1.SriovNetwork{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-trustnetwork", Namespace: operatorNamespace},
 					Spec: sriovv1.SriovNetworkSpec{
-						ResourceName: "testresource",
+						ResourceName: resourceName,
 						IPAM: `{"type":"host-local",
-									"subnet":"10.10.10.0/24",
-									"rangeStart":"10.10.10.171",
-									"rangeEnd":"10.10.10.181",
-									"routes":[{"dst":"0.0.0.0/0"}],
-									"gateway":"10.10.10.1"}`,
+								"subnet":"10.10.10.0/24",
+								"rangeStart":"10.10.10.171",
+								"rangeEnd":"10.10.10.181",
+								"routes":[{"dst":"0.0.0.0/0"}],
+								"gateway":"10.10.10.1"}`,
 						NetworkNamespace: namespaces.Test,
 					}}
 
@@ -541,13 +371,13 @@ var _ = Describe("[sriov] operator", func() {
 				sriovNetwork := &sriovv1.SriovNetwork{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-statenetwork", Namespace: operatorNamespace},
 					Spec: sriovv1.SriovNetworkSpec{
-						ResourceName: "testresource",
+						ResourceName: resourceName,
 						IPAM: `{"type":"host-local",
-									"subnet":"10.10.10.0/24",
-									"rangeStart":"10.10.10.171",
-									"rangeEnd":"10.10.10.181",
-									"routes":[{"dst":"0.0.0.0/0"}],
-									"gateway":"10.10.10.1"}`,
+								"subnet":"10.10.10.0/24",
+								"rangeStart":"10.10.10.171",
+								"rangeEnd":"10.10.10.181",
+								"routes":[{"dst":"0.0.0.0/0"}],
+								"gateway":"10.10.10.1"}`,
 						NetworkNamespace: namespaces.Test,
 					}}
 
@@ -614,13 +444,13 @@ var _ = Describe("[sriov] operator", func() {
 					var minTxRate = 40
 					sriovNetwork := &sriovv1.SriovNetwork{ObjectMeta: metav1.ObjectMeta{Name: "test-ratenetwork", Namespace: operatorNamespace},
 						Spec: sriovv1.SriovNetworkSpec{
-							ResourceName: "testresource",
+							ResourceName: resourceName,
 							IPAM: `{"type":"host-local",
-									"subnet":"10.10.10.0/24",
-									"rangeStart":"10.10.10.171",
-									"rangeEnd":"10.10.10.181",
-									"routes":[{"dst":"0.0.0.0/0"}],
-									"gateway":"10.10.10.1"}`,
+								"subnet":"10.10.10.0/24",
+								"rangeStart":"10.10.10.171",
+								"rangeEnd":"10.10.10.181",
+								"routes":[{"dst":"0.0.0.0/0"}],
+								"gateway":"10.10.10.1"}`,
 							MaxTxRate:        &maxTxRate,
 							MinTxRate:        &minTxRate,
 							NetworkNamespace: namespaces.Test,
@@ -650,13 +480,13 @@ var _ = Describe("[sriov] operator", func() {
 				It("Should configure the requested vlan and Qos vlan flags under the vf", func() {
 					sriovNetwork := &sriovv1.SriovNetwork{ObjectMeta: metav1.ObjectMeta{Name: "test-quosnetwork", Namespace: operatorNamespace},
 						Spec: sriovv1.SriovNetworkSpec{
-							ResourceName: "testresource",
+							ResourceName: resourceName,
 							IPAM: `{"type":"host-local",
-									"subnet":"10.10.10.0/24",
-									"rangeStart":"10.10.10.171",
-									"rangeEnd":"10.10.10.181",
-									"routes":[{"dst":"0.0.0.0/0"}],
-									"gateway":"10.10.10.1"}`,
+								"subnet":"10.10.10.0/24",
+								"rangeStart":"10.10.10.171",
+								"rangeEnd":"10.10.10.181",
+								"routes":[{"dst":"0.0.0.0/0"}],
+								"gateway":"10.10.10.1"}`,
 							Vlan:             1,
 							VlanQoS:          2,
 							NetworkNamespace: namespaces.Test,
@@ -681,297 +511,804 @@ var _ = Describe("[sriov] operator", func() {
 				})
 			})
 		})
-		Context("Resource Injector", func() {
-			// 25815
-			It("Should inject downward api volume", func() {
-				node := sriovInfos.Nodes[0]
-				intf, err := sriovInfos.FindOneSriovDevice(node)
+
+		Context("Multiple sriov device and attachment", func() {
+			// 25834
+			It("Should configure multiple network attachments", func() {
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
-				nodePolicy := &sriovv1.SriovNetworkNodePolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: "test-apivolumepolicy",
-						Namespace:    operatorNamespace,
-					},
+				pod := createTestPod(node, []string{sriovNetworkName, sriovNetworkName})
+				nics, err := network.GetNicsByPrefix(pod, "net")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(nics)).To(Equal(2), "No sriov network interfaces found.")
+			})
+		})
 
-					Spec: sriovv1.SriovNetworkNodePolicySpec{
-						NodeSelector: map[string]string{
-							"kubernetes.io/hostname": node,
-						},
-						NumVfs:       5,
-						ResourceName: "apivolresource",
-						Priority:     99,
-						NicSelector: sriovv1.SriovNetworkNicSelector{
-							PfNames: []string{intf.Name},
-						},
-						DeviceType: "netdevice",
-					},
+		Context("IPv6 configured secondary interfaces on pods", func() {
+			// 25874
+			It("should be able to ping each other", func() {
+				ipv6NetworkName := "test-ipv6network"
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err := network.CreateSriovNetwork(clients, sriovDevice, ipv6NetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: ipv6NetworkName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				pod := createTestPod(node, []string{ipv6NetworkName})
+				ips, err := network.GetSriovNicIPs(pod, "net1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ips).NotTo(BeNil(), "No sriov network interface found.")
+				Expect(len(ips)).Should(Equal(1))
+				for _, ip := range ips {
+					pingPod(ip, node, ipv6NetworkName)
 				}
+			})
+		})
 
-				err = clients.Create(context.Background(), nodePolicy)
+		Context("NAD update", func() {
+			// 24713
+			It("NAD is updated when SriovNetwork spec/networkNamespace is changed", func() {
+				ns1 := "test-z1"
+				ns2 := "test-z2"
+				defer namespaces.DeleteAndWait(clients, ns1, 1*time.Minute)
+				defer namespaces.DeleteAndWait(clients, ns2, 1*time.Minute)
+				err := namespaces.Create(ns1, clients)
+				Expect(err).ToNot(HaveOccurred())
+				err = namespaces.Create(ns2, clients)
 				Expect(err).ToNot(HaveOccurred())
 
-				waitForSRIOVStable()
-
-				Eventually(func() int64 {
-					testedNode, err := clients.Nodes().Get(node, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					resNum, _ := testedNode.Status.Allocatable["openshift.io/apivolresource"]
-					capacity, _ := resNum.AsInt64()
-					return capacity
-				}, 3*time.Minute, time.Second).Should(Equal(int64(5)))
-
-				sriovNetwork := &sriovv1.SriovNetwork{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-apivolnetwork",
-						Namespace: operatorNamespace,
-					},
-					Spec: sriovv1.SriovNetworkSpec{
-						ResourceName:     "apivolresource",
-						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
-						NetworkNamespace: namespaces.Test,
-					}}
-				err = clients.Create(context.Background(), sriovNetwork)
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, ns1, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns1}, netAttDef)
+				}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				body, _ := json.Marshal([]patchBody{{
+					Op:    "replace",
+					Path:  "/spec/networkNamespace",
+					Value: ns2,
+				}})
+				clients.SriovnetworkV1Interface.RESTClient().Patch(types.JSONPatchType).Namespace(operatorNamespace).Resource("sriovnetworks").Name(sriovNetworkName).Body(body).Do(context.Background())
 
 				Eventually(func() error {
 					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "test-apivolnetwork", Namespace: namespaces.Test}, netAttDef)
-				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns2}, netAttDef)
+				}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+				Consistently(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: ns1}, netAttDef)
+				}, 5*time.Second, 1*time.Second).Should(HaveOccurred())
+			})
+		})
 
-				podDefinition := pod.DefineWithNetworks([]string{sriovNetwork.Name})
-				created, err := clients.Pods(namespaces.Test).Create(podDefinition)
+		Context("NAD update", func() {
+			// 24714
+			It("NAD default gateway is updated when SriovNetwork ipam is changed", func() {
+
+				ipam := `{
+					"type": "host-local",
+					"subnet": "10.11.11.0/24",
+					"gateway": "%s"
+				  }`
+				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, fmt.Sprintf(ipam, "10.11.11.1"))
 				Expect(err).ToNot(HaveOccurred())
 
-				var runningPod *corev1.Pod
-				Eventually(func() corev1.PodPhase {
-					runningPod, err = clients.Pods(namespaces.Test).Get(created.Name, metav1.GetOptions{})
+				Eventually(func() bool {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
 					Expect(err).ToNot(HaveOccurred())
-					return runningPod.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+					return strings.Contains(netAttDef.Spec.Config, "10.11.11.1")
+				}, 30*time.Second, 1*time.Second).Should(BeTrue())
 
-				var downwardVolume *corev1.Volume
-				for _, v := range runningPod.Spec.Volumes {
-					if v.Name == "podnetinfo" {
-						downwardVolume = v.DeepCopy()
-						break
-					}
-				}
+				sriovNetwork := &sriovv1.SriovNetwork{}
+				err = clients.Get(context.TODO(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: operatorNamespace}, sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+				sriovNetwork.Spec.IPAM = fmt.Sprintf(ipam, "10.11.11.100")
+				err = clients.Update(context.Background(), sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
 
-				Expect(downwardVolume).ToNot(BeNil(), "Downward volume not found")
-				Expect(downwardVolume.DownwardAPI).ToNot(BeNil(), "Downward api not found in volume")
-				Expect(downwardVolume.DownwardAPI.Items).To(SatisfyAll(
-					ContainElement(corev1.DownwardAPIVolumeFile{
-						Path: "labels",
-						FieldRef: &corev1.ObjectFieldSelector{
-							APIVersion: "v1",
-							FieldPath:  "metadata.labels",
-						},
-					}), ContainElement(corev1.DownwardAPIVolumeFile{
-						Path: "annotations",
-						FieldRef: &corev1.ObjectFieldSelector{
-							APIVersion: "v1",
-							FieldPath:  "metadata.annotations",
-						},
-					})))
+				Eventually(func() bool {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+					return strings.Contains(netAttDef.Spec.Config, "10.11.11.100")
+				}, 30*time.Second, 1*time.Second).Should(BeTrue())
 			})
-			Context("Multiple sriov device and attachment", func() {
-				// 25834
-				It("Should configure multiple network attachments", func() {
-					resourceName := "sriovnic"
-					sriovNetworkName := "test-sriovnetwork"
-					testNode := sriovInfos.Nodes[0]
+		})
 
-					sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
+		Context("SRIOV and macvlan", func() {
+			// 25834
+			It("Should be able to create a pod with both sriov and macvlan interfaces", func() {
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
+				macvlanNadName := "macvlan-nad"
+				nodeNicName := sriovInfos.States[node].Status.Interfaces[0].Name
+				macvlanNad := network.CreateMacvlanNetworkAttachmentDefinition(macvlanNadName, namespaces.Test, nodeNicName)
+				defer clients.Delete(context.Background(), &macvlanNad)
+				err = clients.Create(context.Background(), &macvlanNad)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: macvlanNadName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				createdPod := createTestPod(node, []string{sriovNetworkName, macvlanNadName})
+
+				nics, err := network.GetNicsByPrefix(createdPod, "net")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(nics)).To(Equal(2), "Pod should have two multus nics.")
+
+				stdout, _, err := pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net1")
+				Expect(err).ToNot(HaveOccurred())
+
+				sriovVfDriver := getDriver(stdout)
+				Expect(cluster.IsDriverSupported(sriovVfDriver)).To(BeTrue())
+
+				stdout, _, err = pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net2")
+				macvlanDriver := getDriver(stdout)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(macvlanDriver).To(Equal("macvlan"))
+
+			})
+		})
+
+		Context("Virtual Functions", func() {
+			// 21396
+			It("should release the VFs once the pod deleted and same VFs can be used by the new created pods", func() {
+				By("Create first Pod which consumes all available VFs")
+				sriovNetworkName := "test-sriovnetwork"
+				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				testPodA := pod.RedefineWithNodeSelector(
+					pod.DefineWithNetworks([]string{sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName}),
+					node,
+				)
+				runningPodA, err := clients.Pods(testPodA.Namespace).Create(context.Background(), testPodA, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodA.Name))
+				By("Checking that first Pod is in Running state")
+				Eventually(func() v1core.PodPhase {
+					runningPodA, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodA.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
-					createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
+					return runningPodA.Status.Phase
+				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
+				By("Create second Pod which consumes one more VF")
 
-					ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-					err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				testPodB := pod.RedefineWithNodeSelector(
+					pod.DefineWithNetworks([]string{sriovNetworkName}),
+					node,
+				)
+				runningPodB, err := clients.Pods(testPodB.Namespace).Create(context.Background(), testPodB, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodB.Name))
+				By("Checking second that pod is in Pending state")
+				Eventually(func() v1core.PodPhase {
+					runningPodB, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodB.Name, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return runningPodB.Status.Phase
+				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodPending))
+
+				By("Checking that relevant error event was originated")
+				Eventually(func() string {
+					events, err := clients.Events(namespaces.Test).List(context.Background(), metav1.ListOptions{})
+					Expect(err).ToNot(HaveOccurred())
+
+					for _, val := range events.Items {
+						if val.InvolvedObject.Name == runningPodB.Name {
+							return val.Message
+						}
+					}
+					return ""
+				}, 2*time.Minute, 10*time.Second).Should(ContainSubstring("Insufficient openshift.io/%s", resourceName),
+					"Error to detect Required Event")
+				By("Delete first pod and release all VFs")
+				err = clients.Pods(namespaces.Test).Delete(context.Background(), runningPodA.Name, metav1.DeleteOptions{
+					GracePeriodSeconds: pointer.Int64Ptr(0),
+				})
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to delete pod %s", runningPodA.Name))
+				By("Checking that second pod is able to use released VF")
+				Eventually(func() v1core.PodPhase {
+					runningPodB, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodB.Name, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return runningPodB.Status.Phase
+				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
+			})
+		})
+	})
+
+	Describe("Custom SriovNetworkNodePolicy", func() {
+
+		BeforeEach(func() {
+			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients)
+			Expect(err).ToNot(HaveOccurred())
+			waitForSRIOVStable()
+		})
+
+		Describe("Configuration", func() {
+
+			Context("PF Partitioning", func() {
+				// 27633
+				It("Should be possible to partition the pf's vfs", func() {
+					node := sriovInfos.Nodes[0]
+					intf, err := sriovInfos.FindOneSriovDevice(node)
+					Expect(err).ToNot(HaveOccurred())
+
+					firstConfig := &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							GenerateName: "test-policy",
+							Namespace:    operatorNamespace,
+						},
+
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/hostname": node,
+							},
+							NumVfs:       5,
+							ResourceName: "testresource",
+							Priority:     99,
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name + "#2-4"},
+							},
+							DeviceType: "netdevice",
+						},
+					}
+
+					err = clients.Create(context.Background(), firstConfig)
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(func() sriovv1.Interfaces {
+						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						return nodeState.Spec.Interfaces
+					}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+						IgnoreExtras,
+						Fields{
+							"Name":   Equal(intf.Name),
+							"NumVfs": Equal(5),
+							"VfGroups": ContainElement(
+								MatchFields(
+									IgnoreExtras,
+									Fields{
+										"ResourceName": Equal("testresource"),
+										"DeviceType":   Equal("netdevice"),
+										"VfRange":      Equal("2-4"),
+									})),
+						})))
+
+					waitForSRIOVStable()
+
+					Eventually(func() int64 {
+						testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						resNum, _ := testedNode.Status.Allocatable["openshift.io/testresource"]
+						capacity, _ := resNum.AsInt64()
+						return capacity
+					}, 3*time.Minute, time.Second).Should(Equal(int64(3)))
+
+					secondConfig := &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							GenerateName: "test-policy",
+							Namespace:    operatorNamespace,
+						},
+
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/hostname": node,
+							},
+							NumVfs:       5,
+							ResourceName: "testresource1",
+							Priority:     99,
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name + "#0-1"},
+							},
+							DeviceType: "vfio-pci",
+						},
+					}
+
+					err = clients.Create(context.Background(), secondConfig)
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(func() sriovv1.Interfaces {
+						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						return nodeState.Spec.Interfaces
+					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+						IgnoreExtras,
+						Fields{
+							"Name":   Equal(intf.Name),
+							"NumVfs": Equal(5),
+							"VfGroups": SatisfyAll(
+								ContainElement(
+									MatchFields(
+										IgnoreExtras,
+										Fields{
+											"ResourceName": Equal("testresource"),
+											"DeviceType":   Equal("netdevice"),
+											"VfRange":      Equal("2-4"),
+										})),
+								ContainElement(
+									MatchFields(
+										IgnoreExtras,
+										Fields{
+											"ResourceName": Equal("testresource1"),
+											"DeviceType":   Equal("vfio-pci"),
+											"VfRange":      Equal("0-1"),
+										})),
+							),
+						},
+					)))
+
+					// The node may reset here so we put a larger timeout here
+					Eventually(func() bool {
+						res, err := cluster.SriovStable(operatorNamespace, clients)
+						Expect(err).ToNot(HaveOccurred())
+						return res
+					}, 15*time.Minute, 5*time.Second).Should(BeTrue())
+
+					Eventually(func() map[string]int64 {
+						testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						resNum, _ := testedNode.Status.Allocatable["openshift.io/testresource"]
+						capacity, _ := resNum.AsInt64()
+						res := make(map[string]int64)
+						res["openshift.io/testresource"] = capacity
+						resNum, _ = testedNode.Status.Allocatable["openshift.io/testresource1"]
+						capacity, _ = resNum.AsInt64()
+						res["openshift.io/testresource1"] = capacity
+						return res
+					}, 2*time.Minute, time.Second).Should(Equal(map[string]int64{
+						"openshift.io/testresource":  int64(3),
+						"openshift.io/testresource1": int64(2),
+					}))
+				})
+
+				// 27630
+				/*It("Should not be possible to have overlapping pf ranges", func() {
+					// Skipping this test as blocking the override will
+					// be implemented in 4.5, as per bz #1798880
+					Skip("Overlapping is still not blocked")
+					node := sriovInfos.Nodes[0]
+					intf, err := sriovInfos.FindOneSriovDevice(node)
+					Expect(err).ToNot(HaveOccurred())
+
+					firstConfig := &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							GenerateName: "test-policy",
+							Namespace:    operatorNamespace,
+						},
+
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/hostname": node,
+							},
+							NumVfs:       5,
+							ResourceName: "testresource",
+							Priority:     99,
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name + "#1-4"},
+							},
+							DeviceType: "netdevice",
+						},
+					}
+
+					err = clients.Create(context.Background(), firstConfig)
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(func() sriovv1.Interfaces {
+						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						return nodeState.Spec.Interfaces
+					}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+						IgnoreExtras,
+						Fields{
+							"Name":     Equal(intf.Name),
+							"NumVfs":   Equal(5),
+							"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "1-4", PolicyName: firstConfig.Name}),
+						})))
+
+					secondConfig := &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							GenerateName: "test-policy",
+							Namespace:    operatorNamespace,
+						},
+
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/hostname": node,
+							},
+							NumVfs:       5,
+							ResourceName: "testresource1",
+							Priority:     99,
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name + "#0-2"},
+							},
+							DeviceType: "vfio-pci",
+						},
+					}
+
+					err = clients.Create(context.Background(), secondConfig)
+					Expect(err).To(HaveOccurred())
+				})*/
+			})
+			Context("PF shutdown", func() {
+				// 29398
+				It("Should be able to create pods successfully if PF is down.Pods are able to communicate with each other on the same node", func() {
+					resourceName := "testresource"
+					sriovNetworkName := "sriovnetwork"
+					testNode := sriovInfos.Nodes[0]
+					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
+					Expect(err).ToNot(HaveOccurred())
+					unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
+					defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
+					Expect(err).ToNot(HaveOccurred())
+					createSriovPolicy(unusedSriovDevices[0].Name, testNode, 2, resourceName)
+					ipam := `{
+						"type":"host-local",
+						"subnet":"10.10.10.0/24",
+						"rangeStart":"10.10.10.171",
+						"rangeEnd":"10.10.10.181",
+						"routes":[{"dst":"0.0.0.0/0"}],
+						"gateway":"10.10.10.1"
+						}`
+					err = network.CreateSriovNetwork(clients, unusedSriovDevices[0], sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 					Expect(err).ToNot(HaveOccurred())
 					Eventually(func() error {
 						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
 					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-
-					pod := createTestPod(testNode, []string{sriovNetworkName, sriovNetworkName})
-					nics, err := network.GetNicsByPrefix(pod, "net")
-					Expect(err).ToNot(HaveOccurred())
-					Expect(len(nics)).To(Equal(2), "No sriov network interfaces found.")
-
-				})
-			})
-			Context("IPv6 configured secondary interfaces on pods", func() {
-				// 25874
-				It("should be able to ping each other", func() {
-					resourceName := "sriovnic"
-					ipv6NetworkName := "test-ipv6network"
-					testNode := sriovInfos.Nodes[0]
-					sriovDevice, err := sriovInfos.FindOneSriovDevice(testNode)
-					Expect(err).ToNot(HaveOccurred())
-					createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
-
-					ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-					err = network.CreateSriovNetwork(clients, sriovDevice, ipv6NetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
-					Expect(err).ToNot(HaveOccurred())
-					Eventually(func() error {
-						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: ipv6NetworkName, Namespace: namespaces.Test}, netAttDef)
-					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-
-					pod := createTestPod(testNode, []string{ipv6NetworkName})
+					changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, false)
+					pod := createTestPod(testNode, []string{sriovNetworkName})
 					ips, err := network.GetSriovNicIPs(pod, "net1")
 					Expect(err).ToNot(HaveOccurred())
 					Expect(ips).NotTo(BeNil(), "No sriov network interface found.")
 					Expect(len(ips)).Should(Equal(1))
 					for _, ip := range ips {
-						pingPod(ip, testNode, ipv6NetworkName)
+						pingPod(ip, testNode, sriovNetworkName)
 					}
 				})
 			})
-		})
-		Context("MTU", func() {
-			BeforeEach(func() {
-				node := sriovInfos.Nodes[0]
-				intf, err := sriovInfos.FindOneSriovDevice(node)
-				Expect(err).ToNot(HaveOccurred())
+			Context("Resource Injector", func() {
+				// 25815
+				It("Should inject downward api volume", func() {
+					node := sriovInfos.Nodes[0]
+					intf, err := sriovInfos.FindOneSriovDevice(node)
+					Expect(err).ToNot(HaveOccurred())
 
-				mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: "test-mtupolicy",
-						Namespace:    operatorNamespace,
-					},
-
-					Spec: sriovv1.SriovNetworkNodePolicySpec{
-						NodeSelector: map[string]string{
-							"kubernetes.io/hostname": node,
+					nodePolicy := &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							GenerateName: "test-apivolumepolicy",
+							Namespace:    operatorNamespace,
 						},
-						Mtu:          9000,
-						NumVfs:       5,
-						ResourceName: "mturesource",
-						Priority:     99,
-						NicSelector: sriovv1.SriovNetworkNicSelector{
-							PfNames: []string{intf.Name},
+
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/hostname": node,
+							},
+							NumVfs:       5,
+							ResourceName: "apivolresource",
+							Priority:     99,
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name},
+							},
+							DeviceType: "netdevice",
 						},
-						DeviceType: "netdevice",
-					},
-				}
+					}
 
-				err = clients.Create(context.Background(), mtuPolicy)
-				Expect(err).ToNot(HaveOccurred())
+					err = clients.Create(context.Background(), nodePolicy)
+					Expect(err).ToNot(HaveOccurred())
 
-				waitForSRIOVStable()
+					waitForSRIOVStable()
 
-				sriovNetwork := &sriovv1.SriovNetwork{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-mtuvolnetwork",
-						Namespace: operatorNamespace,
-					},
-					Spec: sriovv1.SriovNetworkSpec{
-						ResourceName:     "mturesource",
-						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
-						NetworkNamespace: namespaces.Test,
-						LinkState:        "enable",
-					}}
+					Eventually(func() int64 {
+						testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						resNum, _ := testedNode.Status.Allocatable["openshift.io/apivolresource"]
+						capacity, _ := resNum.AsInt64()
+						return capacity
+					}, 3*time.Minute, time.Second).Should(Equal(int64(5)))
 
-				// We need this to be able to run the connectivity checks on Mellanox cards
-				if intf.DeviceID == "1015" {
-					sriovNetwork.Spec.SpoofChk = "off"
-				}
+					sriovNetwork := &sriovv1.SriovNetwork{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-apivolnetwork",
+							Namespace: operatorNamespace,
+						},
+						Spec: sriovv1.SriovNetworkSpec{
+							ResourceName:     "apivolresource",
+							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+							NetworkNamespace: namespaces.Test,
+						}}
+					err = clients.Create(context.Background(), sriovNetwork)
+					Expect(err).ToNot(HaveOccurred())
 
-				err = clients.Create(context.Background(), sriovNetwork)
+					Eventually(func() error {
+						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "test-apivolnetwork", Namespace: namespaces.Test}, netAttDef)
+					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
-				Expect(err).ToNot(HaveOccurred())
+					podDefinition := pod.DefineWithNetworks([]string{sriovNetwork.Name})
+					created, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+					Expect(err).ToNot(HaveOccurred())
 
-				Eventually(func() error {
-					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "test-mtuvolnetwork", Namespace: namespaces.Test}, netAttDef)
-				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+					var runningPod *corev1.Pod
+					Eventually(func() corev1.PodPhase {
+						runningPod, err = clients.Pods(namespaces.Test).Get(context.Background(), created.Name, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						return runningPod.Status.Phase
+					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+					var downwardVolume *corev1.Volume
+					for _, v := range runningPod.Spec.Volumes {
+						if v.Name == "podnetinfo" {
+							downwardVolume = v.DeepCopy()
+							break
+						}
+					}
+
+					Expect(downwardVolume).ToNot(BeNil(), "Downward volume not found")
+					Expect(downwardVolume.DownwardAPI).ToNot(BeNil(), "Downward api not found in volume")
+					Expect(downwardVolume.DownwardAPI.Items).To(SatisfyAll(
+						ContainElement(corev1.DownwardAPIVolumeFile{
+							Path: "labels",
+							FieldRef: &corev1.ObjectFieldSelector{
+								APIVersion: "v1",
+								FieldPath:  "metadata.labels",
+							},
+						}), ContainElement(corev1.DownwardAPIVolumeFile{
+							Path: "annotations",
+							FieldRef: &corev1.ObjectFieldSelector{
+								APIVersion: "v1",
+								FieldPath:  "metadata.annotations",
+							},
+						})))
+				})
 
 			})
 
-			// 27662
-			It("Should support jumbo frames", func() {
-				podDefinition := pod.DefineWithNetworks([]string{"test-mtuvolnetwork"})
-				firstPod, err := clients.Pods(namespaces.Test).Create(podDefinition)
-				Expect(err).ToNot(HaveOccurred())
+			Context("MTU", func() {
+				BeforeEach(func() {
+					node := sriovInfos.Nodes[0]
+					intf, err := sriovInfos.FindOneSriovDevice(node)
+					Expect(err).ToNot(HaveOccurred())
 
-				Eventually(func() corev1.PodPhase {
-					firstPod, _ = clients.Pods(namespaces.Test).Get(firstPod.Name, metav1.GetOptions{})
-					return firstPod.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+					mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							GenerateName: "test-mtupolicy",
+							Namespace:    operatorNamespace,
+						},
 
-				var stdout, stderr string
-				Eventually(func() error {
-					stdout, stderr, err = pod.ExecCommand(clients, firstPod, "ip", "link", "show", "net1")
-					if stdout == "" {
-						return fmt.Errorf("empty response from pod exec")
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/hostname": node,
+							},
+							Mtu:          9000,
+							NumVfs:       5,
+							ResourceName: "mturesource",
+							Priority:     99,
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name},
+							},
+							DeviceType: "netdevice",
+						},
 					}
 
-					if err != nil {
-						return fmt.Errorf("Failed to show net1")
+					err = clients.Create(context.Background(), mtuPolicy)
+					Expect(err).ToNot(HaveOccurred())
+
+					waitForSRIOVStable()
+
+					sriovNetwork := &sriovv1.SriovNetwork{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-mtuvolnetwork",
+							Namespace: operatorNamespace,
+						},
+						Spec: sriovv1.SriovNetworkSpec{
+							ResourceName:     "mturesource",
+							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+							NetworkNamespace: namespaces.Test,
+							LinkState:        "enable",
+						}}
+
+					// We need this to be able to run the connectivity checks on Mellanox cards
+					if intf.DeviceID == "1015" {
+						sriovNetwork.Spec.SpoofChk = "off"
 					}
 
-					return nil
-				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
-				Expect(stdout).To(ContainSubstring("mtu 9000"))
-				firstPodIPs, err := network.GetSriovNicIPs(firstPod, "net1")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(len(firstPodIPs)).To(Equal(1))
+					err = clients.Create(context.Background(), sriovNetwork)
 
-				podDefinition = pod.DefineWithNetworks([]string{"test-mtuvolnetwork"})
-				secondPod, err := clients.Pods(namespaces.Test).Create(podDefinition)
-				Expect(err).ToNot(HaveOccurred())
+					Expect(err).ToNot(HaveOccurred())
 
-				Eventually(func() corev1.PodPhase {
-					secondPod, _ = clients.Pods(namespaces.Test).Get(secondPod.Name, metav1.GetOptions{})
-					return secondPod.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+					Eventually(func() error {
+						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "test-mtuvolnetwork", Namespace: namespaces.Test}, netAttDef)
+					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
-				stdout, stderr, err = pod.ExecCommand(clients, secondPod,
-					"ping", firstPodIPs[0], "-s", "8972", "-M", "do", "-c", "2")
-				Expect(err).ToNot(HaveOccurred(), "Failed to ping first pod", stderr)
-				Expect(stdout).To(ContainSubstring("2 packets transmitted, 2 received, 0% packet loss"))
+				})
+
+				// 27662
+				It("Should support jumbo frames", func() {
+					podDefinition := pod.DefineWithNetworks([]string{"test-mtuvolnetwork"})
+					firstPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(func() corev1.PodPhase {
+						firstPod, _ = clients.Pods(namespaces.Test).Get(context.Background(), firstPod.Name, metav1.GetOptions{})
+						return firstPod.Status.Phase
+					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+					var stdout, stderr string
+					Eventually(func() error {
+						stdout, stderr, err = pod.ExecCommand(clients, firstPod, "ip", "link", "show", "net1")
+						if stdout == "" {
+							return fmt.Errorf("empty response from pod exec")
+						}
+
+						if err != nil {
+							return fmt.Errorf("Failed to show net1")
+						}
+
+						return nil
+					}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
+					Expect(stdout).To(ContainSubstring("mtu 9000"))
+					firstPodIPs, err := network.GetSriovNicIPs(firstPod, "net1")
+					Expect(err).ToNot(HaveOccurred())
+					Expect(len(firstPodIPs)).To(Equal(1))
+
+					podDefinition = pod.DefineWithNetworks([]string{"test-mtuvolnetwork"})
+					secondPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(func() corev1.PodPhase {
+						secondPod, _ = clients.Pods(namespaces.Test).Get(context.Background(), secondPod.Name, metav1.GetOptions{})
+						return secondPod.Status.Phase
+					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+					stdout, stderr, err = pod.ExecCommand(clients, secondPod,
+						"ping", firstPodIPs[0], "-s", "8972", "-M", "do", "-c", "2")
+					Expect(err).ToNot(HaveOccurred(), "Failed to ping first pod", stderr)
+					Expect(stdout).To(ContainSubstring("2 packets transmitted, 2 received, 0% packet loss"))
+				})
 			})
 		})
 
-		//TODO: Add this back after making it stable
-		//Context("unhealthyVfs", func() {
-		//	// 25834
-		//	It(" Should not be able to create pod successfully if there are only unhealthy vfs", func() {
-		//		resourceName := "sriovnic"
-		//		sriovNetworkName := "test-sriovnetwork"
-		//		testNode := sriovInfos.Nodes[0]
-		//
-		//		sriovDevices, err := sriovInfos.FindSriovDevices(testNode)
-		//		Expect(err).ToNot(HaveOccurred())
-		//		unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDevices)
-		//		Expect(err).ToNot(HaveOccurred())
-		//		if len(unusedSriovDevices) == 0 {
-		//			Skip("No unused active sriov devices found. " +
-		//				"Sriov devices either not present, used as default route or used for as bridge slave. " +
-		//				"Executing the test could endanger node connectivity.")
-		//		}
-		//		sriovDevice := unusedSriovDevices[0]
-		//
-		//		createSriovPolicy(sriovDevice.Name, testNode, 5, resourceName)
-		//		ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-		//		err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
-		//		Expect(err).ToNot(HaveOccurred())
-		//		Eventually(func() error {
-		//			netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-		//			return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-		//		}, 3*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-		//
-		//		defer changeNodeInterfaceState(testNode, sriovDevice.Name, true)
-		//		changeNodeInterfaceState(testNode, sriovDevice.Name, false)
-		//
-		//		createUnschedulableTestPod(testNode, []string{sriovNetworkName}, resourceName)
-		//	})
-		//})
+		Context("Resource Injector", func() {
+			// 25834
+			AfterEach(func() {
+				cfg := sriovv1.SriovOperatorConfig{}
+				clients.Get(context.TODO(), runtimeclient.ObjectKey{
+					Name:      "default",
+					Namespace: operatorNamespace,
+				}, &cfg)
+				if *cfg.Spec.EnableInjector == false {
+					cfg.Spec.EnableInjector = pointer.BoolPtr(true)
+					clients.Update(context.TODO(), &cfg)
+				}
+			})
+
+			It(" SR-IOV resource injector can be disabled by editing SR-IOV Operator Config	", func() {
+
+				networkResourcesInjector := "network-resources-injector"
+				cfg := sriovv1.SriovOperatorConfig{}
+				err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+					Name:      "default",
+					Namespace: operatorNamespace,
+				}, &cfg)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(*cfg.Spec.EnableInjector).To(BeTrue())
+
+				cfg.Spec.EnableInjector = pointer.BoolPtr(false)
+				err = clients.Update(context.TODO(), &cfg)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() bool {
+					_, err := clients.DaemonSets(operatorNamespace).Get(context.Background(), networkResourcesInjector, metav1.GetOptions{})
+					if k8serrors.IsNotFound(err) {
+						return true
+					}
+					Expect(err).ToNot(HaveOccurred())
+					return false
+				}, 3*time.Minute, 20*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+
+					podsList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					for _, pod := range podsList.Items {
+						if strings.Contains(pod.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					serviceList, err := clients.Services(operatorNamespace).List(context.Background(), metav1.ListOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					for _, svc := range serviceList.Items {
+						if strings.Contains(svc.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					crs := rbacv1.ClusterRoleList{}
+					err = clients.List(context.Background(), &crs, runtimeclient.InNamespace("openshift-sriov-network-operator"))
+					Expect(err).ToNot(HaveOccurred())
+					for _, cr := range crs.Items {
+						if strings.Contains(cr.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					crbs := rbacv1.ClusterRoleBindingList{}
+					err = clients.List(context.Background(), &crbs, runtimeclient.InNamespace("openshift-sriov-network-operator"))
+					Expect(err).ToNot(HaveOccurred())
+					for _, crb := range crbs.Items {
+						if strings.Contains(crb.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					mwc := &admission.MutatingWebhookConfiguration{}
+					err = clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "network-resources-injector-config", Namespace: operatorNamespace}, mwc)
+					return err != nil && k8serrors.IsNotFound(err)
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+
+				Eventually(func() bool {
+					cms := corev1.ConfigMapList{}
+					err = clients.List(context.Background(), &cms, runtimeclient.InNamespace("openshift-sriov-network-operator"))
+					Expect(err).ToNot(HaveOccurred())
+					for _, cm := range cms.Items {
+						if strings.Contains(cm.ObjectMeta.Name, networkResourcesInjector) {
+							return false
+						}
+					}
+					return true
+				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+			})
+		})
+
 	})
 })
+
+func getDriver(ethtoolstdout string) string {
+	lines := strings.Split(ethtoolstdout, "\n")
+	Expect(len(lines)).To(BeNumerically(">", 0))
+	for _, line := range lines {
+		if strings.HasPrefix(line, "driver:") {
+			return strings.TrimSpace(line[len("driver:"):])
+		}
+	}
+	Fail("Could not find device driver")
+	return ""
+}
 
 func changeNodeInterfaceState(testNode string, ifcName string, enable bool) {
 	state := "up"
@@ -987,10 +1324,10 @@ func changeNodeInterfaceState(testNode string, ifcName string, enable bool) {
 			k8sv1.RestartPolicyNever,
 		),
 	)
-	createdPod, err := clients.Pods(namespaces.Test).Create(podDefinition)
+	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 	Eventually(func() k8sv1.PodPhase {
-		runningPod, err := clients.Pods(namespaces.Test).Get(createdPod.Name, metav1.GetOptions{})
+		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
 	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodSucceeded))
@@ -1118,12 +1455,12 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 }
 
 func daemonsScheduledOnNodes(selector string) bool {
-	nn, err := clients.Nodes().List(metav1.ListOptions{
+	nn, err := clients.Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: selector,
 	})
 	nodes := nn.Items
 
-	daemons, err := clients.Pods(operatorNamespace).List(metav1.ListOptions{LabelSelector: "app=sriov-network-config-daemon"})
+	daemons, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=sriov-network-config-daemon"})
 	Expect(err).ToNot(HaveOccurred())
 	for _, d := range daemons.Items {
 		foundNode := false
@@ -1150,7 +1487,7 @@ func createSriovPolicy(sriovDevice string, testNode string, numVfs int, resource
 	waitForSRIOVStable()
 
 	Eventually(func() int64 {
-		testedNode, err := clients.Nodes().Get(testNode, metav1.GetOptions{})
+		testedNode, err := clients.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 		capacity, _ := resNum.AsInt64()
@@ -1163,13 +1500,13 @@ func createUnschedulableTestPod(node string, networks []string, resourceName str
 		pod.DefineWithNetworks(networks),
 		node,
 	)
-	createdPod, err := clients.Pods(namespaces.Test).Create(podDefinition)
+	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Consistently(func() k8sv1.PodPhase {
-		runningPod, err := clients.Pods(namespaces.Test).Get(createdPod.Name, metav1.GetOptions{})
+		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
 	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodPending))
-	pod, err := clients.Pods(namespaces.Test).Get(createdPod.Name, metav1.GetOptions{})
+	pod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred())
 	for _, condition := range pod.Status.Conditions {
 		if condition.Reason == "Unschedulable" && strings.Contains(condition.Message, "Insufficient openshift.io/"+resourceName) {
@@ -1202,35 +1539,39 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool) *k8sv
 			node,
 		)
 	}
-	createdPod, err := clients.Pods(namespaces.Test).Create(podDefinition)
+	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
 	Eventually(func() k8sv1.PodPhase {
-		runningPod, err := clients.Pods(namespaces.Test).Get(createdPod.Name, metav1.GetOptions{})
+		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
 	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodRunning))
-	pod, err := clients.Pods(namespaces.Test).Get(createdPod.Name, metav1.GetOptions{})
+	pod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred())
 	return pod
 }
 
 func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
+	ipProtocolVersion := "6"
+	if len(strings.Split(ip, ".")) == 4 {
+		ipProtocolVersion = "4"
+	}
 	podDefinition := pod.RedefineWithNodeSelector(
 		pod.RedefineWithRestartPolicy(
 			pod.RedefineWithCommand(
 				pod.DefineWithNetworks([]string{sriovNetworkAttachment}),
-				[]string{"sh", "-c", "ping -6 -c 3 " + ip}, []string{},
+				[]string{"sh", "-c", fmt.Sprintf("ping -%s -c 3 %s", ipProtocolVersion, ip)}, []string{},
 			),
 			k8sv1.RestartPolicyNever,
 		),
 		nodeSelector,
 	)
-	createdPod, err := clients.Pods(namespaces.Test).Create(podDefinition)
+	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
 	Eventually(func() k8sv1.PodPhase {
-		runningPod, err := clients.Pods(namespaces.Test).Get(createdPod.Name, metav1.GetOptions{})
+		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
 	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodSucceeded))

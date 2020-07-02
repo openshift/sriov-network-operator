@@ -15,7 +15,10 @@
 package types
 
 import (
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
+	"encoding/json"
+
+	"github.com/jaypipes/ghw"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 var (
@@ -30,17 +33,72 @@ const (
 	KubeEndPoint = "kubelet.sock"
 )
 
-// ResourceConfig contains cofiguration paremeters for a resource pool
+// DeviceType is custom type to define supported device types
+type DeviceType string
+
+const (
+	// NetDeviceType is DeviceType for network class devices
+	NetDeviceType DeviceType = "netDevice"
+	// AcceleratorType is DeviceType for accelerator class devices
+	AcceleratorType DeviceType = "accelerator"
+)
+
+// SupportedDevices is map of 'device identifier as string' to 'device class hexcode as int'
+/*
+Supported PCI Device Classes. ref: https://pci-ids.ucw.cz/read/PD
+02	Network controller
+12	Processing accelerators
+
+Network controller subclasses. ref: https://pci-ids.ucw.cz/read/PD/02
+00	Ethernet controller
+01	Token ring network controller
+02	FDDI network controller
+03	ATM network controller
+04	ISDN controller
+05	WorldFip controller
+06	PICMG controller
+07	Infiniband controller
+08	Fabric controller
+80	Network controller
+
+Processing accelerators subclasses. ref: https://pci-ids.ucw.cz/read/PD/12
+00	Processing accelerators
+01	AI Inference Accelerator
+*/
+var SupportedDevices = map[DeviceType]int{
+	NetDeviceType:   0x02,
+	AcceleratorType: 0x12,
+}
+
+// ResourceConfig contains configuration paremeters for a resource pool
 type ResourceConfig struct {
-	ResourceName string `json:"resourceName"` // the resource name will be added with resource prefix in K8s api
-	IsRdma       bool   // the resource support rdma
-	Selectors    struct {
-		Vendors   []string `json:"vendors,omitempty"`
-		Devices   []string `json:"devices,omitempty"`
-		Drivers   []string `json:"drivers,omitempty"`
-		PfNames   []string `json:"pfNames,omitempty"`
-		LinkTypes []string `json:"linkTypes,omitempty"`
-	} `json:"selectors,omitempty"` // Whether devices have SRIOV virtual function capabilities or not
+	ResourcePrefix string           `json:"resourcePrefix,omitempty"` // optional resource prefix that will ovewrite global prefix specified in cli params
+	ResourceName   string           `json:"resourceName"`             // the resource name will be added with resource prefix in K8s api
+	DeviceType     DeviceType       `json:"deviceType,omitempty"`
+	Selectors      *json.RawMessage `json:"selectors,omitempty"`
+	SelectorObj    interface{}
+}
+
+// DeviceSelectors contains common device selectors fields
+type DeviceSelectors struct {
+	Vendors      []string `json:"vendors,omitempty"`
+	Devices      []string `json:"devices,omitempty"`
+	Drivers      []string `json:"drivers,omitempty"`
+	PciAddresses []string `json:"pciAddresses,omitempty"`
+}
+
+// NetDeviceSelectors contains network device related selectors fields
+type NetDeviceSelectors struct {
+	DeviceSelectors
+	PfNames     []string `json:"pfNames,omitempty"`
+	LinkTypes   []string `json:"linkTypes,omitempty"`
+	DDPProfiles []string `json:"ddpProfiles,omitempty"`
+	IsRdma      bool     // the resource support rdma
+}
+
+// AccelDeviceSelectors contains accelerator(FPGA etc.) related selectors fields
+type AccelDeviceSelectors struct {
+	DeviceSelectors
 }
 
 // ResourceConfList is list of ResourceConfig
@@ -66,14 +124,17 @@ type ResourceFactory interface {
 	GetResourceServer(ResourcePool) (ResourceServer, error)
 	GetInfoProvider(string) DeviceInfoProvider
 	GetSelector(string, []string) (DeviceSelector, error)
-	GetResourcePool(rc *ResourceConfig, deviceList []PciNetDevice) (ResourcePool, error)
+	GetResourcePool(rc *ResourceConfig, deviceList []PciDevice) (ResourcePool, error)
 	GetRdmaSpec(string) RdmaSpec
+	GetDeviceProvider(DeviceType) DeviceProvider
+	GetDeviceFilter(*ResourceConfig) (interface{}, error)
 }
 
 // ResourcePool represents a generic resource entity
 type ResourcePool interface {
 	// extended API for internal use
 	GetResourceName() string
+	GetResourcePrefix() string
 	GetDevices() map[string]*pluginapi.Device // for ListAndWatch
 	Probe() bool
 	GetDeviceSpecs(deviceIDs []string) []*pluginapi.DeviceSpec
@@ -81,25 +142,45 @@ type ResourcePool interface {
 	GetMounts(deviceIDs []string) []*pluginapi.Mount
 }
 
-// PciNetDevice provides an interface to get device specific information
-type PciNetDevice interface {
-	GetPFName() string
+// DeviceProvider provides interface for device discovery
+type DeviceProvider interface {
+	// AddTargetDevices adds a list of devices in a DeviceProvider that matches the 'device class hexcode as int'
+	AddTargetDevices([]*ghw.PCIDevice, int) error
+	GetDevices() []PciDevice
+	GetFilteredDevices([]PciDevice, *ResourceConfig) ([]PciDevice, error)
+}
+
+// PciDevice provides an interface to get generic device specific information
+type PciDevice interface {
 	GetPfPciAddr() string
 	GetVendor() string
 	GetDriver() string
 	GetDeviceCode() string
 	GetPciAddr() string
-	GetNetName() string
 	IsSriovPF() bool
-	GetLinkSpeed() string
-	GetLinkType() string
 	GetSubClass() string
 	GetDeviceSpecs() []*pluginapi.DeviceSpec
 	GetEnvVal() string
 	GetMounts() []*pluginapi.Mount
 	GetAPIDevice() *pluginapi.Device
-	GetRdmaSpec() RdmaSpec
 	GetVFID() int
+	GetNumaInfo() string
+}
+
+// PciNetDevice extends PciDevice interface
+type PciNetDevice interface {
+	PciDevice
+	GetPFName() string
+	GetNetName() string
+	GetLinkSpeed() string
+	GetLinkType() string
+	GetRdmaSpec() RdmaSpec
+	GetDDPProfiles() string
+}
+
+// AccelDevice extends PciDevice interface
+type AccelDevice interface {
+	PciDevice
 }
 
 // DeviceInfoProvider is an interface to get Device Plugin API specific device information
@@ -111,7 +192,7 @@ type DeviceInfoProvider interface {
 
 // DeviceSelector provides an interface for filtering a list of devices
 type DeviceSelector interface {
-	Filter([]PciNetDevice) []PciNetDevice
+	Filter([]PciDevice) []PciDevice
 }
 
 // LinkWatcher in interface to watch Network link status

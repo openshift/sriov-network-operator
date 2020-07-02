@@ -4,6 +4,9 @@ import (
 	// "bytes"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
+	"net"
+
 	// "net"
 	"os"
 	"os/exec"
@@ -19,6 +22,7 @@ import (
 	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
 	"github.com/jaypipes/ghw"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	"github.com/vishvananda/netlink"
 )
 
 const (
@@ -78,7 +82,10 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 		}
 		if name := tryGetInterfaceName(device.Address); name != "" {
 			iface.Name = name
+			iface.Mac = getNetDevMac(name)
+			iface.LinkSpeed = getNetDevLinkSpeed(name)
 		}
+		iface.LinkType = getLinkType(iface)
 
 		if dputils.IsSriovPF(device.Address) {
 			iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
@@ -120,7 +127,7 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 			}
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {
-			if err = resetSriovDevice(ifaceStatus.PciAddress); err != nil {
+			if err = resetSriovDevice(ifaceStatus); err != nil {
 				return err
 			}
 		}
@@ -181,6 +188,13 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
 			return err
 		}
+		if strings.EqualFold(iface.LinkType, "IB") {
+			if err = setVfsGuid(iface); err != nil {
+				return err
+			}
+		} else if err = setVfsAdminMac(ifaceStatus); err != nil {
+			return err
+		}
 	}
 	// set PF mtu
 	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
@@ -198,8 +212,8 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		}
 		for _, addr := range vfAddrs {
 			driver := ""
+			vfID, err := dputils.GetVFID(addr)
 			for _, group := range iface.VfGroups {
-				vfID, err := dputils.GetVFID(addr)
 				if err != nil {
 					glog.Warningf("configSriovDevice(): unable to get VF id %+v %q", iface.PciAddress, err)
 				}
@@ -302,13 +316,43 @@ func getNetdevMTU(pciAddr string) int {
 	return mtu
 }
 
-func resetSriovDevice(pciAddr string) error {
-	glog.V(2).Infof("resetSriovDevice(): reset sr-iov device %s", pciAddr)
-	if err := setSriovNumVfs(pciAddr, 0); err != nil {
+func getNetDevMac(ifaceName string) string {
+	glog.V(2).Infof("getNetDevMac(): get Mac for device %s", ifaceName)
+	macFilePath := filepath.Join(sysClassNet, ifaceName, "address")
+	data, err := ioutil.ReadFile(macFilePath)
+	if err != nil {
+		glog.Warningf("getNetDevMac(): fail to read Mac file %s", macFilePath)
+		return ""
+	}
+
+	return strings.TrimSpace(string(data))
+}
+
+func getNetDevLinkSpeed(ifaceName string) string {
+	glog.V(2).Infof("getNetDevLinkSpeed(): get LinkSpeed for device %s", ifaceName)
+	speedFilePath := filepath.Join(sysClassNet, ifaceName, "speed")
+	data, err := ioutil.ReadFile(speedFilePath)
+	if err != nil {
+		glog.Warningf("getNetDevLinkSpeed(): fail to read Link Speed file %s", speedFilePath)
+		return ""
+	}
+
+	return fmt.Sprintf("%s Mb/s", strings.TrimSpace(string(data)))
+}
+
+func resetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error {
+	glog.V(2).Infof("resetSriovDevice(): reset SRIOV device %s", ifaceStatus.PciAddress)
+	if err := setSriovNumVfs(ifaceStatus.PciAddress, 0); err != nil {
 		return err
 	}
-	if err := setNetdevMTU(pciAddr, 1500); err != nil {
-		return err
+	if ifaceStatus.LinkType == "ETH" {
+		if err := setNetdevMTU(ifaceStatus.PciAddress, 1500); err != nil {
+			return err
+		}
+	} else if ifaceStatus.LinkType == "IB" {
+		if err := setNetdevMTU(ifaceStatus.PciAddress, 2048); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -330,6 +374,10 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualF
 
 	if mtu := getNetdevMTU(pciAddr); mtu > 0 {
 		vf.Mtu = mtu
+	}
+	if name := tryGetInterfaceName(pciAddr); name != "" {
+		vf.Name = name
+		vf.Mac = getNetDevMac(name)
 	}
 
 	for _, device := range devices {
@@ -372,4 +420,108 @@ func Chroot(path string) (func() error, error) {
 		}
 		return syscall.Chroot(".")
 	}, nil
+}
+
+func setVfsAdminMac(iface *sriovnetworkv1.InterfaceExt) error {
+	glog.Infof("setVfsAdminMac(): device %s", iface.PciAddress)
+	pfLink, err := netlink.LinkByName(iface.Name)
+	if err != nil {
+		glog.Errorf("setVfsAdminMac(): unable to get PF link for device %+v %q", iface, err)
+		return err
+	}
+	vfs, err := dputils.GetVFList(iface.PciAddress)
+	if err != nil {
+		return err
+	}
+	for _, addr := range vfs {
+		vfID, err := dputils.GetVFID(addr)
+		if err != nil {
+			glog.Errorf("setVfsAdminMac(): unable to get VF id %+v %q", iface.PciAddress, err)
+			return err
+		}
+		vfName := tryGetInterfaceName(addr)
+		vfLink, err := netlink.LinkByName(vfName)
+		if err != nil {
+			glog.Errorf("setVfsAdminMac(): unable to get VF link for device %+v %q", iface, err)
+			return err
+		}
+		if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
+			return err
+		}
+		if err = Unbind(addr); err != nil {
+			return err
+		}
+		if err = BindDefaultDriver(addr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
+	glog.Infof("getLinkType(): Device %s", ifaceStatus.PciAddress)
+	if ifaceStatus.Name != "" {
+		link, err := netlink.LinkByName(ifaceStatus.Name)
+		if err != nil {
+			glog.Warningf("getLinkType(): %v", err)
+			return ""
+		}
+		linkType := link.Attrs().EncapType
+		if linkType == "ether" {
+			return "ETH"
+		} else if linkType == "infiniband" {
+			return "IB"
+		}
+	}
+
+	return ""
+}
+
+func setVfsGuid(iface *sriovnetworkv1.Interface) error {
+	glog.Infof("setVfsGuid(): device %s", iface.PciAddress)
+	pfLink, err := netlink.LinkByName(iface.Name)
+	if err != nil {
+		glog.Errorf("setVfsGuid(): unable to get PF link for device %+v %q", iface, err)
+		return err
+	}
+	vfs, err := dputils.GetVFList(iface.PciAddress)
+	if err != nil {
+		return err
+	}
+	for _, addr := range vfs {
+		vfID, err := dputils.GetVFID(addr)
+		if err != nil {
+			glog.Errorf("setVfsGuid(): unable to get VF id %+v %q", iface.PciAddress, err)
+			return err
+		}
+		guid := generateRandomGuid()
+		if err := netlink.LinkSetVfNodeGUID(pfLink, vfID, guid); err != nil {
+			return err
+		}
+		if err := netlink.LinkSetVfPortGUID(pfLink, vfID, guid); err != nil {
+			return err
+		}
+		if err = Unbind(addr); err != nil {
+			return err
+		}
+		if err = BindDefaultDriver(addr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func generateRandomGuid() net.HardwareAddr {
+	guid := make(net.HardwareAddr, 8)
+
+	// First field is 0x01 - xfe to avoid all zero and all F invalid guids
+	guid[0] = byte(1 + rand.Intn(0xfe))
+
+	for i := 1; i < len(guid); i++ {
+		guid[i] = byte(rand.Intn(0x100))
+	}
+
+	return guid
 }

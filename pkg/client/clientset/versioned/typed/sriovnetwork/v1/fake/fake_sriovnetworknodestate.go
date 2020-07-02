@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var sriovnetworknodestatesResource = schema.GroupVersionResource{Group: "sriovne
 var sriovnetworknodestatesKind = schema.GroupVersionKind{Group: "sriovnetwork.openshift.io", Version: "v1", Kind: "SriovNetworkNodeState"}
 
 // Get takes name of the sriovNetworkNodeState, and returns the corresponding sriovNetworkNodeState object, and an error if there is any.
-func (c *FakeSriovNetworkNodeStates) Get(name string, options v1.GetOptions) (result *sriovnetworkv1.SriovNetworkNodeState, err error) {
+func (c *FakeSriovNetworkNodeStates) Get(ctx context.Context, name string, options v1.GetOptions) (result *sriovnetworkv1.SriovNetworkNodeState, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(sriovnetworknodestatesResource, c.ns, name), &sriovnetworkv1.SriovNetworkNodeState{})
 
@@ -50,7 +52,7 @@ func (c *FakeSriovNetworkNodeStates) Get(name string, options v1.GetOptions) (re
 }
 
 // List takes label and field selectors, and returns the list of SriovNetworkNodeStates that match those selectors.
-func (c *FakeSriovNetworkNodeStates) List(opts v1.ListOptions) (result *sriovnetworkv1.SriovNetworkNodeStateList, err error) {
+func (c *FakeSriovNetworkNodeStates) List(ctx context.Context, opts v1.ListOptions) (result *sriovnetworkv1.SriovNetworkNodeStateList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(sriovnetworknodestatesResource, sriovnetworknodestatesKind, c.ns, opts), &sriovnetworkv1.SriovNetworkNodeStateList{})
 
@@ -72,14 +74,14 @@ func (c *FakeSriovNetworkNodeStates) List(opts v1.ListOptions) (result *sriovnet
 }
 
 // Watch returns a watch.Interface that watches the requested sriovNetworkNodeStates.
-func (c *FakeSriovNetworkNodeStates) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeSriovNetworkNodeStates) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(sriovnetworknodestatesResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a sriovNetworkNodeState and creates it.  Returns the server's representation of the sriovNetworkNodeState, and an error, if there is any.
-func (c *FakeSriovNetworkNodeStates) Create(sriovNetworkNodeState *sriovnetworkv1.SriovNetworkNodeState) (result *sriovnetworkv1.SriovNetworkNodeState, err error) {
+func (c *FakeSriovNetworkNodeStates) Create(ctx context.Context, sriovNetworkNodeState *sriovnetworkv1.SriovNetworkNodeState, opts v1.CreateOptions) (result *sriovnetworkv1.SriovNetworkNodeState, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(sriovnetworknodestatesResource, c.ns, sriovNetworkNodeState), &sriovnetworkv1.SriovNetworkNodeState{})
 
@@ -90,7 +92,7 @@ func (c *FakeSriovNetworkNodeStates) Create(sriovNetworkNodeState *sriovnetworkv
 }
 
 // Update takes the representation of a sriovNetworkNodeState and updates it. Returns the server's representation of the sriovNetworkNodeState, and an error, if there is any.
-func (c *FakeSriovNetworkNodeStates) Update(sriovNetworkNodeState *sriovnetworkv1.SriovNetworkNodeState) (result *sriovnetworkv1.SriovNetworkNodeState, err error) {
+func (c *FakeSriovNetworkNodeStates) Update(ctx context.Context, sriovNetworkNodeState *sriovnetworkv1.SriovNetworkNodeState, opts v1.UpdateOptions) (result *sriovnetworkv1.SriovNetworkNodeState, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(sriovnetworknodestatesResource, c.ns, sriovNetworkNodeState), &sriovnetworkv1.SriovNetworkNodeState{})
 
@@ -102,7 +104,7 @@ func (c *FakeSriovNetworkNodeStates) Update(sriovNetworkNodeState *sriovnetworkv
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeSriovNetworkNodeStates) UpdateStatus(sriovNetworkNodeState *sriovnetworkv1.SriovNetworkNodeState) (*sriovnetworkv1.SriovNetworkNodeState, error) {
+func (c *FakeSriovNetworkNodeStates) UpdateStatus(ctx context.Context, sriovNetworkNodeState *sriovnetworkv1.SriovNetworkNodeState, opts v1.UpdateOptions) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateSubresourceAction(sriovnetworknodestatesResource, "status", c.ns, sriovNetworkNodeState), &sriovnetworkv1.SriovNetworkNodeState{})
 
@@ -113,7 +115,7 @@ func (c *FakeSriovNetworkNodeStates) UpdateStatus(sriovNetworkNodeState *sriovne
 }
 
 // Delete takes name of the sriovNetworkNodeState and deletes it. Returns an error if one occurs.
-func (c *FakeSriovNetworkNodeStates) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeSriovNetworkNodeStates) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(sriovnetworknodestatesResource, c.ns, name), &sriovnetworkv1.SriovNetworkNodeState{})
 
@@ -121,15 +123,15 @@ func (c *FakeSriovNetworkNodeStates) Delete(name string, options *v1.DeleteOptio
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeSriovNetworkNodeStates) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(sriovnetworknodestatesResource, c.ns, listOptions)
+func (c *FakeSriovNetworkNodeStates) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(sriovnetworknodestatesResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &sriovnetworkv1.SriovNetworkNodeStateList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched sriovNetworkNodeState.
-func (c *FakeSriovNetworkNodeStates) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *sriovnetworkv1.SriovNetworkNodeState, err error) {
+func (c *FakeSriovNetworkNodeStates) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *sriovnetworkv1.SriovNetworkNodeState, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(sriovnetworknodestatesResource, c.ns, name, pt, data, subresources...), &sriovnetworkv1.SriovNetworkNodeState{})
 

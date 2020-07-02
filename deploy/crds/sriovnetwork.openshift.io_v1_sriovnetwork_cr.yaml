@@ -4,7 +4,7 @@ metadata:
   name: example-sriovnetwork
 spec:
   # networkNamespace: default
-  ipam: | 
+  ipam: |
     {
       "type": "host-local",
       "subnet": "10.56.217.0/24",

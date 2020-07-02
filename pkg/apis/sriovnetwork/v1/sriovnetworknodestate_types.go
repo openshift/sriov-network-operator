@@ -18,15 +18,16 @@ type Interface struct {
 	PciAddress string    `json:"pciAddress"`
 	NumVfs     int       `json:"numVfs,omitempty"`
 	Mtu        int       `json:"mtu,omitempty"`
-	Name       string    `json:"name, omitempty"`
-	VfGroups   []VfGroup `json:"vfGroups, omitempty"`
+	Name       string    `json:"name,omitempty"`
+	LinkType   string    `json:"linkType,omitempty"`
+	VfGroups   []VfGroup `json:"vfGroups,omitempty"`
 }
 
 type VfGroup struct {
-	ResourceName string `json:"resourceName"`
+	ResourceName string `json:"resourceName,omitempty"`
 	DeviceType   string `json:"deviceType,omitempty"`
 	VfRange      string `json:"vfRange,omitempty"`
-	PolicyName   string `json:"policyName"`
+	PolicyName   string `json:"policyName,omitempty"`
 }
 
 type Interfaces []Interface
@@ -41,6 +42,7 @@ type InterfaceExt struct {
 	Mtu        int               `json:"mtu,omitempty"`
 	NumVfs     int               `json:"numVfs,omitempty"`
 	LinkSpeed  string            `json:"linkSpeed,omitempty"`
+	LinkType   string            `json:"linkType,omitempty"`
 	TotalVfs   int               `json:"totalvfs,omitempty"`
 	VFs        []VirtualFunction `json:"Vfs,omitempty"`
 }

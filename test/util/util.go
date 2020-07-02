@@ -152,6 +152,7 @@ func GenerateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 	spoofchk := ""
 	trust := ""
 	state := ""
+	ipam := "{}"
 
 	if cr.Spec.Trust == "on" {
 		trust = `"trust":"on",`
@@ -173,9 +174,48 @@ func GenerateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 		state = `"link_state":"disable",`
 	}
 
+	if cr.Spec.IPAM != "" {
+		ipam = cr.Spec.IPAM
+	}
 	vlanQoS := cr.Spec.VlanQoS
 
-	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"sriov", "vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.GetName(), cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, cr.Spec.IPAM)
+	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"sriov","vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.GetName(), cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, ipam)
+}
+
+func GenerateSriovIBNetworkCRs(namespace string, specs map[string]sriovnetworkv1.SriovIBNetworkSpec) map[string]sriovnetworkv1.SriovIBNetwork {
+	crs := make(map[string]sriovnetworkv1.SriovIBNetwork)
+
+	for k, v := range specs {
+		crs[k] = sriovnetworkv1.SriovIBNetwork{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "SriovIBNetwork",
+				APIVersion: "sriovnetwork.openshift.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      k,
+				Namespace: namespace,
+			},
+			Spec: v,
+		}
+	}
+	return crs
+}
+
+func GenerateExpectedIBNetConfig(cr *sriovnetworkv1.SriovIBNetwork) string {
+	state := ""
+	ipam := "{}"
+
+	if cr.Spec.LinkState == "auto" {
+		state = `"link_state":"auto",`
+	} else if cr.Spec.LinkState == "enable" {
+		state = `"link_state":"enable",`
+	} else if cr.Spec.LinkState == "disable" {
+		state = `"link_state":"disable",`
+	}
+	if cr.Spec.IPAM != "" {
+		ipam = cr.Spec.IPAM
+	}
+	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"ib-sriov",%s"ipam":%s }`, cr.GetName(), state, ipam)
 }
 
 func ValidateDevicePluginConfig(nps []*sriovnetworkv1.SriovNetworkNodePolicy, rawConfig string) error {
@@ -194,7 +234,19 @@ func ValidateDevicePluginConfig(nps []*sriovnetworkv1.SriovNetworkNodePolicy, ra
 			if rc.ResourceName != np.Spec.ResourceName {
 				continue
 			}
-			if rc.IsRdma != np.Spec.IsRdma || rc.ResourceName != np.Spec.ResourceName || !validateSelector(&rc, &np.Spec.NicSelector) {
+
+			netDeviceSelectors := &dptypes.NetDeviceSelectors{}
+			raw, err := rc.Selectors.MarshalJSON()
+			if err != nil {
+				return err
+			}
+
+			err = json.Unmarshal(raw, netDeviceSelectors)
+			if err != nil {
+				return err
+			}
+
+			if netDeviceSelectors.IsRdma != np.Spec.IsRdma || rc.ResourceName != np.Spec.ResourceName || !validateSelector(netDeviceSelectors, &np.Spec.NicSelector) {
 				return fmt.Errorf("content of config is incorrect")
 			}
 		}
@@ -202,19 +254,19 @@ func ValidateDevicePluginConfig(nps []*sriovnetworkv1.SriovNetworkNodePolicy, ra
 	return nil
 }
 
-func validateSelector(rc *dptypes.ResourceConfig, ns *sriovnetworkv1.SriovNetworkNicSelector) bool {
+func validateSelector(rc *dptypes.NetDeviceSelectors, ns *sriovnetworkv1.SriovNetworkNicSelector) bool {
 	if ns.DeviceID != "" {
-		if len(rc.Selectors.Devices) != 1 || ns.DeviceID != rc.Selectors.Devices[0] {
+		if len(rc.Devices) != 1 || ns.DeviceID != rc.Devices[0] {
 			return false
 		}
 	}
 	if ns.Vendor != "" {
-		if len(rc.Selectors.Vendors) != 1 || ns.Vendor != rc.Selectors.Vendors[0] {
+		if len(rc.Vendors) != 1 || ns.Vendor != rc.Vendors[0] {
 			return false
 		}
 	}
 	if len(ns.PfNames) > 0 {
-		if !reflect.DeepEqual(ns.PfNames, rc.Selectors.PfNames) {
+		if !reflect.DeepEqual(ns.PfNames, rc.PfNames) {
 			return false
 		}
 	}

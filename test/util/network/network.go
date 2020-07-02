@@ -3,8 +3,10 @@ package network
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
+	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
 	k8sv1 "k8s.io/api/core/v1"
@@ -93,4 +95,34 @@ func GetSriovNicIPs(pod *k8sv1.Pod, ifcName string) ([]string, error) {
 		return net.Ips, nil
 	}
 	return nil, nil
+}
+
+// Return a definition of a macvlan NetworkAttachmentDefinition
+// name name
+// namespace namespace
+func CreateMacvlanNetworkAttachmentDefinition(name string, namespace string, nodeNicName string) netattdefv1.NetworkAttachmentDefinition {
+	return netattdefv1.NetworkAttachmentDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: netattdefv1.NetworkAttachmentDefinitionSpec{
+			Config: fmt.Sprintf(`{
+				"cniVersion": "0.3.0",
+				"type": "macvlan",
+				"master": "%s",
+				"mode": "bridge",
+				"ipam": {
+				  "type": "host-local",
+				  "subnet": "10.1.1.0/24",
+				  "rangeStart": "10.1.1.100",
+				  "rangeEnd": "10.1.1.200",
+				  "routes": [
+					{ "dst": "0.0.0.0/0" }
+				  ],
+				  "gateway": "10.1.1.1"
+				}
+			  }`, nodeNicName),
+		},
+	}
 }

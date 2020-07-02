@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -32,11 +33,10 @@ var (
 
 func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
 	glog.V(2).Infof("validateSriovNetworkNodePolicy: %v", cr)
-	admit := true
 
 	if cr.GetName() == "default" {
 		// skip the default policy
-		return admit, nil
+		return true, nil
 	}
 
 	admit, err := staticValidateSriovNetworkNodePolicy(cr)
@@ -56,7 +56,7 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (
 func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
 	var validString = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	if !validString.MatchString(cr.Spec.ResourceName) {
-		return false, fmt.Errorf("resource name \"%s\" contains invalid characters", cr.Spec.ResourceName)
+		return false, fmt.Errorf("resource name \"%s\" contains invalid characters, the accepted syntax of the regular expressions is: \"^[a-zA-Z0-9_]+$\"", cr.Spec.ResourceName)
 	}
 
 	if cr.Spec.NicSelector.Vendor == "" && cr.Spec.NicSelector.DeviceID == "" && len(cr.Spec.NicSelector.PfNames) == 0 {
@@ -106,6 +106,13 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 			}
 		}
 	}
+
+	// To configure RoCE on baremetal or virtual machine:
+	// BM: DeviceType = netdevice && isRdma = true
+	// VM: DeviceType = vfio-pci && isRdma = false
+	if cr.Spec.DeviceType == "vfio-pci" && cr.Spec.IsRdma {
+		return false, fmt.Errorf("'deviceType: vfio-pci' conflicts with 'isRdma: true'; Set 'deviceType' to (string)'netdevice' Or Set 'isRdma' to (bool)'false'")
+	}
 	return true, nil
 }
 
@@ -113,10 +120,10 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	nodesSelected = false
 	interfaceSelected = false
 
-	nodeList, err := kubeclient.CoreV1().Nodes().List(metav1.ListOptions{
+	nodeList, err := kubeclient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: labels.Set(cr.Spec.NodeSelector).String(),
 	})
-	nsList, err := snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(metav1.ListOptions{})
+	nsList, err := snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return false, err
 	}
@@ -161,19 +168,17 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 	}
 
 	for _, iface := range state.Spec.Interfaces {
-		if sriovnetworkv1.StringInArray(iface.PciAddress, policy.Spec.NicSelector.RootDevices) {
-			if len(policy.Spec.NicSelector.PfNames) > 0 {
-				for _, pf := range policy.Spec.NicSelector.PfNames {
-					name, rngSt, rngEnd, err := sriovnetworkv1.ParsePFName(pf)
-					if err != nil {
-						return false, fmt.Errorf("invalid PF name: %s", pf)
-					}
-					if name == iface.Name {
-						for _, group := range iface.VfGroups {
-							if sriovnetworkv1.IndexInRange(rngSt, group.VfRange) || sriovnetworkv1.IndexInRange(rngEnd, group.VfRange) {
-								if group.PolicyName != policy.GetName() {
-									return false, fmt.Errorf("Vf index range in %s is overlapped with existing policies", pf)
-								}
+		if len(policy.Spec.NicSelector.PfNames) > 0 {
+			for _, pf := range policy.Spec.NicSelector.PfNames {
+				name, rngSt, rngEnd, err := sriovnetworkv1.ParsePFName(pf)
+				if err != nil {
+					return false, fmt.Errorf("invalid PF name: %s", pf)
+				}
+				if name == iface.Name {
+					for _, group := range iface.VfGroups {
+						if sriovnetworkv1.IndexInRange(rngSt, group.VfRange) || sriovnetworkv1.IndexInRange(rngEnd, group.VfRange) {
+							if group.PolicyName != policy.GetName() {
+								return false, fmt.Errorf("Vf index range in %s is overlapped with existing policies", pf)
 							}
 						}
 					}

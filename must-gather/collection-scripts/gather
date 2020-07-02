@@ -13,7 +13,7 @@ resources+=(ns/openshift-multus)
 resources+=(ns/openshift-marketplace)
 
 # sriovnetwork.openshift.io
-resources+=(sriovnetworknodepolicies sriovnetworknodestates sriovnetworks sriovoperatorconfigs)
+resources+=(sriovnetworknodepolicies sriovnetworknodestates sriovnetworks sriovoperatorconfigs sriovibnetworks)
 
 # net-attch-def
 resources+=(network-attachment-definitions)

@@ -20,8 +20,8 @@ type MellanoxPlugin struct {
 type mlnxNic struct {
 	enableSriov bool
 	totalVfs    int
-	linkType    string
-	firstPort   bool
+	linkTypeP1  string
+	linkTypeP2  string
 }
 
 const (
@@ -38,6 +38,8 @@ const (
 
 var Plugin MellanoxPlugin
 var attributesToChange map[string]mlnxNic
+var mellanoxNicsStatus map[string]map[string]sriovnetworkv1.InterfaceExt
+var mellanoxNicsSpec map[string]sriovnetworkv1.Interface
 
 // Initialize our plugin and set up initial values
 func init() {
@@ -45,6 +47,7 @@ func init() {
 		PluginName:  "mellanox_plugin",
 		SpecVersion: "1.0",
 	}
+	mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}
 }
 
 // Name returns the name of the plugin
@@ -71,41 +74,93 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 	needReboot = false
 	err = nil
 	attributesToChange = map[string]mlnxNic{}
+	mellanoxNicsSpec = map[string]sriovnetworkv1.Interface{}
+	processedNics := map[string]bool{}
 
+	// Read mellanox NIC status once
+	if mellanoxNicsStatus == nil || len(mellanoxNicsStatus) == 0 {
+		for _, iface := range new.Status.Interfaces {
+			if iface.Vendor != MellanoxVendorId {
+				continue
+			}
+
+			pciPrefix := getPciAddressPrefix(iface.PciAddress)
+			if ifaces, ok := mellanoxNicsStatus[pciPrefix]; ok {
+				ifaces[iface.PciAddress] = iface
+			} else {
+				mellanoxNicsStatus[pciPrefix] = map[string]sriovnetworkv1.InterfaceExt{iface.PciAddress: iface}
+			}
+		}
+	}
+
+	// Add only mellanox cards that required changes in the map, to help track dual port NICs
 	for _, iface := range new.Spec.Interfaces {
-		if !isMlnxNicAndInNode(iface.PciAddress, new) {
+		pciPrefix := getPciAddressPrefix(iface.PciAddress)
+		if _, ok := mellanoxNicsStatus[pciPrefix]; !ok {
 			continue
 		}
-		fwCurrent, fwNext, err := getMlnxNicFwData(iface.PciAddress)
+
+		mellanoxNicsSpec[iface.PciAddress] = iface
+	}
+
+	for _, ifaceSpec := range mellanoxNicsSpec {
+		pciPrefix := getPciAddressPrefix(ifaceSpec.PciAddress)
+		// skip processed nics, help not running the same logic 2 times for dual port NICs
+		if _, ok := processedNics[pciPrefix]; ok {
+			continue
+		}
+		processedNics[pciPrefix] = true
+
+		fwCurrent, fwNext, err := getMlnxNicFwData(ifaceSpec.PciAddress)
 		if err != nil {
 			return false, false, err
 		}
-		if fwCurrent.enableSriov != fwNext.enableSriov || fwCurrent.totalVfs != fwNext.totalVfs ||
-			fwCurrent.linkType != fwNext.linkType {
-			needReboot = true
-			break
-		}
-		attrs := &mlnxNic{totalVfs: -1, firstPort: fwCurrent.firstPort}
-		requireChange := false
 
-		if fwCurrent.totalVfs != iface.NumVfs {
-			attrs.totalVfs = iface.NumVfs
-			requireChange = true
+		isDualPort := isDualPort(ifaceSpec.PciAddress)
+		// Attributes to change
+		attrs := &mlnxNic{totalVfs: -1}
+		var changeWithoutReboot bool
+
+		var totalVfs int
+		totalVfs, needReboot, changeWithoutReboot = handleTotalVfs(fwCurrent, fwNext, attrs, ifaceSpec, isDualPort)
+		sriovEnNeedReboot, sriovEnChangeWithoutReboot := handleEnableSriov(totalVfs, fwCurrent, fwNext, attrs)
+		needReboot = needReboot || sriovEnNeedReboot
+		changeWithoutReboot = changeWithoutReboot || sriovEnChangeWithoutReboot
+
+		needLinkChange, err := handleLinkType(pciPrefix, fwCurrent, attrs)
+		if err != nil {
+			return false, false, err
 		}
-		if iface.NumVfs == 0 && fwCurrent.enableSriov {
-			attrs.enableSriov = false
-			requireChange = true
-		} else if iface.NumVfs > 0 && !fwCurrent.enableSriov {
-			attrs.enableSriov = true
-			requireChange = true
+
+		needReboot = needReboot || needLinkChange
+		if needReboot || changeWithoutReboot {
+			attributesToChange[ifaceSpec.PciAddress] = *attrs
 		}
-		if fwCurrent.linkType != EthLinkType && fwCurrent.linkType != PreconfiguredLinkType && fwCurrent.linkType != UknownLinkType {
-			attrs.linkType = EthLinkType
-			requireChange = true
+	}
+
+	// Set total VFs to 0 for mellanox interfaces with no spec
+	for pciPrefix, portsMap := range mellanoxNicsStatus {
+		if _, ok := processedNics[pciPrefix]; ok {
+			continue
 		}
-		if requireChange {
-			attributesToChange[iface.PciAddress] = *attrs
-			needReboot = true
+
+		// Add the nic to processed Nics to not repeat the process for dual nic ports
+		processedNics[pciPrefix] = true
+		pciAddress := pciPrefix + "0"
+
+		// Skip unsupported devices
+		if _, ok := sriovnetworkv1.SriovPfVfMap[portsMap[pciAddress].DeviceID]; !ok {
+			continue
+		}
+
+		_, fwNext, err := getMlnxNicFwData(pciAddress)
+		if err != nil {
+			return false, false, err
+		}
+
+		if fwNext.totalVfs > 0 || fwNext.enableSriov {
+			attributesToChange[pciAddress] = mlnxNic{totalVfs: 0}
+			glog.V(2).Infof("Changing TotalVfs %d to 0, doesn't require rebooting", fwNext.totalVfs)
 		}
 	}
 
@@ -134,13 +189,13 @@ func configFW() error {
 		if fwArgs.totalVfs > -1 {
 			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%d", TotalVfs, fwArgs.totalVfs))
 		}
-		if len(fwArgs.linkType) > 0 {
-			if fwArgs.firstPort {
-				cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", LinkTypeP1, EthLinkType))
-			} else {
-				cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", LinkTypeP2, EthLinkType))
-			}
+		if len(fwArgs.linkTypeP1) > 0 {
+			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", LinkTypeP1, fwArgs.linkTypeP1))
 		}
+		if len(fwArgs.linkTypeP2) > 0 {
+			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", LinkTypeP2, fwArgs.linkTypeP2))
+		}
+
 		glog.V(2).Infof("mellanox-plugin: configFW(): %v", cmdArgs)
 		if len(cmdArgs) <= 4 {
 			continue
@@ -178,36 +233,29 @@ func runCommand(command string, args ...string) (string, error) {
 func getMlnxNicFwData(pciAddress string) (current, next *mlnxNic, err error) {
 	glog.Infof("mellanox-plugin getMlnxNicFwData(): device %s", pciAddress)
 	err = nil
-	attrs := []string{TotalVfs, EnableSriov}
-	firstPort := isFirstPort(pciAddress)
+	attrs := []string{TotalVfs, EnableSriov, LinkTypeP1, LinkTypeP2}
 
-	if firstPort {
-		attrs = append(attrs, LinkTypeP1)
-	} else {
-		attrs = append(attrs, LinkTypeP2)
-	}
 	out, err := mstConfigReadData(pciAddress)
 	if err != nil {
 		glog.Errorf("mellanox-plugin getMlnxNicFwData(): failed %v", err)
 		return
 	}
 	mstCurrentData, mstNextData := parseMstconfigOutput(out, attrs)
-	current, err = mlnxNicFromMap(mstCurrentData, firstPort)
+	current, err = mlnxNicFromMap(mstCurrentData)
 	if err != nil {
 		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
 		return
 	}
-	next, err = mlnxNicFromMap(mstNextData, firstPort)
+	next, err = mlnxNicFromMap(mstNextData)
 	if err != nil {
 		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
 	}
 	return
 }
 
-func mlnxNicFromMap(mstData map[string]string, firstPort bool) (*mlnxNic, error) {
-	glog.Infof("mellanox-plugin mlnxNicFromMap() %v, %v", mstData, firstPort)
-	fwData := &mlnxNic{firstPort: firstPort}
-	var linkType string
+func mlnxNicFromMap(mstData map[string]string) (*mlnxNic, error) {
+	glog.Infof("mellanox-plugin mlnxNicFromMap() %v", mstData)
+	fwData := &mlnxNic{}
 	if strings.Contains(mstData[EnableSriov], "True") {
 		fwData.enableSriov = true
 	}
@@ -215,23 +263,11 @@ func mlnxNicFromMap(mstData map[string]string, firstPort bool) (*mlnxNic, error)
 	if err != nil {
 		return nil, err
 	}
-	fwData.totalVfs = i
-	if fwData.firstPort {
-		linkType = mstData[LinkTypeP1]
-	} else {
-		linkType = mstData[LinkTypeP2]
-	}
 
-	if strings.Contains(linkType, EthLinkType) {
-		fwData.linkType = EthLinkType
-	} else if strings.Contains(linkType, InfinibandLinkType) {
-		fwData.linkType = InfinibandLinkType
-	} else if len(linkType) > 0 {
-		glog.Warningf("mellanox-plugin getMlnxNicFwData(): link type %s is not one of [ETH, IB]", linkType)
-		fwData.linkType = UknownLinkType
-	} else {
-		glog.Warning("mellanox-plugin getMlnxNicFwData(): LINK_TYPE_P* attribute was not found")
-		fwData.linkType = PreconfiguredLinkType
+	fwData.totalVfs = i
+	fwData.linkTypeP1 = getLinkType(mstData[LinkTypeP1])
+	if linkTypeP2, ok := mstData[LinkTypeP2]; ok {
+		fwData.linkTypeP2 = getLinkType(linkTypeP2)
 	}
 
 	return fwData, nil
@@ -256,20 +292,152 @@ func parseMstconfigOutput(mstOutput string, attributes []string) (fwCurrent, fwN
 	return
 }
 
-func isFirstPort(pciAddress string) bool {
-	glog.Infof("mellanox-plugin isFirstPort(): device %s", pciAddress)
-	return pciAddress[len(pciAddress)-1] == '0'
+func getPciAddressPrefix(pciAddress string) string {
+	return pciAddress[:len(pciAddress)-1]
 }
 
-func isMlnxNicAndInNode(pciAddress string, state *sriovnetworkv1.SriovNetworkNodeState) bool {
-	glog.Infof("mellanox-plugin isMlnxNicAndInNode(): device %s", pciAddress)
-	for _, iface := range state.Status.Interfaces {
-		if iface.PciAddress == pciAddress {
-			if iface.Vendor == MellanoxVendorId {
-				return true
+func isDualPort(pciAddress string) bool {
+	glog.Infof("mellanox-plugin isDualPort(): pciAddress %s", pciAddress)
+	pciAddressPrefix := getPciAddressPrefix(pciAddress)
+	return len(mellanoxNicsStatus[pciAddressPrefix]) > 1
+}
+
+func getLinkType(linkType string) string {
+	glog.Infof("mellanox-plugin getLinkType(): linkType %s", linkType)
+	if strings.Contains(linkType, EthLinkType) {
+		return EthLinkType
+	} else if strings.Contains(linkType, InfinibandLinkType) {
+		return InfinibandLinkType
+	} else if len(linkType) > 0 {
+		glog.Warningf("mellanox-plugin getMlnxNicFwData(): link type %s is not one of [ETH, IB]", linkType)
+		return UknownLinkType
+	} else {
+		glog.Warning("mellanox-plugin getMlnxNicFwData(): LINK_TYPE_P* attribute was not found")
+		return PreconfiguredLinkType
+	}
+}
+
+func isLinkTypeRequireChange(iface sriovnetworkv1.Interface, ifaceStatus sriovnetworkv1.InterfaceExt, fwLinkType string) (bool, error) {
+	glog.Infof("mellanox-plugin isLinkTypeRequireChange(): device %s", iface.PciAddress)
+	if iface.LinkType != "" && !strings.EqualFold(ifaceStatus.LinkType, iface.LinkType) {
+		if !strings.EqualFold(iface.LinkType, EthLinkType) && !strings.EqualFold(iface.LinkType, InfinibandLinkType) {
+			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Not supported link type: %s,"+
+				" supported link types: [eth, ETH, ib, and IB]", iface.LinkType)
+		}
+		if fwLinkType == UknownLinkType {
+			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Unknown link type: %s", fwLinkType)
+		}
+		if fwLinkType == PreconfiguredLinkType {
+			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Network card %s does not support link type change", iface.PciAddress)
+		}
+
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func getOtherPortSpec(pciAddress string) *sriovnetworkv1.Interface {
+	glog.Infof("mellanox-plugin getOtherPortSpec(): pciAddress %s", pciAddress)
+	pciAddrPrefix := getPciAddressPrefix(pciAddress)
+	pciAddrSuffix := pciAddress[len(pciAddrPrefix):]
+
+	if pciAddrSuffix == "0" {
+		iface := mellanoxNicsSpec[pciAddrPrefix+"1"]
+		return &iface
+	}
+
+	iface := mellanoxNicsSpec[pciAddrPrefix+"0"]
+	return &iface
+}
+
+// handleTotalVfs return required total VFs or max (required VFs for dual port NIC) and needReboot if totalVfs will change
+func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.Interface, isDualPort bool) (
+	totalVfs int, needReboot, changeWithoutReboot bool) {
+
+	totalVfs = ifaceSpec.NumVfs
+	// Check if the other port is changing the number of VF
+	if isDualPort {
+		otherIfaceSpec := getOtherPortSpec(ifaceSpec.PciAddress)
+		if otherIfaceSpec != nil {
+			if otherIfaceSpec.NumVfs > totalVfs {
+				totalVfs = otherIfaceSpec.NumVfs
 			}
-			return false
 		}
 	}
-	return false
+
+	if fwCurrent.totalVfs != totalVfs {
+		glog.V(2).Infof("Changing TotalVfs %d to %d, needs reboot", fwCurrent.totalVfs, totalVfs)
+		attrs.totalVfs = totalVfs
+		needReboot = true
+	}
+
+	// Remove policy then re-apply it
+	if !needReboot && fwNext.totalVfs != totalVfs {
+		glog.V(2).Infof("Changing TotalVfs %d to 0, doesn't require rebooting", fwCurrent.totalVfs)
+		attrs.totalVfs = totalVfs
+		changeWithoutReboot = true
+	}
+
+	return
+}
+
+// handleEnableSriov based on totalVfs it decide to disable (totalVfs=0) or enable (totalVfs changed from 0) sriov
+// and need reboot if enableSriov will change
+func handleEnableSriov(totalVfs int, fwCurrent, fwNext, attrs *mlnxNic) (needReboot, changeWithoutReboot bool) {
+	if totalVfs == 0 && fwCurrent.enableSriov {
+		glog.V(2).Info("disabling Sriov, needs reboot")
+		attrs.enableSriov = false
+		return true, false
+	} else if totalVfs > 0 && !fwCurrent.enableSriov {
+		glog.V(2).Info("enabling Sriov, needs reboot")
+		attrs.enableSriov = true
+		return true, false
+	} else if totalVfs > 0 && !fwNext.enableSriov {
+		attrs.enableSriov = true
+		return false, true
+	}
+
+	return false, false
+}
+
+func getIfaceStatus(pciAddress string) sriovnetworkv1.InterfaceExt {
+	return mellanoxNicsStatus[getPciAddressPrefix(pciAddress)][pciAddress]
+}
+
+// handleLinkType based on existing linkType and requested link
+func handleLinkType(pciPrefix string, fwData, attr *mlnxNic) (bool, error) {
+	needReboot := false
+
+	pciAddress := pciPrefix + "0"
+	if firstPortSpec, ok := mellanoxNicsSpec[pciAddress]; ok {
+		ifaceStatus := getIfaceStatus(pciAddress)
+		needChange, err := isLinkTypeRequireChange(firstPortSpec, ifaceStatus, fwData.linkTypeP1)
+		if err != nil {
+			return false, err
+		}
+
+		if needChange {
+			glog.V(2).Infof("Changing LinkTypeP1 %s to %s, needs reboot", fwData.linkTypeP1, firstPortSpec.LinkType)
+			attr.linkTypeP1 = firstPortSpec.LinkType
+			needReboot = true
+		}
+	}
+
+	pciAddress = pciPrefix + "1"
+	if secondPortSpec, ok := mellanoxNicsSpec[pciAddress]; ok {
+		ifaceStatus := getIfaceStatus(pciAddress)
+		needChange, err := isLinkTypeRequireChange(secondPortSpec, ifaceStatus, fwData.linkTypeP2)
+		if err != nil {
+			return false, err
+		}
+
+		if needChange {
+			glog.V(2).Infof("Changing LinkTypeP2 %s to %s, needs reboot", fwData.linkTypeP2, secondPortSpec.LinkType)
+			attr.linkTypeP2 = secondPortSpec.LinkType
+			needReboot = true
+		}
+	}
+
+	return needReboot, nil
 }
