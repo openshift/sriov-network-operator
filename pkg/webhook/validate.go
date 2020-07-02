@@ -22,7 +22,7 @@ const (
 
 // SupportedModels holds the NIC models officially supported
 var SupportedModels = map[string]([]string){
-	IntelID:    []string{"158b"},
+	IntelID:    []string{"158b", "0d58"},
 	MellanoxID: []string{"1015", "1017"},
 }
 
