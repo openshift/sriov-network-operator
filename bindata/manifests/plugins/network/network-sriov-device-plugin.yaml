@@ -2,7 +2,7 @@
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
-  name: sriov-device-plugin
+  name: sriov-network-device-plugin
   namespace: {{.Namespace}}
   annotations:
     kubernetes.io/description: |
@@ -11,13 +11,13 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: sriov-device-plugin
+      app: sriov-network-device-plugin
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app: sriov-device-plugin
+        app: sriov-network-device-plugin
         component: network
         type: infra
         openshift.io/component: network
@@ -29,10 +29,11 @@ spec:
       - key: node-role.kubernetes.io/master
         operator: Exists
         effect: NoSchedule
-      serviceAccountName: sriov-device-plugin
+      serviceAccountName: sriov-network-device-plugin
       containers:
       - name: sriov-device-plugin
         image: {{.SRIOVDevicePluginImage}}
+        imagePullPolicy: Always
         args:
         - --log-level=10
         - --resource-prefix={{.ResourcePrefix}}
@@ -54,4 +55,4 @@ spec:
             path: /sys/class/net
         - name: config-volume
           configMap: 
-            name: device-plugin-config
+            name: network-device-plugin-config

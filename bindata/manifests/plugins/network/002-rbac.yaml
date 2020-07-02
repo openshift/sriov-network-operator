@@ -2,19 +2,19 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: sriov-cni
+  name: sriov-network-cni
   namespace: {{.Namespace}}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: sriov-device-plugin
+  name: sriov-network-device-plugin
   namespace: {{.Namespace}}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: sriov-plugin
+  name: sriov-network-plugin
   namespace: {{.Namespace}}
 rules:
   - apiGroups:
@@ -29,27 +29,27 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: sriov-cni
+  name: sriov-network-cni
   namespace: {{.Namespace}}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: sriov-plugin
+  name: sriov-network-plugin
 subjects:
   - kind: ServiceAccount
-    name: sriov-cni
+    name: sriov-network-cni
     namespace: {{.Namespace}}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: sriov-device-plugin
+  name: sriov-network-device-plugin
   namespace: {{.Namespace}}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: sriov-plugin
+  name: sriov-network-plugin
 subjects:
   - kind: ServiceAccount
-    name: sriov-device-plugin
+    name: sriov-network-device-plugin
     namespace: {{.Namespace}}

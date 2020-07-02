@@ -26,7 +26,7 @@ spec:
         beta.kubernetes.io/os: linux
       tolerations:
       - operator: Exists
-      serviceAccountName: sriov-cni
+      serviceAccountName: sriov-network-cni
       containers:
       - name: sriov-cni
         image: {{.SRIOVCNIImage}}

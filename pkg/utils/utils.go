@@ -33,26 +33,27 @@ const (
 
 var InitialState sriovnetworkv1.SriovNetworkNodeState
 
-func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
-	glog.V(2).Info("DiscoverSriovDevices")
+func DiscoverSriovNetworkDevices() ([]sriovnetworkv1.InterfaceExt, error) {
+	glog.V(2).Info("DiscoverSriovNetworkDevices")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
 	pci, err := ghw.PCI()
 	if err != nil {
-		return nil, fmt.Errorf("DiscoverSriovDevices(): error getting PCI info: %v", err)
+		return nil, fmt.Errorf("DiscoverSriovNetworkDevices(): error getting PCI info: %v", err)
 	}
 
 	devices := pci.ListDevices()
 	if len(devices) == 0 {
-		return nil, fmt.Errorf("DiscoverSriovDevices(): could not retrieve PCI devices")
+		return nil, fmt.Errorf("DiscoverSriovNetworkDevices(): could not retrieve PCI devices")
 	}
 
 	for _, device := range devices {
 		devClass, err := strconv.ParseInt(device.Class.ID, 16, 64)
 		if err != nil {
-			glog.Warningf("DiscoverSriovDevices(): unable to parse device class for device %+v %q", device, err)
+			glog.Warningf("DiscoverSriovNetworkDevices(): unable to parse device class for device %+v %q", device, err)
 			continue
 		}
+
 		if devClass != netClass {
 			// Not network device
 			continue
@@ -66,7 +67,7 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 
 		driver, err := dputils.GetDriverName(device.Address)
 		if err != nil {
-			glog.Warningf("DiscoverSriovDevices(): unable to parse device driver for device %+v %q", device, err)
+			glog.Warningf("DiscoverSriovNetworkDevices(): unable to parse device driver for device %+v %q", device, err)
 			continue
 		}
 		iface := sriovnetworkv1.InterfaceExt{
@@ -91,7 +92,7 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			if dputils.SriovConfigured(device.Address) {
 				vfs, err := dputils.GetVFList(device.Address)
 				if err != nil {
-					glog.Warningf("DiscoverSriovDevices(): unable to parse VFs for device %+v %q", device, err)
+					glog.Warningf("DiscoverSriovNetworkDevices(): unable to parse VFs for device %+v %q", device, err)
 					continue
 				}
 				for _, vf := range vfs {

@@ -41,10 +41,10 @@ var log = logf.Log.WithName("controller_sriovnetworknodepolicy")
 // bad, but there's no way to pass configuration to the reconciler right now
 const (
 	ResyncPeriod        = 5 * time.Minute
-	PLUGIN_PATH         = "./bindata/manifests/plugins"
+	PLUGIN_PATH         = "./bindata/manifests/plugins/network"
 	DAEMON_PATH         = "./bindata/manifests/daemon"
 	DEFAULT_POLICY_NAME = "default"
-	CONFIGMAP_NAME      = "device-plugin-config"
+	CONFIGMAP_NAME      = "network-device-plugin-config"
 	DP_CONFIG_FILENAME  = "config.json"
 )
 
@@ -106,9 +106,6 @@ type ReconcileSriovNetworkNodePolicy struct {
 
 // Reconcile reads that state of the cluster for a SriovNetworkNodePolicy object and makes changes based on the state read
 // and what is in the SriovNetworkNodePolicy.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
-// Note:
 // The Controller will requeue the Request to be processed again if the returned error is non-nil or
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (reconcile.Result, error) {
@@ -129,7 +126,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 			}
 			err = r.client.Create(context.TODO(), defaultPolicy)
 			if err != nil {
-				reqLogger.Error(err, "Failed to create default Policy", "Namespace", Namespace, "Name", DEFAULT_POLICY_NAME)
+				reqLogger.Error(err, "Failed to create default network policy", "Namespace", Namespace, "Name", DEFAULT_POLICY_NAME)
 				return reconcile.Result{}, err
 			}
 			return reconcile.Result{}, nil
@@ -176,7 +173,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	}
 
 	// Sort the policies with priority, higher priority ones is applied later
-	sort.Sort(sriovnetworkv1.ByPriority(policyList.Items))
+	sort.Sort(sriovnetworkv1.NetworkPolicyByPriority(policyList.Items))
 	// Sync Sriov device plugin ConfigMap object
 	if err = r.syncDevicePluginConfigMap(policyList); err != nil {
 		return reconcile.Result{}, err
@@ -357,10 +354,10 @@ func (r *ReconcileSriovNetworkNodePolicy) syncSriovNetworkNodeState(np *sriovnet
 
 func (r *ReconcileSriovNetworkNodePolicy) syncPluginDaemonObjs(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.WithName("syncPluginDaemonObjs")
-	logger.Info("Start to sync sriov daemons objects")
+	logger.Info("Start to sync network sriov daemons objects")
 
 	if len(pl.Items) < 2 {
-		r.tryDeleteDsPods(Namespace, "sriov-device-plugin")
+		r.tryDeleteDsPods(Namespace, "sriov-network-device-plugin")
 		r.tryDeleteDsPods(Namespace, "sriov-cni")
 		return nil
 	}
@@ -571,7 +568,7 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 				if p.Spec.NumVfs == 0 {
 					deviceID = p.Spec.NicSelector.DeviceID
 				} else {
-					deviceID = sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID]
+					deviceID = sriovnetworkv1.SriovNetworkPfVfMap[p.Spec.NicSelector.DeviceID]
 				}
 
 				if !sriovnetworkv1.StringInArray(p.Spec.NicSelector.DeviceID, netDeviceSelectors.Devices) {
@@ -612,7 +609,7 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 				if p.Spec.NumVfs == 0 {
 					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, p.Spec.NicSelector.DeviceID)
 				} else {
-					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID])
+					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, sriovnetworkv1.SriovNetworkPfVfMap[p.Spec.NicSelector.DeviceID])
 				}
 			}
 			if l := len(p.Spec.NicSelector.PfNames); l > 0 {

@@ -24,7 +24,7 @@ spec:
       hostPID: true
       nodeSelector:
         beta.kubernetes.io/os: linux
-        node-role.kubernetes.io/worker:
+        node-role.kubernetes.io/worker: ""
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-network-config-daemon
