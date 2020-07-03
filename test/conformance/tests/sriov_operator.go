@@ -650,7 +650,6 @@ var _ = Describe("[sriov] operator", func() {
 			// 21396
 			It("should release the VFs once the pod deleted and same VFs can be used by the new created pods", func() {
 				By("Create first Pod which consumes all available VFs")
-				sriovNetworkName := "test-sriovnetwork"
 				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
 				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
 				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
@@ -933,7 +932,6 @@ var _ = Describe("[sriov] operator", func() {
 				// 29398
 				It("Should be able to create pods successfully if PF is down.Pods are able to communicate with each other on the same node", func() {
 					resourceName := "testresource"
-					sriovNetworkName := "sriovnetwork"
 					var testNode string
 					var unusedSriovDevice *sriovv1.InterfaceExt
 
