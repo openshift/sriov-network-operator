@@ -144,7 +144,7 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 		return false, fmt.Errorf("no matched node is selected by the nodeSelector in CR %s", cr.GetName())
 	}
 	if !interfaceSelected {
-		return false, fmt.Errorf("no matched NIC is selected by the nicSelector in CR %s", cr.GetName())
+		return false, fmt.Errorf("no supported NIC is selected by the nicSelector in CR %s", cr.GetName())
 	}
 
 	return true, nil
