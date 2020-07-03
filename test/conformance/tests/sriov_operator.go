@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/api/core/v1"
 	v1core "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	admission "k8s.io/api/admissionregistration/v1"
@@ -582,7 +583,9 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() bool {
 					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-					Expect(err).ToNot(HaveOccurred())
+					if errors.IsNotFound(err) {
+						return false
+					}
 					return strings.Contains(netAttDef.Spec.Config, "10.11.11.1")
 				}, 30*time.Second, 1*time.Second).Should(BeTrue())
 
