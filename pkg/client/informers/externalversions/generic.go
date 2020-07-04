@@ -53,6 +53,10 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=sriovnetwork.openshift.io, Version=v1
+	case v1.SchemeGroupVersion.WithResource("sriovnetworks"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Sriovnetwork().V1().SriovNetworks().Informer()}, nil
+	case v1.SchemeGroupVersion.WithResource("sriovnetworknodepolicies"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Sriovnetwork().V1().SriovNetworkNodePolicies().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("sriovnetworknodestates"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Sriovnetwork().V1().SriovNetworkNodeStates().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("sriovoperatorconfigs"):

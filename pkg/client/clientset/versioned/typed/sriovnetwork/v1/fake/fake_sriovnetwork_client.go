@@ -28,6 +28,14 @@ type FakeSriovnetworkV1 struct {
 	*testing.Fake
 }
 
+func (c *FakeSriovnetworkV1) SriovNetworks(namespace string) v1.SriovNetworkInterface {
+	return &FakeSriovNetworks{c, namespace}
+}
+
+func (c *FakeSriovnetworkV1) SriovNetworkNodePolicies(namespace string) v1.SriovNetworkNodePolicyInterface {
+	return &FakeSriovNetworkNodePolicies{c, namespace}
+}
+
 func (c *FakeSriovnetworkV1) SriovNetworkNodeStates(namespace string) v1.SriovNetworkNodeStateInterface {
 	return &FakeSriovNetworkNodeStates{c, namespace}
 }
