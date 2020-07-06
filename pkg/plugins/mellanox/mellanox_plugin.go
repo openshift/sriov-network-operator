@@ -149,7 +149,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 		pciAddress := pciPrefix + "0"
 
 		// Skip unsupported devices
-		if _, ok := sriovnetworkv1.SriovPfVfMap[portsMap[pciAddress].DeviceID]; !ok {
+		if id := sriovnetworkv1.GetVfDeviceId(portsMap[pciAddress].DeviceID); id != "" {
 			continue
 		}
 

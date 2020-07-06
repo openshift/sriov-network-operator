@@ -26,26 +26,72 @@ const (
 
 const invalidVfIndex = -1
 
-var SriovPfVfMap = map[string](string){
-	"1583": "154c",
-	"158b": "154c",
-	"10fb": "10ed",
-	"1015": "1016",
-	"1017": "1018",
-}
-
+var log = logf.Log.WithName("sriovnetwork")
 var VfIds = []string{}
 
-func init() {
-	for _, v := range SriovPfVfMap {
-		id := "0x" + v
-		if !StringInArray(id, VfIds) {
-			VfIds = append(VfIds, id)
-		}
-	}
+// NicIdMap contains supported mapping of IDs with each in the format of:
+// Vendor ID, Physical Function Device ID, Virtual Function Device ID
+var NicIdMap = []string{
+	"8086 158b 154c",
+	"15b3 1015 1016",
+	"15b3 1017 1018",
 }
 
-var log = logf.Log.WithName("sriovnetwork")
+func IsSupportedVendor(vendorId string) bool {
+	for _, n := range NicIdMap {
+		ids := strings.Split(n, " ")
+		if vendorId == ids[0] {
+			return true
+		}
+	}
+	return false
+}
+
+func IsSupportedDevice(deviceId string) bool {
+	for _, n := range NicIdMap {
+		ids := strings.Split(n, " ")
+		if deviceId == ids[1] {
+			return true
+		}
+	}
+	return false
+}
+
+func IsSupportedModel(vendorId, deviceId string) bool {
+	for _, n := range NicIdMap {
+		ids := strings.Split(n, " ")
+		if vendorId == ids[0] && deviceId == ids[1] {
+			return true
+		}
+	}
+	return false
+}
+
+func GetSupportedVfIds() []string {
+	var vfIds []string
+	for _, n := range NicIdMap {
+		ids := strings.Split(n, " ")
+		vfId := "0x" + ids[2]
+		if !StringInArray(vfId, vfIds) {
+			vfIds = append(vfIds, vfId)
+		}
+	}
+	return vfIds
+}
+
+func GetVfDeviceId(deviceId string) string {
+	for _, n := range NicIdMap {
+		ids := strings.Split(n, " ")
+		if deviceId == ids[1] {
+			return ids[2]
+		}
+	}
+	return ""
+}
+
+func init() {
+	VfIds = GetSupportedVfIds()
+}
 
 type ByPriority []SriovNetworkNodePolicy
 

@@ -20,12 +20,6 @@ const (
 	MlxMaxVFs  = 128
 )
 
-// SupportedModels holds the NIC models officially supported
-var SupportedModels = map[string]([]string){
-	IntelID:    []string{"158b"},
-	MellanoxID: []string{"1015", "1017"},
-}
-
 var (
 	nodesSelected     bool
 	interfaceSelected bool
@@ -64,16 +58,16 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	}
 
 	if cr.Spec.NicSelector.Vendor != "" {
-		if !sriovnetworkv1.StringInArray(cr.Spec.NicSelector.Vendor, keys(SupportedModels)) {
+		if !sriovnetworkv1.IsSupportedVendor(cr.Spec.NicSelector.Vendor) {
 			return false, fmt.Errorf("vendor %s is not supported", cr.Spec.NicSelector.Vendor)
 		}
 		if cr.Spec.NicSelector.DeviceID != "" {
-			if (cr.Spec.NicSelector.Vendor == IntelID && !sriovnetworkv1.StringInArray(cr.Spec.NicSelector.DeviceID, SupportedModels[IntelID])) || (cr.Spec.NicSelector.Vendor == MellanoxID && !sriovnetworkv1.StringInArray(cr.Spec.NicSelector.DeviceID, SupportedModels[MellanoxID])) {
+			if !sriovnetworkv1.IsSupportedModel(cr.Spec.NicSelector.Vendor, cr.Spec.NicSelector.DeviceID) {
 				return false, fmt.Errorf("vendor/device %s/%s is not supported", cr.Spec.NicSelector.Vendor, cr.Spec.NicSelector.DeviceID)
 			}
 		}
 	} else if cr.Spec.NicSelector.DeviceID != "" {
-		if !sriovnetworkv1.StringInArray(cr.Spec.NicSelector.DeviceID, append(SupportedModels[IntelID], SupportedModels[MellanoxID]...)) {
+		if !sriovnetworkv1.IsSupportedDevice(cr.Spec.NicSelector.DeviceID) {
 			return false, fmt.Errorf("device %s is not supported", cr.Spec.NicSelector.DeviceID)
 		}
 	}
@@ -224,10 +218,8 @@ func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *s
 		}
 	}
 	// check the vendor/device ID to make sure only devices in supported list are allowed.
-	for k, v := range SupportedModels {
-		if k == iface.Vendor && !sriovnetworkv1.StringInArray(iface.DeviceID, v) {
-			return false
-		}
+	if !sriovnetworkv1.IsSupportedModel(iface.Vendor, iface.DeviceID) {
+		return false
 	}
 	return true
 }
