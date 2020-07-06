@@ -72,6 +72,29 @@ func newNodeState() *SriovNetworkNodeState {
 		},
 	}
 }
+
+func newNodePolicy() *SriovNetworkNodePolicy {
+	return &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "p1",
+		},
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				PfNames:     []string{"ens803f1#0-2"},
+				RootDevices: []string{"0000:86:00.1"},
+				Vendor:      "8086",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:       63,
+			Priority:     99,
+			ResourceName: "p1",
+		},
+	}
+}
+
 func TestValidatePolicyForNodeStateWithValidPolicy(t *testing.T) {
 	state := newNodeState()
 	policy := &SriovNetworkNodePolicy{
@@ -123,8 +146,8 @@ func TestValidatePolicyForNodeStateWithInvalidNumVfsPolicy(t *testing.T) {
 	g.Expect(ok).To(Equal(false))
 }
 
-func TestValidatePolicyForNodeStateWithOverlappedVfRange(t *testing.T) {
-	state := newNodeState()
+func TestValidatePolicyForNodePolicyWithOverlappedVfRange(t *testing.T) {
+	appliedPolicy := newNodePolicy()
 	policy := &SriovNetworkNodePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "p0",
@@ -132,7 +155,7 @@ func TestValidatePolicyForNodeStateWithOverlappedVfRange(t *testing.T) {
 		Spec: SriovNetworkNodePolicySpec{
 			DeviceType: "netdevice",
 			NicSelector: SriovNetworkNicSelector{
-				PfNames: []string{"ens803f1#1-2"},
+				PfNames: []string{"ens803f1#2-2"},
 				Vendor:  "8086",
 			},
 			NodeSelector: map[string]string{
@@ -143,18 +166,17 @@ func TestValidatePolicyForNodeStateWithOverlappedVfRange(t *testing.T) {
 			ResourceName: "p0",
 		},
 	}
-	state.Spec.Interfaces[0].VfGroups[0].PolicyName = "p1"
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodeState(policy, state)
-	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("Vf index range in %s is overlapped with existing policies", policy.Spec.NicSelector.PfNames[0]))))
+	ok, err := validatePolicyForNodePolicy(policy, appliedPolicy)
+	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("VF index range in %s is overlapped with existing policy %s", policy.Spec.NicSelector.PfNames[0], appliedPolicy.ObjectMeta.Name))))
 	g.Expect(ok).To(Equal(false))
 }
 
 func TestValidatePolicyForNodeStateWithUpdatedExistingVfRange(t *testing.T) {
-	state := newNodeState()
+	appliedPolicy := newNodePolicy()
 	policy := &SriovNetworkNodePolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "p0",
+			Name: "p1",
 		},
 		Spec: SriovNetworkNodePolicySpec{
 			DeviceType: "netdevice",
@@ -168,12 +190,11 @@ func TestValidatePolicyForNodeStateWithUpdatedExistingVfRange(t *testing.T) {
 			},
 			NumVfs:       63,
 			Priority:     99,
-			ResourceName: "p0",
+			ResourceName: "p1",
 		},
 	}
-	state.Spec.Interfaces[0].VfGroups[0].PolicyName = "p0"
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodeState(policy, state)
+	ok, err := validatePolicyForNodePolicy(policy, appliedPolicy)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 }
