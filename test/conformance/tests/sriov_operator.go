@@ -146,13 +146,15 @@ var _ = Describe("[sriov] operator", func() {
 			var err error
 
 			if discovery.Enabled() {
-				node, resourceName, numVfs, err = discovery.DiscoveredResources(clients,
-					sriovInfos.Nodes, operatorNamespace, func(policy sriovv1.SriovNetworkNodePolicy) bool {
-						if policy.Spec.DeviceType != "netdevice" {
-							return false
+				node, resourceName, numVfs, sriovDevice, err = discovery.DiscoveredResources(clients,
+					sriovInfos, operatorNamespace, defaultFilterPolicy,
+					func(node string, sriovDeviceList []*sriovv1.InterfaceExt) (*sriovv1.InterfaceExt, bool) {
+						if len(sriovDeviceList) == 0 {
+							return nil, false
 						}
-						return true
-					})
+						return sriovDeviceList[0], true
+					},
+				)
 
 				Expect(err).ToNot(HaveOccurred())
 				discoveryFailed = node == "" || resourceName == "" || numVfs < 5
@@ -161,7 +163,6 @@ var _ = Describe("[sriov] operator", func() {
 				createVanillaNetworkPolicy(node, sriovInfos, numVfs, resourceName)
 				waitForSRIOVStable()
 			}
-			sriovDevice, err = sriovInfos.FindOneSriovDevice(node)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -930,13 +931,42 @@ var _ = Describe("[sriov] operator", func() {
 				It("Should be able to create pods successfully if PF is down.Pods are able to communicate with each other on the same node", func() {
 					resourceName := "testresource"
 					sriovNetworkName := "sriovnetwork"
-					testNode := sriovInfos.Nodes[0]
-					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
-					Expect(err).ToNot(HaveOccurred())
-					unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
-					defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
-					Expect(err).ToNot(HaveOccurred())
-					createSriovPolicy(unusedSriovDevices[0].Name, testNode, 2, resourceName)
+					var testNode string
+					var unusedSriovDevice *sriovv1.InterfaceExt
+
+					if discovery.Enabled() {
+						var numVfs int
+						var err error
+						testNode, resourceName, numVfs, unusedSriovDevice, err = discovery.DiscoveredResources(clients,
+							sriovInfos, operatorNamespace, defaultFilterPolicy,
+							func(node string, sriovDeviceList []*sriovv1.InterfaceExt) (*sriovv1.InterfaceExt, bool) {
+								if len(sriovDeviceList) == 0 {
+									return nil, false
+								}
+								unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
+								if err != nil && len(unusedSriovDevices) == 0 {
+									return nil, false
+								}
+								return unusedSriovDevices[0], true
+							},
+						)
+
+						Expect(err).ToNot(HaveOccurred())
+						if testNode == "" || resourceName == "" || numVfs < 5 || unusedSriovDevice == nil {
+							Skip("Insufficient resources to run tests in discovery mode")
+						}
+					} else {
+						testNode = sriovInfos.Nodes[0]
+						sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
+						Expect(err).ToNot(HaveOccurred())
+						unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
+						Expect(err).ToNot(HaveOccurred())
+						unusedSriovDevice := unusedSriovDevices[0]
+						defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
+						Expect(err).ToNot(HaveOccurred())
+						createSriovPolicy(unusedSriovDevice.Name, testNode, 2, resourceName)
+					}
+
 					ipam := `{
 						"type":"host-local",
 						"subnet":"10.10.10.0/24",
@@ -945,13 +975,13 @@ var _ = Describe("[sriov] operator", func() {
 						"routes":[{"dst":"0.0.0.0/0"}],
 						"gateway":"10.10.10.1"
 						}`
-					err = network.CreateSriovNetwork(clients, unusedSriovDevices[0], sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+					err := network.CreateSriovNetwork(clients, unusedSriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 					Expect(err).ToNot(HaveOccurred())
 					Eventually(func() error {
 						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
 					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-					changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, false)
+					changeNodeInterfaceState(testNode, unusedSriovDevice.Name, false)
 					pod := createTestPod(testNode, []string{sriovNetworkName})
 					ips, err := network.GetSriovNicIPs(pod, "net1")
 					Expect(err).ToNot(HaveOccurred())
@@ -1615,4 +1645,11 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 			"Name":   Equal(intf.Name),
 			"NumVfs": Equal(numVfs),
 		})))
+}
+
+func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {
+	if policy.Spec.DeviceType != "netdevice" {
+		return false
+	}
+	return true
 }

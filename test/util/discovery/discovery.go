@@ -7,6 +7,7 @@ import (
 
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	"github.com/openshift/sriov-network-operator/test/util/client"
+	"github.com/openshift/sriov-network-operator/test/util/cluster"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,23 +20,31 @@ func Enabled() bool {
 }
 
 // DiscoveredResources discovers resources needed by the tests in discovery mode
-func DiscoveredResources(clients *client.ClientSet, sriovNodes []string, operatorNamespace string, filter func(sriovv1.SriovNetworkNodePolicy) bool) (preferredNode string, preferredResourceName string, preferredResourceCount int, err error) {
+func DiscoveredResources(clients *client.ClientSet, sriovInfos *cluster.EnabledNodes, operatorNamespace string, filterPolicy func(sriovv1.SriovNetworkNodePolicy) bool, filterDevices func(string, []*sriovv1.InterfaceExt) (*sriovv1.InterfaceExt, bool)) (preferredNode string, preferredResourceName string, preferredResourceCount int, preferredDevice *sriovv1.InterfaceExt, err error) {
 	policyList := sriovv1.SriovNetworkNodePolicyList{}
 	err = clients.List(context.Background(), &policyList, runtimeclient.InNamespace(operatorNamespace))
 	if err != nil {
 		return
 	}
-	nodes, err := getSriovNodes(clients, sriovNodes)
+	nodes, err := getSriovNodes(clients, sriovInfos.Nodes)
 	if err != nil {
 		return
 	}
 
 	for _, policy := range policyList.Items {
-		if !filter(policy) {
+		if !filterPolicy(policy) {
 			continue
 		}
 		resourceName := policy.Spec.ResourceName
 		for _, node := range nodes {
+			sriovDeviceList, err := sriovInfos.FindSriovDevices(node.ObjectMeta.Name)
+			if err != nil {
+				continue
+			}
+			device, ok := filterDevices(node.ObjectMeta.Name, sriovDeviceList)
+			if !ok {
+				continue
+			}
 			quantity := node.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 			resourceCount64, _ := (&quantity).AsInt64()
 			resourceCount := int(resourceCount64)
@@ -43,6 +52,7 @@ func DiscoveredResources(clients *client.ClientSet, sriovNodes []string, operato
 				preferredResourceCount = resourceCount
 				preferredResourceName = resourceName
 				preferredNode = node.ObjectMeta.Name
+				preferredDevice = device
 			}
 		}
 	}
