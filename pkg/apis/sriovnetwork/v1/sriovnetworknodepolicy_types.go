@@ -20,7 +20,6 @@ type SriovNetworkNodePolicySpec struct {
 	// Priority of the policy, higher priority policies can override lower ones.
 	Priority int `json:"priority,omitempty"`
 	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=9000
 	// MTU of VF
 	Mtu int `json:"mtu,omitempty"`
 	// +kubebuilder:validation:Minimum=0
