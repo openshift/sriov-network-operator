@@ -2,8 +2,18 @@
 
 ## Prerequisites
 
-1. Kubernetes or Openshift cluster running on bare metal nodes.
-2. Multus-cni is deployed as default CNI plugin, and there is a default CNI plugin (flannel, openshift-sdn etc.) available for Multus-cni.
+1. A supported SRIOV hardware on the cluster nodes. Currently the supported models are:
+  
+   | Vendor-ID   | Device-ID   |
+   | ----------- | ----------- |
+   | Intel       | 158b        |
+   | Melanox     | 1015, 1017  |
+
+2. Kubernetes or Openshift cluster running on bare metal nodes.
+3. Multus-cni is deployed as default CNI plugin, and there is a default CNI plugin (flannel, openshift-sdn etc.) available for Multus-cni.
+
+> **Note:** As for unsupported SRIOV NICs, that is not guaranteed but might work as well.
+> For that to happen, one must [disable the webhook](https://docs.openshift.com/container-platform/4.4/networking/hardware_networks/configuring-sriov-operator.html#disable-enable-sr-iov-operator-admission-control-webhook_configuring-sriov-operator) which validates the NIC's model.
 
 ## Installation
 
