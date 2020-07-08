@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/api/admission/v1beta1"
@@ -10,8 +9,6 @@ import (
 
 var (
 	defaultPriorityPatch   = map[string]interface{}{"op": "add", "path": "/spec/priority", "value": 99}
-	defaultEthMtuPatch     = map[string]interface{}{"op": "add", "path": "/spec/mtu", "value": 1500}
-	defaultIBMtuPatch      = map[string]interface{}{"op": "add", "path": "/spec/mtu", "value": 2048}
 	defaultDeviceTypePatch = map[string]interface{}{"op": "add", "path": "/spec/deviceType", "value": "netdevice"}
 	defaultIsRdmaPatch     = map[string]interface{}{"op": "add", "path": "/spec/isRdma", "value": false}
 	defaultLinkTypePatch   = map[string]interface{}{"op": "add", "path": "/spec/linkType", "value": "eth"}
@@ -45,16 +42,6 @@ func defaultSriovNetworkNodePolicy(cr map[string]interface{}) (*v1beta1.Admissio
 	if _, ok := spec.(map[string]interface{})["linkType"]; !ok {
 		glog.V(2).Infof("defaultSriovNetworkNodePolicy(): set default linkType to eth for %v", name)
 		patchs = append(patchs, defaultLinkTypePatch)
-	}
-	// MTU is evaluated lastly since default MTU value varies per link type
-	if _, ok := spec.(map[string]interface{})["mtu"]; !ok {
-		if str, ok := spec.(map[string]interface{})["linkType"].(string); ok && strings.ToLower(str) == "eth" {
-			glog.V(2).Infof("defaultSriovNetworkNodePolicy(): set default mtu to 1500 for %v", name)
-			patchs = append(patchs, defaultEthMtuPatch)
-		} else if str, ok := spec.(map[string]interface{})["linkType"].(string); ok && strings.ToLower(str) == "ib" {
-			glog.V(2).Infof("defaultSriovNetworkNodePolicy(): set default mtu to 2048 for %v", name)
-			patchs = append(patchs, defaultIBMtuPatch)
-		}
 	}
 	var err error
 	reviewResponse.Patch, err = json.Marshal(patchs)
