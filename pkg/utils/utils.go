@@ -1,14 +1,11 @@
 package utils
 
 import (
-	// "bytes"
 	"fmt"
 	"io/ioutil"
-	// "net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	// "regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -30,6 +27,8 @@ const (
 	numVfsFile            = "sriov_numvfs"
 	scriptsPath           = "bindata/scripts/load-kmod.sh"
 )
+
+var InitialState sriovnetworkv1.SriovNetworkNodeState
 
 func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 	glog.V(2).Info("DiscoverSriovDevices")
@@ -131,9 +130,19 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 }
 
 func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
-	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
-		glog.V(2).Infof("needUpdate(): MTU needs update, desired=%d, current=%d", iface.Mtu, ifaceStatus.Mtu)
-		return true
+	mtu := ifaceStatus.Mtu
+	if iface.Mtu > 0 {
+		mtu = iface.Mtu
+		if mtu != ifaceStatus.Mtu {
+			glog.V(2).Infof("needUpdate(): MTU needs update, desired=%d, current=%d", mtu, ifaceStatus.Mtu)
+			return true
+		}
+	}
+	for _, vf := range ifaceStatus.VFs {
+		if vf.Mtu != mtu && !sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
+			glog.V(2).Infof("needUpdate(): VF MTU needs update, desired=%d", mtu)
+			return true
+		}
 	}
 	if iface.NumVfs != ifaceStatus.NumVfs {
 		glog.V(2).Infof("needUpdate(): NumVfs needs update desired=%d, current=%d", iface.NumVfs, ifaceStatus.NumVfs)
@@ -217,8 +226,13 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 					glog.Warningf("configSriovDevice(): fail to bind default driver for device %s", addr)
 					return err
 				}
+				// keep VF MTU align with PF's
+				mtu := ifaceStatus.Mtu
+				if iface.Mtu > 0 {
+					mtu = iface.Mtu
+				}
 				// only set MTU for VF with default driver
-				if err := setNetdevMTU(addr, iface.Mtu); err != nil {
+				if err := setNetdevMTU(addr, mtu); err != nil {
 					glog.Warningf("configSriovDevice(): fail to set mtu for VF %s: %v", addr, err)
 					return err
 				}
@@ -251,7 +265,7 @@ func setSriovNumVfs(pciAddr string, numVfs int) error {
 }
 
 func setNetdevMTU(pciAddr string, mtu int) error {
-	glog.V(2).Infof("setNetdevMTU(): set MTU for device %s", pciAddr)
+	glog.V(2).Infof("setNetdevMTU(): set MTU for device %s to %d", pciAddr, mtu)
 	if mtu <= 0 {
 		glog.V(2).Infof("setNetdevMTU(): not set MTU to %d", mtu)
 		return nil
@@ -309,9 +323,18 @@ func resetSriovDevice(pciAddr string) error {
 	if err := setSriovNumVfs(pciAddr, 0); err != nil {
 		return err
 	}
-	if err := setNetdevMTU(pciAddr, 1500); err != nil {
+	var mtu int
+	is := InitialState.GetInterfaceStateByPciAddress(pciAddr)
+	if is != nil {
+		mtu = is.Mtu
+	} else {
+		mtu = 1500
+	}
+	glog.V(2).Infof("resetSriovDevice(): reset mtu to %d", mtu)
+	if err := setNetdevMTU(pciAddr, mtu); err != nil {
 		return err
 	}
+
 	return nil
 }
 
