@@ -21,7 +21,7 @@ func All() error {
 	if !namespaces.Exists(namespaces.Test, clients) {
 		return nil
 	}
-	err := namespaces.Clean(operatorNamespace, namespaces.Test, clients)
+	err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, false)
 	if err != nil {
 		return fmt.Errorf("Failed to clean sriov resources %v", err)
 	}

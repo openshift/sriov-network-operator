@@ -715,7 +715,7 @@ var _ = Describe("[sriov] operator", func() {
 	Describe("Custom SriovNetworkNodePolicy", func() {
 
 		BeforeEach(func() {
-			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients)
+			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 			Expect(err).ToNot(HaveOccurred())
 			waitForSRIOVStable()
 		})
@@ -995,50 +995,74 @@ var _ = Describe("[sriov] operator", func() {
 			Context("Resource Injector", func() {
 				// 25815
 				It("Should inject downward api volume", func() {
-					node := sriovInfos.Nodes[0]
-					intf, err := sriovInfos.FindOneSriovDevice(node)
-					Expect(err).ToNot(HaveOccurred())
+					resourceName := "apivolresource"
+					sriovNetworkName := "test-apivolnetwork"
+					numVfs := 5
+					var node string
+					var intf *sriovv1.InterfaceExt
+					var err error
 
-					nodePolicy := &sriovv1.SriovNetworkNodePolicy{
-						ObjectMeta: metav1.ObjectMeta{
-							GenerateName: "test-apivolumepolicy",
-							Namespace:    operatorNamespace,
-						},
-
-						Spec: sriovv1.SriovNetworkNodePolicySpec{
-							NodeSelector: map[string]string{
-								"kubernetes.io/hostname": node,
+					if discovery.Enabled() {
+						node, resourceName, numVfs, intf, err = discovery.DiscoveredResources(clients,
+							sriovInfos, operatorNamespace, defaultFilterPolicy,
+							func(node string, sriovDeviceList []*sriovv1.InterfaceExt) (*sriovv1.InterfaceExt, bool) {
+								if len(sriovDeviceList) == 0 {
+									return nil, false
+								}
+								return sriovDeviceList[0], true
 							},
-							NumVfs:       5,
-							ResourceName: "apivolresource",
-							Priority:     99,
-							NicSelector: sriovv1.SriovNetworkNicSelector{
-								PfNames: []string{intf.Name},
-							},
-							DeviceType: "netdevice",
-						},
-					}
+						)
 
-					err = clients.Create(context.Background(), nodePolicy)
-					Expect(err).ToNot(HaveOccurred())
-
-					waitForSRIOVStable()
-
-					Eventually(func() int64 {
-						testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
-						resNum, _ := testedNode.Status.Allocatable["openshift.io/apivolresource"]
-						capacity, _ := resNum.AsInt64()
-						return capacity
-					}, 3*time.Minute, time.Second).Should(Equal(int64(5)))
+						if node == "" || resourceName == "" || numVfs < 5 || intf == nil {
+							Skip("Insufficient resources to run test in discovery mode")
+						}
+					} else {
+						node := sriovInfos.Nodes[0]
+						intf, err := sriovInfos.FindOneSriovDevice(node)
+						Expect(err).ToNot(HaveOccurred())
+
+						nodePolicy := &sriovv1.SriovNetworkNodePolicy{
+							ObjectMeta: metav1.ObjectMeta{
+								GenerateName: "test-apivolumepolicy",
+								Namespace:    operatorNamespace,
+							},
+
+							Spec: sriovv1.SriovNetworkNodePolicySpec{
+								NodeSelector: map[string]string{
+									"kubernetes.io/hostname": node,
+								},
+								NumVfs:       5,
+								ResourceName: resourceName,
+								Priority:     99,
+								NicSelector: sriovv1.SriovNetworkNicSelector{
+									PfNames: []string{intf.Name},
+								},
+								DeviceType: "netdevice",
+							},
+						}
+
+						err = clients.Create(context.Background(), nodePolicy)
+						Expect(err).ToNot(HaveOccurred())
+
+						waitForSRIOVStable()
+
+						Eventually(func() int64 {
+							testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+							Expect(err).ToNot(HaveOccurred())
+							resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+							capacity, _ := resNum.AsInt64()
+							return capacity
+						}, 3*time.Minute, time.Second).Should(Equal(int64(5)))
+					}
 
 					sriovNetwork := &sriovv1.SriovNetwork{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "test-apivolnetwork",
+							Name:      sriovNetworkName,
 							Namespace: operatorNamespace,
 						},
 						Spec: sriovv1.SriovNetworkSpec{
-							ResourceName:     "apivolresource",
+							ResourceName:     resourceName,
 							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
 							NetworkNamespace: namespaces.Test,
 						}}
@@ -1047,7 +1071,7 @@ var _ = Describe("[sriov] operator", func() {
 
 					Eventually(func() error {
 						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "test-apivolnetwork", Namespace: namespaces.Test}, netAttDef)
+						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
 					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 					podDefinition := pod.DefineWithNetworks([]string{sriovNetwork.Name})
@@ -1086,7 +1110,6 @@ var _ = Describe("[sriov] operator", func() {
 							},
 						})))
 				})
-
 			})
 
 			Context("MTU", func() {
