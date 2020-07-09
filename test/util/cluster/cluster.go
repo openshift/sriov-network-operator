@@ -72,17 +72,10 @@ func (n *EnabledNodes) FindOneSriovDevice(node string) (*sriovv1.InterfaceExt, e
 	if !ok {
 		return nil, fmt.Errorf("Node %s not found", node)
 	}
-	var currentNumVfs int
-	var preferredIfc *sriovv1.InterfaceExt
 	for _, itf := range s.Status.Interfaces {
 		if IsDriverSupported(itf.Driver) && isDeviceSupported(itf.DeviceID) {
-			if itf.NumVfs > currentNumVfs {
-				preferredIfc = &itf
-			}
+			return &itf, nil
 		}
-	}
-	if preferredIfc != nil {
-		return preferredIfc, nil
 	}
 	return nil, fmt.Errorf("Unable to find sriov devices in node %s", node)
 }
