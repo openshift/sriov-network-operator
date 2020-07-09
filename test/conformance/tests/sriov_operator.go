@@ -162,8 +162,9 @@ var _ = Describe("[sriov] operator", func() {
 				node = sriovInfos.Nodes[0]
 				createVanillaNetworkPolicy(node, sriovInfos, numVfs, resourceName)
 				waitForSRIOVStable()
+				sriovDevice, err = sriovInfos.FindOneSriovDevice(node)
+				Expect(err).ToNot(HaveOccurred())
 			}
-			Expect(err).ToNot(HaveOccurred())
 		})
 
 		BeforeEach(func() {
@@ -961,7 +962,7 @@ var _ = Describe("[sriov] operator", func() {
 						Expect(err).ToNot(HaveOccurred())
 						unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
 						Expect(err).ToNot(HaveOccurred())
-						unusedSriovDevice := unusedSriovDevices[0]
+						unusedSriovDevice = unusedSriovDevices[0]
 						defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
 						Expect(err).ToNot(HaveOccurred())
 						createSriovPolicy(unusedSriovDevice.Name, testNode, 2, resourceName)
@@ -1363,6 +1364,9 @@ func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceEx
 			continue
 		}
 		filteredDevices = append(filteredDevices, device)
+	}
+	if len(filteredDevices) == 0 {
+		return nil, fmt.Errorf("Unused sriov devices not found")
 	}
 	return filteredDevices, nil
 }
