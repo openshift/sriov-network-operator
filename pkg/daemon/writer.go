@@ -2,7 +2,10 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/golang/glog"
@@ -13,6 +16,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
+)
+
+const (
+	CheckpointFileName = "sno-initial-node-state.json"
 )
 
 type NodeStateStatusWriter struct {
@@ -33,7 +40,7 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func()) *Node
 
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
-func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, runonce bool) {
+func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, destDir string, runonce bool) {
 	glog.V(0).Infof("Run(): start writer")
 	msg := Message{}
 	if runonce {
@@ -41,7 +48,8 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 		if err := writer.pollNicStatus(); err != nil {
 			glog.Errorf("Run(): first poll failed: %v", err)
 		}
-		writer.setNodeStateStatus(msg)
+		ns, _ := writer.setNodeStateStatus(msg)
+		writer.writeCheckpointFile(ns, destDir)
 		return
 	}
 	for {
@@ -143,4 +151,29 @@ func (w *NodeStateStatusWriter) getNodeState() (*sriovnetworkv1.SriovNetworkNode
 		return nil, err
 	}
 	return n, nil
+}
+
+func (w *NodeStateStatusWriter) writeCheckpointFile(ns *sriovnetworkv1.SriovNetworkNodeState, destDir string) error {
+	configdir := filepath.Join(destDir, CheckpointFileName)
+	file, err := os.OpenFile(configdir, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	glog.Info("writeCheckpointFile(): try to decode the checkpoint file")
+	if err = json.NewDecoder(file).Decode(&utils.InitialState); err != nil {
+		glog.V(2).Infof("writeCheckpointFile(): fail to decode: %v", err)
+		glog.Info("writeCheckpointFile(): write checkpoint file")
+		if err = file.Truncate(0); err != nil {
+			return err
+		}
+		if _, err = file.Seek(0, 0); err != nil {
+			return err
+		}
+		if err = json.NewEncoder(file).Encode(*ns); err != nil {
+			return err
+		}
+		utils.InitialState = *ns
+	}
+	return nil
 }
