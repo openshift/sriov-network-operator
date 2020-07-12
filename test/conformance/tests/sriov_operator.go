@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8sv1 "k8s.io/api/core/v1"
 	v1core "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	admission "k8s.io/api/admissionregistration/v1"
@@ -583,7 +584,9 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() bool {
 					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-					Expect(err).ToNot(HaveOccurred())
+					if errors.IsNotFound(err) {
+						return false
+					}
 					return strings.Contains(netAttDef.Spec.Config, "10.11.11.1")
 				}, 30*time.Second, 1*time.Second).Should(BeTrue())
 
@@ -648,7 +651,6 @@ var _ = Describe("[sriov] operator", func() {
 			// 21396
 			It("should release the VFs once the pod deleted and same VFs can be used by the new created pods", func() {
 				By("Create first Pod which consumes all available VFs")
-				sriovNetworkName := "test-sriovnetwork"
 				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
 				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
 				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
@@ -931,7 +933,6 @@ var _ = Describe("[sriov] operator", func() {
 				// 29398
 				It("Should be able to create pods successfully if PF is down.Pods are able to communicate with each other on the same node", func() {
 					resourceName := "testresource"
-					sriovNetworkName := "sriovnetwork"
 					var testNode string
 					var unusedSriovDevice *sriovv1.InterfaceExt
 
