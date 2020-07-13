@@ -77,6 +77,9 @@ var _ = Describe("[sriov] operator", func() {
 		Context("SR-IOV network config daemon can be set by nodeselector", func() {
 			// 26186
 			It("Should schedule the config daemon on selected nodes", func() {
+				if discovery.Enabled() {
+					Skip("Test unsuitable to be run in discovery mode")
+				}
 
 				By("Checking that a daemon is scheduled on each worker node")
 				Eventually(func() bool {
@@ -728,6 +731,9 @@ var _ = Describe("[sriov] operator", func() {
 			Context("PF Partitioning", func() {
 				// 27633
 				It("Should be possible to partition the pf's vfs", func() {
+					if discovery.Enabled() {
+						Skip("Test unsuitable to be run in discovery mode")
+					}
 					node := sriovInfos.Nodes[0]
 					intf, err := sriovInfos.FindOneSriovDevice(node)
 					Expect(err).ToNot(HaveOccurred())
@@ -1212,6 +1218,9 @@ var _ = Describe("[sriov] operator", func() {
 			})
 
 			It(" SR-IOV resource injector can be disabled by editing SR-IOV Operator Config	", func() {
+				if discovery.Enabled() {
+					Skip("Test unsuitable to be run in discovery mode")
+				}
 
 				networkResourcesInjector := "network-resources-injector"
 				cfg := sriovv1.SriovOperatorConfig{}
