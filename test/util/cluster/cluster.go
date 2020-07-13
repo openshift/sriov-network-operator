@@ -87,9 +87,10 @@ func (n *EnabledNodes) FindSriovDevices(node string) ([]*sriovv1.InterfaceExt, e
 	if !ok {
 		return nil, fmt.Errorf("Node %s not found", node)
 	}
-	for _, itf := range s.Status.Interfaces {
+
+	for i, itf := range s.Status.Interfaces {
 		if IsDriverSupported(itf.Driver) {
-			devices = append(devices, &itf)
+			devices = append(devices, &s.Status.Interfaces[i])
 		}
 	}
 	return devices, nil
