@@ -1,0 +1,17 @@
+FROM golang:1.13 AS builder
+WORKDIR /go/src/github.com/openshift/sriov-network-operator
+COPY . .
+RUN make _build-sriov-network-config-daemon BIN_PATH=build/_output/cmd
+RUN make plugins BIN_PATH=build/_output/pkg
+
+FROM centos:7
+RUN yum -y update && ARCH_DEP_PKGS=$(if [ "$(uname -m)" != "s390x" ]; then echo -n mstflint ; fi) && yum -y install hwdata $ARCH_DEP_PKGS && yum clean all
+LABEL io.k8s.display-name="sriov-network-config-daemon" \
+      io.k8s.description="This is a daemon that manage and config sriov network devices in Kubernetes cluster"
+COPY bindata/rpm/* /tmp/rpm/
+RUN yum install -y /tmp/rpm/config-fpga-2.0-1.el8.x86_64.rpm
+COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_output/cmd/sriov-network-config-daemon /usr/bin/
+COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_output/pkg/plugins /plugins
+COPY bindata /bindata
+ENV PLUGINSPATH=/plugins
+CMD ["/usr/bin/sriov-network-config-daemon"]
