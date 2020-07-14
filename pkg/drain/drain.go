@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubectl/pkg/drain"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -43,6 +44,10 @@ type DrainManager struct {
 
 	drainable bool
 
+	drainingManagers map[string]struct{}
+
+	drainMutex sync.Mutex
+
 	nodeLister listerv1.NodeLister
 }
 
@@ -59,10 +64,12 @@ func (w writer) Write(p []byte) (n int, err error) {
 
 func NewDrainManager(kubeClient *kubernetes.Clientset, nodeName string, stopCh <-chan struct{}) *DrainManager {
 	return &DrainManager{
-		name:       nodeName,
-		kubeClient: kubeClient,
-		drainable:  true,
-		stopCh:     stopCh,
+		name:             nodeName,
+		kubeClient:       kubeClient,
+		drainable:        true,
+		stopCh:           stopCh,
+		drainMutex:       sync.Mutex{},
+		drainingManagers: make(map[string]struct{}),
 		drainer: &drain.Helper{
 			Client:              kubeClient,
 			Force:               true,
@@ -201,20 +208,33 @@ func (dm *DrainManager) annotateNode(node, value string) error {
 	return err
 }
 
-func (dm *DrainManager) DrainNode() error {
+func (dm *DrainManager) DrainNode(managerName string) error {
+	dm.drainMutex.Lock()
+	defer dm.drainMutex.Unlock()
+
+	// There is another manager that also request to drain so we just add to the number of draining managers
+	if len(dm.drainingManagers) > 0 {
+		glog.Infof("drainNode(): the node is already in drain mode let just add %s to managers that request to drain the node", managerName)
+		dm.drainingManagers[managerName] = struct{}{}
+		return nil
+	}
+
 	glog.Info("DrainNode(): Update prepared")
-	var err error
 	// wait a random time to avoid all the nodes drain at the same time
-	wait.PollUntil(time.Duration(rand.Intn(15)+1)*time.Second, func() (bool, error) {
+	err := wait.PollUntil(time.Duration(rand.Intn(15)+1)*time.Second, func() (bool, error) {
 		if !dm.drainable {
 			glog.Info("drainNode(): other node is draining, waiting...")
 		}
 		return dm.drainable, nil
 	}, dm.stopCh)
 
+	if err != nil {
+		return fmt.Errorf("drainNode(): timeout waiting for node to be drainable")
+	}
+
 	err = dm.annotateNode(dm.name, annoDraining)
 	if err != nil {
-		glog.Errorf("drainNode(): Failed to annotate node: %v", err)
+		glog.Errorf("drainNode(): failed to annotate node: %v", err)
 		return err
 	}
 
@@ -247,16 +267,28 @@ func (dm *DrainManager) DrainNode() error {
 		glog.Errorf("drainNode(): failed to drain node: %v", err)
 		return err
 	}
+
 	glog.Info("drainNode(): drain complete")
+	dm.drainingManagers[managerName] = struct{}{}
 	return nil
 }
 
-func (dm *DrainManager) AnnotateNode() error {
+func (dm *DrainManager) AnnotateNode(managerName string) error {
 	if anno, ok := dm.node.Annotations[annoKey]; ok && anno == annoDraining {
-		if err := dm.CompleteDrain(); err != nil {
-			glog.Errorf("AnnotateNode(): failed to complete draining: %v", err)
-			return err
+		dm.drainMutex.Lock()
+		defer dm.drainMutex.Unlock()
+		if len(dm.drainingManagers) == 1 {
+			if err := dm.CompleteDrain(); err != nil {
+				glog.Errorf("AnnotateNode(): failed to complete draining: %v", err)
+				return err
+			}
+			delete(dm.drainingManagers, managerName)
+			return nil
 		}
+		glog.V(2).Infof("There is more then one manager that request to complete the drain skipp this one let the last manager to make the drain")
+		delete(dm.drainingManagers, managerName)
+		return nil
+
 	} else if !ok {
 		if err := dm.annotateNode(dm.name, annoIdle); err != nil {
 			glog.Errorf("AnnotateNode(): failed to annotate node: %v", err)

@@ -16,6 +16,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"plugin"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,7 +57,7 @@ type NetworkDaemon struct {
 
 	nodeStateStatus *sriovnetworkv1.SriovNetworkNodeStateStatus
 
-	LoadedPlugins map[string]VendorPlugin
+	LoadedPlugins map[string]NetworkVendorPlugin
 
 	// channel used to ensure all spawned goroutines exit when we exit.
 	stopCh <-chan struct{}
@@ -103,6 +105,29 @@ func NewNetworkDaemon(
 
 	return networkDaemon
 }
+
+type NetworkVendorPlugin interface {
+	// Return the name of plugin
+	Name() string
+	// Return the SpecVersion followed by plugin
+	Spec() string
+	// Invoked when SriovNetworkNodeState CR is created, return if need dain and/or reboot node
+	OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error)
+	// Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
+	OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error)
+	// Apply config change
+	Apply() error
+}
+
+var networkPluginMap = map[string]string{
+	"8086": "intel_network_plugin",
+	"15b3": "mellanox_network_plugin",
+}
+
+const (
+	NetworkSpecVersion   = "1.0"
+	NetworkGenericPlugin = "generic_network_plugin"
+)
 
 // Run the config daemon
 func (nd *NetworkDaemon) Run(errCh chan<- error) {
@@ -212,15 +237,58 @@ func (nd *NetworkDaemon) processNextWorkItem() bool {
 	return true
 }
 
+func registerNetworkPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
+	pluginNames := make(map[string]bool)
+	for _, iface := range ns.Status.Interfaces {
+		if val, ok := networkPluginMap[iface.Vendor]; ok {
+			pluginNames[val] = true
+		}
+	}
+	rawList := reflect.ValueOf(pluginNames).MapKeys()
+	glog.Infof("registerNetworkPlugins(): %v", rawList)
+	nameList := make([]string, len(rawList))
+	for i := 0; i < len(rawList); i++ {
+		nameList[i] = rawList[i].String()
+	}
+	return nameList
+}
+
+// loadPlugin loads a single plugin from a file path
+func loadNetworkPlugin(path string) (NetworkVendorPlugin, error) {
+	glog.Infof("loadPlugin(): load plugin from %s", path)
+	plug, err := plugin.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	symbol, err := plug.Lookup("Plugin")
+	if err != nil {
+		return nil, err
+	}
+
+	// Cast the loaded symbol to the NetworkVendorPlugin
+	p, ok := symbol.(NetworkVendorPlugin)
+	if !ok {
+		return nil, fmt.Errorf("Unable to load plugin")
+	}
+
+	// Check the spec to ensure we are supported version
+	if p.Spec() != NetworkSpecVersion {
+		return nil, fmt.Errorf("Spec mismatch")
+	}
+
+	return p, nil
+}
+
 func (nd *NetworkDaemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) error {
-	pl := registerPlugins(ns)
-	pl = append(pl, GenericPlugin)
-	nd.LoadedPlugins = make(map[string]VendorPlugin)
+	pl := registerNetworkPlugins(ns)
+	pl = append(pl, NetworkGenericPlugin)
+	nd.LoadedPlugins = make(map[string]NetworkVendorPlugin)
 
 	for _, pn := range pl {
 		filePath := filepath.Join(pluginsPath, "network", pn+".so")
 		glog.Infof("loadVendorPlugins(): try to load plugin %s", pn)
-		p, err := loadPlugin(filePath)
+		p, err := loadNetworkPlugin(filePath)
 		if err != nil {
 			glog.Errorf("loadVendorPlugins(): fail to load plugin %s: %v", filePath, err)
 			return err
@@ -296,12 +364,12 @@ func (nd *NetworkDaemon) nodeStateSyncHandler(generation int64) error {
 
 	if reqDrain {
 		glog.Info("nodeStateSyncHandler(): drain node")
-		if err := nd.drainManager.DrainNode(); err != nil {
+		if err := nd.drainManager.DrainNode("network"); err != nil {
 			return err
 		}
 	}
 	for k, p := range nd.LoadedPlugins {
-		if k != GenericPlugin {
+		if k != NetworkGenericPlugin {
 			err := p.Apply()
 			if err != nil {
 				glog.Errorf("nodeStateSyncHandler(): plugin %s fail to apply: %v", k, err)
@@ -312,7 +380,7 @@ func (nd *NetworkDaemon) nodeStateSyncHandler(generation int64) error {
 
 	if len(nd.LoadedPlugins) > 1 && !reqReboot {
 		// Apply generic_plugin last
-		err = nd.LoadedPlugins[GenericPlugin].Apply()
+		err = nd.LoadedPlugins[NetworkGenericPlugin].Apply()
 		if err != nil {
 			glog.Errorf("nodeStateSyncHandler(): generic_plugin fail to apply: %v", err)
 			return err
@@ -328,13 +396,13 @@ func (nd *NetworkDaemon) nodeStateSyncHandler(generation int64) error {
 	// restart device plugin pod
 	if reqDrain || (latestState.Spec.DpConfigVersion != nd.nodeState.Spec.DpConfigVersion) {
 		glog.Info("nodeStateSyncHandler(): restart device plugin pod")
-		if err := restartDevicePluginPod(nd.name, nd.kubeClient, nd.mu, nd.stopCh); err != nil {
+		if err := restartDevicePluginPod(nd.name, "sriov-network-device-plugin", nd.kubeClient, nd.mu, nd.stopCh); err != nil {
 			glog.Errorf("nodeStateSyncHandler(): fail to restart device plugin pod: %v", err)
 			return err
 		}
 	}
 
-	err = nd.drainManager.AnnotateNode()
+	err = nd.drainManager.AnnotateNode("network")
 	if err != nil {
 		glog.Errorf("nodeStateSyncHandler(): failed to annotate node: %v", err)
 		return err
@@ -417,12 +485,13 @@ func (nd *NetworkDaemon) getNetworkNodeState() (*sriovnetworkv1.SriovNetworkNode
 
 func (nd *NetworkDaemon) UpdateNetworkNodeState(n *sriovnetworkv1.SriovNetworkNodeState) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	glog.V(2).Info("UpdateNetworkNodeState()")
+	var updatedStatus *sriovnetworkv1.SriovNetworkNodeState
 	var lastErr error
 
 	err := wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		n, lastErr = nd.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(ctx, n, metav1.UpdateOptions{})
+		updatedStatus, lastErr = nd.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(ctx, n, metav1.UpdateOptions{})
 		if lastErr == nil {
 			return true, nil
 		}
@@ -442,7 +511,7 @@ func (nd *NetworkDaemon) UpdateNetworkNodeState(n *sriovnetworkv1.SriovNetworkNo
 		}
 		return nil, err
 	}
-	return n, lastErr
+	return updatedStatus, lastErr
 }
 
 func (nd *NetworkDaemon) updateNodeStateStatusRetry() {
@@ -463,11 +532,13 @@ func (nd *NetworkDaemon) updateNodeStateStatusRetry() {
 		n.Status.SyncStatus = nd.nodeStateStatus.SyncStatus
 
 		glog.V(0).Infof("updateNodeStateStatusRetry(): updating syncStatus: %s, lastSyncError: %s", n.Status.SyncStatus, n.Status.LastSyncError)
+
 		n, err = nd.UpdateNetworkNodeState(n)
 		if err != nil {
 			glog.V(0).Infof("failed go update latest sriov network node state: %v", err)
+		} else {
+			glog.V(0).Infof("updateNodeStateStatusRetry(): updated syncStatus: %s, lastSyncError: %s", n.Status.SyncStatus, n.Status.LastSyncError)
 		}
-		glog.V(0).Infof("updateNodeStateStatusRetry(): updated syncStatus: %s, lastSyncError: %s", n.Status.SyncStatus, n.Status.LastSyncError)
 
 		return err
 	})
@@ -559,7 +630,7 @@ func (nd *NetworkDaemon) writeCheckpointFile(destDir string) error {
 	}
 	defer file.Close()
 	glog.Info("writeCheckpointFile(): try to decode the checkpoint file")
-	if err = json.NewDecoder(file).Decode(&utils.InitialState); err != nil {
+	if err = json.NewDecoder(file).Decode(&utils.NetworkInitialState); err != nil {
 		glog.V(2).Infof("writeCheckpointFile(): fail to decode: %v", err)
 		glog.Info("writeCheckpointFile(): write checkpoint file")
 		if err = file.Truncate(0); err != nil {
@@ -571,7 +642,7 @@ func (nd *NetworkDaemon) writeCheckpointFile(destDir string) error {
 		if err = json.NewEncoder(file).Encode(*ns); err != nil {
 			return err
 		}
-		utils.InitialState = *ns
+		utils.NetworkInitialState = *ns
 	}
 	return nil
 }

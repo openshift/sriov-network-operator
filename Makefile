@@ -89,10 +89,14 @@ undeploy:
 undeploy-k8s: export NAMESPACE=sriov-network-operator
 undeploy-k8s: undeploy
 
-_plugin-%:
-	@hack/build-plugins.sh $*
+_plugin-network-%:
+	@hack/build-plugins.sh $* network
 
-plugins: _plugin-intel _plugin-mellanox _plugin-generic
+_plugin-accelerator-%:
+	@hack/build-plugins.sh $* accelerator
+
+
+plugins: _plugin-network-intel _plugin-network-mellanox _plugin-network-generic _plugin-accelerator-intel_fec _plugin-accelerator-generic
 
 verify-gofmt:
 ifeq (, $(GOFMT_CHECK))

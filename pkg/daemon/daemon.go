@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"reflect"
 	"sync"
 	"time"
 
@@ -60,6 +59,8 @@ type Daemon struct {
 	drainManager *drain.DrainManager
 
 	networkDaemon *NetworkDaemon
+
+	acceleratorDaemon *AcceleratorDaemon
 }
 
 const (
@@ -96,7 +97,8 @@ func New(
 	// Create the network daemon
 	daemon.networkDaemon = NewNetworkDaemon(nodeName, daemon.client, daemon.kubeClient, daemon.drainManager, closeAllConns, daemon.stopCh)
 
-	// TODO: create the accelerator daemon
+	// Create the accelerator daemon
+	daemon.acceleratorDaemon = NewAcceleratorDaemon(nodeName, daemon.client, daemon.kubeClient, daemon.drainManager, closeAllConns, daemon.stopCh)
 
 	return daemon
 }
@@ -131,6 +133,8 @@ func (dn *Daemon) Run() error {
 
 	netErrChan := make(chan error)
 	go dn.networkDaemon.Run(netErrChan)
+	accelErrCan := make(chan error)
+	go dn.acceleratorDaemon.Run(accelErrCan)
 
 	for {
 		select {
@@ -139,6 +143,9 @@ func (dn *Daemon) Run() error {
 			return nil
 		case err := <-netErrChan:
 			glog.V(0).Infof("Run(): failed to run network daemon: %v", err)
+			return err
+		case err := <-accelErrCan:
+			glog.V(0).Infof("Run(): failed to run accelerator daemon: %v", err)
 			return err
 		case err := <-drainErrChan:
 			glog.V(0).Infof("Run(): failed to run drain manager: %v", err)
@@ -160,43 +167,43 @@ func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 	}
 }
 
-func restartDevicePluginPod(nodeName string, kubeClient *kubernetes.Clientset, mutex *sync.Mutex, stopCh <-chan struct{}) error {
+func restartDevicePluginPod(nodeName, appLabel string, kubeClient *kubernetes.Clientset, mutex *sync.Mutex, stopCh <-chan struct{}) error {
 	mutex.Lock()
 	defer mutex.Unlock()
-	glog.V(2).Infof("restartDevicePluginPod(): try to restart device plugin pod")
+	glog.V(2).Infof("restartDevicePluginPod(): try to restart device plugin pod name %s", appLabel)
 
 	var podToDelete string
 	var foundPodToDelete bool
 	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
 		pods, err := kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
-			LabelSelector: "app=sriov-network-device-plugin",
+			LabelSelector: fmt.Sprintf("app=%s", appLabel),
 			FieldSelector: "spec.nodeName=" + nodeName,
 		})
 
 		if errors.IsNotFound(err) {
-			glog.Info("restartDevicePluginPod(): device plugin pod exited")
+			glog.Infof("restartDevicePluginPod(): device plugin pod named %s exited", appLabel)
 			return true, nil
 		}
 
 		if err != nil {
-			glog.Warningf("restartDevicePluginPod(): Failed to list device plugin pod: %s, retrying", err)
+			glog.Warningf("restartDevicePluginPod(): Failed to list device plugin pod named %s: %s, retrying", appLabel, err)
 			return false, nil
 		}
 
 		if len(pods.Items) == 0 {
-			glog.Info("restartDevicePluginPod(): device plugin pod exited")
+			glog.Infof("restartDevicePluginPod(): device plugin pod named %s exited", appLabel)
 			return true, nil
 		}
 		podToDelete = pods.Items[0].Name
 		foundPodToDelete = true
 		return true, nil
 	}, stopCh); err != nil {
-		glog.Errorf("restartDevicePluginPod(): failed to wait for finding pod to delete: %v", err)
+		glog.Errorf("restartDevicePluginPod(): failed to wait for finding pod named %s to delete: %v", appLabel, err)
 		return err
 	}
 
 	if !foundPodToDelete {
-		glog.Info("restartDevicePluginPod(): device plugin pod was not there")
+		glog.Infof("restartDevicePluginPod(): device plugin pod named %s was not there", appLabel)
 		return nil
 	}
 
@@ -204,34 +211,34 @@ func restartDevicePluginPod(nodeName string, kubeClient *kubernetes.Clientset, m
 		glog.V(2).Infof("restartDevicePluginPod(): Found device plugin pod %s, deleting it", podToDelete)
 		err := kubeClient.CoreV1().Pods(namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
 		if errors.IsNotFound(err) {
-			glog.Info("restartDevicePluginPod(): pod to delete not found")
+			glog.Infof("restartDevicePluginPod(): pod named %s to delete not found", podToDelete)
 			return true, nil
 		}
 		if err != nil {
-			glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod: %s, retrying", err)
+			glog.Errorf("restartDevicePluginPod(): Failed to delete device plugin pod named %s: %s, retrying", podToDelete, err)
 			return false, nil
 		}
 		return true, nil
 	}, stopCh); err != nil {
-		glog.Errorf("restartDevicePluginPod(): failed to wait for pod deletion: %v", err)
+		glog.Errorf("restartDevicePluginPod(): failed to wait for pod named %s deletion: %v", podToDelete, err)
 		return err
 	}
 
 	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
 		_, err := kubeClient.CoreV1().Pods(namespace).Get(context.Background(), podToDelete, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
-			glog.Info("restartDevicePluginPod(): device plugin pod exited")
+			glog.Infof("restartDevicePluginPod(): device plugin pod named %s exited", podToDelete)
 			return true, nil
 		}
 
 		if err != nil {
-			glog.Warningf("restartDevicePluginPod(): Failed to check for device plugin exit: %s, retrying", err)
+			glog.Warningf("restartDevicePluginPod(): Failed to check for device plugin named %s exit: %s, retrying", podToDelete, err)
 		} else {
 			glog.Infof("restartDevicePluginPod(): waiting for device plugin %s to exit", podToDelete)
 		}
 		return false, nil
 	}, stopCh); err != nil {
-		glog.Errorf("restartDevicePluginPod(): failed to wait for checking pod deletion: %v", err)
+		glog.Errorf("restartDevicePluginPod(): failed to wait for checking pod named %s deletion: %v", podToDelete, err)
 		return err
 	}
 
@@ -247,22 +254,6 @@ func (a GlogLogger) Log(v ...interface{}) {
 
 func (a GlogLogger) Logf(format string, v ...interface{}) {
 	glog.Infof(format, v...)
-}
-
-func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
-	pluginNames := make(map[string]bool)
-	for _, iface := range ns.Status.Interfaces {
-		if val, ok := pluginMap[iface.Vendor]; ok {
-			pluginNames[val] = true
-		}
-	}
-	rawList := reflect.ValueOf(pluginNames).MapKeys()
-	glog.Infof("registerPlugins(): %v", rawList)
-	nameList := make([]string, len(rawList))
-	for i := 0; i < len(rawList); i++ {
-		nameList[i] = rawList[i].String()
-	}
-	return nameList
 }
 
 // updateDialer instruments a restconfig with a dial. the returned function allows forcefully closing all active connections.
