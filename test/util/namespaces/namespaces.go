@@ -135,14 +135,16 @@ func waitForSriovNetworkDeletion(operatorNamespace string, cs *testclient.Client
 }
 
 // Clean cleans all dangling objects from the given namespace.
-func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet) error {
+func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet, discoveryEnabled bool) error {
 	err := CleanPods(namespace, cs)
 	if err != nil {
 		return err
 	}
-	err = CleanPolicies(operatorNamespace, cs)
-	if err != nil {
-		return err
+	if !discoveryEnabled {
+		err = CleanPolicies(operatorNamespace, cs)
+		if err != nil {
+			return err
+		}
 	}
 	err = CleanNetworks(operatorNamespace, cs)
 	return err

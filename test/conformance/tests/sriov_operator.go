@@ -781,7 +781,7 @@ var _ = Describe("[sriov] operator", func() {
 	Describe("Custom SriovNetworkNodePolicy", func() {
 
 		BeforeEach(func() {
-			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients)
+			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 			Expect(err).ToNot(HaveOccurred())
 			waitForSRIOVStable()
 		})
@@ -1063,35 +1063,78 @@ var _ = Describe("[sriov] operator", func() {
 
 			Context("MTU", func() {
 				BeforeEach(func() {
-					node := sriovInfos.Nodes[0]
-					intf, err := sriovInfos.FindOneSriovDevice(node)
-					Expect(err).ToNot(HaveOccurred())
+					var node string
+					resourceName := "mturesource"
+					numVfs := 5
+					var intf *sriovv1.InterfaceExt
+					var err error
 
-					mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
-						ObjectMeta: metav1.ObjectMeta{
-							GenerateName: "test-mtupolicy",
-							Namespace:    operatorNamespace,
-						},
+					if discovery.Enabled() {
+						node, resourceName, numVfs, intf, err = discovery.DiscoveredResources(clients,
+							sriovInfos, operatorNamespace,
+							func(policy sriovv1.SriovNetworkNodePolicy) bool {
+								if !defaultFilterPolicy(policy) {
+									return false
+								}
+								if policy.Spec.Mtu != 9000 {
+									return false
+								}
+								return true
+							},
+							func(node string, sriovDeviceList []*sriovv1.InterfaceExt) (*sriovv1.InterfaceExt, bool) {
+								if len(sriovDeviceList) == 0 {
+									return nil, false
+								}
+								nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+								Expect(err).ToNot(HaveOccurred())
 
-						Spec: sriovv1.SriovNetworkNodePolicySpec{
-							NodeSelector: map[string]string{
-								"kubernetes.io/hostname": node,
+								for _, ifc := range nodeState.Spec.Interfaces {
+									if ifc.Mtu == 9000 && ifc.NumVfs > 0 {
+										for _, device := range sriovDeviceList {
+											if device.Name == ifc.Name {
+												return device, true
+											}
+										}
+									}
+								}
+								return nil, false
 							},
-							Mtu:          9000,
-							NumVfs:       5,
-							ResourceName: "mturesource",
-							Priority:     99,
-							NicSelector: sriovv1.SriovNetworkNicSelector{
-								PfNames: []string{intf.Name},
+						)
+						Expect(err).ToNot(HaveOccurred())
+						if node == "" || resourceName == "" || numVfs < 5 || intf == nil {
+							Skip("Insufficient resources to run test in discovery mode")
+						}
+					} else {
+						node = sriovInfos.Nodes[0]
+						intf, err := sriovInfos.FindOneSriovDevice(node)
+						Expect(err).ToNot(HaveOccurred())
+
+						mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
+							ObjectMeta: metav1.ObjectMeta{
+								GenerateName: "test-mtupolicy",
+								Namespace:    operatorNamespace,
 							},
-							DeviceType: "netdevice",
-						},
+
+							Spec: sriovv1.SriovNetworkNodePolicySpec{
+								NodeSelector: map[string]string{
+									"kubernetes.io/hostname": node,
+								},
+								Mtu:          9000,
+								NumVfs:       5,
+								ResourceName: resourceName,
+								Priority:     99,
+								NicSelector: sriovv1.SriovNetworkNicSelector{
+									PfNames: []string{intf.Name},
+								},
+								DeviceType: "netdevice",
+							},
+						}
+
+						err = clients.Create(context.Background(), mtuPolicy)
+						Expect(err).ToNot(HaveOccurred())
+
+						waitForSRIOVStable()
 					}
-
-					err = clients.Create(context.Background(), mtuPolicy)
-					Expect(err).ToNot(HaveOccurred())
-
-					waitForSRIOVStable()
 
 					sriovNetwork := &sriovv1.SriovNetwork{
 						ObjectMeta: metav1.ObjectMeta{
@@ -1099,7 +1142,7 @@ var _ = Describe("[sriov] operator", func() {
 							Namespace: operatorNamespace,
 						},
 						Spec: sriovv1.SriovNetworkSpec{
-							ResourceName:     "mturesource",
+							ResourceName:     resourceName,
 							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
 							NetworkNamespace: namespaces.Test,
 							LinkState:        "enable",
