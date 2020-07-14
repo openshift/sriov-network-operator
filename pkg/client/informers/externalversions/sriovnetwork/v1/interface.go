@@ -24,6 +24,12 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// SriovAcceleratorNodePolicies returns a SriovAcceleratorNodePolicyInformer.
+	SriovAcceleratorNodePolicies() SriovAcceleratorNodePolicyInformer
+	// SriovAcceleratorNodeStates returns a SriovAcceleratorNodeStateInformer.
+	SriovAcceleratorNodeStates() SriovAcceleratorNodeStateInformer
+	// SriovIBNetworks returns a SriovIBNetworkInformer.
+	SriovIBNetworks() SriovIBNetworkInformer
 	// SriovNetworks returns a SriovNetworkInformer.
 	SriovNetworks() SriovNetworkInformer
 	// SriovNetworkNodePolicies returns a SriovNetworkNodePolicyInformer.
@@ -43,6 +49,21 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// SriovAcceleratorNodePolicies returns a SriovAcceleratorNodePolicyInformer.
+func (v *version) SriovAcceleratorNodePolicies() SriovAcceleratorNodePolicyInformer {
+	return &sriovAcceleratorNodePolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// SriovAcceleratorNodeStates returns a SriovAcceleratorNodeStateInformer.
+func (v *version) SriovAcceleratorNodeStates() SriovAcceleratorNodeStateInformer {
+	return &sriovAcceleratorNodeStateInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// SriovIBNetworks returns a SriovIBNetworkInformer.
+func (v *version) SriovIBNetworks() SriovIBNetworkInformer {
+	return &sriovIBNetworkInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // SriovNetworks returns a SriovNetworkInformer.

@@ -18,6 +18,12 @@ limitations under the License.
 
 package v1
 
+type SriovAcceleratorNodePolicyExpansion interface{}
+
+type SriovAcceleratorNodeStateExpansion interface{}
+
+type SriovIBNetworkExpansion interface{}
+
 type SriovNetworkExpansion interface{}
 
 type SriovNetworkNodePolicyExpansion interface{}

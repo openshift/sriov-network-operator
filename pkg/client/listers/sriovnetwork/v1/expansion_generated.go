@@ -18,6 +18,30 @@ limitations under the License.
 
 package v1
 
+// SriovAcceleratorNodePolicyListerExpansion allows custom methods to be added to
+// SriovAcceleratorNodePolicyLister.
+type SriovAcceleratorNodePolicyListerExpansion interface{}
+
+// SriovAcceleratorNodePolicyNamespaceListerExpansion allows custom methods to be added to
+// SriovAcceleratorNodePolicyNamespaceLister.
+type SriovAcceleratorNodePolicyNamespaceListerExpansion interface{}
+
+// SriovAcceleratorNodeStateListerExpansion allows custom methods to be added to
+// SriovAcceleratorNodeStateLister.
+type SriovAcceleratorNodeStateListerExpansion interface{}
+
+// SriovAcceleratorNodeStateNamespaceListerExpansion allows custom methods to be added to
+// SriovAcceleratorNodeStateNamespaceLister.
+type SriovAcceleratorNodeStateNamespaceListerExpansion interface{}
+
+// SriovIBNetworkListerExpansion allows custom methods to be added to
+// SriovIBNetworkLister.
+type SriovIBNetworkListerExpansion interface{}
+
+// SriovIBNetworkNamespaceListerExpansion allows custom methods to be added to
+// SriovIBNetworkNamespaceLister.
+type SriovIBNetworkNamespaceListerExpansion interface{}
+
 // SriovNetworkListerExpansion allows custom methods to be added to
 // SriovNetworkLister.
 type SriovNetworkListerExpansion interface{}

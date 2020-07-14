@@ -26,6 +26,9 @@ import (
 
 type SriovnetworkV1Interface interface {
 	RESTClient() rest.Interface
+	SriovAcceleratorNodePoliciesGetter
+	SriovAcceleratorNodeStatesGetter
+	SriovIBNetworksGetter
 	SriovNetworksGetter
 	SriovNetworkNodePoliciesGetter
 	SriovNetworkNodeStatesGetter
@@ -35,6 +38,18 @@ type SriovnetworkV1Interface interface {
 // SriovnetworkV1Client is used to interact with features provided by the sriovnetwork.openshift.io group.
 type SriovnetworkV1Client struct {
 	restClient rest.Interface
+}
+
+func (c *SriovnetworkV1Client) SriovAcceleratorNodePolicies(namespace string) SriovAcceleratorNodePolicyInterface {
+	return newSriovAcceleratorNodePolicies(c, namespace)
+}
+
+func (c *SriovnetworkV1Client) SriovAcceleratorNodeStates(namespace string) SriovAcceleratorNodeStateInterface {
+	return newSriovAcceleratorNodeStates(c, namespace)
+}
+
+func (c *SriovnetworkV1Client) SriovIBNetworks(namespace string) SriovIBNetworkInterface {
+	return newSriovIBNetworks(c, namespace)
 }
 
 func (c *SriovnetworkV1Client) SriovNetworks(namespace string) SriovNetworkInterface {

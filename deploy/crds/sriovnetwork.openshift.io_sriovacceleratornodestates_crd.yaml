@@ -1,0 +1,111 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: sriovacceleratornodestates.sriovnetwork.openshift.io
+spec:
+  group: sriovnetwork.openshift.io
+  names:
+    kind: SriovAcceleratorNodeState
+    listKind: SriovAcceleratorNodeStateList
+    plural: sriovacceleratornodestates
+    singular: sriovacceleratornodestate
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: SriovAcceleratorNodeState is the Schema for the sriovacceleratornodestates
+          API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: SriovAcceleratorNodeStateSpec defines the desired state of
+              SriovAcceleratorNodeState
+            properties:
+              cards:
+                items:
+                  properties:
+                    config:
+                      type: string
+                    deviceName:
+                      type: string
+                    numVfs:
+                      type: integer
+                    pciAddress:
+                      type: string
+                  required:
+                  - config
+                  - deviceName
+                  - numVfs
+                  - pciAddress
+                  type: object
+                type: array
+              dpConfigVersion:
+                type: string
+            type: object
+          status:
+            description: SriovAcceleratorNodeStateStatus defines the observed state
+              of SriovAcceleratorNodeState
+            properties:
+              accelerators:
+                items:
+                  properties:
+                    Vfs:
+                      items:
+                        properties:
+                          deviceID:
+                            type: string
+                          driver:
+                            type: string
+                          pciAddress:
+                            type: string
+                          vendor:
+                            type: string
+                          vfID:
+                            type: integer
+                        required:
+                        - pciAddress
+                        - vfID
+                        type: object
+                      type: array
+                    config:
+                      type: string
+                    deviceID:
+                      type: string
+                    deviceName:
+                      type: string
+                    driver:
+                      type: string
+                    numVfs:
+                      type: integer
+                    pciAddress:
+                      type: string
+                    totalvfs:
+                      type: integer
+                    vendor:
+                      type: string
+                  required:
+                  - pciAddress
+                  type: object
+                type: array
+              lastSyncError:
+                type: string
+              syncStatus:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

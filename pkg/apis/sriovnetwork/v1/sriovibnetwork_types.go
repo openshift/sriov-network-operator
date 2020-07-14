@@ -37,6 +37,7 @@ type SriovIBNetworkStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SriovIBNetwork is the Schema for the sriovibnetworks API
+// +genclient
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=sriovibnetworks,scope=Namespaced
 type SriovIBNetwork struct {

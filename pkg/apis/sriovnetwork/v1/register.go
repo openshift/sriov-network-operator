@@ -46,6 +46,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&SriovNetworkNodeStateList{},
 		&SriovNetworkNodePolicy{},
 		&SriovNetworkNodePolicyList{},
+		&SriovAcceleratorNodeState{},
+		&SriovAcceleratorNodeStateList{},
 	)
 	// register the type in the scheme
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
