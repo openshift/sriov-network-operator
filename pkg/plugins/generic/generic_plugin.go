@@ -186,7 +186,7 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 		for _, iface := range desired {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
-				if iface.NumVfs != ifaceStatus.NumVfs {
+				if iface.NumVfs != ifaceStatus.NumVfs || iface.Mtu != ifaceStatus.Mtu {
 					needDrain = true
 					return
 				}
