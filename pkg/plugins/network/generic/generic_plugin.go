@@ -34,7 +34,7 @@ var Plugin GenericPlugin
 // Initialize our plugin and set up initial values
 func init() {
 	Plugin = GenericPlugin{
-		PluginName:     "generic_plugin",
+		PluginName:     "generic_network_plugin",
 		SpecVersion:    "1.0",
 		LoadVfioDriver: unloaded,
 	}
@@ -123,7 +123,7 @@ func (p *GenericPlugin) Apply() error {
 		return err
 	}
 	defer exit()
-	if err := utils.SyncNodeState(p.DesireState); err != nil {
+	if err := utils.SyncNetworkNodeState(p.DesireState); err != nil {
 		return err
 	}
 	p.LastState = &sriovnetworkv1.SriovNetworkNodeState{}

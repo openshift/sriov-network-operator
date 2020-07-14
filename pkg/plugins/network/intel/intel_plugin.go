@@ -17,7 +17,7 @@ var Plugin IntelPlugin
 // Initialize our plugin and set up initial values
 func init() {
 	Plugin = IntelPlugin{
-		PluginName:  "intel_plugin",
+		PluginName:  "intel_network_plugin",
 		SpecVersion: "1.0",
 	}
 }

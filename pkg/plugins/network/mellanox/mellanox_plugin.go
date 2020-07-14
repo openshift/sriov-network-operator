@@ -44,7 +44,7 @@ var mellanoxNicsSpec map[string]sriovnetworkv1.Interface
 // Initialize our plugin and set up initial values
 func init() {
 	Plugin = MellanoxPlugin{
-		PluginName:  "mellanox_plugin",
+		PluginName:  "mellanox_network_plugin",
 		SpecVersion: "1.0",
 	}
 	mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}

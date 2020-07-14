@@ -34,6 +34,6 @@ mkdir -p ${BIN_PATH}
 
 CGO_ENABLED=1
 
-echo "Building ${REPO}/pkg/plugins/network/$1_plugin (${VERSION_OVERRIDE})"
-CGO_ENABLED=${CGO_ENABLED} GOOS=${GOOS} GOARCH=${GOARCH} go build -buildmode=plugin -ldflags "${GLDFLAGS} -s -w" ${GOFLAGS} -o ${BIN_PATH}/plugins/network/$1_plugin.so ${REPO}/pkg/plugins/network/$1
+echo "Building ${REPO}/pkg/plugins/$2/$1_plugin (${VERSION_OVERRIDE})"
+CGO_ENABLED=${CGO_ENABLED} GOOS=${GOOS} GOARCH=${GOARCH} go build -buildmode=plugin -ldflags "${GLDFLAGS} -s -w" ${GOFLAGS} -o ${BIN_PATH}/plugins/$2/$1_$2_plugin.so ${REPO}/pkg/plugins/$2/$1
 #CGO_ENABLED=${CGO_ENABLED} GOOS=${GOOS} GOARCH=${GOARCH} go build -buildmode=plugin -gcflags='all=-N -l' -ldflags "${GLDFLAGS} -s -w" ${GOFLAGS} -o ${BIN_PATH}/plugins/$1_plugin.so ${REPO}/pkg/plugins/$1
