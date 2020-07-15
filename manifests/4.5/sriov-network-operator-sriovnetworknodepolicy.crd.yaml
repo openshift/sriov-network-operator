@@ -45,7 +45,6 @@ spec:
               type: boolean
             mtu:
               description: MTU of VF
-              maximum: 9000
               minimum: 1
               type: integer
             nicSelector:
