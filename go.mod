@@ -9,7 +9,6 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/coreos/ignition v0.35.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.7
-	github.com/go-log/log v0.2.0 // indirect
 	github.com/go-openapi/spec v0.19.4
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/intel/sriov-network-device-plugin v3.0.1-0.20191017093954-bf28fdc3e2d9+incompatible
@@ -18,7 +17,6 @@ require (
 	github.com/onsi/gomega v1.7.1
 	github.com/openshift/api v3.9.1-0.20191213091414-3fbf6bcf78e8+incompatible // indirect
 	github.com/openshift/client-go v0.0.0-20191205152420-9faca5198b4f
-	github.com/openshift/kubernetes-drain v0.0.0-20190727205423-d20a33f09dbf
 	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
 	github.com/operator-framework/operator-sdk v0.15.1
 	github.com/pkg/errors v0.8.1
@@ -31,6 +29,7 @@ require (
 	k8s.io/apimachinery v0.17.1
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kube-openapi v0.0.0-20191107075043-30be4d16710a
+	k8s.io/kubectl v0.0.0
 	k8s.io/utils v0.0.0-20200109141947-94aeca20bf09
 	sigs.k8s.io/controller-runtime v0.4.0
 )
