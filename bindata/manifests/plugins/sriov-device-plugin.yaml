@@ -26,9 +26,7 @@ spec:
       nodeSelector:
         beta.kubernetes.io/os: linux
       tolerations:
-      - key: node-role.kubernetes.io/master
-        operator: Exists
-        effect: NoSchedule
+      - operator: Exists
       serviceAccountName: sriov-device-plugin
       containers:
       - name: sriov-device-plugin
