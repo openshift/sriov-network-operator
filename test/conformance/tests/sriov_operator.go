@@ -1217,117 +1217,17 @@ var _ = Describe("[sriov] operator", func() {
 		})
 
 		Context("Resource Injector", func() {
-			// 25834
-			AfterEach(func() {
-				cfg := sriovv1.SriovOperatorConfig{}
-				clients.Get(context.TODO(), runtimeclient.ObjectKey{
-					Name:      "default",
-					Namespace: operatorNamespace,
-				}, &cfg)
-				if *cfg.Spec.EnableInjector == false {
-					cfg.Spec.EnableInjector = pointer.BoolPtr(true)
-					clients.Update(context.TODO(), &cfg)
-				}
-			})
-
-			It(" SR-IOV resource injector can be disabled by editing SR-IOV Operator Config	", func() {
+			BeforeEach(func() {
 				if discovery.Enabled() {
 					Skip("Test unsuitable to be run in discovery mode")
 				}
-
-				networkResourcesInjector := "network-resources-injector"
-				cfg := sriovv1.SriovOperatorConfig{}
-				err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
-					Name:      "default",
-					Namespace: operatorNamespace,
-				}, &cfg)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(*cfg.Spec.EnableInjector).To(BeTrue())
-
-				cfg.Spec.EnableInjector = pointer.BoolPtr(false)
-				err = clients.Update(context.TODO(), &cfg)
-				Expect(err).ToNot(HaveOccurred())
-
-				Eventually(func() bool {
-					_, err := clients.DaemonSets(operatorNamespace).Get(context.Background(), networkResourcesInjector, metav1.GetOptions{})
-					if k8serrors.IsNotFound(err) {
-						return true
-					}
-					Expect(err).ToNot(HaveOccurred())
-					return false
-				}, 3*time.Minute, 20*time.Second).Should(BeTrue())
-
-				Eventually(func() bool {
-
-					podsList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					for _, pod := range podsList.Items {
-						if strings.Contains(pod.ObjectMeta.Name, networkResourcesInjector) {
-							return false
-						}
-					}
-					return true
-				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
-
-				Eventually(func() bool {
-					serviceList, err := clients.Services(operatorNamespace).List(context.Background(), metav1.ListOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					for _, svc := range serviceList.Items {
-						if strings.Contains(svc.ObjectMeta.Name, networkResourcesInjector) {
-							return false
-						}
-					}
-					return true
-				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
-
-				Eventually(func() bool {
-					crs := rbacv1.ClusterRoleList{}
-					err = clients.List(context.Background(), &crs, runtimeclient.InNamespace("openshift-sriov-network-operator"))
-					Expect(err).ToNot(HaveOccurred())
-					for _, cr := range crs.Items {
-						if strings.Contains(cr.ObjectMeta.Name, networkResourcesInjector) {
-							return false
-						}
-					}
-					return true
-				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
-
-				Eventually(func() bool {
-					crbs := rbacv1.ClusterRoleBindingList{}
-					err = clients.List(context.Background(), &crbs, runtimeclient.InNamespace("openshift-sriov-network-operator"))
-					Expect(err).ToNot(HaveOccurred())
-					for _, crb := range crbs.Items {
-						if strings.Contains(crb.ObjectMeta.Name, networkResourcesInjector) {
-							return false
-						}
-					}
-					return true
-				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
-
-				Eventually(func() bool {
-					mwc := &admission.MutatingWebhookConfiguration{}
-					err = clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "network-resources-injector-config", Namespace: operatorNamespace}, mwc)
-					return err != nil && k8serrors.IsNotFound(err)
-				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
-
-				Eventually(func() bool {
-					cms := corev1.ConfigMapList{}
-					err = clients.List(context.Background(), &cms, runtimeclient.InNamespace("openshift-sriov-network-operator"))
-					Expect(err).ToNot(HaveOccurred())
-					for _, cm := range cms.Items {
-						if strings.Contains(cm.ObjectMeta.Name, networkResourcesInjector) {
-							return false
-						}
-					}
-					return true
-				}, 1*time.Minute, 10*time.Second).Should(BeTrue())
 			})
-		})
-		Context("Resource Injector", func() {
 
 			AfterEach(func() {
-				setSriovOperatorSpecFlag(operatorNetworkInjectorFlag, true)
-				setSriovOperatorSpecFlag(operatorWebhookFlag, true)
+				if !discovery.Enabled() {
+					setSriovOperatorSpecFlag(operatorNetworkInjectorFlag, true)
+					setSriovOperatorSpecFlag(operatorWebhookFlag, true)
+				}
 			})
 
 			DescribeTable("SR-IOV Operator Config, disable",
@@ -1345,7 +1245,6 @@ var _ = Describe("[sriov] operator", func() {
 					}, 2*time.Minute, 5*time.Second).Should(BeTrue())
 
 					Eventually(func() bool {
-
 						podsList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
 							LabelSelector: fmt.Sprintf("app=%s", resourceName)})
 						Expect(err).ToNot(HaveOccurred())
