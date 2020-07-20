@@ -285,6 +285,8 @@ spec:
                       value: quay.io/openshift/origin-sriov-network-config-daemon:4.6
                     - name: SRIOV_NETWORK_WEBHOOK_IMAGE
                       value: quay.io/openshift/origin-sriov-network-webhook:4.6
+                    - name: SRIOV_INFINIBAND_CNI_IMAGE
+                      value: quay.io/openshift/origin-sriov-infiniband-cni:4.6
                     - name: RESOURCE_PREFIX
                       value: openshift.io
                     - name: ENABLE_ADMISSION_CONTROLLER

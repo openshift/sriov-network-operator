@@ -33,6 +33,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: SRIOV_CNI_IMAGE
               value: $SRIOV_CNI_IMAGE
+            - name: SRIOV_INFINIBAND_CNI_IMAGE
+              value: $SRIOV_INFINIBAND_CNI_IMAGE
             - name: SRIOV_DEVICE_PLUGIN_IMAGE
               value: $SRIOV_DEVICE_PLUGIN_IMAGE
             - name: NETWORK_RESOURCES_INJECTOR_IMAGE
