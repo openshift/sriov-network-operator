@@ -1216,6 +1216,100 @@ var _ = Describe("[sriov] operator", func() {
 			})
 		})
 
+		Context("Nic Validation", func() {
+			numVfs := 5
+			resourceName := "testresource"
+
+			BeforeEach(func() {
+				if discovery.Enabled() {
+					Skip("Test unsuitable to be run in discovery mode")
+				}
+			})
+
+			findSriovDevice := func(vendorID, deviceID string) (string, sriovv1.InterfaceExt) {
+				for _, node := range sriovInfos.Nodes {
+					for _, nic := range sriovInfos.States[node].Status.Interfaces {
+						if vendorID != "" && deviceID != "" && nic.Vendor == vendorID && nic.DeviceID == deviceID {
+							return node, nic
+						}
+					}
+				}
+
+				return "", sriovv1.InterfaceExt{}
+			}
+
+			DescribeTable("Test connectivity using the requested nic", func(vendorID, deviceID string) {
+				By("searching for the requested network card")
+				node, nic := findSriovDevice(vendorID, deviceID)
+				if node == "" {
+					Skip(fmt.Sprintf("skip nic validate as wasn't able to find a nic with vendorID %s and deviceID %s", vendorID, deviceID))
+				}
+
+				By("creating a network policy")
+				config := &sriovv1.SriovNetworkNodePolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						GenerateName: "test-policy",
+						Namespace:    operatorNamespace,
+					},
+
+					Spec: sriovv1.SriovNetworkNodePolicySpec{
+						NodeSelector: map[string]string{
+							"kubernetes.io/hostname": node,
+						},
+						NumVfs:       numVfs,
+						ResourceName: resourceName,
+						Priority:     99,
+						NicSelector: sriovv1.SriovNetworkNicSelector{
+							PfNames: []string{nic.Name},
+						},
+						DeviceType: "netdevice",
+					},
+				}
+				err := clients.Create(context.Background(), config)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("waiting for the node state to be updated")
+				Eventually(func() sriovv1.Interfaces {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Spec.Interfaces
+				}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":   Equal(nic.Name),
+						"NumVfs": Equal(numVfs),
+					})))
+
+				By("waiting the sriov to be stable on the node")
+				waitForSRIOVStable()
+
+				By("creating a network object")
+				ipv6NetworkName := "test-ipv6network"
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				err = network.CreateSriovNetwork(clients, &nic, ipv6NetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: ipv6NetworkName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				By("creating a pod")
+				pod := createTestPod(node, []string{ipv6NetworkName})
+				ips, err := network.GetSriovNicIPs(pod, "net1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ips).NotTo(BeNil(), "No sriov network interface found.")
+				Expect(len(ips)).Should(Equal(1))
+
+				By("run pod from another pod")
+				for _, ip := range ips {
+					pingPod(ip, node, ipv6NetworkName)
+				}
+			},
+				//25321
+				Entry("Intel Corporation Ethernet Controller XXV710 for 25GbE SFP28", "8086", "158b"),
+				Entry("Ethernet Controller XXV710 Intel(R) FPGA Programmable Acceleration Card N3000 for Networking", "8086", "0d58"))
+		})
+
 		Context("Resource Injector", func() {
 			BeforeEach(func() {
 				if discovery.Enabled() {
