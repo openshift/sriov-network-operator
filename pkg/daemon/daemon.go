@@ -384,8 +384,10 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		d, r := false, false
 		if dn.nodeState.GetName() == "" {
 			d, r, err = p.OnNodeStateAdd(latestState)
+			glog.V(0).Infof("nodeStateSyncHandler(): plugin %s: reqDrain %v, reqReboot %v", k, d, r)
 		} else {
 			d, r, err = p.OnNodeStateChange(dn.nodeState, latestState)
+			glog.V(0).Infof("nodeStateSyncHandler(): plugin %s: reqDrain %v, reqReboot %v", k, d, r)
 		}
 		if err != nil {
 			glog.Errorf("nodeStateSyncHandler(): plugin %s error: %v", k, err)
@@ -428,7 +430,7 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	}
 
 	// restart device plugin pod
-	if reqDrain || (dn.nodeState.GetName() != "" && latestState.Spec.DpConfigVersion != dn.nodeState.Spec.DpConfigVersion) {
+	if reqDrain || latestState.Spec.DpConfigVersion != dn.nodeState.Spec.DpConfigVersion {
 		glog.Info("nodeStateSyncHandler(): restart device plugin pod")
 		if err := dn.restartDevicePluginPod(); err != nil {
 			glog.Errorf("nodeStateSyncHandler(): fail to restart device plugin pod: %v", err)
