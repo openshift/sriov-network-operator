@@ -12,8 +12,17 @@
 2. Kubernetes or Openshift cluster running on bare metal nodes.
 3. Multus-cni is deployed as default CNI plugin, and there is a default CNI plugin (flannel, openshift-sdn etc.) available for Multus-cni.
 
-> **Note:** As for unsupported SRIOV NICs, that is not guaranteed but might work as well.
-> For that to happen, one must [disable the webhook](https://docs.openshift.com/container-platform/4.4/networking/hardware_networks/configuring-sriov-operator.html#disable-enable-sr-iov-operator-admission-control-webhook_configuring-sriov-operator) which validates the NIC's model.
+> **Note:** As for unsupported SRIOV NICs, that is not guaranteed, but might work as well.
+> For that to happen, after you install the SR_IOV operator, one must disable the SR-IOV operator admission controller webhook.
+> If the operator was deployed with `make deploy-setup-k8s` the webhook is disabled by default and you can skip the next step. Else, one has to so manually:
+> First, make sure you have the OpenShift Command-line Interface (oc) installed and that you are logged in with  `cluster-admin` privileges.
+> Then, set the `enableOperatorWebhook` field to `false`:
+> ```
+> $ oc patch sriovoperatorconfig default --type=merge \
+>   -n openshift-sriov-network-operator \
+>   --patch '{ "spec": { "enableOperatorWebhook": false } }'
+> ```
+
 
 ## Installation
 
