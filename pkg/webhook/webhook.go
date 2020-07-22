@@ -25,7 +25,7 @@ func MutateCustomResource(ar v1beta1.AdmissionReview) *v1beta1.AdmissionResponse
 		return toV1beta1AdmissionResponse(err)
 	}
 	var reviewResp *v1beta1.AdmissionResponse
-	if reviewResp, err = defaultSriovNetworkNodePolicy(cr); err != nil {
+	if reviewResp, err = mutateSriovNetworkNodePolicy(cr); err != nil {
 		glog.Error(err)
 		return toV1beta1AdmissionResponse(err)
 	}
