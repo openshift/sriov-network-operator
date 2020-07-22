@@ -101,9 +101,15 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	writerclient := snclientset.NewForConfigOrDie(config)
 	glog.V(0).Info("starting node writer")
 	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient, startOpts.nodeName, closeAllConns)
+
+	destdir := os.Getenv("DEST_DIR")
+	if destdir == "" {
+		destdir = "/host/etc"
+	}
+
 	// block the deamon process until nodeWriter finish first its run
-	nodeWriter.Run(stopCh, refreshCh, syncCh, true)
-	go nodeWriter.Run(stopCh, refreshCh, syncCh, false)
+	nodeWriter.Run(stopCh, refreshCh, syncCh, destdir, true)
+	go nodeWriter.Run(stopCh, refreshCh, syncCh, "", false)
 
 	glog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(
