@@ -27,15 +27,16 @@ spec:
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-cni
-      initContainers:
-      - name: sriov-infiniband-cni
-        image: {{.SRIOVInfiniBandCNIImage}}
-        volumeMounts:
-        - name: cnibin
-          mountPath: /host/opt/cni/bin
       containers:
       - name: sriov-cni
         image: {{.SRIOVCNIImage}}
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: cnibin
+          mountPath: /host/opt/cni/bin
+      - name: sriov-infiniband-cni
+        image: {{.SRIOVInfiniBandCNIImage}}
         securityContext:
           privileged: true
         volumeMounts:
@@ -45,4 +46,3 @@ spec:
         - name: cnibin
           hostPath:
             path: {{.CNIBinPath}}
-
