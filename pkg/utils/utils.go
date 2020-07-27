@@ -19,6 +19,7 @@ import (
 	"github.com/jaypipes/ghw"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	"github.com/vishvananda/netlink"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 const (
@@ -443,6 +444,24 @@ func Chroot(path string) (func() error, error) {
 	}, nil
 }
 
+func vfIsReady(pciAddr string) (netlink.Link, error) {
+	glog.Infof("vfIsReady(): VF device %s", pciAddr)
+	var err error
+	var vfLink netlink.Link
+	err = wait.PollImmediate(time.Second, 5*time.Second, func() (bool, error) {
+		vfName := tryGetInterfaceName(pciAddr)
+		vfLink, err = netlink.LinkByName(vfName)
+		if err != nil {
+			glog.Errorf("vfIsReady(): unable to get VF link for device %+v, %q", pciAddr, err)
+		}
+		return err == nil, nil
+	})
+	if err != nil {
+		return vfLink, err
+	}
+	return vfLink, nil
+}
+
 func setVfsAdminMac(iface *sriovnetworkv1.InterfaceExt) error {
 	glog.Infof("setVfsAdminMac(): device %s", iface.PciAddress)
 	pfLink, err := netlink.LinkByName(iface.Name)
@@ -460,10 +479,9 @@ func setVfsAdminMac(iface *sriovnetworkv1.InterfaceExt) error {
 			glog.Errorf("setVfsAdminMac(): unable to get VF id %+v %q", iface.PciAddress, err)
 			return err
 		}
-		vfName := tryGetInterfaceName(addr)
-		vfLink, err := netlink.LinkByName(vfName)
+		vfLink, err := vfIsReady(addr)
 		if err != nil {
-			glog.Errorf("setVfsAdminMac(): unable to get VF link for device %+v %q", iface, err)
+			glog.Errorf("setVfsAdminMac(): VF link is not ready for device %+v %q", addr, err)
 			return err
 		}
 		if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
