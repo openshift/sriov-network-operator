@@ -580,25 +580,19 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 				if p.Spec.NumVfs == 0 {
 					deviceID = p.Spec.NicSelector.DeviceID
 				} else {
-					deviceID = sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID]
+					deviceID = sriovnetworkv1.GetVfDeviceId(p.Spec.NicSelector.DeviceID)
 				}
 
-				if !sriovnetworkv1.StringInArray(p.Spec.NicSelector.DeviceID, netDeviceSelectors.Devices) {
+				if !sriovnetworkv1.StringInArray(deviceID, netDeviceSelectors.Devices) && deviceID != "" {
 					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, deviceID)
 				}
 			}
 			if len(p.Spec.NicSelector.PfNames) > 0 {
 				netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
+			// Removed driver constraint for "netdevice" DeviceType
 			if p.Spec.DeviceType == "vfio-pci" {
 				netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, p.Spec.DeviceType)
-			} else {
-				if p.Spec.NumVfs > 0 {
-					///////////////////////////////////
-					// TODO: remove unsupport VF driver
-					///////////////////////////////////
-					netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, "iavf", "mlx5_core", "ixgbevf", "i40evf")
-				}
 			}
 
 			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
@@ -618,26 +612,25 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 				netDeviceSelectors.Vendors = append(netDeviceSelectors.Vendors, p.Spec.NicSelector.Vendor)
 			}
 			if p.Spec.NicSelector.DeviceID != "" {
+				var deviceID string
 				if p.Spec.NumVfs == 0 {
-					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, p.Spec.NicSelector.DeviceID)
+					deviceID = p.Spec.NicSelector.DeviceID
 				} else {
-					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, sriovnetworkv1.SriovPfVfMap[p.Spec.NicSelector.DeviceID])
+					deviceID = sriovnetworkv1.GetVfDeviceId(p.Spec.NicSelector.DeviceID)
+				}
+
+				if !sriovnetworkv1.StringInArray(deviceID, netDeviceSelectors.Devices) && deviceID != "" {
+					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, deviceID)
 				}
 			}
 			if l := len(p.Spec.NicSelector.PfNames); l > 0 {
 				netDeviceSelectors.PfNames = append(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
-
+			// Removed driver constraint for "netdevice" DeviceType
 			if p.Spec.DeviceType == "vfio-pci" {
 				netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, p.Spec.DeviceType)
-			} else {
-				if p.Spec.NumVfs > 0 {
-					///////////////////////////////////
-					// TODO: remove unsupport VF driver
-					///////////////////////////////////
-					netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, "iavf", "mlx5_core", "i40evf", "ixgbevf")
-				}
 			}
+
 			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
 			if err != nil {
 				return rcl, err
