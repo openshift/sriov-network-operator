@@ -1112,7 +1112,7 @@ var _ = Describe("[sriov] operator", func() {
 						}
 					} else {
 						node = sriovInfos.Nodes[0]
-						intf, err := sriovInfos.FindOneSriovDevice(node)
+						intf, err = sriovInfos.FindOneSriovDevice(node)
 						Expect(err).ToNot(HaveOccurred())
 
 						mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
