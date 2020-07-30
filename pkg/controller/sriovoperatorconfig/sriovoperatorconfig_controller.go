@@ -126,6 +126,7 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 				EnableInjector:           func() *bool { b := true; return &b }(),
 				EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
 				ConfigDaemonNodeSelector: map[string]string{},
+				LogLevel:                 2,
 			}
 			err = r.client.Create(context.TODO(), defaultConfig)
 			if err != nil {
