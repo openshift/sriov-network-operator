@@ -182,10 +182,10 @@ func CheckReadyGeneration(clients *testclient.ClientSet, operatorNamespace strin
 			return true, nil
 		}
 
-		// I0612 03:38:09.469903    6090 daemon.go:336] nodeStateChangeHandler(): new generation is 6
-		// I0612 03:38:09.474546    6090 daemon.go:361] nodeStateChangeHandler(): Interface not changed
+		//I0729 11:17:58.873459 1293984 daemon.go:353] nodeStateSyncHandler(): new generation is 1
+		//I0729 11:17:58.885626 1293984 daemon.go:363] nodeStateSyncHandler(): Interface not changed
 		if strings.Contains(log, fmt.Sprintf("new generation is %d", state.Generation)) &&
-			strings.Contains(logsList[idx+1], "Interface not changed") {
+			len(logsList) > idx+1 && strings.Contains(logsList[idx+1], "Interface not changed") {
 			return true, nil
 		}
 	}
