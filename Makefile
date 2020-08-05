@@ -60,11 +60,12 @@ gencode: operator-sdk
 	@operator-sdk generate k8s
 
 deploy-setup:
-	@EXCLUSIONS=() hack/deploy-setup.sh $(NAMESPACE)
+	@hack/deploy-setup.sh $(NAMESPACE)
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
 deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
 deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
+deploy-setup-k8s: export OPERATOR_EXEC=kubectl
 deploy-setup-k8s: deploy-setup
 
 # test-unit:
@@ -78,15 +79,13 @@ test-e2e-conformance:
 test-%:
 	@hack/run-test.sh $*
 
-deploy-setup-k8s: export NAMESPACE=sriov-network-operator
-deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
-deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 test-e2e-k8s: test-e2e
 
 undeploy:
 	@hack/undeploy.sh $(NAMESPACE)
 
 undeploy-k8s: export NAMESPACE=sriov-network-operator
+undeploy-k8s: export OPERATOR_EXEC=kubectl
 undeploy-k8s: undeploy
 
 _plugin-%:
