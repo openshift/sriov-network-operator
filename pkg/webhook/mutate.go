@@ -39,7 +39,7 @@ func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1beta1.Admission
 	}
 	if _, ok := spec.(map[string]interface{})["isRdma"]; !ok {
 		glog.V(2).Infof("mutateSriovNetworkNodePolicy(): set default isRdma to false for %v", name)
-		patchs = append(patchs, defaultDeviceTypePatch)
+		patchs = append(patchs, defaultIsRdmaPatch)
 	}
 	if _, ok := spec.(map[string]interface{})["linkType"]; !ok {
 		glog.V(2).Infof("mutateSriovNetworkNodePolicy(): set default linkType to eth for %v", name)
