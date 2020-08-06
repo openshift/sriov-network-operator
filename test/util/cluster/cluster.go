@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -114,9 +115,15 @@ func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.Interfa
 // SriovStable tells if all the node states are in sync (and the cluster is ready for another round of tests)
 func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool, error) {
 	nodeStates, err := clients.SriovNetworkNodeStates(operatorNamespace).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
+	switch err {
+	case io.ErrUnexpectedEOF:
+		return false, err
+	case nil:
+		break
+	default:
 		return false, fmt.Errorf("Failed to fetch nodes state %v", err)
 	}
+
 	if len(nodeStates.Items) == 0 {
 		return false, nil
 	}
