@@ -309,10 +309,10 @@ func getLinkType(linkType string) string {
 	} else if strings.Contains(linkType, InfinibandLinkType) {
 		return InfinibandLinkType
 	} else if len(linkType) > 0 {
-		glog.Warningf("mellanox-plugin getMlnxNicFwData(): link type %s is not one of [ETH, IB]", linkType)
+		glog.Warningf("mellanox-plugin getLinkType(): link type %s is not one of [ETH, IB]", linkType)
 		return UknownLinkType
 	} else {
-		glog.Warning("mellanox-plugin getMlnxNicFwData(): LINK_TYPE_P* attribute was not found")
+		glog.Warning("mellanox-plugin getLinkType(): LINK_TYPE_P* attribute was not found")
 		return PreconfiguredLinkType
 	}
 }
