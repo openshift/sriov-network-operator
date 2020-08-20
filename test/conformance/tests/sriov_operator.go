@@ -1489,7 +1489,7 @@ func isInterfaceSlave(ifcPod *k8sv1.Pod, ifcName string) (bool, error) {
 		parts := strings.Split(line, " ")
 		if len(parts) > 1 && parts[1] == ifcName {
 			if strings.Index(line, "master") != -1 { // Ignore hw bridges
-				return false, nil // The interface is part of a bridge (it has a master)
+				return true, nil // The interface is part of a bridge (it has a master)
 			}
 		}
 	}
