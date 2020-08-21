@@ -137,7 +137,8 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 		}
 	}
 	for _, vf := range ifaceStatus.VFs {
-		if vf.Mtu != mtu && !sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
+		// 0 is a invalid value for mtu as defined in getNetdevMTU
+		if vf.Mtu != 0 && vf.Mtu != mtu && !sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
 			glog.V(2).Infof("needUpdate(): VF MTU needs update, desired=%d", mtu)
 			return true
 		}
