@@ -113,7 +113,21 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 		configured := false
 		for _, iface := range newState.Spec.Interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
-				configured = true
+				// Node A PF: 0000:5e:00.0, ens3
+				// Node B PF: 0000:5e:00.0, ens3f0
+				// Node Policy 1:
+				//	rootDevices: ["0000:5e:00.0"]
+				//	pfNames:     ["ens3"]
+				//
+				// Node Policy 2:
+				//	rootDevices: ["0000:5e:00.0"]
+				//	pfNames:     ["ens3f0"]
+				//
+				// When Node Policy updates from 1 to 2, ens3 on Node A
+				// should be reset with below conditional check.
+				if iface.Name == "" || iface.Name == ifaceStatus.Name {
+					configured = true
+				}
 				if !needUpdate(&iface, &ifaceStatus) {
 					glog.V(2).Infof("syncNodeState(): no need update interface %s", iface.PciAddress)
 					break
