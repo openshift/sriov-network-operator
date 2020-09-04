@@ -361,6 +361,14 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	latest := latestState.GetGeneration()
 	if dn.nodeState.GetGeneration() == latest {
 		glog.V(0).Infof("nodeStateSyncHandler(): Interface not changed")
+		if latestState.Status.LastSyncError != "" ||
+			latestState.Status.SyncStatus != "Succeeded" {
+			dn.refreshCh <- Message{
+				syncStatus:    "Succeeded",
+				lastSyncError: "",
+			}
+		}
+
 		return nil
 	}
 
