@@ -95,6 +95,34 @@ func newNodePolicy() *SriovNetworkNodePolicy {
 	}
 }
 
+func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
+	var err error
+	var ok bool
+	policy := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+		},
+		Spec: SriovNetworkNodePolicySpec{
+			NicSelector:  SriovNetworkNicSelector{},
+			NodeSelector: map[string]string{},
+			NumVfs:       1,
+			ResourceName: "p0",
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err = validateSriovNetworkNodePolicy(policy, "DELETE")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(Equal(false))
+
+	ok, err = validateSriovNetworkNodePolicy(policy, "UPDATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+
+	ok, err = validateSriovNetworkNodePolicy(policy, "CREATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+}
+
 func TestValidatePolicyForNodeStateWithValidPolicy(t *testing.T) {
 	state := newNodeState()
 	policy := &SriovNetworkNodePolicy{

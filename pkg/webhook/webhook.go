@@ -49,7 +49,7 @@ func ValidateCustomResource(ar v1beta1.AdmissionReview) *v1beta1.AdmissionRespon
 	reviewResponse := v1beta1.AdmissionResponse{}
 	reviewResponse.Allowed = true
 
-	if reviewResponse.Allowed, err = validateSriovNetworkNodePolicy(&cr); err != nil {
+	if reviewResponse.Allowed, err = validateSriovNetworkNodePolicy(&cr, ar.Request.Operation); err != nil {
 		reviewResponse.Result = &metav1.Status{
 			Reason: metav1.StatusReason(err.Error()),
 		}

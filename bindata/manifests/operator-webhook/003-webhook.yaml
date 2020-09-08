@@ -33,7 +33,7 @@ webhooks:
         namespace: {{.Namespace}}
         path: "/validating-custom-resource"
     rules:
-      - operations: [ "CREATE", "UPDATE" ]
+      - operations: [ "CREATE", "UPDATE", "DELETE" ]
         apiGroups: ["sriovnetwork.openshift.io"]
         apiVersions: ["v1"]
         resources: ["sriovnetworknodepolicies"]
