@@ -26,6 +26,19 @@ var (
 	interfaceSelected bool
 )
 
+func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operation v1beta1.Operation) (bool, error) {
+	glog.V(2).Infof("validateSriovOperatorConfig: %v", cr)
+
+	if cr.GetName() == "default" {
+		if operation == "DELETE" {
+			return false, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
+		} else {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("only default SriovOperatorConfig is used")
+}
+
 func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1beta1.Operation) (bool, error) {
 	glog.V(2).Infof("validateSriovNetworkNodePolicy: %v", cr)
 

@@ -36,4 +36,4 @@ webhooks:
       - operations: [ "CREATE", "UPDATE", "DELETE" ]
         apiGroups: ["sriovnetwork.openshift.io"]
         apiVersions: ["v1"]
-        resources: ["sriovnetworknodepolicies"]
+        resources: ["sriovnetworknodepolicies", "sriovoperatorconfigs"]

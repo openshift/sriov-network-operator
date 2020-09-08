@@ -95,6 +95,34 @@ func newNodePolicy() *SriovNetworkNodePolicy {
 	}
 }
 
+func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
+	var err error
+	var ok bool
+	config := &SriovOperatorConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+		},
+		Spec: SriovOperatorConfigSpec{
+			ConfigDaemonNodeSelector: map[string]string{},
+			EnableInjector:           func() *bool { b := true; return &b }(),
+			EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
+			LogLevel:                 2,
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err = validateSriovOperatorConfig(config, "DELETE")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(Equal(false))
+
+	ok, err = validateSriovOperatorConfig(config, "UPDATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+
+	ok, err = validateSriovOperatorConfig(config, "CREATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+}
+
 func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
 	var err error
 	var ok bool
