@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -1701,8 +1702,19 @@ func waitForSRIOVStable() {
 	// TODO: find a better way to handle this scenario
 
 	time.Sleep(5 * time.Second)
+
+	eofErrorCount := 0
 	Eventually(func() bool {
 		res, err := cluster.SriovStable(operatorNamespace, clients)
+		// The check for EofError is done to temorarily work around an issue
+		// occuring during tests run. The issue occurs very sporadicly and as such
+		// is difficult to identify. eofErrorCount is introduced to allow us to respond
+		// to real issues.
+		if err == io.ErrUnexpectedEOF {
+			eofErrorCount++
+			Expect(eofErrorCount).To(BeNumerically("<", 2))
+			return false
+		}
 		Expect(err).ToNot(HaveOccurred())
 		return res
 	}, waitingTime, 1*time.Second).Should(BeTrue())
