@@ -91,6 +91,14 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
+
+	err = c.Watch(&source.Kind{Type: &sriovnetworkv1.SriovNetworkNodeState{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &sriovnetworkv1.SriovNetworkNodePolicy{},
+	})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
