@@ -31,3 +31,7 @@ spec:
     from:
       kind: DockerImage
       name: quay.io/openshift/origin-sriov-infiniband-cni:4.6
+  - name: sriov-operator-must-gather
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-sriov-operator-must-gather:4.6
