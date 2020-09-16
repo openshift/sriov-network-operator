@@ -689,9 +689,9 @@ var _ = Describe("[sriov] operator", func() {
 				macvlanNadName := "macvlan-nad"
 				nodeNicName := sriovInfos.States[node].Status.Interfaces[0].Name
 				macvlanNad := network.CreateMacvlanNetworkAttachmentDefinition(macvlanNadName, namespaces.Test, nodeNicName)
-				defer clients.Delete(context.Background(), &macvlanNad)
 				err = clients.Create(context.Background(), &macvlanNad)
 				Expect(err).ToNot(HaveOccurred())
+				defer clients.Delete(context.Background(), &macvlanNad)
 				Eventually(func() error {
 					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: macvlanNadName, Namespace: namespaces.Test}, netAttDef)
@@ -707,7 +707,7 @@ var _ = Describe("[sriov] operator", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				sriovVfDriver := getDriver(stdout)
-				Expect(cluster.IsDriverSupported(sriovVfDriver)).To(BeTrue())
+				Expect(cluster.IsVFDriverSupported(sriovVfDriver)).To(BeTrue())
 
 				stdout, _, err = pod.ExecCommand(clients, createdPod, "ethtool", "-i", "net2")
 				macvlanDriver := getDriver(stdout)
