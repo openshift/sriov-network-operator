@@ -1,15 +1,15 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
+
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
+	"github.com/openshift/sriov-network-operator/pkg/utils"
 )
 
 type MellanoxPlugin struct {
@@ -200,7 +200,8 @@ func configFW() error {
 		if len(cmdArgs) <= 4 {
 			continue
 		}
-		_, err := runCommand("mstconfig", cmdArgs...)
+		stdout, _, err := utils.RunCommand("mstconfig", cmdArgs...)
+		glog.V(2).Infof("mellanox-plugin: configFW(): %s", stdout)
 		if err != nil {
 			glog.Errorf("mellanox-plugin configFW(): failed : %v", err)
 			return err
@@ -212,22 +213,9 @@ func configFW() error {
 func mstConfigReadData(pciAddress string) (string, error) {
 	glog.Infof("mellanox-plugin mstConfigReadData(): device %s", pciAddress)
 	args := []string{"-e", "-d", pciAddress, "q"}
-	out, err := runCommand("mstconfig", args...)
-	return out, err
-}
-
-func runCommand(command string, args ...string) (string, error) {
-	glog.Infof("mellanox-plugin runCommand(): %s %v", command, args)
-	var stdout, stderr bytes.Buffer
-
-	cmd := exec.Command(command, args...)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	glog.V(2).Infof("mellanox-plugin: runCommand(): %s, %v", command, args)
-	err := cmd.Run()
-	glog.V(2).Infof("mellanox-plugin: runCommand(): %s", stdout.String())
-	return stdout.String(), err
+	stdout, _, err := utils.RunCommand("mstconfig", args...)
+	glog.V(2).Infof("mellanox-plugin: mstConfigReadData(): %s", stdout)
+	return stdout, err
 }
 
 func getMlnxNicFwData(pciAddress string) (current, next *mlnxNic, err error) {

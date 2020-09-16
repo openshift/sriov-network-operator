@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os/exec"
 	"reflect"
 	"strconv"
@@ -145,12 +144,9 @@ func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
 func tryEnableIommuInKernelArgs() (bool, error) {
 	glog.Info("generic-plugin tryEnableIommuInKernelArgs()")
 	args := [2]string{"intel_iommu=on", "iommu=pt"}
-	var stdout, stderr bytes.Buffer
-	cmd := exec.Command("/bin/sh", scriptsPath, args[0], args[1])
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
+	stdout, _, err := utils.RunCommand("/bin/sh", scriptsPath, args[0], args[1])
+	if err != nil {
 		// if grubby is not there log and assume kernel args are set correctly.
 		if isCommandNotFound(err) {
 			glog.Error("generic-plugin tryEnableIommuInKernelArgs(): grubby command not found. Please ensure that kernel args intel_iommu=on iommu=pt are set")
@@ -160,7 +156,7 @@ func tryEnableIommuInKernelArgs() (bool, error) {
 		return false, err
 	}
 
-	i, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
+	i, err := strconv.Atoi(strings.TrimSpace(stdout))
 	if err == nil {
 		if i > 0 {
 			glog.Infof("generic-plugin tryEnableIommuInKernelArgs(): need to reboot node")

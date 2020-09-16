@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -9,7 +8,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -679,10 +677,10 @@ func rebootNode() {
 	// However note we use `;` instead of `&&` so we keep rebooting even
 	// if kubelet failed to shutdown - that way the machine will still eventually reboot
 	// as systemd will time out the stop invocation.
-	cmd := exec.Command("systemd-run", "--unit", "sriov-network-config-daemon-reboot",
+	_, _, err = utils.RunCommand("systemd-run", "--unit", "sriov-network-config-daemon-reboot",
 		"--description", fmt.Sprintf("sriov-network-config-daemon reboot node"), "/bin/sh", "-c", "systemctl stop kubelet.service; reboot")
 
-	if err := cmd.Run(); err != nil {
+	if err != nil {
 		glog.Errorf("failed to reboot node: %v", err)
 	}
 }
@@ -806,18 +804,15 @@ func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
 
 func tryEnableRdma() (bool, error) {
 	glog.V(2).Infof("tryEnableRdma()")
-	var stdout, stderr bytes.Buffer
 
-	cmd := exec.Command("/bin/bash", scriptsPath)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		glog.Errorf("tryEnableRdma(): fail to enable rdma %v: %v", err, cmd.Stderr)
+	stdout, stderr, err := utils.RunCommand("/bin/bash", scriptsPath)
+	if err != nil {
+		glog.Errorf("tryEnableRdma(): fail to enable rdma %v: %v", err, stderr)
 		return false, err
 	}
-	glog.V(2).Infof("tryEnableRdma(): %v", cmd.Stdout)
+	glog.V(2).Infof("tryEnableRdma(): %v", stdout)
 
-	i, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
+	i, err := strconv.Atoi(strings.TrimSpace(stdout))
 	if err == nil {
 		if i == 0 {
 			glog.V(2).Infof("tryEnableRdma(): RDMA kernel modules loaded")
