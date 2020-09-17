@@ -572,6 +572,10 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList)
 		found, i := resourceNameInList(p.Spec.ResourceName, &rcl)
 		netDeviceSelectors := dptypes.NetDeviceSelectors{}
 		if found {
+			if err := json.Unmarshal(*rcl.ResourceList[i].Selectors, &netDeviceSelectors); err != nil {
+				return rcl, err
+			}
+
 			if p.Spec.NicSelector.Vendor != "" && !sriovnetworkv1.StringInArray(p.Spec.NicSelector.Vendor, netDeviceSelectors.Vendors) {
 				netDeviceSelectors.Vendors = append(netDeviceSelectors.Vendors, p.Spec.NicSelector.Vendor)
 			}
