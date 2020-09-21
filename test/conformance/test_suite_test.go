@@ -56,6 +56,11 @@ func TestTest(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "SRIOV Operator conformance tests", rr)
 }
 
+var _ = BeforeSuite(func() {
+	err := clean.All()
+	Expect(err).NotTo(HaveOccurred())
+})
+
 var _ = AfterSuite(func() {
 	err := clean.All()
 	Expect(err).NotTo(HaveOccurred())

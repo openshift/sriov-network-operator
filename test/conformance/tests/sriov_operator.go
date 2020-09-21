@@ -215,7 +215,11 @@ var _ = Describe("[sriov] operator", func() {
 				var runningPod *corev1.Pod
 				Eventually(func() corev1.PodPhase {
 					runningPod, err = clients.Pods(namespaces.Test).Get(context.Background(), created.Name, metav1.GetOptions{})
+					if errors.IsNotFound(err) {
+						return corev1.PodUnknown
+					}
 					Expect(err).ToNot(HaveOccurred())
+
 					return runningPod.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
 
@@ -1113,8 +1117,11 @@ var _ = Describe("[sriov] operator", func() {
 						}
 					} else {
 						node = sriovInfos.Nodes[0]
-						intf, err = sriovInfos.FindOneSriovDevice(node)
+						sriovDeviceList, err := sriovInfos.FindSriovDevices(node)
 						Expect(err).ToNot(HaveOccurred())
+						unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
+						Expect(err).ToNot(HaveOccurred())
+						intf = unusedSriovDevices[0]
 
 						mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
 							ObjectMeta: metav1.ObjectMeta{
