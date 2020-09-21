@@ -137,6 +137,8 @@ spec:
                 type: array
               lastSyncError:
                 type: string
+              rdmaMode:
+                type: string
               syncStatus:
                 type: string
             type: object

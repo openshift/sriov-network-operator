@@ -633,3 +633,17 @@ func RunCommand(command string, args ...string) (string, string, error) {
 	err := cmd.Run()
 	return stdout.String(), stderr.String(), err
 }
+
+// GetRdmaMode return the current network namespace rdma mode
+func GetRdmaMode() string {
+	glog.Info("getRdmaMode():")
+
+	out, _, err := RunCommand("rdma", "system", "show", "netns")
+
+	if err != nil {
+		glog.Warningf("failed to get RDMA mode with error: %s", err)
+		return ""
+	}
+
+	return strings.TrimSpace(out[6:])
+}

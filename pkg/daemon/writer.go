@@ -90,6 +90,7 @@ func (writer *NodeStateStatusWriter) pollNicStatus(platformType PlatformType) er
 		return err
 	}
 	writer.status.Interfaces = iface
+	writer.status.RdmaMode = utils.GetRdmaMode()
 
 	return nil
 }
@@ -123,6 +124,7 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 func (w *NodeStateStatusWriter) setNodeStateStatus(msg Message) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	nodeState, err := w.updateNodeStateStatusRetry(func(nodeState *sriovnetworkv1.SriovNetworkNodeState) {
 		nodeState.Status.Interfaces = w.status.Interfaces
+		nodeState.Status.RdmaMode = w.status.RdmaMode
 		if msg.lastSyncError != "" || msg.syncStatus == "Succeeded" {
 			// clear lastSyncError when sync Succeeded
 			nodeState.Status.LastSyncError = msg.lastSyncError
