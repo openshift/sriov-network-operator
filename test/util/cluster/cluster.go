@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
-	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
 	"github.com/openshift/sriov-network-operator/test/util/nodes"
-	pods "github.com/openshift/sriov-network-operator/test/util/pod"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EnabledNodes provides info on sriov enabled nodes of the cluster.
@@ -142,61 +139,12 @@ func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool,
 func stateStable(state sriovv1.SriovNetworkNodeState, clients *testclient.ClientSet, operatorNamespace string) (bool, error) {
 	switch state.Status.SyncStatus {
 	case "Succeeded":
-		return CheckReadyGeneration(clients, operatorNamespace, state)
+		return true, nil
 	// When the config daemon is restarted the status will be empty
 	// This doesn't mean the config was applied
 	case "":
 		return false, nil
 	}
-	return false, nil
-}
-
-func CheckReadyGeneration(clients *testclient.ClientSet, operatorNamespace string, state sriovv1.SriovNetworkNodeState) (bool, error) {
-	podList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=sriov-network-config-daemon"})
-	if err != nil {
-		return false, err
-	}
-
-	var podObj *corev1.Pod
-	for _, pod := range podList.Items {
-		if pod.Spec.NodeName == state.Name {
-			podObj = &pod
-			break
-		}
-	}
-
-	if podObj == nil {
-		return false, nil
-	}
-
-	if podObj.Status.Phase != corev1.PodRunning {
-		return false, nil
-	}
-
-	logs, err := pods.GetLog(clients, podObj, 5*time.Minute)
-	if err != nil {
-		return false, err
-	}
-
-	logsList := strings.Split(logs, "\n")
-	for idx, log := range logsList {
-		// example output from the config-daemon
-
-		// I0412 09:46:26.041882 3910208 writer.go:111] setNodeStateStatus(): syncStatus: Succeeded, lastSyncError:
-		// I0412 09:46:35.293994 3910208 daemon.go:244] nodeStateChangeHandler(): current generation is 183
-		if strings.Contains(log, fmt.Sprintf("current generation is %d", state.Generation)) &&
-			strings.Contains(logsList[idx-1], "syncStatus: Succeeded") {
-			return true, nil
-		}
-
-		//I0729 11:17:58.873459 1293984 daemon.go:353] nodeStateSyncHandler(): new generation is 1
-		//I0729 11:17:58.885626 1293984 daemon.go:363] nodeStateSyncHandler(): Interface not changed
-		if strings.Contains(log, fmt.Sprintf("new generation is %d", state.Generation)) &&
-			len(logsList) > idx+1 && strings.Contains(logsList[idx+1], "Interface not changed") {
-			return true, nil
-		}
-	}
-
 	return false, nil
 }
 
