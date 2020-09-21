@@ -20,8 +20,9 @@ type EnabledNodes struct {
 }
 
 var (
-	supportedDrivers = []string{"mlx5_core", "i40e", "ixgbe"}
-	supportedDevices = []string{"1583", "158b", "10fb", "1015", "1017"}
+	supportedPFDrivers = []string{"mlx5_core", "i40e", "ixgbe"}
+	supportedVFDrivers = []string{"iavf", "vfio-pci", "mlx5_core"}
+	supportedDevices   = []string{"1583", "158b", "10fb", "1015", "1017"}
 )
 
 // DiscoverSriov retrieves Sriov related information of a given cluster.
@@ -50,7 +51,7 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 
 		node := state.Name
 		for _, itf := range state.Status.Interfaces {
-			if IsDriverSupported(itf.Driver) {
+			if IsPFDriverSupported(itf.Driver) {
 				res.Nodes = append(res.Nodes, node)
 				res.States[node] = state
 				break
@@ -71,7 +72,7 @@ func (n *EnabledNodes) FindOneSriovDevice(node string) (*sriovv1.InterfaceExt, e
 		return nil, fmt.Errorf("Node %s not found", node)
 	}
 	for _, itf := range s.Status.Interfaces {
-		if IsDriverSupported(itf.Driver) && isDeviceSupported(itf.DeviceID) {
+		if IsPFDriverSupported(itf.Driver) && isDeviceSupported(itf.DeviceID) {
 			return &itf, nil
 		}
 	}
@@ -87,7 +88,7 @@ func (n *EnabledNodes) FindSriovDevices(node string) ([]*sriovv1.InterfaceExt, e
 	}
 
 	for i, itf := range s.Status.Interfaces {
-		if IsDriverSupported(itf.Driver) {
+		if IsPFDriverSupported(itf.Driver) {
 			devices = append(devices, &s.Status.Interfaces[i])
 		}
 	}
@@ -148,8 +149,17 @@ func stateStable(state sriovv1.SriovNetworkNodeState, clients *testclient.Client
 	return false, nil
 }
 
-func IsDriverSupported(driver string) bool {
-	for _, supportedDriver := range supportedDrivers {
+func IsPFDriverSupported(driver string) bool {
+	for _, supportedDriver := range supportedPFDrivers {
+		if strings.Contains(driver, supportedDriver) {
+			return true
+		}
+	}
+	return false
+}
+
+func IsVFDriverSupported(driver string) bool {
+	for _, supportedDriver := range supportedVFDrivers {
 		if strings.Contains(driver, supportedDriver) {
 			return true
 		}
