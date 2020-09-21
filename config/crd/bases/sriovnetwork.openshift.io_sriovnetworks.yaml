@@ -67,6 +67,10 @@ spec:
               networkNamespace:
                 description: Namespace of the NetworkAttachmentDefinition custom resource
                 type: string
+              rdmaIsolation:
+                description: Whether to the VFs Rdma resources will be isolated by
+                  namespace or shared in same network namespace
+                type: boolean
               resourceName:
                 description: SRIOV Network device plugin endpoint resource name
                 type: string

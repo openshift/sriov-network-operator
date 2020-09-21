@@ -45,6 +45,8 @@ type SriovNetworkSpec struct {
 	// MetaPluginsConfig configuration to be used in order to chain metaplugins to the sriov interface returned
 	// by the operator.
 	MetaPluginsConfig string `json:"metaPlugins,omitempty"`
+	// Whether to the VFs Rdma resources will be isolated by namespace or shared in same network namespace
+	RdmaIsolation bool `json:"rdmaIsolation,omitempty"`
 }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork

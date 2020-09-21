@@ -624,6 +624,7 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["MetaPluginsConfigured"] = true
 		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
 	}
+	data.Data["RdmaIsolation"] = cr.Spec.RdmaIsolation
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {
