@@ -71,6 +71,8 @@ spec:
                   - pciAddress
                   type: object
                 type: array
+              rdmaMode:
+                type: string
             type: object
           status:
             description: SriovNetworkNodeStateStatus defines the observed state of

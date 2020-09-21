@@ -11,6 +11,7 @@ import (
 // +k8s:openapi-gen=true
 type SriovNetworkNodeStateSpec struct {
 	DpConfigVersion string     `json:"dpConfigVersion,omitempty"`
+	RdmaMode        string     `json:"rdmaMode,omitempty"`
 	Interfaces      Interfaces `json:"interfaces,omitempty"`
 }
 

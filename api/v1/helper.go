@@ -274,10 +274,11 @@ func UniqueAppend(inSlice []string, strings ...string) []string {
 // Apply policy to SriovNetworkNodeState CR
 func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, merge bool) {
 	s := p.Spec.NicSelector
-	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 {
-		// Empty NicSelector match none
+	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 && p.Spec.RdmaMode == "" {
+		// Empty NicSelector match none and No RDMA namespace change
 		return
 	}
+	state.Spec.RdmaMode = p.Spec.RdmaMode
 	for _, iface := range state.Status.Interfaces {
 		if s.Selected(&iface) {
 			log.Info("Update interface", "name:", iface.Name)

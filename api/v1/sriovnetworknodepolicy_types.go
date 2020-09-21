@@ -38,6 +38,9 @@ type SriovNetworkNodePolicySpec struct {
 	// +kubebuilder:validation:Enum=legacy;switchdev
 	// NIC Device Mode. Allowed value "legacy","switchdev".
 	EswitchMode string `json:"eSwitchMode,omitempty"`
+	// +kubebuilder:validation:Enum=shared;exclusive
+	// Rdma mode for the node whether shared the RDMA is shared across all network namespaces or exclusive for one namespace
+	RdmaMode string `json:"rdmaMode,omitempty"`
 }
 
 // +k8s:openapi-gen=false

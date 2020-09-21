@@ -103,6 +103,13 @@ spec:
                 maximum: 99
                 minimum: 0
                 type: integer
+              rdmaMode:
+                description: Rdma mode for the node whether shared the RDMA is shared
+                  across all network namespaces or exclusive for one namespace
+                enum:
+                - shared
+                - exclusive
+                type: string
               resourceName:
                 description: SRIOV Network device plugin endpoint resource name
                 type: string
