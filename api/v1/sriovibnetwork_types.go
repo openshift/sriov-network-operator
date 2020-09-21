@@ -25,6 +25,8 @@ type SriovIBNetworkSpec struct {
 	// VF link state (enable|disable|auto)
 	// +kubebuilder:validation:Enum={"auto","enable","disable"}
 	LinkState string `json:"linkState,omitempty"`
+	// The VFs Rdma resources will be isolated by namespace or shared in same network namespace
+	RdmaIsolation bool `json:"rdmaIsolation,omitempty"`
 }
 
 // SriovIBNetworkStatus defines the observed state of SriovIBNetwork

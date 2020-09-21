@@ -498,6 +498,7 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	// TODO: this needs to be expanded if we want to support
 	// metaplugins for the infiniband cni
 	data.Data["MetaPluginsConfigured"] = false
+	data.Data["RdmaIsolation"] = cr.Spec.RdmaIsolation
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {

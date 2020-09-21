@@ -36,6 +36,9 @@ spec:
 {{- if .StateConfigured -}}
   "link_state":"{{.SriovCniState}}",
 {{- end -}}
+{{- if and (.RdmaIsolation) (eq .CniType "ib-sriov") -}}
+  "rdmaIsolation": true,
+{{- end -}}
   {{.SriovCniIpam}}
 {{- if and (.RdmaIsolation) (eq .CniType "sriov") -}}
   },
