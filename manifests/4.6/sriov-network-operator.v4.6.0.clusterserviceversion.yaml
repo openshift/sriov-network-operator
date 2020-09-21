@@ -8,6 +8,19 @@ metadata:
       [
         {
           "apiVersion": "sriovnetwork.openshift.io/v1",
+          "kind": "SriovOperatorConfig",
+          "metadata": {
+            "name": "default",
+            "namespace": "openshift-sriov-network-operator"
+          },
+          "spec": {
+            "enableInjector": true,
+            "enableOperatorWebhook": true,
+            "logLevel": 2
+          }
+        },
+        {
+          "apiVersion": "sriovnetwork.openshift.io/v1",
           "kind": "SriovNetworkNodePolicy",
           "metadata": {
             "name": "policy-1",
@@ -51,6 +64,20 @@ metadata:
         },
         {
           "apiVersion": "sriovnetwork.openshift.io/v1",
+          "kind": "SriovIBNetwork",
+          "metadata": {
+            "name": "example-sriovibnetwork",
+            "namespace": "openshift-sriov-network-operator"
+          },
+          "spec": {
+            "ipam": "{\n  \"type\": \"host-local\",\n  \"subnet\": \"10.56.217.0/24\",\n  \"rangeStart\": \"10.56.217.171\",\n  \"rangeEnd\": \"10.56.217.181\",\n  \"routes\": [{\n    \"dst\": \"0.0.0.0/0\"\n  }],\n  \"gateway\": \"10.56.217.1\"\n}\n",
+            "linkState": "auto",
+            "resourceName": "mellanoxnics",
+            "networkNamespace": "default"
+          }
+        },
+        {
+          "apiVersion": "sriovnetwork.openshift.io/v1",
           "kind": "SriovNetworkNodeState",
           "metadata": {
             "name": "minikube",
@@ -74,6 +101,11 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: Represents an cluster-wide policy of configuring SR-IOV Operator
+      displayName: Sriov Operator Config
+      kind: SriovOperatorConfig
+      name: sriovoperatorconfigs.sriovnetwork.openshift.io
+      version: v1
     - description: Represents an policy of configuring SR-IOV components on nodes
       displayName: Sriov Network
       kind: SriovNetwork
