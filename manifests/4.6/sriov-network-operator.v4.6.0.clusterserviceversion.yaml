@@ -67,7 +67,7 @@ metadata:
     olm.skipRange: ">=4.3.0-0 <4.6.0"
     description: An operator for configuring SR-IOV components and initializing SRIOV network devices in Openshift cluster.
     repository: https://github.com/openshift/sriov-network-operator
-    support: Red Hat, Inc.
+    support: Red Hat
     capabilities: Basic Install
     categories: Networking
 spec:
@@ -314,7 +314,7 @@ spec:
   - supported: false
     type: AllNamespaces
   provider:
-    name: Red Hat, Inc.
+    name: Red Hat
   version: 4.6.0
   links:
   - name: Source Code
