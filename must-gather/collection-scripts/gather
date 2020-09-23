@@ -23,7 +23,7 @@ resources+=(nodes machineconfigs machineconfigpools featuregates kubeletconfigs)
 
 # run the collection of resources using must-gather
 for resource in ${resources[@]}; do
-  /usr/bin/oc adm inspect --dest-dir must-gather --all-namespaces ${resource}
+  oc adm inspect --dest-dir must-gather --all-namespaces ${resource}
 done
 
 exit 0
