@@ -100,7 +100,7 @@ func GetSriovNicIPs(pod *k8sv1.Pod, ifcName string) ([]string, error) {
 // Return a definition of a macvlan NetworkAttachmentDefinition
 // name name
 // namespace namespace
-func CreateMacvlanNetworkAttachmentDefinition(name string, namespace string, nodeNicName string) netattdefv1.NetworkAttachmentDefinition {
+func CreateMacvlanNetworkAttachmentDefinition(name string, namespace string) netattdefv1.NetworkAttachmentDefinition {
 	return netattdefv1.NetworkAttachmentDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -110,7 +110,6 @@ func CreateMacvlanNetworkAttachmentDefinition(name string, namespace string, nod
 			Config: fmt.Sprintf(`{
 				"cniVersion": "0.3.0",
 				"type": "macvlan",
-				"master": "%s",
 				"mode": "bridge",
 				"ipam": {
 				  "type": "host-local",
@@ -122,7 +121,7 @@ func CreateMacvlanNetworkAttachmentDefinition(name string, namespace string, nod
 				  ],
 				  "gateway": "10.1.1.1"
 				}
-			  }`, nodeNicName),
+			  }`),
 		},
 	}
 }
