@@ -175,6 +175,14 @@ var _ = Describe("[sriov] operator", func() {
 				waitForSRIOVStable()
 				sriovDevice, err = sriovInfos.FindOneSriovDevice(node)
 				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() int64 {
+					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					allocatable, _ := resNum.AsInt64()
+					return allocatable
+				}, 10*time.Minute, time.Second).Should(Equal(int64(numVfs)))
 			}
 		})
 
@@ -691,8 +699,7 @@ var _ = Describe("[sriov] operator", func() {
 				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 				macvlanNadName := "macvlan-nad"
-				nodeNicName := sriovInfos.States[node].Status.Interfaces[0].Name
-				macvlanNad := network.CreateMacvlanNetworkAttachmentDefinition(macvlanNadName, namespaces.Test, nodeNicName)
+				macvlanNad := network.CreateMacvlanNetworkAttachmentDefinition(macvlanNadName, namespaces.Test)
 				err = clients.Create(context.Background(), &macvlanNad)
 				Expect(err).ToNot(HaveOccurred())
 				defer clients.Delete(context.Background(), &macvlanNad)
