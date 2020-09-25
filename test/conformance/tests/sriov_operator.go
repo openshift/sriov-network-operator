@@ -1042,7 +1042,8 @@ var _ = Describe("[sriov] operator", func() {
 						"routes":[{"dst":"0.0.0.0/0"}],
 						"gateway":"10.10.10.1"
 						}`
-					err := network.CreateSriovNetwork(clients, unusedSriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+
+					err = network.CreateSriovNetwork(clients, unusedSriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 					Expect(err).ToNot(HaveOccurred())
 					Eventually(func() error {
 						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
