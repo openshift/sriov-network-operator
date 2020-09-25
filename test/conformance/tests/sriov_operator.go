@@ -1021,37 +1021,18 @@ var _ = Describe("[sriov] operator", func() {
 					var unusedSriovDevice *sriovv1.InterfaceExt
 
 					if discovery.Enabled() {
-						var numVfs int
-						var err error
-						testNode, resourceName, numVfs, unusedSriovDevice, err = discovery.DiscoveredResources(clients,
-							sriovInfos, operatorNamespace, defaultFilterPolicy,
-							func(node string, sriovDeviceList []*sriovv1.InterfaceExt) (*sriovv1.InterfaceExt, bool) {
-								if len(sriovDeviceList) == 0 {
-									return nil, false
-								}
-								unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
-								if err != nil && len(unusedSriovDevices) == 0 {
-									return nil, false
-								}
-								return unusedSriovDevices[0], true
-							},
-						)
-
-						Expect(err).ToNot(HaveOccurred())
-						if testNode == "" || resourceName == "" || numVfs < 5 || unusedSriovDevice == nil {
-							Skip("Insufficient resources to run tests in discovery mode")
-						}
-					} else {
-						testNode = sriovInfos.Nodes[0]
-						sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
-						Expect(err).ToNot(HaveOccurred())
-						unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
-						Expect(err).ToNot(HaveOccurred())
-						unusedSriovDevice = unusedSriovDevices[0]
-						defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
-						Expect(err).ToNot(HaveOccurred())
-						createSriovPolicy(unusedSriovDevice.Name, testNode, 2, resourceName)
+						Skip("PF Shutdown test not enabled in discovery mode")
 					}
+
+					testNode = sriovInfos.Nodes[0]
+					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
+					Expect(err).ToNot(HaveOccurred())
+					unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
+					Expect(err).ToNot(HaveOccurred())
+					unusedSriovDevice = unusedSriovDevices[0]
+					defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
+					Expect(err).ToNot(HaveOccurred())
+					createSriovPolicy(unusedSriovDevice.Name, testNode, 2, resourceName)
 
 					ipam := `{
 						"type":"host-local",
@@ -1477,35 +1458,19 @@ func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceEx
 		stdout, _, err = pod.ExecCommand(clients, createdPod, "ip", "link", "show", device.Name)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(stdout)).Should(Not(Equal(0)), "Unable to query link state")
-		if strings.Index(stdout, "state DOWN") > 0 {
+		if strings.Contains(stdout, "state DOWN") {
+			continue // The interface is not active
+		}
+		if strings.Contains(stdout, "master ovs-system") {
 			continue // The interface is not active
 		}
 
-		isInterfaceSlave, err := isInterfaceSlave(createdPod, device.Name)
-		Expect(err).ToNot(HaveOccurred())
-		if isInterfaceSlave {
-			continue
-		}
 		filteredDevices = append(filteredDevices, device)
 	}
 	if len(filteredDevices) == 0 {
 		return nil, fmt.Errorf("Unused sriov devices not found")
 	}
 	return filteredDevices, nil
-}
-
-func isInterfaceSlave(ifcPod *k8sv1.Pod, ifcName string) (bool, error) {
-	stdout, _, err := pod.ExecCommand(clients, ifcPod, "bridge", "link")
-	if err != nil {
-		return false, err
-	}
-	lines := strings.Split(stdout, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, ifcName) && strings.Contains(line, "master") {
-			return true, nil // The interface is part of a bridge (it has a master)
-		}
-	}
-	return false, nil
 }
 
 // podVFIndexInHost retrieves the vf index on the host network namespace related to the given
