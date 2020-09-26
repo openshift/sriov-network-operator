@@ -134,16 +134,21 @@ func (dn *Daemon) nodeStateAddHandler(obj interface{}) {
 	// "k8s.io/apimachinery/pkg/apis/meta/v1" provides an Object
 	// interface that allows us to get metadata easily
 	nodeState := obj.(*sriovnetworkv1.SriovNetworkNodeState)
+	var err error
 	glog.V(2).Infof("nodeStateAddHandler(): New SriovNetworkNodeState Added to Store: %s", nodeState.GetName())
 	dn.refreshCh <- Message{
 		syncStatus:    "InProgress",
 		lastSyncError: "",
 	}
-	err := dn.loadVendorPlugins(nodeState)
-	if err != nil {
-		glog.Errorf("nodeStateAddHandler(): failed to load vendor plugin: %v", err)
-		dn.exitCh <- err
-		return
+
+	// load plugins if has not loaded
+	if len(dn.LoadedPlugins) == 0 {
+		err = dn.loadVendorPlugins(nodeState)
+		if err != nil {
+			glog.Errorf("nodeStateAddHandler(): failed to load vendor plugin: %v", err)
+			dn.exitCh <- err
+			return
+		}
 	}
 
 	reqReboot := false
