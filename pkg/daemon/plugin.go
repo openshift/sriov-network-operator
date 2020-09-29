@@ -22,13 +22,15 @@ type VendorPlugin interface {
 }
 
 var pluginMap = map[string]string{
-	"8086": "intel_plugin",
-	"15b3": "mellanox_plugin",
+	"8086":    "intel_plugin",
+	"15b3":    "mellanox_plugin",
+	"virtual": "virtual_plugin",
 }
 
 const (
 	SpecVersion   = "1.0"
 	GenericPlugin = "generic_plugin"
+	VirtualPlugin = "virtual_plugin"
 )
 
 // loadPlugin loads a single plugin from a file path

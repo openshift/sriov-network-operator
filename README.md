@@ -1,18 +1,22 @@
 # sriov-network-operator
 
-The Sriov Network Operator is design to help user to provision and configure SR-IOV CNI plugin and Device plugin in Openshift cluster.
+The Sriov Network Operator is designed to help the user to provision and configure SR-IOV CNI plugin and Device plugin in the Openshift cluster.
 
 ## Motivation
 
-SR-IOV network is an optional feature of Openshift cluster. To make it work, it requires different components to be provisioned and configured accordingly. It makes sense to have one operator to coordinate those relevant components in one place, instead of having them managed by different operators. And also, to hide the complexity, we should provide an elegant user interface to simplify the process of enabling SR-IOV.
+SR-IOV network is an optional feature of an Openshift cluster. To make it work, it requires different components to be provisioned and configured accordingly. It makes sense to have one operator to coordinate those relevant components in one place, instead of having them managed by different operators. And also, to hide the complexity, we should provide an elegant user interface to simplify the process of enabling SR-IOV.
 
 ## Features
 
 - Initialize the supported SR-IOV NIC types on selected nodes.
-- provision/upgrade SR-IOV device plugin executable on selected node.  
-- provision/upgrade SR-IOV CNI plugin executable on selected nodes.
-- manage configuration of SR-IOV device plugin on host.
-- generate net-att-def CRs for SR-IOV CNI plugin
+- Provision/upgrade SR-IOV device plugin executable on selected node.  
+- Provision/upgrade SR-IOV CNI plugin executable on selected nodes.
+- Manage configuration of SR-IOV device plugin on host.
+- Generate net-att-def CRs for SR-IOV CNI plugin
+- Supports operation in a virtualized Kubernetes deployment
+  - Discovers VFs attached to the Virtual Machine (VM)
+  - Does not require attached of associated PFs
+  - VFs can be associated to SriovNetworks by selecting the appropriate PciAddress as the RootDevice in the SriovNetworkNodePolicy
 
 ## Quick Start
 
@@ -30,7 +34,7 @@ The SR-IOV network operator introduces following new CRDs:
 
 ### SriovNetwork
 
-A custom resource of SriovNetwork could represent the a layer-2 broadcast domain where some SR-IOV devices attach to. It is primarily used to generate the a NetworkAttachmentDefinition CR with SR-IOV CNI plugin configuration. 
+A custom resource of SriovNetwork could represent the a layer-2 broadcast domain where some SR-IOV devices are attach to. It is primarily used to generate a NetworkAttachmentDefinition CR with an SR-IOV CNI plugin configuration. 
 
 This SriovNetwork CR also contains the ‘resourceName’ which is aligned with the ‘resourceName’ of SR-IOV device plugin. One SriovNetwork obj maps to one ‘resoureName’, but one ‘resourceName’ can be shared by different SriovNetwork CRs.
 
@@ -101,8 +105,8 @@ spec:
 
 The custom resource to represent the SR-IOV interface states of each host, which should only be managed by the operator itself.
 
-- The ‘spec’ of this CR represents the desired configuration which should be apply to the interfaces and SR-IOV device plugin.
-- The ‘status’ contains current states of those PFs, and the states of the VFs. It helps user to discover SR-IOV network hardware on node.
+- The ‘spec’ of this CR represents the desired configuration which should be applied to the interfaces and SR-IOV device plugin.
+- The ‘status’ contains current states of those PFs (baremetal only), and the states of the VFs. It helps user to discover SR-IOV network hardware on node, or attached VFs in the case of a virtual deployment.
 
 The spec is rendered by sriov-policy-controller, and consumed by sriov-config-daemon. Sriov-config-daemon is responsible for updating the ‘status’ field to reflect the latest status, this information can be used as input to create SriovNetworkNodeConfigPolicy CR.
 
@@ -154,13 +158,13 @@ status:
     vendor: "8086"
 ```
 
-From this example, in status field, user can find out there are 2 SRIOV capable NICs on node 'work-node-1'; in spec field, user can learn what the expected configure is generated from the combination of SriovNetworkNodeConfigPolicy CRs.
+From this example, in status field, the user can find out there are 2 SRIOV capable NICs on node 'work-node-1'; in spec field, user can learn what the expected configure is generated from the combination of SriovNetworkNodeConfigPolicy CRs.  In the virtual deployment case, a single VF will be associated with each device.
 
 ### SriovNetworkNodeConfigPolicy
 
 This CRD is the key of SR-IOV network operator. This custom resource should be managed by cluster admin, to instruct the operator to:
 
-1. Render the spec of SriovNetworkNodeState CR for selected node, to configure the SR-IOV interfaces.
+1. Render the spec of SriovNetworkNodeState CR for selected node, to configure the SR-IOV interfaces.  In virtual deployment, the VF interface is read-only.
 2. Deploy SR-IOV CNI plugin and device plugin on selected node.
 3. Generate the configuration of SR-IOV device plugin.
 
@@ -187,7 +191,12 @@ spec:
   resourceName: intelnics
 ```
 
-In this example, user selected the nice from vendor '8086' which is intel, device module is '1583' which is XL710 for 40GbE, on nodes labeled with 'network-sriov.capable' equals 'true'. Then for those PFs, create 4 VFs each, set mtu to 1500 and the load the vfio-pci driver to those virtual functions.
+In this example, user selected the nic from vendor '8086' which is intel, device module is '1583' which is XL710 for 40GbE, on nodes labeled with 'network-sriov.capable' equals 'true'. Then for those PFs, create 4 VFs each, set mtu to 1500 and the load the vfio-pci driver to those virtual functions.  
+
+In a virtual deployment: 
+- The mtu of the PF is set by the underlying virtualization platform and cannot be changed by the sriov-network-operator.
+- The numVfs parameter has no effect as there is always 1 VF
+- The deviceType field depends upon whether the underlying device/driver is [native-bifurcating or non-bifurcating](https://doc.dpdk.org/guides/howto/flow_bifurcation.html) For example, the supported Mellanox devices support native-bifurcating drivers and therefore deviceType should be netdevice (default).  The support Intel devices are non-bifurcating and should be set to vfio-pci.
 
 ## Components and design
 
