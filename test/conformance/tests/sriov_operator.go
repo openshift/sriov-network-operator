@@ -264,7 +264,7 @@ var _ = Describe("[sriov] operator", func() {
 			intf := &sriovv1.InterfaceExt{}
 
 			validationFunction := func(networks []string, containsFunc func(line string) bool) {
-				podObj := pod.DefineWithNetworks(networks)
+				podObj := pod.RedefineWithNodeSelector(pod.DefineWithNetworks(networks), node)
 				err := clients.Create(context.Background(), podObj)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() corev1.PodPhase {
@@ -318,7 +318,6 @@ var _ = Describe("[sriov] operator", func() {
 			}
 
 			BeforeEach(func() {
-				node := sriovInfos.Nodes[0]
 				Eventually(func() int64 {
 					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
