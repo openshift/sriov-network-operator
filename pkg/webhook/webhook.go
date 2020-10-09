@@ -35,25 +35,44 @@ func MutateCustomResource(ar v1beta1.AdmissionReview) *v1beta1.AdmissionResponse
 
 func ValidateCustomResource(ar v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 	glog.V(2).Info("validating custom resource")
-	cr := sriovnetworkv1.SriovNetworkNodePolicy{}
 	var err error
 	var raw []byte
+
 	raw = ar.Request.Object.Raw
-
-	err = json.Unmarshal(raw, &cr)
-	if err != nil {
-		glog.Error(err)
-		return toV1beta1AdmissionResponse(err)
-	}
-
 	reviewResponse := v1beta1.AdmissionResponse{}
 	reviewResponse.Allowed = true
 
-	if reviewResponse.Allowed, err = validateSriovNetworkNodePolicy(&cr); err != nil {
-		reviewResponse.Result = &metav1.Status{
-			Reason: metav1.StatusReason(err.Error()),
+	switch ar.Request.Kind.Kind {
+	case "SriovNetworkNodePolicy":
+		policy := sriovnetworkv1.SriovNetworkNodePolicy{}
+
+		err = json.Unmarshal(raw, &policy)
+		if err != nil {
+			glog.Error(err)
+			return toV1beta1AdmissionResponse(err)
+		}
+
+		if reviewResponse.Allowed, err = validateSriovNetworkNodePolicy(&policy, ar.Request.Operation); err != nil {
+			reviewResponse.Result = &metav1.Status{
+				Reason: metav1.StatusReason(err.Error()),
+			}
+		}
+	case "SriovOperatorConfig":
+		config := sriovnetworkv1.SriovOperatorConfig{}
+
+		err = json.Unmarshal(raw, &config)
+		if err != nil {
+			glog.Error(err)
+			return toV1beta1AdmissionResponse(err)
+		}
+
+		if reviewResponse.Allowed, err = validateSriovOperatorConfig(&config, ar.Request.Operation); err != nil {
+			reviewResponse.Result = &metav1.Status{
+				Reason: metav1.StatusReason(err.Error()),
+			}
 		}
 	}
+
 	return &reviewResponse
 }
 

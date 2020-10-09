@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+	"k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -25,12 +26,30 @@ var (
 	interfaceSelected bool
 )
 
-func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
+func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operation v1beta1.Operation) (bool, error) {
+	glog.V(2).Infof("validateSriovOperatorConfig: %v", cr)
+
+	if cr.GetName() == "default" {
+		if operation == "DELETE" {
+			return false, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
+		} else {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("only default SriovOperatorConfig is used")
+}
+
+func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1beta1.Operation) (bool, error) {
 	glog.V(2).Infof("validateSriovNetworkNodePolicy: %v", cr)
 
 	if cr.GetName() == "default" {
-		// skip the default policy
-		return true, nil
+		if operation == "DELETE" {
+			// reject deletion of default policy
+			return false, fmt.Errorf("default SriovNetworkNodePolicy shouldn't be deleted")
+		} else {
+			// skip validating default policy
+			return true, nil
+		}
 	}
 
 	admit, err := staticValidateSriovNetworkNodePolicy(cr)
