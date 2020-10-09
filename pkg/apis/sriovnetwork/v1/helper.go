@@ -32,11 +32,12 @@ var VfIds = []string{}
 // NicIdMap contains supported mapping of IDs with each in the format of:
 // Vendor ID, Physical Function Device ID, Virtual Function Device ID
 var NicIdMap = []string{
-	"8086 158b 154c",
-	"15b3 1015 1016",
-	"15b3 1017 1018",
-	"15b3 101b 101c",
-	"15b3 1013 1014",
+	"8086 158b 154c", // I40e 25G SFP28
+	"8086 0d58 154c", // I40e XXV710 N3000
+	"15b3 1015 1016", // ConnectX-4LX
+	"15b3 1017 1018", // ConnectX-5, PCIe 3.0
+	"15b3 101b 101c", // ConnectX-6
+	"15b3 1013 1014", // ConnectX-4
 }
 
 func IsSupportedVendor(vendorId string) bool {
