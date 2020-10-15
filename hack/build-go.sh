@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eu
+set -eux
 
 REPO=github.com/openshift/sriov-network-operator
 WHAT=${WHAT:-sriov-network-operator}
@@ -34,5 +34,11 @@ mkdir -p ${BIN_PATH}
 
 CGO_ENABLED=1
 
+
+if [[ ${WHAT} == "manager" ]]; then
+echo "Building ${WHAT} (${VERSION_OVERRIDE})"
+CGO_ENABLED=${CGO_ENABLED} GOOS=${GOOS} GOARCH=${GOARCH} go build ${GOFLAGS} -ldflags "${GLDFLAGS} -s -w" -o ${BIN_PATH}/${WHAT} main.go
+else
 echo "Building ${REPO}/cmd/${WHAT} (${VERSION_OVERRIDE})"
 CGO_ENABLED=${CGO_ENABLED} GOOS=${GOOS} GOARCH=${GOARCH} go build ${GOFLAGS} -ldflags "${GLDFLAGS} -s -w" -o ${BIN_PATH}/${WHAT} ${REPO}/cmd/${WHAT}
+fi

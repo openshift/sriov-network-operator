@@ -8,7 +8,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	sriovv1 "github.com/openshift/sriov-network-operator/api/v1"
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
 	"github.com/openshift/sriov-network-operator/test/util/nodes"
 )

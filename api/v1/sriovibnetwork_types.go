@@ -34,7 +34,7 @@ type SriovIBNetworkStatus struct {
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // SriovIBNetwork is the Schema for the sriovibnetworks API
 // +kubebuilder:subresource:status
@@ -47,7 +47,7 @@ type SriovIBNetwork struct {
 	Status SriovIBNetworkStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // SriovIBNetworkList contains a list of SriovIBNetwork
 type SriovIBNetworkList struct {

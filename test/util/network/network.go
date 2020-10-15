@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
-	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	sriovv1 "github.com/openshift/sriov-network-operator/api/v1"
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

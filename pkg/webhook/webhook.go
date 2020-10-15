@@ -8,7 +8,7 @@ import (
 	"k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 )
 
 var namespace = os.Getenv("NAMESPACE")

@@ -14,6 +14,7 @@ TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 IMAGE_TAG?=nfvpe/$(APP_NAME):latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
+export WATCH_NAMESPACE?=openshift-sriov-network-operator
 export ENABLE_ADMISSION_CONTROLLER?=true
 export GOFLAGS=-mod=vendor
 export GO111MODULE=on
@@ -22,29 +23,44 @@ PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
-.PHONY: all operator-sdk build clean fmt gendeepcopy test-unit test test-e2e-k8s run image fmt sync-manifests test-e2e-conformance
+# Current Operator version
+VERSION ?= 4.7.0
+# Default bundle image tag
+BUNDLE_IMG ?= controller-bundle:$(VERSION)
+# Options for 'bundle-build'
+ifneq ($(origin CHANNELS), undefined)
+BUNDLE_CHANNELS := --channels=$(CHANNELS)
+endif
+ifneq ($(origin DEFAULT_CHANNEL), undefined)
+BUNDLE_DEFAULT_CHANNEL := --default-channel=$(DEFAULT_CHANNEL)
+endif
+BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 
-all: build #check install
+# Image URL to use all building/pushing image targets
+IMG ?= controller:latest
+# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
+CRD_OPTIONS ?= "crd:trivialVersions=true"
 
-operator-sdk:
-	@if ! type -p operator-sdk ; \
-	then if [ ! -d $(GOPATH)/src/github.com/operator-framework/operator-sdk ] ; \
-	  then git clone https://github.com/operator-framework/operator-sdk --branch master $(GOPATH)/src/github.com/operator-framework/operator-sdk ; \
-	  fi ; \
-	  cd $(GOPATH)/src/github.com/operator-framework/operator-sdk ; \
-	  make tidy ; \
-	  GOFLAGS="" make install ; \
-	fi
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
+ifeq (,$(shell go env GOBIN))
+GOBIN=$(shell go env GOPATH)/bin
+else
+GOBIN=$(shell go env GOBIN)
+endif
 
-all: build plugins
+.PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests
 
-build: _build-manager _build-sriov-network-config-daemon _build-webhook
+all: generate vet build plugins
+
+build: manager _build-sriov-network-config-daemon _build-webhook
 
 _build-%:
 	WHAT=$* hack/build-go.sh
 
-run:
-	hack/run-locally.sh
+_plugin-%: vet
+	@hack/build-plugins.sh $*
+
+plugins: _plugin-intel _plugin-mellanox _plugin-generic
 
 clean:
 	@rm -rf $(TARGET_DIR)
@@ -52,14 +68,104 @@ clean:
 image: ; $(info Building image...)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE) -t $(IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
 
+# Run tests
+ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
+test: generate vet manifests
+	mkdir -p ${ENVTEST_ASSETS_DIR}
+	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/master/hack/setup-envtest.sh
+	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./... -coverprofile cover.out -v
+
+# Build manager binary
+manager: generate vet _build-manager
+
+# Run against the configured Kubernetes cluster in ~/.kube/config
+run: vet install
+	hack/run-locally.sh
+
+# Install CRDs into a cluster
+install: manifests kustomize
+	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+
+# Uninstall CRDs from a cluster
+uninstall: manifests kustomize
+	$(KUSTOMIZE) build config/crd | kubectl delete -f -
+
+# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+# deploy: manifests kustomize
+# 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+# 	$(KUSTOMIZE) build config/default | kubectl apply -f -
+
+# UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
+# undeploy:
+# 	$(KUSTOMIZE) build config/default | kubectl delete -f -
+
+# Generate manifests e.g. CRD, RBAC etc.
+manifests: controller-gen
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+
+# Run go fmt against code
+
 fmt: ## Go fmt your code
 	CONTAINER_CMD=$(IMAGE_BUILDER) hack/go-fmt.sh .
 
-gencode: operator-sdk
-	@operator-sdk generate crds
-	@operator-sdk generate k8s
+# Run go fmt against code
+fmt-code:
+	go fmt ./...
 
-deploy-setup:
+# Run go vet against code
+vet:
+	go vet ./...
+
+# Generate code
+generate: controller-gen
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+# find or download controller-gen
+# download controller-gen if necessary
+controller-gen:
+ifeq (, $(shell which controller-gen))
+	@{ \
+	set -e ;\
+	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$CONTROLLER_GEN_TMP_DIR ;\
+	go mod init tmp ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.3.0 ;\
+	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
+	}
+CONTROLLER_GEN=$(GOBIN)/controller-gen
+else
+CONTROLLER_GEN=$(shell which controller-gen)
+endif
+
+kustomize:
+ifeq (, $(shell which kustomize))
+	@{ \
+	set -e ;\
+	KUSTOMIZE_GEN_TMP_DIR=$$(mktemp -d) ;\
+	cd $$KUSTOMIZE_GEN_TMP_DIR ;\
+	go mod init tmp ;\
+	go get sigs.k8s.io/kustomize/kustomize/v3@v3.5.4 ;\
+	rm -rf $$KUSTOMIZE_GEN_TMP_DIR ;\
+	}
+KUSTOMIZE=$(GOBIN)/kustomize
+else
+KUSTOMIZE=$(shell which kustomize)
+endif
+
+# Generate bundle manifests and metadata, then validate generated files.
+.PHONY: bundle
+bundle: manifests
+	operator-sdk generate kustomize manifests --interactive=false -q
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	operator-sdk bundle validate ./bundle
+
+# Build the bundle image.
+.PHONY: bundle-build
+bundle-build:
+	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+deploy-setup: install
 	@EXCLUSIONS=() hack/deploy-setup.sh $(NAMESPACE)
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
@@ -67,52 +173,30 @@ deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
 deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 deploy-setup-k8s: deploy-setup
 
-# test-unit:
-# 	@go test -v $(PKGS)
-test-e2e-local: operator-sdk
-	@hack/run-e2e-test-locally.sh
-
 test-e2e-conformance:
 	./hack/run-e2e-conformance.sh
 
-test-%:
-	@hack/run-test.sh $*
+test-e2e: 
+	mkdir -p ${ENVTEST_ASSETS_DIR}
+	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/master/hack/setup-envtest.sh
+	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); source hack/env.sh; go test ./test/e2e/... -coverprofile cover.out -v
 
-deploy-setup-k8s: export NAMESPACE=sriov-network-operator
-deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
-deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
-test-e2e-k8s: test-e2e
 
-undeploy:
+test-%: generate vet manifests
+	mkdir -p ${ENVTEST_ASSETS_DIR}
+	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/master/hack/setup-envtest.sh
+	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); source hack/env.sh; go test ./$*/... -coverprofile cover.out -v
+
+# deploy-setup-k8s: export NAMESPACE=sriov-network-operator
+# deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
+# deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
+# test-e2e-k8s: test-e2e
+
+undeploy: uninstall
 	@hack/undeploy.sh $(NAMESPACE)
 
 undeploy-k8s: export NAMESPACE=sriov-network-operator
 undeploy-k8s: undeploy
-
-_plugin-%:
-	@hack/build-plugins.sh $*
-
-plugins: _plugin-intel _plugin-mellanox _plugin-generic
-
-verify-gofmt:
-ifeq (, $(GOFMT_CHECK))
-	@echo "verify-gofmt: OK"
-else
-	@echo "verify-gofmt: ERROR: gofmt failed on the following files:"
-	@echo "$(GOFMT_CHECK)"
-	@echo ""
-	@echo "For details, run: gofmt -d -s $(GOFMT_CHECK)"
-	@echo ""
-	@exit 1
-endif
-
-verify: verify-gofmt
-
-sync-manifests-%:
-	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworks_crd.yaml manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
-	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodestates_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
-	cp deploy/crds/sriovnetwork.openshift.io_sriovnetworknodepolicies_crd.yaml manifests/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
-	cp deploy/crds/sriovnetwork.openshift.io_sriovoperatorconfigs_crd.yaml manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
 
 deps-update:
 	go mod tidy && \

@@ -1,0 +1,70 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+    operators.operatorframework.io/builder: operator-sdk-v1.0.1
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v2
+  name: sriov-network-operator.vX.Y.Z
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: SriovOperatorConfig is the Schema for the sriovoperatorconfigs API
+      displayName: Sriov Operator Config
+      kind: SriovOperatorConfig
+      name: sriovoperatorconfigs.sriovnetwork.openshift.io
+      version: v1
+    - description: SriovNetwork is the Schema for the sriovnetworks API
+      displayName: Sriov Network
+      kind: SriovNetwork
+      name: sriovnetworks.sriovnetwork.openshift.io
+      version: v1
+    - description: SriovIBNetwork is the Schema for the sriovibnetworks API
+      displayName: Sriov IBNetwork
+      kind: SriovIBNetwork
+      name: sriovibnetworks.sriovnetwork.openshift.io
+      version: v1
+    - description: SriovNetworkNodePolicy is the Schema for the sriovnetworknodepolicies API
+      displayName: Sriov Network Node Policy
+      kind: SriovNetworkNodePolicy
+      name: sriovnetworknodepolicies.sriovnetwork.openshift.io
+      version: v1
+    - description: SriovNetworkNodeState is the Schema for the sriovnetworknodestates API
+      displayName: Sriov Network Node State
+      kind: SriovNetworkNodeState
+      name: sriovnetworknodestates.sriovnetwork.openshift.io
+      version: v1
+  description: Sriov Network Operator description. TODO.
+  displayName: Sriov Network Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - sriov-network-operator
+  links:
+  - name: Sriov Network Operator
+    url: https://sriov-network-operator.domain
+  maintainers:
+  - email: your@email.com
+    name: Maintainer Name
+  maturity: alpha
+  provider:
+    name: Provider Name
+    url: https://your.domain
+  version: 0.0.0

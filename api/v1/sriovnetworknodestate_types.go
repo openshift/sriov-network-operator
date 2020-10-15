@@ -70,7 +70,7 @@ type SriovNetworkNodeStateStatus struct {
 }
 
 // +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 // SriovNetworkNodeState is the Schema for the sriovnetworknodestates API
 // +k8s:openapi-gen=true
 // +kubebuilder:subresource:status
@@ -83,7 +83,7 @@ type SriovNetworkNodeState struct {
 	Status SriovNetworkNodeStateStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
 
 // SriovNetworkNodeStateList contains a list of SriovNetworkNodeState
 type SriovNetworkNodeStateList struct {

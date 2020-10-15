@@ -1,84 +1,100 @@
 package e2e
 
 import (
-	// goctx "context"
-	// "encoding/json"
-	// "fmt"
-	// "reflect"
-	// "strings"
+	"os"
+	"path/filepath"
 	"testing"
-	// "time"
+	"time"
 
-	// dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
-	framework "github.com/operator-framework/operator-sdk/pkg/test"
-	// "github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
-	appsv1 "k8s.io/api/apps/v1"
-	// corev1 "k8s.io/api/core/v1"
-	// "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	// "k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
-	// dynclient "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/sriov-network-operator/pkg/apis"
-	// netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
-
+	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 
-	. "github.com/openshift/sriov-network-operator/test/util"
-	testclient "github.com/openshift/sriov-network-operator/test/util/client"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
+	// +kubebuilder:scaffold:imports
+
 	"github.com/openshift/sriov-network-operator/test/util/cluster"
 )
 
-var namespace = "openshift-sriov-network-operator"
-var oprctx framework.TestCtx
+// These tests use Ginkgo (BDD-style Go testing framework). Refer to
+// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+
+var cfg *rest.Config
+var k8sClient client.Client
+var testEnv *envtest.Environment
+
+// Define utility constants for object names and testing timeouts/durations and intervals.
+const (
+	testNamespace = "openshift-sriov-network-operator"
+
+	timeout  = time.Second * 30
+	duration = time.Second * 300
+	interval = time.Second * 1
+)
 
 func TestSriovTests(t *testing.T) {
-	snetList := &sriovnetworkv1.SriovNetworkList{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "SriovNetwork",
-			APIVersion: sriovnetworkv1.SchemeGroupVersion.String(),
-		},
-	}
-	err := framework.AddToFrameworkScheme(apis.AddToScheme, snetList)
-	if err != nil {
-		t.Logf("failed to add custom resource scheme to framework: %v", err)
-	}
-
-	config.GinkgoConfig.ParallelTotal = 1
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "OperatorTests Suite")
+
+	RunSpecsWithDefaultAndCustomReporters(t,
+		"E2E Suite",
+		[]Reporter{printer.NewlineReporter{}})
 }
 
 var sriovInfos *cluster.EnabledNodes
 var sriovIface *sriovnetworkv1.InterfaceExt
 
-var _ = BeforeSuite(func() {
-	// get global framework variables
-	f := framework.Global
-	// wait for sriov-network-operator to be ready
-	deploy := &appsv1.Deployment{}
-	err := WaitForNamespacedObject(deploy, f.Client, namespace, "sriov-network-operator", RetryInterval, Timeout)
+var _ = BeforeSuite(func(done Done) {
+	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+
+	// Go to project root directory
+	os.Chdir("..")
+
+	By("bootstrapping test environment")
+	testEnv = &envtest.Environment{
+		CRDDirectoryPaths:  []string{filepath.Join("config", "crd", "bases"), filepath.Join("test", "util", "crds")},
+		UseExistingCluster: pointer.BoolPtr(true),
+	}
+
+	var err error
+	cfg, err = testEnv.Start()
+	Expect(err).ToNot(HaveOccurred())
+	Expect(cfg).ToNot(BeNil())
+
+	err = sriovnetworkv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-	clients := testclient.New("")
-	var sriovInfos *cluster.EnabledNodes
-	err = wait.PollImmediate(RetryInterval, Timeout*15, func() (done bool, err error) {
-		sriovInfos, err = cluster.DiscoverSriov(clients, namespace)
-		if sriovInfos == nil {
-			return false, nil
-		}
-		return true, nil
-	})
+	err = netattdefv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = sriovnetworkv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = sriovnetworkv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = sriovnetworkv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	// +kubebuilder:scaffold:scheme
+
+	// A client is created for our test CRUD operations.
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).ToNot(HaveOccurred())
-	Expect(len(sriovInfos.Nodes)).Should(BeNumerically(">=", 1))
-	sriovIface, err = sriovInfos.FindOneSriovDevice(sriovInfos.Nodes[0])
-	Expect(err).ToNot(HaveOccurred())
-	Expect(sriovIface).ToNot(BeNil())
-})
+	Expect(k8sClient).ToNot(BeNil())
+
+	close(done)
+}, 60)
 
 var _ = AfterSuite(func() {
-	oprctx.Cleanup()
+	By("tearing down the test environment")
+	err := testEnv.Stop()
+	Expect(err).ToNot(HaveOccurred())
 })

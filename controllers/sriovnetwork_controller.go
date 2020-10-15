@@ -1,98 +1,58 @@
-package sriovnetwork
+/*
+
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controllers
 
 import (
 	"context"
 	"reflect"
 
-	"github.com/operator-framework/operator-sdk/pkg/k8sutil"
+	"github.com/go-logr/logr"
+	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	kscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
-	. "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 )
 
-var log = logf.Log.WithName("controller_sriovnetwork")
-
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
-// Add creates a new SriovNetwork Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+// SriovNetworkReconciler reconciles a SriovNetwork object
+type SriovNetworkReconciler struct {
+	client.Client
+	Log    logr.Logger
+	Scheme *runtime.Scheme
 }
 
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileSriovNetwork{client: mgr.GetClient(), scheme: mgr.GetScheme()}
-}
+// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworks,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworks/status,verbs=get;update;patch
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("sriovnetwork-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
+func (r *SriovNetworkReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	_ = context.Background()
+	reqLogger := r.Log.WithValues("sriovnetwork", req.NamespacedName)
 
-	// Watch for changes to primary resource SriovNetwork
-	err = c.Watch(&source.Kind{Type: &SriovNetwork{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-	// Watch for changes to secondary resource NetworkAttachmentDefinition
-	err = c.Watch(&source.Kind{Type: &netattdefv1.NetworkAttachmentDefinition{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-var _ reconcile.Reconciler = &ReconcileSriovNetwork{}
-
-// ReconcileSriovNetwork reconciles a SriovNetwork object
-type ReconcileSriovNetwork struct {
-	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
-}
-
-// Reconcile reads that state of the cluster for a SriovNetwork object and makes changes based on the state read
-// and what is in the SriovNetwork.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
-// Note:
-// The Controller will requeue the Request to be processed again if the returned error is non-nil or
-// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling SriovNetwork")
 	var err error
 
-	// The SriovNetwork CR shall only be defined in operator namespace.
-	request.Namespace, err = k8sutil.GetWatchNamespace()
-	if err != nil {
-		reqLogger.Error(err, "Failed get operator namespace")
-		return reconcile.Result{}, err
-	}
 	// Fetch the SriovNetwork instance
-	instance := &SriovNetwork{}
-	err = r.client.Get(context.TODO(), request.NamespacedName, instance)
+	instance := &sriovnetworkv1.SriovNetwork{}
+	err = r.Get(context.TODO(), req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -110,25 +70,25 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
 		// registering our finalizer.
-		if !StringInArray(FINALIZERNAME, instance.ObjectMeta.Finalizers) {
-			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, FINALIZERNAME)
-			if err := r.client.Update(context.Background(), instance); err != nil {
+		if !sriovnetworkv1.StringInArray(sriovnetworkv1.FINALIZERNAME, instance.ObjectMeta.Finalizers) {
+			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, sriovnetworkv1.FINALIZERNAME)
+			if err := r.Update(context.Background(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
 	} else {
 		// The object is being deleted
-		if StringInArray(FINALIZERNAME, instance.ObjectMeta.Finalizers) {
+		if sriovnetworkv1.StringInArray(sriovnetworkv1.FINALIZERNAME, instance.ObjectMeta.Finalizers) {
 			// our finalizer is present, so lets handle any external dependency
 			reqLogger.Info("delete NetworkAttachmentDefinition CR", "Namespace", instance.Spec.NetworkNamespace, "Name", instance.Name)
-			if err := instance.DeleteNetAttDef(r.client); err != nil {
+			if err := instance.DeleteNetAttDef(r); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return reconcile.Result{}, err
 			}
 			// remove our finalizer from the list and update it.
-			instance.ObjectMeta.Finalizers = RemoveString(FINALIZERNAME, instance.ObjectMeta.Finalizers)
-			if err := r.client.Update(context.Background(), instance); err != nil {
+			instance.ObjectMeta.Finalizers = sriovnetworkv1.RemoveString(sriovnetworkv1.FINALIZERNAME, instance.ObjectMeta.Finalizers)
+			if err := r.Update(context.Background(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
@@ -139,14 +99,13 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 		return reconcile.Result{}, err
 	}
 	netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
-	scheme := kscheme.Scheme
-	err = scheme.Convert(raw, netAttDef, nil)
+	err = r.Scheme.Convert(raw, netAttDef, nil)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	if lnns, ok := instance.GetAnnotations()[LASTNETWORKNAMESPACE]; ok && netAttDef.GetNamespace() != lnns {
-		err = r.client.Delete(context.TODO(), &netattdefv1.NetworkAttachmentDefinition{
-			ObjectMeta: v1.ObjectMeta{
+	if lnns, ok := instance.GetAnnotations()[sriovnetworkv1.LASTNETWORKNAMESPACE]; ok && netAttDef.GetNamespace() != lnns {
+		err = r.Delete(context.TODO(), &netattdefv1.NetworkAttachmentDefinition{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      instance.GetName(),
 				Namespace: lnns,
 			},
@@ -158,18 +117,18 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 	}
 	// Check if this NetworkAttachmentDefinition already exists
 	found := &netattdefv1.NetworkAttachmentDefinition{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
+	err = r.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("NetworkAttachmentDefinition CR not exist, creating")
-			err = r.client.Create(context.TODO(), netAttDef)
+			err = r.Create(context.TODO(), netAttDef)
 			if err != nil {
 				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err
 			}
-			anno := map[string]string{LASTNETWORKNAMESPACE: netAttDef.Namespace}
+			anno := map[string]string{sriovnetworkv1.LASTNETWORKNAMESPACE: netAttDef.Namespace}
 			instance.SetAnnotations(anno)
-			if err := r.client.Update(context.Background(), instance); err != nil {
+			if err := r.Update(context.Background(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		} else {
@@ -181,12 +140,20 @@ func (r *ReconcileSriovNetwork) Reconcile(request reconcile.Request) (reconcile.
 		if !reflect.DeepEqual(found.Spec, netAttDef.Spec) || !reflect.DeepEqual(found.GetAnnotations(), netAttDef.GetAnnotations()) {
 			reqLogger.Info("Update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 			netAttDef.SetResourceVersion(found.GetResourceVersion())
-			err = r.client.Update(context.TODO(), netAttDef)
+			err = r.Update(context.TODO(), netAttDef)
 			if err != nil {
 				reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err
 			}
 		}
 	}
-	return reconcile.Result{}, nil
+
+	return ctrl.Result{}, nil
+}
+
+func (r *SriovNetworkReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&sriovnetworkv1.SriovNetwork{}).
+		Owns(&netattdefv1.NetworkAttachmentDefinition{}).
+		Complete(r)
 }

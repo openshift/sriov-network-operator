@@ -1,0 +1,24 @@
+# permissions for end users to edit sriovoperatorconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sriovoperatorconfig-editor-role
+rules:
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovoperatorconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovoperatorconfigs/status
+  verbs:
+  - get

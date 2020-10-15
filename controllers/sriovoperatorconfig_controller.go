@@ -1,126 +1,73 @@
-package sriovoperatorconfig
+/*
+
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"time"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	"github.com/go-logr/logr"
 	apply "github.com/openshift/sriov-network-operator/pkg/apply"
 	render "github.com/openshift/sriov-network-operator/pkg/render"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 )
 
-var log = logf.Log.WithName("controller_sriovoperatorconfig")
-
-const (
-	ResyncPeriod                    = 5 * time.Minute
-	DEFAULT_CONFIG_NAME             = "default"
-	CONFIG_DAEMON_PATH              = "./bindata/manifests/daemon"
-	INJECTOR_WEBHOOK_PATH           = "./bindata/manifests/webhook"
-	OPERATOR_WEBHOOK_PATH           = "./bindata/manifests/operator-webhook"
-	INJECTOR_SERVICE_CA_CONFIGMAP   = "injector-service-ca"
-	WEBHOOK_SERVICE_CA_CONFIGMAP    = "webhook-service-ca"
-	SERVICE_CA_CONFIGMAP_ANNOTATION = "service.beta.openshift.io/inject-cabundle"
-	INJECTOR_WEBHOOK_NAME           = "network-resources-injector-config"
-	OPERATOR_WEBHOOK_NAME           = "operator-webhook-config"
-)
-
-var Webhooks = map[string](string){
-	INJECTOR_WEBHOOK_NAME: INJECTOR_WEBHOOK_PATH,
-	OPERATOR_WEBHOOK_NAME: OPERATOR_WEBHOOK_PATH,
+// SriovOperatorConfigReconciler reconciles a SriovOperatorConfig object
+type SriovOperatorConfigReconciler struct {
+	client.Client
+	Log    logr.Logger
+	Scheme *runtime.Scheme
 }
 
-var Namespace = os.Getenv("NAMESPACE")
+var injectorServiceCaCmVersion = ""
+var webhookServiceCaCmVersion = ""
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
+// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs/status,verbs=get;update;patch
 
-// Add creates a new SriovOperatorConfig Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
-}
+func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	_ = context.Background()
+	logger := r.Log.WithValues("sriovoperatorconfig", req.NamespacedName)
 
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileSriovOperatorConfig{client: mgr.GetClient(), scheme: mgr.GetScheme()}
-}
-
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("sriovoperatorconfig-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to primary resource SriovOperatorConfig
-	err = c.Watch(&source.Kind{Type: &sriovnetworkv1.SriovOperatorConfig{}},
-		&handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to secondary resource DaemonSet
-	err = c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &sriovnetworkv1.SriovOperatorConfig{},
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// blank assignment to verify that ReconcileSriovOperatorConfig implements reconcile.Reconciler
-var _ reconcile.Reconciler = &ReconcileSriovOperatorConfig{}
-
-// ReconcileSriovOperatorConfig reconciles a SriovOperatorConfig object
-type ReconcileSriovOperatorConfig struct {
-	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
-}
-
-// Reconcile reads that state of the cluster for a SriovOperatorConfig object and makes changes based on the state read
-// and what is in the SriovOperatorConfig.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
-// Note:
-// The Controller will requeue the Request to be processed again if the returned error is non-nil or
-// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling SriovOperatorConfig")
+	logger.Info("Reconciling SriovOperatorConfig")
 
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{
-		Name: DEFAULT_CONFIG_NAME, Namespace: Namespace}, defaultConfig)
+	err := r.Get(context.TODO(), types.NamespacedName{
+		Name: DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Default Config object not found, create it.
-			defaultConfig.SetNamespace(Namespace)
+			defaultConfig.SetNamespace(namespace)
 			defaultConfig.SetName(DEFAULT_CONFIG_NAME)
 			defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 				EnableInjector:           func() *bool { b := true; return &b }(),
@@ -128,10 +75,10 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 				ConfigDaemonNodeSelector: map[string]string{},
 				LogLevel:                 2,
 			}
-			err = r.client.Create(context.TODO(), defaultConfig)
+			err = r.Create(context.TODO(), defaultConfig)
 			if err != nil {
-				reqLogger.Error(err, "Failed to create default Operator Config", "Namespace",
-					Namespace, "Name", DEFAULT_CONFIG_NAME)
+				logger.Error(err, "Failed to create default Operator Config", "Namespace",
+					namespace, "Name", DEFAULT_CONFIG_NAME)
 				return reconcile.Result{}, err
 			}
 			return reconcile.Result{}, nil
@@ -140,7 +87,7 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 		return reconcile.Result{}, err
 	}
 
-	if request.Namespace != Namespace {
+	if req.Namespace != namespace {
 		return reconcile.Result{}, nil
 	}
 
@@ -149,23 +96,141 @@ func (r *ReconcileSriovOperatorConfig) Reconcile(request reconcile.Request) (rec
 		return reconcile.Result{}, err
 	}
 
+	// Render and sync CA configmap
+	if err = r.syncCAConfigMap(types.NamespacedName{Name: INJECTOR_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
+		return reconcile.Result{}, err
+	}
+	if err = r.syncCAConfigMap(types.NamespacedName{Name: WEBHOOK_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Sync SriovNetworkConfigDaemon objects
 	if err = r.syncConfigDaemonSet(defaultConfig); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if err = r.syncPluginDaemonSet(defaultConfig); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
 }
 
-func (r *ReconcileSriovOperatorConfig) syncConfigDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := log.WithName("syncConfigDaemonset")
+func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&sriovnetworkv1.SriovOperatorConfig{}).
+		Owns(&appsv1.DaemonSet{}).
+		Owns(&corev1.ConfigMap{}).
+		Complete(r)
+}
+
+func (r *SriovOperatorConfigReconciler) syncCAConfigMap(name types.NamespacedName) error {
+	logger := r.Log.WithName("syncCAConfigMap")
+	logger.Info("Reconciling CA", "ConfigMap", name)
+
+	whName := ""
+	if name.Name == INJECTOR_SERVICE_CA_CONFIGMAP {
+		whName = INJECTOR_WEBHOOK_NAME
+	} else if name.Name == WEBHOOK_SERVICE_CA_CONFIGMAP {
+		whName = OPERATOR_WEBHOOK_NAME
+	} else {
+		return nil
+	}
+
+	caBundleConfigMap := &corev1.ConfigMap{}
+	err := r.Get(context.TODO(), name, caBundleConfigMap)
+	if err != nil {
+		logger.Error(err, "Couldn't get caBundle ConfigMap", "name", name.Name)
+		return err
+	}
+
+	caBundleData, ok := caBundleConfigMap.Data["service-ca.crt"]
+	if !ok {
+		logger.Info("No service-ca.crt in ConfigMap", "name", caBundleConfigMap.GetName())
+	}
+
+	mutateWebhookConfig := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: whName}, mutateWebhookConfig)
+	if errors.IsNotFound(err) {
+		logger.Info("Couldn't find", "mutate webhook config:", whName)
+	}
+	modified := false
+	for idx, webhook := range mutateWebhookConfig.Webhooks {
+		// Update CABundle if CABundle is empty or updated.
+		if webhook.ClientConfig.CABundle == nil || !bytes.Equal(webhook.ClientConfig.CABundle, []byte(caBundleData)) {
+			modified = true
+			mutateWebhookConfig.Webhooks[idx].ClientConfig.CABundle = []byte(caBundleData)
+		}
+	}
+	if modified {
+		// Update webhookConfig
+		err = r.Update(context.TODO(), mutateWebhookConfig)
+		if err != nil {
+			logger.Error(err, "Couldn't update mutate webhook config")
+			return err
+		}
+	}
+
+	validateWebhookConfig := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: whName}, validateWebhookConfig)
+	if errors.IsNotFound(err) {
+		logger.Info("Couldn't find", "validate webhook config:", whName)
+	}
+	modified = false
+	for idx, webhook := range validateWebhookConfig.Webhooks {
+		// Update CABundle if CABundle is empty or updated.
+		if webhook.ClientConfig.CABundle == nil || !bytes.Equal(webhook.ClientConfig.CABundle, []byte(caBundleData)) {
+			modified = true
+			validateWebhookConfig.Webhooks[idx].ClientConfig.CABundle = []byte(caBundleData)
+		}
+	}
+	if modified {
+		// Update webhookConfig
+		err = r.Update(context.TODO(), validateWebhookConfig)
+		if err != nil {
+			logger.Error(err, "Couldn't update validate webhook config")
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
+	logger := r.Log.WithName("syncConfigDaemonset")
+	logger.Info("Start to sync SRIOV plugin daemonsets nodeSelector")
+	ds := &appsv1.DaemonSet{}
+
+	names := []string{"sriov-cni", "sriov-device-plugin"}
+
+	for _, name := range names {
+		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, ds)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			logger.Error(err, "Couldn't get daemonset", "name", name)
+			return err
+		}
+		ds.Spec.Template.Spec.NodeSelector = dc.Spec.ConfigDaemonNodeSelector
+		err = r.Client.Update(context.TODO(), ds)
+		if err != nil {
+			logger.Error(err, "Couldn't update daemonset", "name", name)
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
+	logger := r.Log.WithName("syncConfigDaemonset")
 	logger.Info("Start to sync config daemonset")
 	// var err error
 	objs := []*uns.Unstructured{}
 
 	data := render.MakeRenderData()
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
-	data.Data["Namespace"] = Namespace
+	data.Data["Namespace"] = namespace
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	objs, err := render.RenderDir(CONFIG_DAEMON_PATH, &data)
 	if err != nil {
@@ -198,8 +263,8 @@ func (r *ReconcileSriovOperatorConfig) syncConfigDaemonSet(dc *sriovnetworkv1.Sr
 	return nil
 }
 
-func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := log.WithName("syncWebhookObjs")
+func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.SriovOperatorConfig) error {
+	logger := r.Log.WithName("syncWebhookObjs")
 	logger.Info("Start to sync webhook objects")
 
 	enable := os.Getenv("ENABLE_ADMISSION_CONTROLLER")
@@ -208,10 +273,10 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovO
 		return nil
 	}
 
-	for name, path := range Webhooks {
+	for name, path := range webhooks {
 		// Render Webhook manifests
 		data := render.MakeRenderData()
-		data.Data["Namespace"] = Namespace
+		data.Data["Namespace"] = namespace
 		data.Data["InjectorServiceCAConfigMap"] = INJECTOR_SERVICE_CA_CONFIGMAP
 		data.Data["WebhookServiceCAConfigMap"] = WEBHOOK_SERVICE_CA_CONFIGMAP
 		data.Data["SRIOVMutatingWebhookName"] = name
@@ -264,16 +329,16 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObjs(dc *sriovnetworkv1.SriovO
 	return nil
 }
 
-func (r *ReconcileSriovOperatorConfig) deleteWebhookObject(obj *uns.Unstructured) error {
+func (r *SriovOperatorConfigReconciler) deleteWebhookObject(obj *uns.Unstructured) error {
 	if err := r.deleteK8sResource(obj); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *ReconcileSriovOperatorConfig) syncWebhookObject(dc *sriovnetworkv1.SriovOperatorConfig, obj *uns.Unstructured) error {
+func (r *SriovOperatorConfigReconciler) syncWebhookObject(dc *sriovnetworkv1.SriovOperatorConfig, obj *uns.Unstructured) error {
 	var err error
-	logger := log.WithName("syncWebhookObject")
+	logger := r.Log.WithName("syncWebhookObject")
 	logger.Info("Start to sync Objects")
 	scheme := kscheme.Scheme
 	switch kind := obj.GetKind(); kind {
@@ -310,18 +375,18 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookObject(dc *sriovnetworkv1.Srio
 	return nil
 }
 
-func (r *ReconcileSriovOperatorConfig) syncMutatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1beta1.MutatingWebhookConfiguration) error {
-	logger := log.WithName("syncMutatingWebhook")
+func (r *SriovOperatorConfigReconciler) syncMutatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1beta1.MutatingWebhookConfiguration) error {
+	logger := r.Log.WithName("syncMutatingWebhook")
 	logger.Info("Start to sync mutating webhook", "Name", in.Name, "Namespace", in.Namespace)
 
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
 		return err
 	}
 	whs := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
+	err := r.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
+			err = r.Create(context.TODO(), in)
 			if err != nil {
 				return fmt.Errorf("Couldn't create webhook: %v", err)
 			}
@@ -338,18 +403,18 @@ func (r *ReconcileSriovOperatorConfig) syncMutatingWebhook(cr *sriovnetworkv1.Sr
 	return nil
 }
 
-func (r *ReconcileSriovOperatorConfig) syncValidatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1beta1.ValidatingWebhookConfiguration) error {
-	logger := log.WithName("syncValidatingWebhook")
+func (r *SriovOperatorConfigReconciler) syncValidatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1beta1.ValidatingWebhookConfiguration) error {
+	logger := r.Log.WithName("syncValidatingWebhook")
 	logger.Info("Start to sync validating webhook", "Name", in.Name, "Namespace", in.Namespace)
 
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
 		return err
 	}
 	whs := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
+	err := r.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
+			err = r.Create(context.TODO(), in)
 			if err != nil {
 				return fmt.Errorf("Couldn't create webhook: %v", err)
 			}
@@ -366,18 +431,18 @@ func (r *ReconcileSriovOperatorConfig) syncValidatingWebhook(cr *sriovnetworkv1.
 	return nil
 }
 
-func (r *ReconcileSriovOperatorConfig) syncWebhookConfigMap(cr *sriovnetworkv1.SriovOperatorConfig, in *corev1.ConfigMap) error {
-	logger := log.WithName("syncWebhookConfigMap")
+func (r *SriovOperatorConfigReconciler) syncWebhookConfigMap(cr *sriovnetworkv1.SriovOperatorConfig, in *corev1.ConfigMap) error {
+	logger := r.Log.WithName("syncWebhookConfigMap")
 	logger.Info("Start to sync config map", "Name", in.Name, "Namespace", in.Namespace)
 
-	if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
+	if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
 		return err
 	}
 	cm := &corev1.ConfigMap{}
-	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, cm)
+	err := r.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, cm)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			err = r.client.Create(context.TODO(), in)
+			err = r.Create(context.TODO(), in)
 			if err != nil {
 				return fmt.Errorf("Couldn't create webhook config map: %v", err)
 			}
@@ -388,7 +453,7 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookConfigMap(cr *sriovnetworkv1.S
 	} else {
 		logger.Info("Webhook ConfigMap already exists, updating")
 		cm.ObjectMeta.Annotations[SERVICE_CA_CONFIGMAP_ANNOTATION] = "true"
-		err = r.client.Update(context.TODO(), cm)
+		err = r.Update(context.TODO(), cm)
 		if err != nil {
 			return fmt.Errorf("Couldn't update webhook config map: %v", err)
 		}
@@ -402,21 +467,21 @@ func (r *ReconcileSriovOperatorConfig) syncWebhookConfigMap(cr *sriovnetworkv1.S
 	return nil
 }
 
-func (r *ReconcileSriovOperatorConfig) deleteK8sResource(in *uns.Unstructured) error {
-	if err := apply.DeleteObject(context.TODO(), r.client, in); err != nil {
+func (r *SriovOperatorConfigReconciler) deleteK8sResource(in *uns.Unstructured) error {
+	if err := apply.DeleteObject(context.TODO(), r, in); err != nil {
 		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
 	}
 	return nil
 }
 
-func (r *ReconcileSriovOperatorConfig) syncK8sResource(cr *sriovnetworkv1.SriovOperatorConfig, in *uns.Unstructured) error {
+func (r *SriovOperatorConfigReconciler) syncK8sResource(cr *sriovnetworkv1.SriovOperatorConfig, in *uns.Unstructured) error {
 	// set owner-reference only for namespaced objects
 	if in.GetKind() != "ClusterRole" && in.GetKind() != "ClusterRoleBinding" {
-		if err := controllerutil.SetControllerReference(cr, in, r.scheme); err != nil {
+		if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
 			return err
 		}
 	}
-	if err := apply.ApplyObject(context.TODO(), r.client, in); err != nil {
+	if err := apply.ApplyObject(context.TODO(), r, in); err != nil {
 		return fmt.Errorf("failed to apply object %v with err: %v", in, err)
 	}
 	return nil

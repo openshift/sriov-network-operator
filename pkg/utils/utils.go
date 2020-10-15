@@ -17,9 +17,10 @@ import (
 	"github.com/golang/glog"
 	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
 	"github.com/jaypipes/ghw"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 )
 
 const (
