@@ -60,6 +60,9 @@ spec:
                   rate limiting). min_tx_rate should be <= max_tx_rate.
                 minimum: 0
                 type: integer
+              metaPlugins:
+                  description: MetaPlugins configurations to be chained to the SR-IOV cni configuration.
+                  type: string
               networkNamespace:
                 description: Namespace of the NetworkAttachmentDefinition custom resource
                 type: string

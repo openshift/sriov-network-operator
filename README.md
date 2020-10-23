@@ -58,6 +58,45 @@ spec:
   resourceName: intelnics
 ```
 
+#### Chaining CNI metaplugins
+
+It is possible to add additional capabilities to the device configured via the SR-IOV configuring optional metaplugins.
+
+In order to do this, the `metaPlugins` field must contain the array of one or more additional configurations used to build a [network configuration list](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration-lists), as per the following example:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetwork
+metadata:
+  name: example-network
+  namespace: example-namespace
+spec:
+  ipam: |
+    {
+      "type": "host-local",
+      "subnet": "10.56.217.0/24",
+      "rangeStart": "10.56.217.171",
+      "rangeEnd": "10.56.217.181",
+      "routes": [{
+        "dst": "0.0.0.0/0"
+      }],
+      "gateway": "10.56.217.1"
+    }
+  vlan: 0
+  resourceName: intelnics
+  metaPlugins : |
+    {
+      "type": "tuning",
+      "sysctl": {
+        "net.core.somaxconn": "500"
+      }
+    },
+    {
+      "type": "vrf",
+      "vrfname": "red"
+    }
+```
+
 ### SriovNetworkNodeState
 
 The custom resource to represent the SR-IOV interface states of each host, which should only be managed by the operator itself.

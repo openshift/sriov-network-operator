@@ -9,6 +9,10 @@ spec:
   config: '{
   "cniVersion":"0.3.1",
   "name":"{{.SriovNetworkName}}",
+{{- if .MetaPluginsConfigured -}}
+  "plugins": [
+    {
+{{- end -}}
   "type":"{{.CniType}}",
 {{- if eq .CniType "sriov" -}}
   "vlan":{{.SriovCniVlan}},
@@ -35,4 +39,11 @@ spec:
   "link_state":"{{.SriovCniState}}",
 {{- end -}}
   {{.SriovCniIpam}}
-}'
+}
+{{- if .MetaPluginsConfigured -}}
+  ,
+  {{.MetaPlugins}}
+  ]
+}
+{{- end -}}
+'
