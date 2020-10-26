@@ -1,0 +1,24 @@
+# permissions for end users to edit sriovibnetworks.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sriovibnetwork-editor-role
+rules:
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovibnetworks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovibnetworks/status
+  verbs:
+  - get

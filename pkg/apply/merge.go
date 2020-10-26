@@ -13,6 +13,7 @@ func MergeMetadataForUpdate(current, updated *uns.Unstructured) error {
 
 	mergeAnnotations(current, updated)
 	mergeLabels(current, updated)
+	updated.SetResourceVersion(current.GetResourceVersion())
 
 	return nil
 }

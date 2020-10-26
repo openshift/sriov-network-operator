@@ -5,7 +5,7 @@ package externalversions
 import (
 	"fmt"
 
-	v1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	v1 "github.com/openshift/sriov-network-operator/api/v1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )

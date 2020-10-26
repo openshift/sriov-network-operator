@@ -6,7 +6,7 @@ import (
 	"context"
 	time "time"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 	versioned "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
 	v1 "github.com/openshift/sriov-network-operator/pkg/client/listers/sriovnetwork/v1"

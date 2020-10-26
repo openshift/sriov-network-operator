@@ -11,7 +11,7 @@ import (
 
 	"github.com/onsi/ginkgo/config"
 	"github.com/onsi/ginkgo/types"
-	sriovv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	sriovv1 "github.com/openshift/sriov-network-operator/api/v1"
 	testclient "github.com/openshift/sriov-network-operator/test/util/client"
 	"github.com/openshift/sriov-network-operator/test/util/namespaces"
 	corev1 "k8s.io/api/core/v1"

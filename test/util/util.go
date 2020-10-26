@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+
 	// "strings"
 	// "testing"
 	"time"
 
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
-	framework "github.com/operator-framework/operator-sdk/pkg/test"
 	// "github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	appsv1 "k8s.io/api/apps/v1"
 	// corev1 "k8s.io/api/core/v1"
@@ -19,11 +19,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	// dynclient "sigs.k8s.io/controller-runtime/pkg/client"
+	client "sigs.k8s.io/controller-runtime/pkg/client"
 
 	// "github.com/openshift/sriov-network-operator/pkg/apis"
-	// netattdefv1 "github.com/openshift/sriov-network-operator/pkg/apis/k8s/v1"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 )
 
 var (
@@ -34,7 +33,7 @@ var (
 	CleanupTimeout       = time.Second * 5
 )
 
-func WaitForSriovNetworkNodeStateReady(nodeState *sriovnetworkv1.SriovNetworkNodeState, client framework.FrameworkClient, namespace, name string, retryInterval, timeout time.Duration) error {
+func WaitForSriovNetworkNodeStateReady(nodeState *sriovnetworkv1.SriovNetworkNodeState, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 	time.Sleep(30 * time.Second)
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
@@ -59,7 +58,7 @@ func WaitForSriovNetworkNodeStateReady(nodeState *sriovnetworkv1.SriovNetworkNod
 	return nil
 }
 
-func WaitForDaemonSetReady(ds *appsv1.DaemonSet, client framework.FrameworkClient, namespace, name string, retryInterval, timeout time.Duration) error {
+func WaitForDaemonSetReady(ds *appsv1.DaemonSet, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
@@ -85,7 +84,7 @@ func WaitForDaemonSetReady(ds *appsv1.DaemonSet, client framework.FrameworkClien
 	return nil
 }
 
-func WaitForNamespacedObject(obj runtime.Object, client framework.FrameworkClient, namespace, name string, retryInterval, timeout time.Duration) error {
+func WaitForNamespacedObject(obj runtime.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
@@ -107,7 +106,7 @@ func WaitForNamespacedObject(obj runtime.Object, client framework.FrameworkClien
 	return nil
 }
 
-func WaitForNamespacedObjectDeleted(obj runtime.Object, client framework.FrameworkClient, namespace, name string, retryInterval, timeout time.Duration) error {
+func WaitForNamespacedObjectDeleted(obj runtime.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)

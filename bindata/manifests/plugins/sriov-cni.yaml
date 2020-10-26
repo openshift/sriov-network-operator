@@ -24,6 +24,7 @@ spec:
     spec:
       nodeSelector:
         beta.kubernetes.io/os: linux
+        node-role.kubernetes.io/worker:
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-cni

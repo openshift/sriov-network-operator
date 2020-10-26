@@ -35,7 +35,7 @@ import (
 	"k8s.io/kubectl/pkg/drain"
 
 	// "k8s.io/client-go/kubernetes/scheme"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
 	sninformer "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions"
 	"github.com/openshift/sriov-network-operator/pkg/utils"

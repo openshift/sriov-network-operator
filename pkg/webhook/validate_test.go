@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-	. "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	. "github.com/openshift/sriov-network-operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

@@ -1,0 +1,23 @@
+domain: openshift.io
+layout: go.kubebuilder.io/v2
+projectName: sriov-network-operator
+repo: github.com/openshift/sriov-network-operator
+resources:
+- group: sriovnetwork
+  kind: SriovNetwork
+  version: v1
+- group: sriovnetwork
+  kind: SriovIBNetwork
+  version: v1
+- group: sriovnetwork
+  kind: SriovNetworkNodePolicy
+  version: v1
+- group: sriovnetwork
+  kind: SriovNetworkNodeState
+  version: v1
+- group: sriovnetwork
+  kind: SriovOperatorConfig
+  version: v1
+version: 3-alpha
+plugins:
+  go.sdk.operatorframework.io/v2-alpha: {}

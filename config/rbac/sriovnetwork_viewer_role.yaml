@@ -1,0 +1,20 @@
+# permissions for end users to view sriovnetworks.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sriovnetwork-viewer-role
+rules:
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworks
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworks/status
+  verbs:
+  - get

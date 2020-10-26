@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/golang/glog"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
+	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 )
 
 type IntelPlugin struct {
