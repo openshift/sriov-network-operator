@@ -12,7 +12,7 @@ require (
 	github.com/go-logr/logr v0.1.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/huandu/xstrings v1.3.2 // indirect
-	github.com/intel/sriov-network-device-plugin v0.0.0-20200603101849-e116e9c7d0b8
+	github.com/intel/sriov-network-device-plugin v0.0.0-20200924101303-b7f6d3e06797
 
 	github.com/jaypipes/ghw v0.6.1
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20200626054723-37f83d1996bc
