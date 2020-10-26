@@ -1,11 +1,24 @@
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
-  name: sriov-network-operator.v4.5.0
+  name: sriov-network-operator.v4.7.0
   namespace: openshift-sriov-network-operator
   annotations:
     alm-examples: |
       [
+        {
+          "apiVersion": "sriovnetwork.openshift.io/v1",
+          "kind": "SriovOperatorConfig",
+          "metadata": {
+            "name": "default",
+            "namespace": "openshift-sriov-network-operator"
+          },
+          "spec": {
+            "enableInjector": true,
+            "enableOperatorWebhook": true,
+            "logLevel": 2
+          }
+        },
         {
           "apiVersion": "sriovnetwork.openshift.io/v1",
           "kind": "SriovNetworkNodePolicy",
@@ -51,6 +64,20 @@ metadata:
         },
         {
           "apiVersion": "sriovnetwork.openshift.io/v1",
+          "kind": "SriovIBNetwork",
+          "metadata": {
+            "name": "example-sriovibnetwork",
+            "namespace": "openshift-sriov-network-operator"
+          },
+          "spec": {
+            "ipam": "{\n  \"type\": \"host-local\",\n  \"subnet\": \"10.56.217.0/24\",\n  \"rangeStart\": \"10.56.217.171\",\n  \"rangeEnd\": \"10.56.217.181\",\n  \"routes\": [{\n    \"dst\": \"0.0.0.0/0\"\n  }],\n  \"gateway\": \"10.56.217.1\"\n}\n",
+            "linkState": "auto",
+            "resourceName": "mellanoxnics",
+            "networkNamespace": "default"
+          }
+        },
+        {
+          "apiVersion": "sriovnetwork.openshift.io/v1",
           "kind": "SriovNetworkNodeState",
           "metadata": {
             "name": "minikube",
@@ -62,18 +89,23 @@ metadata:
         }
       ]
     certified: "false"
-    containerImage: quay.io/openshift/origin-sriov-network-operator:4.5
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.7
     createdAt: 2019/04/30
-    olm.skipRange: ">=4.3.0-0 <4.5.0"
+    olm.skipRange: ">=4.3.0-0 <4.7.0"
     description: An operator for configuring SR-IOV components and initializing SRIOV network devices in Openshift cluster.
     repository: https://github.com/openshift/sriov-network-operator
-    support: Red Hat, Inc.
+    support: Red Hat
     capabilities: Basic Install
     categories: Networking
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: Represents an cluster-wide policy of configuring SR-IOV Operator
+      displayName: Sriov Operator Config
+      kind: SriovOperatorConfig
+      name: sriovoperatorconfigs.sriovnetwork.openshift.io
+      version: v1
     - description: Represents an policy of configuring SR-IOV components on nodes
       displayName: Sriov Network
       kind: SriovNetwork
@@ -88,6 +120,11 @@ spec:
       displayName: Sriov Network Node State
       kind: SriovNetworkNodeState
       name: sriovnetworknodestates.sriovnetwork.openshift.io
+      version: v1
+    - description: Represents an policy of configuring SR-IOV IB network components on a node
+      displayName: Sriov IB Network
+      kind: SriovIBNetwork
+      name: sriovibnetworks.sriovnetwork.openshift.io
       version: v1
   description: |
       # SR-IOV Network Operator for Openshift
@@ -259,7 +296,7 @@ spec:
                 operator: Exists
               containers:
                 - name: sriov-network-operator
-                  image: quay.io/openshift/origin-sriov-network-operator:4.5
+                  image: quay.io/openshift/origin-sriov-network-operator:4.7
                   command:
                   - sriov-network-operator
                   imagePullPolicy: IfNotPresent
@@ -269,19 +306,25 @@ spec:
                         fieldRef:
                           fieldPath: metadata.namespace
                     - name: SRIOV_CNI_IMAGE
-                      value: quay.io/openshift/origin-sriov-cni:4.5
+                      value: quay.io/openshift/origin-sriov-cni:4.7
                     - name: SRIOV_DEVICE_PLUGIN_IMAGE
-                      value: quay.io/openshift/origin-sriov-network-device-plugin:4.5
+                      value: quay.io/openshift/origin-sriov-network-device-plugin:4.7
                     - name: NETWORK_RESOURCES_INJECTOR_IMAGE
-                      value: quay.io/openshift/origin-sriov-dp-admission-controller:4.5
+                      value: quay.io/openshift/origin-sriov-dp-admission-controller:4.7
                     - name: OPERATOR_NAME
                       value: sriov-network-operator
                     - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-                      value: quay.io/openshift/origin-sriov-network-config-daemon:4.5
+                      value: quay.io/openshift/origin-sriov-network-config-daemon:4.7
                     - name: SRIOV_NETWORK_WEBHOOK_IMAGE
-                      value: quay.io/openshift/origin-sriov-network-webhook:4.5
+                      value: quay.io/openshift/origin-sriov-network-webhook:4.7
+                    - name: SRIOV_INFINIBAND_CNI_IMAGE
+                      value: quay.io/openshift/origin-sriov-infiniband-cni:4.7
+                    - name: SRIOV_OPERATOR_MUST_GATHER_IMAGE
+                      value: quay.io/openshift/origin-sriov-operator-must-gather:4.7
                     - name: RESOURCE_PREFIX
                       value: openshift.io
+                    - name: ENABLE_ADMISSION_CONTROLLER
+                      value: "true"
                     - name: NAMESPACE
                       valueFrom:
                         fieldRef:
@@ -291,7 +334,7 @@ spec:
                         fieldRef:
                           fieldPath: metadata.name
                     - name: RELEASE_VERSION
-                      value: 4.5.0
+                      value: 4.7.0
     strategy: deployment
   installModes:
   - supported: true
@@ -303,8 +346,8 @@ spec:
   - supported: false
     type: AllNamespaces
   provider:
-    name: Red Hat, Inc.
-  version: 4.5.0
+    name: Red Hat
+  version: 4.7.0
   links:
   - name: Source Code
     url: https://github.com/openshift/sriov-network-operator
@@ -314,7 +357,7 @@ spec:
   keywords: ["network", "sr-iov", "sriov"]
   labels:
     olm-owner-enterprise-app: sriov-network-operator
-    olm-status-descriptors: sriov-network-operator.v4.5.0
+    olm-status-descriptors: sriov-network-operator.v4.7.0
   maintainers:
   - email: support@redhat.com
     name: Red Hat
