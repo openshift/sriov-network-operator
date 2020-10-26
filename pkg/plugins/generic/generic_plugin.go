@@ -186,10 +186,16 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 		for _, iface := range desired {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
+				if iface.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
+					// Skip for switchdev devices
+					glog.V(2).Infof("generic-plugin needDrainNode(): skip for switchdev devices")
+					break
+				}
 				if iface.NumVfs != ifaceStatus.NumVfs || iface.Mtu != ifaceStatus.Mtu {
 					needDrain = true
 					return
 				}
+				break
 			}
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {

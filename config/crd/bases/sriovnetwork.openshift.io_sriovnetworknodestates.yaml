@@ -42,6 +42,8 @@ spec:
               interfaces:
                 items:
                   properties:
+                    eSwitchMode:
+                      type: string
                     linkType:
                       type: string
                     mtu:
@@ -108,6 +110,8 @@ spec:
                     deviceID:
                       type: string
                     driver:
+                      type: string
+                    eSwitchMode:
                       type: string
                     linkSpeed:
                       type: string
