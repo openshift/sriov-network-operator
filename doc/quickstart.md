@@ -26,17 +26,10 @@
 
 ## Installation
 
-Firstly, clone this GitHub repository.
+Clone this GitHub repository.
 
 ```bash
 go get github.com/openshift/sriov-network-operator
-```
-
-Install the Operator-SDK. The following commands will put operator-sdk to your $GOPATH/bin, please make sure that path is included in your \$PATH.
-
-```bash
-cd $GOPATH/src/github.com/openshift/sriov-network-operator
-make operator-sdk
 ```
 
 Deploy the operator. 
