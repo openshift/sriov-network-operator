@@ -433,3 +433,20 @@ func TestValidatePolicyForNodeStateWithValidPfName(t *testing.T) {
 	g.Expect(ok).To(Equal(true))
 	g.Expect(interfaceSelected).To(Equal(true))
 }
+
+func TestStaticValidateSriovNetworkNodePolicyWithInvalidNicSelector(t *testing.T) {
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType:  "netdevice",
+			NicSelector: SriovNetworkNicSelector{},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			ResourceName: "p0",
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(Equal(false))
+}
