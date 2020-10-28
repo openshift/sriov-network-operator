@@ -13,9 +13,15 @@ rules:
 - apiGroups:
   - ""
   - k8s.cni.cncf.io
+  - extensions
+  - apps
   resources:
   - pods
   - network-attachment-definitions
+  - replicationcontrollers
+  - replicasets
+  - daemonsets
+  - statefulsets
   verbs:
   - '*'
 - apiGroups:
