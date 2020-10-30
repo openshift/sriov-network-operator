@@ -31,7 +31,7 @@ const (
 	WEBHOOK_SERVICE_CA_CONFIGMAP    = "webhook-service-ca"
 	SERVICE_CA_CONFIGMAP_ANNOTATION = "service.beta.openshift.io/inject-cabundle"
 	INJECTOR_WEBHOOK_NAME           = "network-resources-injector-config"
-	OPERATOR_WEBHOOK_NAME           = "operator-webhook-config"
+	OPERATOR_WEBHOOK_NAME           = "sriov-operator-webhook-config"
 	PLUGIN_PATH                     = "./bindata/manifests/plugins"
 	DAEMON_PATH                     = "./bindata/manifests/daemon"
 	DEFAULT_POLICY_NAME             = "default"
