@@ -171,6 +171,7 @@ deploy-setup: install
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
 deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
 deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
+deploy-setup-k8s: export OPERATOR_EXEC=kubectl
 deploy-setup-k8s: deploy-setup
 
 test-e2e-conformance:
@@ -180,7 +181,6 @@ test-e2e:
 	mkdir -p ${ENVTEST_ASSETS_DIR}
 	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/master/hack/setup-envtest.sh
 	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); source hack/env.sh; go test ./test/e2e/... -coverprofile cover.out -v
-
 
 test-%: generate vet manifests
 	mkdir -p ${ENVTEST_ASSETS_DIR}
@@ -196,6 +196,7 @@ undeploy: uninstall
 	@hack/undeploy.sh $(NAMESPACE)
 
 undeploy-k8s: export NAMESPACE=sriov-network-operator
+undeploy-k8s: export OPERATOR_EXEC=kubectl
 undeploy-k8s: undeploy
 
 deps-update:
