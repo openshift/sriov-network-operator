@@ -20,6 +20,8 @@ type SriovOperatorConfigSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=2
 	LogLevel int `json:"logLevel,omitempty"`
+	// Flag to disable nodes drain during debugging
+	DisableDrain bool `json:"disableDrain,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
