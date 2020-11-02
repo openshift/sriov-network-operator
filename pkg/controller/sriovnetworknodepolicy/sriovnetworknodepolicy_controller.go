@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 	"sort"
 	"time"
 
@@ -186,7 +185,7 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	// Sort the policies with priority, higher priority ones is applied later
 	sort.Sort(sriovnetworkv1.ByPriority(policyList.Items))
 	// Sync Sriov device plugin ConfigMap object
-	if err = r.syncDevicePluginConfigMap(policyList); err != nil {
+	if err = r.syncDevicePluginConfigMap(policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
 	}
 	// Render and sync Daemon objects
@@ -203,20 +202,22 @@ func (r *ReconcileSriovNetworkNodePolicy) Reconcile(request reconcile.Request) (
 	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
 }
 
-func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
+func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
 	logger := log.WithName("syncDevicePluginConfigMap")
 	logger.Info("Start to sync device plugin ConfigMap")
 
-	data, err := renderDevicePluginConfigData(pl)
-	if err != nil {
-		return err
-	}
-	config, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
 	configData := make(map[string]string)
-	configData[DP_CONFIG_FILENAME] = string(config)
+	for _, node := range nl.Items {
+		data, err := renderDevicePluginConfigData(pl, &node)
+		if err != nil {
+			return err
+		}
+		config, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		configData[node.Name] = string(config)
+	}
 
 	cm := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
@@ -230,7 +231,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnet
 		Data: configData,
 	}
 	found := &corev1.ConfigMap{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Namespace: cm.Namespace, Name: cm.Name}, found)
+	err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: cm.Namespace, Name: cm.Name}, found)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			err = r.client.Create(context.TODO(), cm)
@@ -243,15 +244,6 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDevicePluginConfigMap(pl *sriovnet
 		}
 	} else {
 		logger.Info("ConfigMap already exists, updating")
-		currentConfig := dptypes.ResourceConfList{}
-		err = json.Unmarshal([]byte(string(found.Data[DP_CONFIG_FILENAME])), &currentConfig)
-		if err != nil {
-			return err
-		}
-		if reflect.DeepEqual(currentConfig, data) {
-			logger.Info("No content change, skip update")
-			return nil
-		}
 		err = r.client.Update(context.TODO(), cm)
 		if err != nil {
 			return fmt.Errorf("Couldn't update ConfigMap: %v", err)
@@ -560,12 +552,17 @@ func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, e
 	return objs, nil
 }
 
-func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList) (dptypes.ResourceConfList, error) {
+func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node) (dptypes.ResourceConfList, error) {
 	logger := log.WithName("renderDevicePluginConfigData")
 	logger.Info("Start to render device plugin config data")
 	rcl := dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
 		if p.Name == "default" {
+			continue
+		}
+
+		// render node specific data for device plugin config
+		if !p.Selected(node) {
 			continue
 		}
 
