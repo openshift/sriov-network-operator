@@ -53,11 +53,11 @@ var _ = Describe("Operator", func() {
 
 		It("should have webhook enable", func() {
 			mutateCfg := &admv1beta1.MutatingWebhookConfiguration{}
-			err := util.WaitForNamespacedObject(mutateCfg, k8sClient, testNamespace, "operator-webhook-config", interval, timeout)
+			err := util.WaitForNamespacedObject(mutateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
 			validateCfg := &admv1beta1.ValidatingWebhookConfiguration{}
-			err = util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "operator-webhook-config", interval, timeout)
+			err = util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -124,11 +124,11 @@ var _ = Describe("Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			mutateCfg := &admv1beta1.MutatingWebhookConfiguration{}
-			err = util.WaitForNamespacedObjectDeleted(mutateCfg, k8sClient, testNamespace, "operator-webhook-config", interval, timeout)
+			err = util.WaitForNamespacedObjectDeleted(mutateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
 			validateCfg := &admv1beta1.ValidatingWebhookConfiguration{}
-			err = util.WaitForNamespacedObjectDeleted(validateCfg, k8sClient, testNamespace, "operator-webhook-config", interval, timeout)
+			err = util.WaitForNamespacedObjectDeleted(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("set disable to enableOperatorWebhook")
@@ -144,11 +144,11 @@ var _ = Describe("Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			mutateCfg = &admv1beta1.MutatingWebhookConfiguration{}
-			err = util.WaitForNamespacedObject(mutateCfg, k8sClient, testNamespace, "operator-webhook-config", interval, timeout)
+			err = util.WaitForNamespacedObject(mutateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
 			validateCfg = &admv1beta1.ValidatingWebhookConfiguration{}
-			err = util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "operator-webhook-config", interval, timeout)
+			err = util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 		})
 		PIt("should be able to update the node selector of sriov-network-config-daemon", func() {
