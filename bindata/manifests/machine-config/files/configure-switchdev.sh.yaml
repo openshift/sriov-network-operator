@@ -1,0 +1,51 @@
+mode: 0755
+overwrite: true
+path: "/usr/local/bin/configure-switchdev.sh"
+contents:
+  inline: |
+    #!/bin/bash
+    set -eux
+    input="/etc/switchdev.conf"
+    names=()
+
+    while read pci_addr num_vfs
+    do
+      echo "Set $num_vfs VFs on device $pci_addr"
+
+      names+=($(ls /sys/bus/pci/devices/${pci_addr}/net/))
+      # create VFs
+      echo $num_vfs > /sys/bus/pci/devices/${pci_addr}/sriov_numvfs
+    done <"$input"
+
+    # wait for vfs to be ready
+    sleep 5
+    i=0
+    while read pci_addr num_vfs
+    do
+      # unload VF driver
+      VfDirs=$(ls /sys/bus/pci/devices/${pci_addr} | grep virtfn)
+      for VfDir in $VfDirs
+      do
+        VfPciAddr=$(basename "$( readlink -f /sys/bus/pci/devices/${pci_addr}/$VfDir )")
+        echo $VfPciAddr > /sys/bus/pci/drivers/mlx5_core/unbind || true
+
+      done
+
+      # set PF to switchdev mode
+      devlink dev eswitch set pci/${pci_addr} mode switchdev
+
+      # reset the pf name
+      new_name=$(ls /sys/bus/pci/devices/${pci_addr}/net/)
+      ip link set ${new_name} down
+      ip link set ${new_name} name ${names[i]}
+      ip link set ${names[i]} up
+      # ip link set $new_name up
+      i=$(( i+1 ))
+
+      # load VF driver
+      for VfDir in $VfDirs
+      do
+        VfPciAddr=$(basename "$( readlink -f /sys/bus/pci/devices/${pci_addr}/$VfDir )")
+        echo $VfPciAddr > /sys/bus/pci/drivers_probe
+      done
+    done <"$input"

@@ -3,6 +3,8 @@ package render
 import (
 	"testing"
 
+	"github.com/openshift/machine-config-operator/pkg/controller/common"
+
 	. "github.com/onsi/gomega"
 )
 
@@ -95,4 +97,28 @@ func TestRenderDir(t *testing.T) {
 	o, err := RenderDir("testdata", &d)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(o).To(HaveLen(6))
+}
+
+func TestGenerateOffloadMachineConfig(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	d := MakeRenderData()
+	d.Data["deviceList"] = []DeviceInfo{
+		{"0000.18:00.0", 16},
+		{"0000.18:00.1", 16},
+	}
+	expect := "data:,0000.18%3A00.0%2016%0A0000.18%3A00.1%2016%0A"
+
+	mc, err := GenerateOffloadMachineConfig("testdata/machineconfig", "offload", &d)
+	g.Expect(err).NotTo(HaveOccurred())
+	err = common.ValidateMachineConfig(mc.Spec)
+	g.Expect(err).NotTo(HaveOccurred())
+	ign, err := common.ParseAndConvertConfig(mc.Spec.Config.Raw)
+	// t.Errorf("config: %s", string(mc.Spec.Config.Raw))
+	g.Expect(err).NotTo(HaveOccurred())
+	err = common.ValidateIgnition(ign)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ign.Storage.Files).To(HaveLen(2))
+	g.Expect(*(ign.Storage.Files[1].Contents.Source)).To(Equal(expect))
+	g.Expect(ign.Systemd.Units).To(HaveLen(4))
 }

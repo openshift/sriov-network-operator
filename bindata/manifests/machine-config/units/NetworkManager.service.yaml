@@ -1,0 +1,7 @@
+name: NetworkManager.service
+dropins:
+- name: 10-switchdev.conf
+  contents: |
+    [Unit]
+    Wants=switchdev-configuration.service
+    After=switchdev-configuration.service

@@ -25,6 +25,7 @@ import (
 
 	"github.com/go-logr/logr"
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -60,8 +61,20 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 
 	reqLogger.Info("Reconciling")
 
+	policy := &sriovnetworkv1.SriovNetworkNodePolicy{}
+	err := r.Get(context.TODO(), req.NamespacedName, policy)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			reqLogger.Info("SriovNetworkNodePolicy resource not found. Ignoring since object must be deleted")
+			return ctrl.Result{}, nil
+		}
+		// Error reading the object - requeue the request.
+		reqLogger.Error(err, "Failed to get SriovNetworkNodePolicy")
+		return ctrl.Result{}, err
+	}
+
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-	err := r.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: namespace}, defaultPolicy)
+	err = r.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: namespace}, defaultPolicy)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Default policy object not found, create it.
@@ -135,9 +148,120 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		return reconcile.Result{}, err
 	}
 
+	if err = r.syncOffloadMachineConfig(policyList); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// All was successful. Request that this be re-triggered after ResyncPeriod,
 	// so we can reconcile state again.
 	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
+}
+
+func (r *SriovNetworkNodePolicyReconciler) syncOffloadMachineConfig(pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
+	logger := r.Log.WithName("syncOffloadMachineConfig")
+	var err error
+	devList := []render.DeviceInfo{}
+	offload := false
+
+	for _, p := range pl.Items {
+		if p.Spec.EswitchMode != sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
+			continue
+		}
+
+		for _, dev := range p.Spec.NicSelector.RootDevices {
+			devList = append(devList, render.DeviceInfo{PciAddress: dev, NumVfs: p.Spec.NumVfs})
+		}
+		offload = true
+	}
+
+	if !offload {
+		logger.Info("delete MachineConfig CR for OVS HW offloading if exists")
+		mc := &mcfgv1.MachineConfig{}
+		err = r.Get(context.TODO(), types.NamespacedName{Name: "offload"}, mc)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return err
+			}
+		} else {
+			mc.Name = "offload"
+			err = r.Delete(context.TODO(), mc)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	logger.Info("Start to render MachineConfig and MachineConfigPool for OVS HW offloading")
+	data := render.MakeRenderData()
+	data.Data["deviceList"] = devList
+	mc, err := render.GenerateOffloadMachineConfig("bindata/manifests/machine-config", "offload", &data)
+	if err != nil {
+		return err
+	}
+	mcpRaw, err := render.RenderTemplate("bindata/manifests/machine-config/machineconfigpool.yaml", &data)
+	if err != nil {
+		return err
+	}
+	mcp := &mcfgv1.MachineConfigPool{}
+	if len(mcpRaw) != 1 {
+		return fmt.Errorf("Invalid MachineConfigPool CR template")
+	}
+	err = r.Scheme.Convert(mcpRaw[0], mcp, context.TODO())
+	if err != nil {
+		return err
+	}
+
+	foundMC := &mcfgv1.MachineConfig{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: "offload"}, foundMC)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			err = r.Create(context.TODO(), mc)
+			if err != nil {
+				return fmt.Errorf("Couldn't create MachineConfig: %v", err)
+			}
+			logger.Info("Created MachineConfig CR")
+		} else {
+			return fmt.Errorf("Failed to get MachineConfig: %v", err)
+		}
+	} else {
+		logger.Info("MachineConfig already exists, updating")
+		if reflect.DeepEqual(foundMC.Spec.Config.Raw, mc.Spec.Config.Raw) {
+			logger.Info("No content change, skip update")
+			return nil
+		}
+		foundMC.Spec = mc.Spec
+		err = r.Update(context.TODO(), foundMC)
+		if err != nil {
+			return fmt.Errorf("Couldn't update MachineConfig: %v", err)
+		}
+	}
+
+	foundMCP := &mcfgv1.MachineConfigPool{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: "offload"}, foundMCP)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			err = r.Create(context.TODO(), mcp)
+			if err != nil {
+				return fmt.Errorf("Couldn't create MachineConfigPool: %v", err)
+			}
+			logger.Info("Created MachineConfigPool CR")
+		} else {
+			return fmt.Errorf("Failed to get MachineConfigPool: %v", err)
+		}
+	} else {
+		logger.Info("MachineConfigPool already exists, updating")
+		if reflect.DeepEqual(foundMCP.Spec, mcp.Spec) {
+			logger.Info("No content change, skip update")
+			return nil
+		}
+		foundMCP.Spec = mcp.Spec
+		err = r.Update(context.TODO(), foundMCP)
+		if err != nil {
+			return fmt.Errorf("Couldn't update MachineConfigPool: %v", err)
+		}
+	}
+	return nil
 }
 
 func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -402,7 +526,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDsObject(dp *sriovnetworkv1.Sriov
 		}
 	case "DaemonSet":
 		ds := &appsv1.DaemonSet{}
-		err := kscheme.Scheme.Convert(obj, ds, nil)
+		err := r.Scheme.Convert(obj, ds, nil)
 		r.syncDaemonSet(dp, pl, ds)
 		if err != nil {
 			logger.Error(err, "Fail to sync DaemonSet", "Namespace", ds.Namespace, "Name", ds.Name)

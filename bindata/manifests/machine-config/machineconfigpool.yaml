@@ -1,0 +1,12 @@
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  name: offload
+spec:
+  machineConfigSelector:
+    matchExpressions:
+      - {key: machineconfiguration.openshift.io/role, operator: In, values: [worker,offload]}
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/offload-worker: ""

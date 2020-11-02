@@ -1,0 +1,6 @@
+mode: 0755
+overwrite: true
+path: "/etc/switchdev.conf"
+contents:
+  inline: |
+{{.deviceList|formateDeviceList | indent 4}}
