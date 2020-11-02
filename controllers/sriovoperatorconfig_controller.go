@@ -396,6 +396,24 @@ func (r *SriovOperatorConfigReconciler) syncMutatingWebhook(cr *sriovnetworkv1.S
 		}
 	}
 
+	// Delete deprecated operator mutating webhook CR
+	deprecated_webhook := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		} else {
+			logger.Info("Failed to get deprecated operator mutating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+		}
+	} else {
+		err := r.Delete(context.TODO(), deprecated_webhook)
+		if err != nil {
+			logger.Info("Failed to delete deprecated operator mutating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+		} else {
+			logger.Info("Deleted deprecated operator mutating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+		}
+	}
+
 	// Note:
 	// we don't need to manage the update of MutatingWebhookConfiguration here
 	// as it's handled by caconfig controller
@@ -421,6 +439,24 @@ func (r *SriovOperatorConfigReconciler) syncValidatingWebhook(cr *sriovnetworkv1
 			logger.Info("Create webhook for", in.Namespace, in.Name)
 		} else {
 			return fmt.Errorf("Fail to get webhook: %v", err)
+		}
+	}
+
+	// Delete deprecated operator validating webhook CR
+	deprecated_webhook := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		} else {
+			logger.Info("Failed to get deprecated operator validating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+		}
+	} else {
+		err := r.Delete(context.TODO(), deprecated_webhook)
+		if err != nil {
+			logger.Info("Failed to delete deprecated operator validating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+		} else {
+			logger.Info("Deleted deprecated operator validating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
 		}
 	}
 
