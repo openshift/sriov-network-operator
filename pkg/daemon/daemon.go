@@ -88,6 +88,8 @@ type Daemon struct {
 
 	drainable bool
 
+	disableDrain bool
+
 	nodeLister listerv1.NodeLister
 
 	workqueue workqueue.RateLimitingInterface
@@ -346,6 +348,11 @@ func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 		glog.Infof("Set log verbose level to: %d", level)
 		flag.Set("v", level.String())
 	}
+	newDisableDrain := newCfg.Spec.DisableDrain
+	if dn.disableDrain != newDisableDrain {
+		dn.disableDrain = newDisableDrain
+		glog.Infof("Set Disable Drain to: %t", dn.disableDrain)
+	}
 }
 
 func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
@@ -392,21 +399,20 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		d, r := false, false
 		if dn.nodeState.GetName() == "" {
 			d, r, err = p.OnNodeStateAdd(latestState)
-			glog.V(0).Infof("nodeStateSyncHandler(): plugin %s: reqDrain %v, reqReboot %v", k, d, r)
 		} else {
 			d, r, err = p.OnNodeStateChange(dn.nodeState, latestState)
-			glog.V(0).Infof("nodeStateSyncHandler(): plugin %s: reqDrain %v, reqReboot %v", k, d, r)
 		}
 		if err != nil {
 			glog.Errorf("nodeStateSyncHandler(): plugin %s error: %v", k, err)
 			return err
 		}
+		glog.V(0).Infof("nodeStateSyncHandler(): plugin %s: reqDrain %v, reqReboot %v", k, d, r)
 		reqDrain = reqDrain || d
 		reqReboot = reqReboot || r
 	}
-	glog.V(0).Infof("nodeStateSyncHandler(): reqDrain %v, reqReboot %v", reqDrain, reqReboot)
+	glog.V(0).Infof("nodeStateSyncHandler(): reqDrain %v, reqReboot %v disableDrain %v", reqDrain, reqReboot, dn.disableDrain)
 
-	if reqDrain {
+	if reqDrain && !dn.disableDrain {
 		glog.Info("nodeStateSyncHandler(): drain node")
 		if err := dn.drainNode(dn.name); err != nil {
 			return err
