@@ -19,13 +19,13 @@ import (
 )
 
 const (
-	MANIFESTS_PATH       = "./bindata/manifests/cni-config"
 	LASTNETWORKNAMESPACE = "operator.sriovnetwork.openshift.io/last-network-namespace"
 	FINALIZERNAME        = "netattdef.finalizers.sriovnetwork.openshift.io"
 )
 
 const invalidVfIndex = -1
 
+var MANIFESTS_PATH = "./bindata/manifests/cni-config"
 var log = logf.Log.WithName("sriovnetwork")
 var VfIds = []string{}
 
@@ -493,6 +493,12 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 	} else {
 		data.Data["SriovCniIpam"] = "\"ipam\":{}"
+	}
+
+	data.Data["MetaPluginsConfigured"] = false
+	if cr.Spec.MetaPluginsConfig != "" {
+		data.Data["MetaPluginsConfigured"] = true
+		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
 	}
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)

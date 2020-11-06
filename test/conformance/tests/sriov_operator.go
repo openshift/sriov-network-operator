@@ -727,6 +727,27 @@ var _ = Describe("[sriov] operator", func() {
 			})
 		})
 
+		Context("Meta Plugin Configuration", func() {
+			It("Should be able to configure a metaplugin", func() {
+				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				config := func(network *sriovv1.SriovNetwork) {
+					network.Spec.MetaPluginsConfig = `{ "type": "tuning", "sysctl": { "net.core.somaxconn": "500"}}`
+				}
+				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam, []network.SriovNetworkOptions{config}...)
+				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				testPod := createTestPod(node, []string{sriovNetworkName})
+				stdout, _, err := pod.ExecCommand(clients, testPod, "more", "/proc/sys/net/core/somaxconn")
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(strings.TrimSpace(stdout)).To(Equal("500"))
+			})
+		})
+
 		Context("Virtual Functions", func() {
 			// 21396
 			It("should release the VFs once the pod deleted and same VFs can be used by the new created pods", func() {

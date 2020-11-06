@@ -42,6 +42,9 @@ type SriovNetworkSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// Maximum tx rate, in Mbps, for the VF. Defaults to 0 (no rate limiting)
 	MaxTxRate *int `json:"maxTxRate,omitempty"`
+	// MetaPluginsConfig configuration to be used in order to chain metaplugins to the sriov interface returned
+	// by the operator.
+	MetaPluginsConfig string `json:"metaplugins,omitempty"`
 }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork
