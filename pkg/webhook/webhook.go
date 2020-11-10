@@ -42,6 +42,12 @@ func ValidateCustomResource(ar v1beta1.AdmissionReview) *v1beta1.AdmissionRespon
 	reviewResponse := v1beta1.AdmissionResponse{}
 	reviewResponse.Allowed = true
 
+	if ar.Request.Operation == "DELETE" {
+		raw = ar.Request.OldObject.Raw
+	} else {
+		raw = ar.Request.Object.Raw
+	}
+
 	switch ar.Request.Kind.Kind {
 	case "SriovNetworkNodePolicy":
 		policy := sriovnetworkv1.SriovNetworkNodePolicy{}
