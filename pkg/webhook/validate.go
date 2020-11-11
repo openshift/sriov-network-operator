@@ -3,6 +3,7 @@ package webhook
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -26,44 +27,55 @@ var (
 	interfaceSelected bool
 )
 
-func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operation v1beta1.Operation) (bool, error) {
+func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operation v1beta1.Operation) (bool, []string, error) {
 	glog.V(2).Infof("validateSriovOperatorConfig: %v", cr)
+	var warnings []string
 
 	if cr.GetName() == "default" {
 		if operation == "DELETE" {
-			return false, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
-		} else {
-			return true, nil
+			return false, warnings, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
 		}
+
+		if cr.Spec.DisableDrain {
+			warnings = append(warnings, "Node draining is disabled for applying SriovNetworkNodePolicy, it may result in workload interruption.")
+		}
+		return true, warnings, nil
 	}
-	return false, fmt.Errorf("only default SriovOperatorConfig is used")
+	return false, warnings, fmt.Errorf("only default SriovOperatorConfig is used")
 }
 
-func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1beta1.Operation) (bool, error) {
+func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1beta1.Operation) (bool, []string, error) {
 	glog.V(2).Infof("validateSriovNetworkNodePolicy: %v", cr)
+	var warnings []string
 
-	if cr.GetName() == "default" {
+	if cr.GetName() == "default" && cr.GetNamespace() == os.Getenv("NAMESPACE") {
 		if operation == "DELETE" {
 			// reject deletion of default policy
-			return false, fmt.Errorf("default SriovNetworkNodePolicy shouldn't be deleted")
+			return false, warnings, fmt.Errorf("default SriovNetworkNodePolicy shouldn't be deleted")
 		} else {
 			// skip validating default policy
-			return true, nil
+			return true, warnings, nil
 		}
+	}
+
+	if cr.GetNamespace() != os.Getenv("NAMESPACE") {
+		warnings = append(warnings, cr.GetName()+
+			" is created or updated but not used. Only policy in openshift-sriov-network-operator namespace is respected.")
 	}
 
 	admit, err := staticValidateSriovNetworkNodePolicy(cr)
 	if err != nil {
-		return admit, err
+		return admit, warnings, err
 
 	}
 
 	admit, err = dynamicValidateSriovNetworkNodePolicy(cr)
 	if err != nil {
-		return admit, err
+		return admit, warnings, err
 
 	}
-	return admit, nil
+
+	return admit, warnings, nil
 }
 
 func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
