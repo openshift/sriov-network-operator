@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -98,27 +99,34 @@ func newNodePolicy() *SriovNetworkNodePolicy {
 func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 	var err error
 	var ok bool
+	var w []string
 	config := &SriovOperatorConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default",
 		},
 		Spec: SriovOperatorConfigSpec{
 			ConfigDaemonNodeSelector: map[string]string{},
+			DisableDrain:             true,
 			EnableInjector:           func() *bool { b := true; return &b }(),
 			EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
 			LogLevel:                 2,
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err = validateSriovOperatorConfig(config, "DELETE")
+	ok, _, err = validateSriovOperatorConfig(config, "DELETE")
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(ok).To(Equal(false))
 
-	ok, err = validateSriovOperatorConfig(config, "UPDATE")
+	ok, _, err = validateSriovOperatorConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 
-	ok, err = validateSriovOperatorConfig(config, "CREATE")
+	ok, w, err = validateSriovOperatorConfig(config, "UPDATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+	g.Expect(w[0]).To(ContainSubstring("Node draining is disabled"))
+
+	ok, _, err = validateSriovOperatorConfig(config, "CREATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 }
@@ -128,7 +136,8 @@ func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
 	var ok bool
 	policy := &SriovNetworkNodePolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "default",
+			Name:      "default",
+			Namespace: "openshift-sriov-network-operator",
 		},
 		Spec: SriovNetworkNodePolicySpec{
 			NicSelector:  SriovNetworkNicSelector{},
@@ -137,16 +146,17 @@ func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
 			ResourceName: "p0",
 		},
 	}
+	os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
 	g := NewGomegaWithT(t)
-	ok, err = validateSriovNetworkNodePolicy(policy, "DELETE")
+	ok, _, err = validateSriovNetworkNodePolicy(policy, "DELETE")
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(ok).To(Equal(false))
 
-	ok, err = validateSriovNetworkNodePolicy(policy, "UPDATE")
+	ok, _, err = validateSriovNetworkNodePolicy(policy, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 
-	ok, err = validateSriovNetworkNodePolicy(policy, "CREATE")
+	ok, _, err = validateSriovNetworkNodePolicy(policy, "CREATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 }
