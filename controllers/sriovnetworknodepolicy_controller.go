@@ -28,6 +28,7 @@ import (
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -270,7 +271,8 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(np *sriovne
 		}
 	} else {
 		logger.Info("SriovNetworkNodeState already exists, updating")
-		found.Spec = ns.Spec
+		newVersion := found.DeepCopy()
+		newVersion.Spec = ns.Spec
 
 		// Previous Policy Priority(ppp) records the priority of previous evaluated policy in node policy list.
 		// Since node policy list is already sorted with priority number, comparing current priority with ppp shall
@@ -287,13 +289,17 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(np *sriovne
 				// Merging only for policies with the same priority (ppp == p.Spec.Priority)
 				// This boolean flag controls merging of PF configuration (e.g. mtu, numvfs etc)
 				// when VF partition is configured.
-				p.Apply(found, bool(ppp == p.Spec.Priority))
+				p.Apply(newVersion, bool(ppp == p.Spec.Priority))
 				// record the evaluated policy priority for next loop
 				ppp = p.Spec.Priority
 			}
 		}
-		found.Spec.DpConfigVersion = cksum
-		err = r.Update(context.TODO(), found)
+		newVersion.Spec.DpConfigVersion = cksum
+		if equality.Semantic.DeepDerivative(newVersion.Spec, found.Spec) {
+			logger.Info("SriovNetworkNodeState did not change, not updating")
+			return nil
+		}
+		err = r.Update(context.TODO(), newVersion)
 		if err != nil {
 			return fmt.Errorf("Couldn't update SriovNetworkNodeState: %v", err)
 		}
@@ -441,6 +447,13 @@ func (r *SriovNetworkNodePolicyReconciler) syncDaemonSet(cr *sriovnetworkv1.Srio
 		}
 	} else {
 		logger.Info("DaemonSet already exists, updating")
+		// DeepDerivative checks for changes only comparing non zero fields in the source struct.
+		// This skips default values added by the api server.
+		// References in https://github.com/kubernetes-sigs/kubebuilder/issues/592#issuecomment-625738183
+		if equality.Semantic.DeepDerivative(in.Spec, ds.Spec) {
+			logger.Info("Daemonset spec did not change, not updating")
+			return nil
+		}
 		err = r.Update(context.TODO(), in)
 		if err != nil {
 			logger.Error(err, "Fail to update DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
