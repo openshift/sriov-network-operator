@@ -41,7 +41,7 @@ type SriovNetworkNodePolicySpec struct {
 type SriovNetworkNicSelector struct {
 	// The vendor hex code of SR-IoV device. Allowed value "8086", "15b3".
 	Vendor string `json:"vendor,omitempty"`
-	// The device hex code of SR-IoV device. Allowed value "158b", "1015", "1017".
+	// The device hex code of SR-IoV device. Allowed value "0d58", "1572", "158b", "1013", "1015", "1017", "101b".
 	DeviceID string `json:"deviceID,omitempty"`
 	// PCI address of SR-IoV PF.
 	RootDevices []string `json:"rootDevices,omitempty"`

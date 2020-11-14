@@ -33,6 +33,7 @@ var VfIds = []string{}
 // Vendor ID, Physical Function Device ID, Virtual Function Device ID
 var NicIdMap = []string{
 	"8086 158b 154c", // I40e 25G SFP28
+	"8086 1572 154c", // I40e 10G X710 SFP+
 	"8086 0d58 154c", // I40e XXV710 N3000
 	"15b3 1015 1016", // ConnectX-4LX
 	"15b3 1017 1018", // ConnectX-5, PCIe 3.0

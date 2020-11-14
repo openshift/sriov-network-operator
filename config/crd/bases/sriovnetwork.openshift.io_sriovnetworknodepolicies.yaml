@@ -65,7 +65,7 @@ spec:
                 properties:
                   deviceID:
                     description: The device hex code of SR-IoV device. Allowed value
-                      "158b", "1015", "1017".
+                      "0d58", "1572", "158b", "1013", "1015", "1017", "101b".
                     type: string
                   pfNames:
                     description: Name of SR-IoV PF.
