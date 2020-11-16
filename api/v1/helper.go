@@ -191,6 +191,8 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, merge bool)
 					result.VfGroups = []VfGroup{*group}
 					state.Spec.Interfaces = append(state.Spec.Interfaces, result)
 				}
+			} else if p.Spec.NumVfs == 0 {
+				state.Spec.Interfaces = append(state.Spec.Interfaces, result)
 			}
 		}
 	}
