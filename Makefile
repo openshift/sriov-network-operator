@@ -166,7 +166,7 @@ bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 deploy-setup: install
-	@EXCLUSIONS=() hack/deploy-setup.sh $(NAMESPACE)
+	hack/deploy-setup.sh $(NAMESPACE)
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
 deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
