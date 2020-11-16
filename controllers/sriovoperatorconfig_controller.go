@@ -61,6 +61,10 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 
 	logger.Info("Reconciling SriovOperatorConfig")
 
+	enableAdmissionController := os.Getenv("ENABLE_ADMISSION_CONTROLLER") == "true"
+	if !enableAdmissionController {
+		logger.Info("SR-IOV Network Resource Injector and Operator Webhook are disabled.")
+	}
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
 	err := r.Get(context.TODO(), types.NamespacedName{
 		Name: DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
@@ -70,8 +74,8 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 			defaultConfig.SetNamespace(namespace)
 			defaultConfig.SetName(DEFAULT_CONFIG_NAME)
 			defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
-				EnableInjector:           func() *bool { b := true; return &b }(),
-				EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
+				EnableInjector:           func() *bool { b := enableAdmissionController; return &b }(),
+				EnableOperatorWebhook:    func() *bool { b := enableAdmissionController; return &b }(),
 				ConfigDaemonNodeSelector: map[string]string{},
 				LogLevel:                 2,
 			}
@@ -91,17 +95,19 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 		return reconcile.Result{}, nil
 	}
 
-	// Render and sync webhook objects
-	if err = r.syncWebhookObjs(defaultConfig); err != nil {
-		return reconcile.Result{}, err
-	}
+	if enableAdmissionController {
+		// Render and sync webhook objects
+		if err = r.syncWebhookObjs(defaultConfig); err != nil {
+			return reconcile.Result{}, err
+		}
 
-	// Render and sync CA configmap
-	if err = r.syncCAConfigMap(types.NamespacedName{Name: INJECTOR_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
-		return reconcile.Result{}, err
-	}
-	if err = r.syncCAConfigMap(types.NamespacedName{Name: WEBHOOK_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
-		return reconcile.Result{}, err
+		// Render and sync CA configmap
+		if err = r.syncCAConfigMap(types.NamespacedName{Name: INJECTOR_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
+			return reconcile.Result{}, err
+		}
+		if err = r.syncCAConfigMap(types.NamespacedName{Name: WEBHOOK_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	// Sync SriovNetworkConfigDaemon objects
@@ -266,12 +272,6 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.SriovOperatorConfig) error {
 	logger := r.Log.WithName("syncWebhookObjs")
 	logger.Info("Start to sync webhook objects")
-
-	enable := os.Getenv("ENABLE_ADMISSION_CONTROLLER")
-	if enable != "true" {
-		logger.Info("SR-IOV Network Resource Injector and Operator Webhook are disabled.")
-		return nil
-	}
 
 	for name, path := range webhooks {
 		// Render Webhook manifests

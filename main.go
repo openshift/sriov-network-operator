@@ -185,10 +185,11 @@ func createDefaultOperatorConfig(cfg *rest.Config) error {
 	if err != nil {
 		return fmt.Errorf("Couldn't create client: %v", err)
 	}
+	enableAdmissionController := os.Getenv("ENABLE_ADMISSION_CONTROLLER") == "true"
 	config := &sriovnetworkv1.SriovOperatorConfig{
 		Spec: sriovnetworkv1.SriovOperatorConfigSpec{
-			EnableInjector:           func() *bool { b := true; return &b }(),
-			EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
+			EnableInjector:           func() *bool { b := enableAdmissionController; return &b }(),
+			EnableOperatorWebhook:    func() *bool { b := enableAdmissionController; return &b }(),
 			ConfigDaemonNodeSelector: map[string]string{},
 			LogLevel:                 2,
 		},
