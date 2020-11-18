@@ -19,8 +19,10 @@ import (
 )
 
 const (
-	LASTNETWORKNAMESPACE = "operator.sriovnetwork.openshift.io/last-network-namespace"
-	FINALIZERNAME        = "netattdef.finalizers.sriovnetwork.openshift.io"
+	LASTNETWORKNAMESPACE  = "operator.sriovnetwork.openshift.io/last-network-namespace"
+	FINALIZERNAME         = "netattdef.finalizers.sriovnetwork.openshift.io"
+	ESWITCHMODE_LEGACY    = "legacy"
+	ESWITCHMODE_SWITCHDEV = "switchdev"
 )
 
 const invalidVfIndex = -1
@@ -165,10 +167,11 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, merge bool)
 		if s.Selected(&iface) {
 			log.Info("Update interface", "name:", iface.Name)
 			result := Interface{
-				PciAddress: iface.PciAddress,
-				Mtu:        p.Spec.Mtu,
-				Name:       iface.Name,
-				LinkType:   p.Spec.LinkType,
+				PciAddress:  iface.PciAddress,
+				Mtu:         p.Spec.Mtu,
+				Name:        iface.Name,
+				LinkType:    p.Spec.LinkType,
+				EswitchMode: p.Spec.EswitchMode,
 			}
 			var group *VfGroup
 			if p.Spec.NumVfs > 0 {

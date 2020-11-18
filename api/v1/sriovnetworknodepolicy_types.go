@@ -35,6 +35,9 @@ type SriovNetworkNodePolicySpec struct {
 	// +kubebuilder:validation:Enum=eth;ETH;ib;IB
 	// NIC Link Type. Allowed value "eth", "ETH", "ib", and "IB".
 	LinkType string `json:"linkType,omitempty"`
+	// +kubebuilder:validation:Enum=legacy;switchdev
+	// NIC Device Mode. Allowed value "legacy","switchdev".
+	EswitchMode string `json:"eSwitchMode,omitempty"`
 }
 
 // +k8s:openapi-gen=false

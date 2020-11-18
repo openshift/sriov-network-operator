@@ -90,6 +90,9 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 		if dputils.IsSriovPF(device.Address) {
 			iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
 			iface.NumVfs = dputils.GetVFconfigured(device.Address)
+			if iface.EswitchMode, err = GetNicSriovMode(device.Address); err != nil {
+				glog.Warningf("DiscoverSriovDevices(): unable to get device mode %+v %q", device.Address, err)
+			}
 			if dputils.SriovConfigured(device.Address) {
 				vfs, err := dputils.GetVFList(device.Address)
 				if err != nil {
@@ -594,4 +597,13 @@ func generateRandomGuid() net.HardwareAddr {
 	}
 
 	return guid
+}
+
+func GetNicSriovMode(pciAddress string) (string, error) {
+	glog.V(2).Infof("GetNicSriovMode(): device %s", pciAddress)
+	devLink, err := netlink.DevLinkGetDeviceByName("pci", pciAddress)
+	if err != nil {
+		return "", err
+	}
+	return devLink.Attrs.Eswitch.Mode, nil
 }

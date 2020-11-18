@@ -3,7 +3,7 @@ module github.com/openshift/sriov-network-operator
 go 1.13
 
 require (
-	cloud.google.com/go v0.53.0 // indirect
+	cloud.google.com/go v0.58.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/blang/semver v3.5.0+incompatible
@@ -28,6 +28,7 @@ require (
 	github.com/vishvananda/netlink v1.1.0
 	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
+	google.golang.org/genproto v0.0.0-20200610104632-a5b850bcf112 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	k8s.io/api v0.19.0
 	k8s.io/apiextensions-apiserver v0.18.8 // indirect
