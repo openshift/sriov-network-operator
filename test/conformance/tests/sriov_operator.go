@@ -1142,6 +1142,14 @@ var _ = Describe("[sriov] operator", func() {
 						Expect(err).ToNot(HaveOccurred())
 
 						waitForSRIOVStable()
+						By("waiting for the resources to be available")
+						Eventually(func() int64 {
+							testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+							Expect(err).ToNot(HaveOccurred())
+							resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+							allocatable, _ := resNum.AsInt64()
+							return allocatable
+						}, 10*time.Minute, time.Second).Should(Equal(int64(5)))
 					}
 
 					sriovNetwork := &sriovv1.SriovNetwork{
@@ -1284,6 +1292,15 @@ var _ = Describe("[sriov] operator", func() {
 
 				By("waiting the sriov to be stable on the node")
 				waitForSRIOVStable()
+
+				By("waiting for the resources to be available")
+				Eventually(func() int64 {
+					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					allocatable, _ := resNum.AsInt64()
+					return allocatable
+				}, 10*time.Minute, time.Second).Should(Equal(int64(numVfs)))
 
 				By("creating a network object")
 				ipv6NetworkName := "test-ipv6network"
