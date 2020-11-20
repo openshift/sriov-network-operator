@@ -12,9 +12,9 @@ require (
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/google/go-cmp v0.5.0
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/intel/sriov-network-device-plugin v0.0.0-20200924101303-b7f6d3e06797
-
 	github.com/jaypipes/ghw v0.6.1
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20200626054723-37f83d1996bc
 	github.com/mitchellh/copystructure v1.0.0 // indirect
@@ -22,7 +22,6 @@ require (
 	github.com/onsi/gomega v1.10.1
 	github.com/openshift/client-go v0.0.0-20200320150128-a906f3d8e723
 	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
-
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.0.0
 	github.com/vishvananda/netlink v1.1.0
