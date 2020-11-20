@@ -22,9 +22,8 @@ type VendorPlugin interface {
 }
 
 var pluginMap = map[string]string{
-	"8086":    "intel_plugin",
-	"15b3":    "mellanox_plugin",
-	"virtual": "virtual_plugin",
+	"8086": "intel_plugin",
+	"15b3": "mellanox_plugin",
 }
 
 const (

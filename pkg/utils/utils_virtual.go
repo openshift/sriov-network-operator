@@ -143,35 +143,32 @@ func configSriovDeviceVirtual(iface *sriovnetworkv1.Interface, ifaceStatus *srio
 			glog.Warningf("configSriovDeviceVirtual(): missing VFGroup")
 			return errors.New("NumVfs != 1")
 		}
-		vfAddrs := []string{iface.PciAddress}
-		glog.V(2).Infof("configSriovDeviceVirtual(): vfaddrs %v", vfAddrs)
-		for _, addr := range vfAddrs {
-			glog.V(2).Infof("configSriovDeviceVirtual(): addr %s", addr)
-			driver := ""
-			vfID := 0
-			for _, group := range iface.VfGroups {
-				glog.V(2).Infof("configSriovDeviceVirtual(): group %v", group)
-				if sriovnetworkv1.IndexInRange(vfID, group.VfRange) {
-					glog.V(2).Infof("configSriovDeviceVirtual(): indexInRange %d", vfID)
-					if sriovnetworkv1.StringInArray(group.DeviceType, DpdkDrivers) {
-						glog.V(2).Infof("configSriovDeviceVirtual(): driver %s", group.DeviceType)
-						driver = group.DeviceType
-					}
-					break
+		addr := iface.PciAddress
+		glog.V(2).Infof("configSriovDeviceVirtual(): addr %s", addr)
+		driver := ""
+		vfID := 0
+		for _, group := range iface.VfGroups {
+			glog.V(2).Infof("configSriovDeviceVirtual(): group %v", group)
+			if sriovnetworkv1.IndexInRange(vfID, group.VfRange) {
+				glog.V(2).Infof("configSriovDeviceVirtual(): indexInRange %d", vfID)
+				if sriovnetworkv1.StringInArray(group.DeviceType, DpdkDrivers) {
+					glog.V(2).Infof("configSriovDeviceVirtual(): driver %s", group.DeviceType)
+					driver = group.DeviceType
 				}
+				break
 			}
-			if driver == "" {
-				glog.V(2).Infof("configSriovDeviceVirtual(): bind default")
-				if err := BindDefaultDriver(addr); err != nil {
-					glog.Warningf("configSriovDeviceVirtual(): fail to bind default driver for device %s", addr)
-					return err
-				}
-			} else {
-				glog.V(2).Infof("configSriovDeviceVirtual(): bind driver %s", driver)
-				if err := BindDpdkDriver(addr, driver); err != nil {
-					glog.Warningf("configSriovDeviceVirtual(): fail to bind driver %s for device %s", driver, addr)
-					return err
-				}
+		}
+		if driver == "" {
+			glog.V(2).Infof("configSriovDeviceVirtual(): bind default")
+			if err := BindDefaultDriver(addr); err != nil {
+				glog.Warningf("configSriovDeviceVirtual(): fail to bind default driver for device %s", addr)
+				return err
+			}
+		} else {
+			glog.V(2).Infof("configSriovDeviceVirtual(): bind driver %s", driver)
+			if err := BindDpdkDriver(addr, driver); err != nil {
+				glog.Warningf("configSriovDeviceVirtual(): fail to bind driver %s for device %s", driver, addr)
+				return err
 			}
 		}
 	}

@@ -50,12 +50,9 @@ func (p *VirtualPlugin) Spec() string {
 // OnNodeStateAdd Invoked when SriovNetworkNodeState CR is created, return if need dain and/or reboot node
 func (p *VirtualPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("virtual-plugin OnNodeStateAdd()")
-	needDrain = false
 	needReboot = false
 	err = nil
 	p.DesireState = state
-
-	needDrain = needDrainNode(state.Spec.Interfaces, state.Status.Interfaces)
 
 	if p.LoadVfioDriver != loaded {
 		if needVfioDriver(state) {
@@ -133,9 +130,4 @@ func isCommandNotFound(err error) bool {
 		}
 	}
 	return false
-}
-
-func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool) {
-	needDrain = false
-	return
 }
