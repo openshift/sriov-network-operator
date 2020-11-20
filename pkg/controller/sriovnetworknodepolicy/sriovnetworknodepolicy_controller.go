@@ -513,27 +513,7 @@ func (r *ReconcileSriovNetworkNodePolicy) syncDaemonSet(cr *sriovnetworkv1.Sriov
 }
 
 func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1.DaemonSet) error {
-	terms := []corev1.NodeSelectorTerm{}
-	for _, p := range pl.Items {
-		nodeSelector := corev1.NodeSelectorTerm{}
-		if len(p.Spec.NodeSelector) == 0 {
-			continue
-		}
-		for k, v := range p.Spec.NodeSelector {
-			expressions := []corev1.NodeSelectorRequirement{}
-			exp := corev1.NodeSelectorRequirement{
-				Operator: corev1.NodeSelectorOpIn,
-				Key:      k,
-				Values:   []string{v},
-			}
-			expressions = append(expressions, exp)
-			nodeSelector = corev1.NodeSelectorTerm{
-				MatchExpressions: expressions,
-			}
-		}
-		terms = append(terms, nodeSelector)
-	}
-
+	terms := nodeSelectorTermsForPolicyList(pl.Items)
 	if len(terms) > 0 {
 		ds.Spec.Template.Spec.Affinity = &corev1.Affinity{
 			NodeAffinity: &corev1.NodeAffinity{
@@ -544,6 +524,36 @@ func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1
 		}
 	}
 	return nil
+}
+
+func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePolicy) []corev1.NodeSelectorTerm {
+	terms := []corev1.NodeSelectorTerm{}
+	for _, p := range policies {
+		nodeSelector := corev1.NodeSelectorTerm{}
+		if len(p.Spec.NodeSelector) == 0 {
+			continue
+		}
+		expressions := []corev1.NodeSelectorRequirement{}
+		for k, v := range p.Spec.NodeSelector {
+			exp := corev1.NodeSelectorRequirement{
+				Operator: corev1.NodeSelectorOpIn,
+				Key:      k,
+				Values:   []string{v},
+			}
+			expressions = append(expressions, exp)
+		}
+		// sorting is needed to keep the daemon spec stable.
+		// the items are popped in a random order from the map
+		sort.Slice(expressions, func(i, j int) bool {
+			return expressions[i].Key < expressions[j].Key
+		})
+		nodeSelector = corev1.NodeSelectorTerm{
+			MatchExpressions: expressions,
+		}
+		terms = append(terms, nodeSelector)
+	}
+
+	return terms
 }
 
 // renderDsForCR returns a busybox pod with the same name/namespace as the cr
