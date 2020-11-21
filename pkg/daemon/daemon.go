@@ -742,7 +742,7 @@ func tryCreateUdevRule() error {
 			return err
 		}
 	}
-	content := fmt.Sprintf("ACTION==\"add|change\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.VfIds, "|"))
+	content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.VfIds, "|"))
 	err = ioutil.WriteFile(filePath, []byte(content), 0666)
 	if err != nil {
 		glog.Errorf("tryCreateUdevRule(): fail to write file: %v", err)
