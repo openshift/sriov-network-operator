@@ -20,6 +20,7 @@ import (
 	"github.com/golang/glog"
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -48,6 +49,8 @@ const (
 	// maxUpdateBackoff is the maximum time to react to a change as we back off
 	// in the face of errors.
 	maxUpdateBackoff = 60 * time.Second
+
+	UNSUPPORTED_NIC_ID_CONFIGMAP = "unsupported-nic-ids"
 )
 
 type Message struct {
@@ -163,6 +166,50 @@ func New(
 	}
 }
 
+func (dn *Daemon) getUnsupportedNicIdConfigMap() (*v1.ConfigMap, error) {
+	cm, err := dn.kubeClient.CoreV1().ConfigMaps(namespace).Get(
+		context.Background(),
+		UNSUPPORTED_NIC_ID_CONFIGMAP,
+		metav1.GetOptions{},
+	)
+	return cm, err
+}
+
+func (dn *Daemon) annotateUnsupportedNicIdConfigMap(cm *v1.ConfigMap, nodeName string) (*v1.ConfigMap, error) {
+	jsonData, err := json.Marshal(cm.Data)
+	if err != nil {
+		return nil, err
+	}
+	cm.ObjectMeta.Annotations["openshift.io/"+nodeName] = string(jsonData)
+	return dn.kubeClient.CoreV1().ConfigMaps(namespace).Update(context.Background(), cm, metav1.UpdateOptions{})
+}
+
+func (dn *Daemon) tryCreateUdevRuleWrapper() error {
+	var unsupportedNicIdMap map[string]string
+
+	// retrieve config map
+	cm, configMapErr := dn.getUnsupportedNicIdConfigMap()
+	if configMapErr != nil {
+		glog.V(2).Info("Could not retrieve Nic Id ConfigMap: ", configMapErr)
+	} else {
+		unsupportedNicIdMap = cm.Data
+	}
+
+	// update udev rule and if update succeeds
+	ruleWritten, err := tryCreateUdevRule(unsupportedNicIdMap)
+	if err != nil {
+		return err
+	}
+
+	// annotage ConfigMap if it exists
+	if configMapErr == nil && ruleWritten {
+		if _, err := dn.annotateUnsupportedNicIdConfigMap(cm, dn.name); err != nil {
+			glog.V(2).Info("Could not update Nic Id ConfigMap", "err", err)
+		}
+	}
+	return nil
+}
+
 // Run the config daemon
 func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	glog.V(0).Info("Run(): start daemon")
@@ -171,9 +218,11 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	defer dn.workqueue.ShutDown()
 
 	tryEnableRdma()
-	if err := tryCreateUdevRule(); err != nil {
+
+	if err := dn.tryCreateUdevRuleWrapper(); err != nil {
 		return err
 	}
+
 	var timeout int64 = 5
 	dn.mu = &sync.Mutex{}
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
@@ -242,6 +291,11 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 				lastSyncError: err.Error(),
 			}
 			return err
+		case <-time.After(30 * time.Second):
+			glog.V(2).Info("Run(): period refresh")
+			if err := dn.tryCreateUdevRuleWrapper(); err != nil {
+				glog.V(2).Info("Could not create udev rule: ", err)
+			}
 		}
 	}
 }
@@ -726,27 +780,29 @@ func tryEnableRdma() (bool, error) {
 	return false, err
 }
 
-func tryCreateUdevRule() error {
+func tryCreateUdevRule(unsupportedNicIdMap map[string]string) (bool, error) {
 	glog.V(2).Infof("tryCreateUdevRule()")
 	filePath := "/host/etc/udev/rules.d/10-nm-unmanaged.rules"
-	_, err := os.Stat(filePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			glog.V(2).Infof("tryCreateUdevRule(): file not existed, create file")
-			_, err := os.Create(filePath)
-			if err != nil {
-				glog.Errorf("tryCreateUdevRule(): fail to create file: %v", err)
-				return err
-			}
-		} else {
-			return err
-		}
+
+	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetMergedVfIds(unsupportedNicIdMap), "|"))
+
+	old_content, err := ioutil.ReadFile(filePath)
+	// if old_content = new_content, don't do anything
+	if err == nil && new_content == string(old_content) {
+		return false, nil
 	}
-	content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.VfIds, "|"))
-	err = ioutil.WriteFile(filePath, []byte(content), 0666)
+
+	glog.V(2).Infof("Old udev content '%v' and new content '%v' differ. Writing to file %v.",
+		strings.TrimSuffix(string(old_content), "\n"),
+		strings.TrimSuffix(new_content, "\n"),
+		filePath)
+
+	// if the file does not exist or if old_content != new_content
+	// write to file and create it if it doesn't exist
+	err = ioutil.WriteFile(filePath, []byte(new_content), 0666)
 	if err != nil {
 		glog.Errorf("tryCreateUdevRule(): fail to write file: %v", err)
-		return err
+		return false, err
 	}
-	return nil
+	return true, nil
 }

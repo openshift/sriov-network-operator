@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -73,6 +74,77 @@ func IsSupportedModel(vendorId, deviceId string) bool {
 	return false
 }
 
+func IsEnabledUnsupportedVendor(vendorId string, unsupportedNicIdMap map[string]string) bool {
+	for _, n := range unsupportedNicIdMap {
+		if IsValidPciString(n) {
+			ids := strings.Split(n, " ")
+			if vendorId == ids[0] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func IsEnabledUnsupportedDevice(deviceId string, unsupportedNicIdMap map[string]string) bool {
+	for _, n := range unsupportedNicIdMap {
+		if IsValidPciString(n) {
+			ids := strings.Split(n, " ")
+			if deviceId == ids[1] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func IsEnabledUnsupportedModel(vendorId, deviceId string, unsupportedNicIdMap map[string]string) bool {
+	for _, n := range unsupportedNicIdMap {
+		if IsValidPciString(n) {
+			ids := strings.Split(n, " ")
+			if vendorId == ids[0] && deviceId == ids[1] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func IsValidPciString(nicIdString string) bool {
+	ids := strings.Split(nicIdString, " ")
+
+	if len(ids) != 3 {
+		log.Info("IsValidPciString(): ", nicIdString)
+		return false
+	}
+
+	if len(ids[0]) != 4 {
+		log.Info("IsValidPciString():", "Invalid vendor PciId ", ids[0])
+		return false
+	}
+	if _, err := strconv.ParseInt(ids[0], 16, 32); err != nil {
+		log.Info("IsValidPciString():", "Invalid vendor PciId ", ids[0])
+	}
+
+	if len(ids[1]) != 4 {
+		log.Info("IsValidPciString():", "Invalid PciId of PF ", ids[1])
+		return false
+	}
+	if _, err := strconv.ParseInt(ids[1], 16, 32); err != nil {
+		log.Info("IsValidPciString():", "Invalid PciId of PF ", ids[1])
+	}
+
+	if len(ids[2]) != 4 {
+		log.Info("IsValidPciString():", "Invalid PciId of VF ", ids[2])
+		return false
+	}
+	if _, err := strconv.ParseInt(ids[2], 16, 32); err != nil {
+		log.Info("IsValidPciString():", "Invalid PciId of VF ", ids[2])
+	}
+
+	return true
+}
+
 func GetSupportedVfIds() []string {
 	var vfIds []string
 	for _, n := range NicIdMap {
@@ -83,6 +155,49 @@ func GetSupportedVfIds() []string {
 		}
 	}
 	return vfIds
+}
+
+func GetUnsupportedVfIds(unsupportedNicIdMap map[string]string) []string {
+	var vfIds []string
+	for k, n := range unsupportedNicIdMap {
+		if !IsValidPciString(n) {
+			log.Info("GetUnsupportedVfIds():", "name", k,
+				"Invalid Pci string", n)
+			continue
+		}
+		ids := strings.Split(n, " ")
+		vfId := "0x" + ids[2]
+		if !StringInArray(vfId, vfIds) {
+			vfIds = append(vfIds, vfId)
+		}
+	}
+	return vfIds
+}
+
+func GetMergedVfIds(unsupportedNicIdMap map[string]string) []string {
+	supportedVfIds := VfIds
+	unsupportedVfIds := GetUnsupportedVfIds(unsupportedNicIdMap)
+	var mergedVfIds []string
+
+	mergedVfIdsSet := make(map[string]struct{})
+	for _, v := range supportedVfIds {
+		mergedVfIdsSet[v] = struct{}{}
+	}
+	for _, v := range unsupportedVfIds {
+		mergedVfIdsSet[v] = struct{}{}
+	}
+	for k := range mergedVfIdsSet {
+		mergedVfIds = append(mergedVfIds, k)
+	}
+
+	// return a sorted slice so that udev rule is stable
+	sort.Slice(mergedVfIds, func(i, j int) bool {
+		ip, _ := strconv.ParseInt(mergedVfIds[i], 0, 32)
+		jp, _ := strconv.ParseInt(mergedVfIds[j], 0, 32)
+		return ip < jp
+	})
+
+	return mergedVfIds
 }
 
 func GetVfDeviceId(deviceId string) string {
