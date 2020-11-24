@@ -1,0 +1,9 @@
+name: ovs-configuration.service
+dropins:
+- name: 10-switchdev.conf
+  contents: |
+    [Service]
+    ExecStartPre=-/sbin/ip route del default via 10.19.111.254 dev eno2
+    [Unit]
+    Wants=switchdev-configuration.service
+    After=switchdev-configuration.service

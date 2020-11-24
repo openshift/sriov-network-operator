@@ -420,6 +420,7 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 
 	reqReboot := false
 	reqDrain := false
+	mcoReboot := false
 	for k, p := range dn.LoadedPlugins {
 		d, r := false, false
 		if dn.nodeState.GetName() == "" {
@@ -431,25 +432,39 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 			glog.Errorf("nodeStateSyncHandler(): plugin %s error: %v", k, err)
 			return err
 		}
+
+		if p.Name() == "mco_plugin" && d && !r {
+			mcoReboot = true
+		}
+
 		glog.V(0).Infof("nodeStateSyncHandler(): plugin %s: reqDrain %v, reqReboot %v", k, d, r)
 		reqDrain = reqDrain || d
 		reqReboot = reqReboot || r
 	}
 	glog.V(0).Infof("nodeStateSyncHandler(): reqDrain %v, reqReboot %v disableDrain %v", reqDrain, reqReboot, dn.disableDrain)
 
-	if reqDrain && !dn.disableDrain {
-		glog.Info("nodeStateSyncHandler(): drain node")
-		if err := dn.drainNode(dn.name); err != nil {
-			return err
-		}
-	}
 	for k, p := range dn.LoadedPlugins {
-		if k != GenericPlugin {
+		if k != GenericPlugin && k != McoPlugin {
 			err := p.Apply()
 			if err != nil {
 				glog.Errorf("nodeStateSyncHandler(): plugin %s fail to apply: %v", k, err)
 				return err
 			}
+		}
+	}
+	if mcoReboot {
+		glog.V(0).Infof("nodeStateSyncHandler(): MCO will trigger reboot")
+		err = dn.LoadedPlugins[McoPlugin].Apply()
+		if err != nil {
+			glog.Errorf("nodeStateSyncHandler(): mco_plugin fail to apply: %v", err)
+			return err
+		}
+		return nil
+	}
+	if reqDrain && !dn.disableDrain {
+		glog.Info("nodeStateSyncHandler(): drain node")
+		if err := dn.drainNode(dn.name); err != nil {
+			return err
 		}
 	}
 
@@ -575,8 +590,12 @@ func (dn *Daemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) er
 		pl = append(pl, VirtualPlugin)
 	} else {
 		pl = registerPlugins(ns)
+		if utils.ClusterType == utils.ClusterTypeOpenshift {
+			pl = append(pl, McoPlugin)
+		}
 		pl = append(pl, GenericPlugin)
 	}
+
 	dn.LoadedPlugins = make(map[string]VendorPlugin)
 
 	for _, pn := range pl {

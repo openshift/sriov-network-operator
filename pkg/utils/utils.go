@@ -31,9 +31,16 @@ const (
 	netClass              = 0x02
 	numVfsFile            = "sriov_numvfs"
 	scriptsPath           = "bindata/scripts/load-kmod.sh"
+	ClusterTypeOpenshift  = "openshift"
+	ClusterTypeKubernetes = "kubernetes"
 )
 
 var InitialState sriovnetworkv1.SriovNetworkNodeState
+var ClusterType string
+
+func init() {
+	ClusterType = os.Getenv("CLUSTER_TYPE")
+}
 
 func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 	glog.V(2).Info("DiscoverSriovDevices")
@@ -120,6 +127,10 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 		for _, iface := range newState.Spec.Interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
+				if iface.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV && ClusterType == ClusterTypeOpenshift {
+					// Skip sync for openshift, MCO will inject a systemd service to config switchdev devices.
+					break
+				}
 				if !needUpdate(&iface, &ifaceStatus) {
 					glog.V(2).Infof("syncNodeState(): no need update interface %s", iface.PciAddress)
 					break
@@ -131,7 +142,7 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 				break
 			}
 		}
-		if !configured && ifaceStatus.NumVfs > 0 {
+		if !configured && ifaceStatus.NumVfs > 0 && ifaceStatus.EswitchMode != sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
 			if err = resetSriovDevice(ifaceStatus); err != nil {
 				return err
 			}

@@ -23,6 +23,7 @@ import (
 	"os"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -49,6 +50,7 @@ func init() {
 
 	utilruntime.Must(sriovnetworkv1.AddToScheme(scheme))
 	utilruntime.Must(netattdefv1.AddToScheme(scheme))
+	utilruntime.Must(mcfgv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 

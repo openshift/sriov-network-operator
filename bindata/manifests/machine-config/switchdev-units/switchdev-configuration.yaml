@@ -1,0 +1,19 @@
+contents: |
+  [Unit]
+  Description=Configures SRIOV NIC into switchdev mode
+  # Removal of this file signals firstboot completion
+  ConditionPathExists=!/etc/ignition-machine-config-encapsulated.json
+  # This service is used to move a SRIOV NIC into switchdev mode
+  Wants=network-pre.target
+  Before=network-pre.target
+
+  [Service]
+  Type=oneshot
+  ExecStart=/usr/local/bin/configure-switchdev.sh
+  StandardOutput=journal+console
+  StandardError=journal+console
+
+  [Install]
+  WantedBy=network-online.target
+enabled: true
+name: switchdev-configuration.service

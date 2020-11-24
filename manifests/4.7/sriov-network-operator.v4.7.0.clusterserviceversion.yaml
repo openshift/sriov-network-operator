@@ -184,6 +184,9 @@ spec:
         - apiGroups: ["sriovnetwork.openshift.io"]
           resources: ["*"]
           verbs: ["*"]
+        - apiGroups: ["machineconfiguration.openshift.io"]
+          resources: ["*"]
+          verbs: ["*"]
         serviceAccountName: sriov-network-operator
       - rules:
         - apiGroups: [""]
