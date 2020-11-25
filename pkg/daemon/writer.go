@@ -40,12 +40,12 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func()) *Node
 
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
-func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, destDir string, runonce bool) {
+func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, destDir string, runonce bool, platformType PlatformType) {
 	glog.V(0).Infof("Run(): start writer")
 	msg := Message{}
 	if runonce {
 		glog.V(0).Info("Run(): once")
-		if err := writer.pollNicStatus(); err != nil {
+		if err := writer.pollNicStatus(platformType); err != nil {
 			glog.Errorf("Run(): first poll failed: %v", err)
 		}
 		ns, _ := writer.setNodeStateStatus(msg)
@@ -59,7 +59,7 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 			return
 		case msg = <-refresh:
 			glog.V(0).Info("Run(): refresh trigger")
-			if err := writer.pollNicStatus(); err != nil {
+			if err := writer.pollNicStatus(platformType); err != nil {
 				continue
 			}
 			writer.setNodeStateStatus(msg)
@@ -68,7 +68,7 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 			}
 		case <-time.After(30 * time.Second):
 			glog.V(2).Info("Run(): period refresh")
-			if err := writer.pollNicStatus(); err != nil {
+			if err := writer.pollNicStatus(platformType); err != nil {
 				continue
 			}
 			writer.setNodeStateStatus(msg)
@@ -76,9 +76,16 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 	}
 }
 
-func (writer *NodeStateStatusWriter) pollNicStatus() error {
+func (writer *NodeStateStatusWriter) pollNicStatus(platformType PlatformType) error {
 	glog.V(2).Info("pollNicStatus()")
-	iface, err := utils.DiscoverSriovDevices()
+	var iface []sriovnetworkv1.InterfaceExt
+	var err error
+
+	if platformType == Virtual {
+		iface, err = utils.DiscoverSriovDevicesVirtual()
+	} else {
+		iface, err = utils.DiscoverSriovDevices()
+	}
 	if err != nil {
 		return err
 	}

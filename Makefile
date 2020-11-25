@@ -60,7 +60,7 @@ _build-%:
 _plugin-%: vet
 	@hack/build-plugins.sh $*
 
-plugins: _plugin-intel _plugin-mellanox _plugin-generic
+plugins: _plugin-intel _plugin-mellanox _plugin-generic _plugin-virtual
 
 clean:
 	@rm -rf $(TARGET_DIR)
