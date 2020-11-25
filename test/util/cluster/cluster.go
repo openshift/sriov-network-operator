@@ -41,7 +41,7 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 	}
 
 	for _, state := range ss {
-		isStable, err := stateStable(state, clients, operatorNamespace)
+		isStable, err := stateStable(state)
 		if err != nil {
 			return nil, err
 		}
@@ -126,7 +126,7 @@ func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool,
 		return false, nil
 	}
 	for _, state := range nodeStates.Items {
-		nodeReady, err := stateStable(state, clients, operatorNamespace)
+		nodeReady, err := stateStable(state)
 		if err != nil {
 			return false, err
 		}
@@ -137,7 +137,7 @@ func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool,
 	return true, nil
 }
 
-func stateStable(state sriovv1.SriovNetworkNodeState, clients *testclient.ClientSet, operatorNamespace string) (bool, error) {
+func stateStable(state sriovv1.SriovNetworkNodeState) (bool, error) {
 	switch state.Status.SyncStatus {
 	case "Succeeded":
 		return true, nil
