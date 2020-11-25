@@ -8,6 +8,9 @@ IMAGE_BUILDER?=docker
 IMAGE_BUILD_OPTS?=
 DOCKERFILE?=Dockerfile
 
+CRD_BASES=./config/crd/bases
+MANIFESTS_4.7=./manifests/4.7
+
 export APP_NAME=sriov-network-operator
 APP_REPO=github.com/openshift/$(APP_NAME)
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
@@ -101,7 +104,12 @@ uninstall: manifests kustomize
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=$(CRD_BASES)
+	cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovibnetworks.yaml 		$(MANIFESTS_4.7)/sriov-network-operator-sriovibnetworks_crd.yaml
+	cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodepolicies.yaml 	$(MANIFESTS_4.7)/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
+	cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodestates.yaml 	$(MANIFESTS_4.7)/sriov-network-operator-sriovnetworknodestate.crd.yaml
+	cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovoperatorconfigs.yaml  	$(MANIFESTS_4.7)/sriov-network-operator-sriovoperatorconfig.crd.yaml
+
 
 # Run go fmt against code
 
