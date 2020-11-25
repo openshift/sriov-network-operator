@@ -1041,29 +1041,31 @@ var _ = Describe("[sriov] operator", func() {
 			})
 			Context("Main PF", func() {
 				It("should work when vfs are used by pods", func() {
-					if discovery.Enabled() {
-						Skip("VFs from main PF used by pods disabled in discovery mode")
+					if !discovery.Enabled() {
+						testNode := sriovInfos.Nodes[0]
+						resourceName := "mainpfresource"
+						sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
+						Expect(err).ToNot(HaveOccurred())
+						executorPod := createCustomTestPod(testNode, []string{}, true)
+						mainDeviceForNode := findMainSriovDevice(executorPod, sriovDeviceList)
+						if mainDeviceForNode == nil {
+							Skip("Could not find pf used as gateway")
+						}
+						createSriovPolicy(mainDeviceForNode.Name, testNode, 2, resourceName)
 					}
 
-					testNode := sriovInfos.Nodes[0]
-					resourceName := "mainpfresource"
-					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
-					Expect(err).ToNot(HaveOccurred())
-					executorPod := createCustomTestPod(testNode, []string{}, true)
-					mainDevice := findMainSriovDevice(executorPod, sriovDeviceList)
-					if mainDevice == nil {
-						Skip("Could not find pf used as gateway")
+					mainDevice, resourceName, nodeToTest, ok := discoverResourceForMainSriov(sriovInfos)
+					if !ok {
+						Skip("Could not find a policy configured to use the main pf")
 					}
-
-					createSriovPolicy(mainDevice.Name, testNode, 2, resourceName)
 					ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
-					err = network.CreateSriovNetwork(clients, mainDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+					err := network.CreateSriovNetwork(clients, mainDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 					Expect(err).ToNot(HaveOccurred())
 					Eventually(func() error {
 						netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 						return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
 					}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-					createTestPod(testNode, []string{sriovNetworkName})
+					createTestPod(nodeToTest, []string{sriovNetworkName})
 				})
 			})
 			Context("PF shutdown", func() {
@@ -1512,6 +1514,57 @@ func changeNodeInterfaceState(testNode string, ifcName string, enable bool) {
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
 	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodSucceeded))
+}
+
+func discoverResourceForMainSriov(nodes *cluster.EnabledNodes) (*sriovv1.InterfaceExt, string, string, bool) {
+	for _, node := range nodes.Nodes {
+		nodeDevices, err := nodes.FindSriovDevices(node)
+		Expect(err).ToNot(HaveOccurred())
+		if len(nodeDevices) == 0 {
+			continue
+		}
+
+		executorPod := createCustomTestPod(node, []string{}, true)
+		mainDevice := findMainSriovDevice(executorPod, nodeDevices)
+		nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		resourceName, ok := findSuitableResourceForMain(mainDevice, nodeState)
+		if ok {
+			fmt.Printf("Using %s with resource %s for node %s", mainDevice.Name, resourceName, node)
+			return mainDevice, resourceName, node, true
+		}
+	}
+	return nil, "", "", false
+}
+
+func findSuitableResourceForMain(mainIntf *sriovv1.InterfaceExt, networkState *sriovv1.SriovNetworkNodeState) (string, bool) {
+	for _, intf := range networkState.Spec.Interfaces {
+		if intf.Name == mainIntf.Name {
+			for _, vfGroup := range intf.VfGroups {
+				// we want to make sure that selecting the resource name means
+				// selecting the primary interface
+				if resourceOnlyForInterface(networkState, intf.Name, vfGroup.ResourceName) {
+					return vfGroup.ResourceName, true
+				}
+			}
+		}
+	}
+
+	return "", false
+
+}
+
+func resourceOnlyForInterface(networkState *sriovv1.SriovNetworkNodeState, resourceName, interfaceName string) bool {
+	for _, intf := range networkState.Spec.Interfaces {
+		if intf.Name != interfaceName {
+			for _, vfGroup := range intf.VfGroups {
+				if vfGroup.ResourceName == resourceName {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 func findMainSriovDevice(executorPod *corev1.Pod, sriovDevices []*sriovv1.InterfaceExt) *sriovv1.InterfaceExt {
