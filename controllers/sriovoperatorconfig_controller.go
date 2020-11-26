@@ -208,6 +208,9 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.S
 
 	names := []string{"sriov-cni", "sriov-device-plugin"}
 
+	if len(dc.Spec.ConfigDaemonNodeSelector) == 0 {
+		return nil
+	}
 	for _, name := range names {
 		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, ds)
 		if err != nil {
