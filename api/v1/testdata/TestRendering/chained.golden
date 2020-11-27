@@ -9,6 +9,6 @@
     "namespace": "testnamespace"
   },
   "spec": {
-    "config": "{\"cniVersion\":\"0.4.0\",\"name\":\"\",\"plugins\": [ {\"type\":\"sriov\",\"vlan\":0,\"vlanQoS\":0,\"ipam\":{} },\n{ \"type\": \"vrf\", \"vrfname\": \"blue\" }\n]"
+    "config": "{ \"cniVersion\":\"0.3.1\", \"name\":\"\",\"plugins\": [ {\"type\":\"sriov\",\"vlan\":0,\"vlanQoS\":0,\"ipam\":{} },\n{ \"type\": \"vrf\", \"vrfname\": \"blue\" }\n] }"
   }
 }
