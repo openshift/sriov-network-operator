@@ -79,3 +79,50 @@ func TestRendering(t *testing.T) {
 		})
 	}
 }
+
+func TestIBRendering(t *testing.T) {
+	testtable := []struct {
+		tname   string
+		network v1.SriovIBNetwork
+	}{
+		{
+			tname: "simpleib",
+			network: v1.SriovIBNetwork{
+				Spec: v1.SriovIBNetworkSpec{
+					NetworkNamespace: "testnamespace",
+					ResourceName:     "testresource",
+					Capabilities:     "foo",
+				},
+			},
+		},
+	}
+	for _, tc := range testtable {
+		t.Run(tc.tname, func(t *testing.T) {
+			var b bytes.Buffer
+			w := bufio.NewWriter(&b)
+			rendered, err := tc.network.RenderNetAttDef()
+			if err != nil {
+				t.Fatal("failed rendering network attachment definition", err)
+			}
+			encoder := json.NewEncoder(w)
+			encoder.SetIndent("", "  ")
+			encoder.Encode(rendered)
+			w.Flush()
+			gp := filepath.Join("testdata", filepath.FromSlash(t.Name())+".golden")
+			if *update {
+				t.Log("update golden file")
+				if err := ioutil.WriteFile(gp, b.Bytes(), 0644); err != nil {
+					t.Fatalf("failed to update golden file: %s", err)
+				}
+			}
+			g, err := ioutil.ReadFile(gp)
+			if err != nil {
+				t.Fatalf("failed reading .golden: %s", err)
+			}
+			t.Log(string(b.Bytes()))
+			if !bytes.Equal(b.Bytes(), g) {
+				t.Errorf("bytes do not match .golden file")
+			}
+		})
+	}
+}
