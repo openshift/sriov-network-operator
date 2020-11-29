@@ -563,6 +563,9 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			if len(p.Spec.NicSelector.PfNames) > 0 {
 				netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
+			if len(p.Spec.NicSelector.LinkTypes) > 0 {
+				netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, p.Spec.NicSelector.LinkTypes...)
+			}
 			if len(p.Spec.NicSelector.RootDevices) > 0 {
 				netDeviceSelectors.RootDevices = sriovnetworkv1.UniqueAppend(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
 			}
@@ -615,6 +618,9 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			}
 			if len(p.Spec.NicSelector.PfNames) > 0 {
 				netDeviceSelectors.PfNames = append(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
+			}
+			if l := len(p.Spec.NicSelector.LinkTypes); l > 0 {
+				netDeviceSelectors.LinkTypes = append(netDeviceSelectors.LinkTypes, p.Spec.NicSelector.LinkTypes...)
 			}
 			if len(p.Spec.NicSelector.RootDevices) > 0 {
 				netDeviceSelectors.RootDevices = append(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)

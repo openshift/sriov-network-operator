@@ -77,6 +77,11 @@ spec:
                     description: Infrastructure Networking selection filter. Allowed
                       value "openstack/NetworkID:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                     type: string
+                  linkTypes:
+                    description: Link type of SR-IOV PF.
+                    items:
+                      type: string
+                    type: array
                   pfNames:
                     description: Name of SR-IoV PF.
                     items:

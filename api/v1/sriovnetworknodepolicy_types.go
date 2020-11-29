@@ -52,6 +52,8 @@ type SriovNetworkNicSelector struct {
 	PfNames []string `json:"pfNames,omitempty"`
 	// Infrastructure Networking selection filter. Allowed value "openstack/NetworkID:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 	NetFilter string `json:"netFilter,omitempty"`
+	// Link type of SR-IOV PF.
+	LinkTypes []string `json:"linkTypes,omitempty"`
 }
 
 // SriovNetworkNodePolicyStatus defines the observed state of SriovNetworkNodePolicy
