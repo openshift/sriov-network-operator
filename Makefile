@@ -9,7 +9,6 @@ IMAGE_BUILD_OPTS?=
 DOCKERFILE?=Dockerfile
 
 CRD_BASES=./config/crd/bases
-MANIFESTS_4.7=./manifests/4.7
 
 export APP_NAME=sriov-network-operator
 APP_REPO=github.com/openshift/$(APP_NAME)
@@ -105,10 +104,16 @@ uninstall: manifests kustomize
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=$(CRD_BASES)
-	cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovibnetworks.yaml 		$(MANIFESTS_4.7)/sriov-network-operator-sriovibnetworks_crd.yaml
-	cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodepolicies.yaml 	$(MANIFESTS_4.7)/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
-	cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodestates.yaml 	$(MANIFESTS_4.7)/sriov-network-operator-sriovnetworknodestate.crd.yaml
-	cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovoperatorconfigs.yaml  	$(MANIFESTS_4.7)/sriov-network-operator-sriovoperatorconfig.crd.yaml
+
+
+sync-manifests-%: manifests
+	@mkdir -p MANIFESTS/$*
+	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovibnetworks.yaml		MANIFESTS/$*/sriov-network-operator-sriovibnetworks_crd.yaml
+	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodepolicies.yaml 	MANIFESTS/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
+	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodestates.yaml 	MANIFESTS/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
+	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovoperatorconfigs.yaml  	MANIFESTS/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
+	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworks.yaml			MANIFESTS/$*/sriov-network-operator-sriovnetwork.crd.yaml
+	@echo "Please manually update the sriov-network-operator.v4.7.0.clusterserviceversion.yaml and image-references files in  MANIFESTS/$* directory"
 
 
 # Run go fmt against code
