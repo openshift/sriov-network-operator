@@ -79,7 +79,7 @@ test: generate vet manifests
 manager: generate vet _build-manager
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: vet install
+run: vet skopeo install
 	hack/run-locally.sh
 
 # Install CRDs into a cluster
@@ -152,6 +152,9 @@ else
 KUSTOMIZE=$(shell which kustomize)
 endif
 
+skopeo:
+	if ! which skopeo; then if [ -f /etc/redhat-release ]; then dnf -y install skopeo; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install skopeo; fi; fi
+
 # Generate bundle manifests and metadata, then validate generated files.
 .PHONY: bundle
 bundle: manifests
@@ -165,7 +168,7 @@ bundle: manifests
 bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
-deploy-setup: install
+deploy-setup: skopeo install
 	hack/deploy-setup.sh $(NAMESPACE)
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
@@ -177,7 +180,7 @@ deploy-setup-k8s: deploy-setup
 test-e2e-conformance:
 	./hack/run-e2e-conformance.sh
 
-test-e2e: 
+test-e2e: generate vet manifests skopeo
 	mkdir -p ${ENVTEST_ASSETS_DIR}
 	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/master/hack/setup-envtest.sh
 	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); source hack/env.sh; go test ./test/e2e/... -coverprofile cover.out -v
@@ -185,7 +188,7 @@ test-e2e:
 test-%: generate vet manifests
 	mkdir -p ${ENVTEST_ASSETS_DIR}
 	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/master/hack/setup-envtest.sh
-	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); source hack/env.sh; go test ./$*/... -coverprofile cover.out -v
+	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./$*/... -coverprofile cover.out -v
 
 # deploy-setup-k8s: export NAMESPACE=sriov-network-operator
 # deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false

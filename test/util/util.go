@@ -178,7 +178,7 @@ func GenerateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 	}
 	vlanQoS := cr.Spec.VlanQoS
 
-	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"sriov","vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.GetName(), cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, ipam)
+	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s","type":"sriov","vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.GetName(), cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, ipam)
 }
 
 func GenerateSriovIBNetworkCRs(namespace string, specs map[string]sriovnetworkv1.SriovIBNetworkSpec) map[string]sriovnetworkv1.SriovIBNetwork {
@@ -214,7 +214,7 @@ func GenerateExpectedIBNetConfig(cr *sriovnetworkv1.SriovIBNetwork) string {
 	if cr.Spec.IPAM != "" {
 		ipam = cr.Spec.IPAM
 	}
-	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s", "type":"ib-sriov",%s"ipam":%s }`, cr.GetName(), state, ipam)
+	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s","type":"ib-sriov",%s"ipam":%s }`, cr.GetName(), state, ipam)
 }
 
 func ValidateDevicePluginConfig(nps []*sriovnetworkv1.SriovNetworkNodePolicy, rawConfig string) error {

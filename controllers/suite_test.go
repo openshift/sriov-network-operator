@@ -127,6 +127,14 @@ var _ = BeforeSuite(func(done Done) {
 	os.Setenv("RESOURCE_PREFIX", "openshift.io")
 	os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
 	os.Setenv("ENABLE_ADMISSION_CONTROLLER", "true")
+	os.Setenv("SRIOV_CNI_IMAGE", "mock-image")
+	os.Setenv("SRIOV_INFINIBAND_CNI_IMAGE", "mock-image")
+	os.Setenv("SRIOV_DEVICE_PLUGIN_IMAGE", "mock-image")
+	os.Setenv("NETWORK_RESOURCES_INJECTOR_IMAGE", "mock-image")
+	os.Setenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE", "mock-image")
+	os.Setenv("SRIOV_NETWORK_WEBHOOK_IMAGE", "mock-image")
+	os.Setenv("RELEASE_VERSION", "4.7.0")
+	os.Setenv("OPERATOR_NAME", "sriov-network-operator")
 
 	go func() {
 		err = k8sManager.Start(ctrl.SetupSignalHandler())
