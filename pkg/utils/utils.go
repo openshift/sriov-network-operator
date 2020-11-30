@@ -66,6 +66,10 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			continue
 		}
 
+		if !dputils.IsSriovPF(device.Address) {
+			continue
+		}
+
 		driver, err := dputils.GetDriverName(device.Address)
 		if err != nil {
 			glog.Warningf("DiscoverSriovDevices(): unable to parse device driver for device %+v %q", device, err)
@@ -87,22 +91,20 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 		}
 		iface.LinkType = getLinkType(iface)
 
-		if dputils.IsSriovPF(device.Address) {
-			iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
-			iface.NumVfs = dputils.GetVFconfigured(device.Address)
-			if iface.EswitchMode, err = GetNicSriovMode(device.Address); err != nil {
-				glog.Warningf("DiscoverSriovDevices(): unable to get device mode %+v %q", device.Address, err)
+		iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
+		iface.NumVfs = dputils.GetVFconfigured(device.Address)
+		if iface.EswitchMode, err = GetNicSriovMode(device.Address); err != nil {
+			glog.Warningf("DiscoverSriovDevices(): unable to get device mode %+v %q", device.Address, err)
+		}
+		if dputils.SriovConfigured(device.Address) {
+			vfs, err := dputils.GetVFList(device.Address)
+			if err != nil {
+				glog.Warningf("DiscoverSriovDevices(): unable to parse VFs for device %+v %q", device, err)
+				continue
 			}
-			if dputils.SriovConfigured(device.Address) {
-				vfs, err := dputils.GetVFList(device.Address)
-				if err != nil {
-					glog.Warningf("DiscoverSriovDevices(): unable to parse VFs for device %+v %q", device, err)
-					continue
-				}
-				for _, vf := range vfs {
-					instance := getVfInfo(vf, devices)
-					iface.VFs = append(iface.VFs, instance)
-				}
+			for _, vf := range vfs {
+				instance := getVfInfo(vf, devices)
+				iface.VFs = append(iface.VFs, instance)
 			}
 		}
 		pfList = append(pfList, iface)
