@@ -107,13 +107,17 @@ manifests: controller-gen
 
 
 sync-manifests-%: manifests
-	@mkdir -p MANIFESTS/$*
-	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovibnetworks.yaml		MANIFESTS/$*/sriov-network-operator-sriovibnetworks_crd.yaml
-	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodepolicies.yaml 	MANIFESTS/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
-	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodestates.yaml 	MANIFESTS/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
-	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovoperatorconfigs.yaml  	MANIFESTS/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
-	@cp -u $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworks.yaml			MANIFESTS/$*/sriov-network-operator-sriovnetwork.crd.yaml
-	@echo "Please manually update the sriov-network-operator.v4.7.0.clusterserviceversion.yaml and image-references files in  MANIFESTS/$* directory"
+	@mkdir -p manifests/$*
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovibnetworks.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovibnetworks_crd.yaml
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodepolicies.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodestates.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovoperatorconfigs.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworks.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
+	@echo ""
+	@echo "*************************************************************************************************************************************************"
+	@echo "* Please manually update the sriov-network-operator.v4.7.0.clusterserviceversion.yaml and image-references files in the manifests/$* directory *"
+	@echo "*************************************************************************************************************************************************"
+	@echo ""
 
 
 # Run go fmt against code
