@@ -55,7 +55,7 @@ spec:
                   rate limiting)
                 minimum: 0
                 type: integer
-              metaplugins:
+              metaPlugins:
                 description: MetaPluginsConfig configuration to be used in order to
                   chain metaplugins to the sriov interface returned by the operator.
                 type: string
