@@ -40,6 +40,7 @@ type InterfaceExt struct {
 	PciAddress  string            `json:"pciAddress"`
 	Vendor      string            `json:"vendor,omitempty"`
 	DeviceID    string            `json:"deviceID,omitempty"`
+	NetFilter   string            `json:"netFilter,omitempty"`
 	Mtu         int               `json:"mtu,omitempty"`
 	NumVfs      int               `json:"numVfs,omitempty"`
 	LinkSpeed   string            `json:"linkSpeed,omitempty"`

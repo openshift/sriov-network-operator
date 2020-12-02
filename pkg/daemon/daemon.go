@@ -42,27 +42,6 @@ import (
 	"github.com/openshift/sriov-network-operator/pkg/utils"
 )
 
-// PlatformType foo
-type PlatformType int
-
-const (
-	// Baremetal platform
-	Baremetal PlatformType = iota
-	// Virtual platform
-	Virtual
-)
-
-func (e PlatformType) String() string {
-	switch e {
-	case Baremetal:
-		return "Baremetal"
-	case Virtual:
-		return "Virtual"
-	default:
-		return fmt.Sprintf("%d", int(e))
-	}
-}
-
 const (
 	// updateDelay is the baseline speed at which we react to changes.  We don't
 	// need to react in milliseconds as any change would involve rebooting the node.
@@ -84,7 +63,7 @@ type Daemon struct {
 	name      string
 	namespace string
 
-	platform PlatformType
+	platform utils.PlatformType
 
 	client snclientset.Interface
 	// kubeClient allows interaction with Kubernetes, including the node we are running on.
@@ -154,7 +133,7 @@ func New(
 	stopCh <-chan struct{},
 	syncCh <-chan struct{},
 	refreshCh chan<- Message,
-	platformType PlatformType,
+	platformType utils.PlatformType,
 ) *Daemon {
 	return &Daemon{
 		name:       nodeName,
@@ -640,7 +619,7 @@ func (dn *Daemon) restartDevicePluginPod() error {
 func (dn *Daemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) error {
 	var pl []string
 
-	if dn.platform == Virtual {
+	if dn.platform == utils.VirtualOpenStack {
 		pl = append(pl, VirtualPlugin)
 	} else {
 		pl = registerPlugins(ns)

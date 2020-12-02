@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"strconv"
 
 	"github.com/golang/glog"
@@ -11,8 +13,148 @@ import (
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 )
 
+// PlatformType ...
+type PlatformType int
+
+const (
+	// Baremetal platform
+	Baremetal PlatformType = iota
+	// VirtualOpenStack ...
+	VirtualOpenStack
+)
+
+func (e PlatformType) String() string {
+	switch e {
+	case Baremetal:
+		return "Baremetal"
+	case VirtualOpenStack:
+		return "Virtual/Openstack"
+	default:
+		return fmt.Sprintf("%d", int(e))
+	}
+}
+
+const (
+	ospMetaDataDir = "/host/var/config/openstack/latest/"
+	ospNetworkData = ospMetaDataDir + "/network_data.json"
+	ospMetaData    = ospMetaDataDir + "/meta_data.json"
+)
+
+// OSPMetaDataDevice -- Device structure within meta_data.json
+type OSPMetaDataDevice struct {
+	Vlan      int      `json:"vlan,omitempty"`
+	VfTrusted bool     `json:"vf_trusted,omitempty"`
+	Type      string   `json:"type,omitempty"`
+	Mac       string   `json:"mac,omitempty"`
+	Bus       string   `json:"bus,omitempty"`
+	Address   string   `json:"address,omitempty"`
+	Tags      []string `json:"tags,omitempty"`
+}
+
+// OSPMetaData -- Openstack meta_data.json format
+type OSPMetaData struct {
+	UUID             string              `json:"uuid,omitempty"`
+	AdminPass        string              `json:"admin_pass,omitempty"`
+	Name             string              `json:"name,omitempty"`
+	LaunchIndex      int                 `json:"launch_index,omitempty"`
+	AvailabilityZone string              `json:"availability_zone,omitempty"`
+	ProjectID        string              `json:"project_id,omitempty"`
+	Devices          []OSPMetaDataDevice `json:"devices,omitempty"`
+}
+
+// OSPNetworkLink OSP Link metadata
+type OSPNetworkLink struct {
+	ID          string `json:"id"`
+	VifID       string `json:"vif_id,omitempty"`
+	Type        string `json:"type"`
+	Mtu         int    `json:"mtu,omitempty"`
+	EthernetMac string `json:"ethernet_mac_address"`
+}
+
+// OSPNetwork OSP Network metadata
+type OSPNetwork struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Link      string `json:"link"`
+	NetworkID string `json:"network_id"`
+}
+
+// OSPNetworkData OSP Network metadata
+type OSPNetworkData struct {
+	Links    []OSPNetworkLink `json:"links,omitempty"`
+	Networks []OSPNetwork     `json:"networks,omitempty"`
+	// Omit Services
+}
+
+func metaData(platformType PlatformType, address string) (netFilter string, macAddress string) {
+	switch platformType {
+	case VirtualOpenStack:
+		metaData, networkData := readOpenstackMetaData()
+		netFilter, macAddress = parseOpenstackMetaData(address, metaData, networkData)
+
+	default:
+		glog.V(2).Infof("Unknown PlatformType: %v", platformType)
+	}
+
+	return
+}
+
+func readOpenstackMetaData() (metaData *OSPMetaData, networkData *OSPNetworkData) {
+	networkData = &OSPNetworkData{}
+
+	rawBytes, err := ioutil.ReadFile(ospNetworkData)
+	if err != nil {
+		glog.Errorf("error reading file %s, %v", ospNetworkData, err)
+		return
+	}
+
+	if err = json.Unmarshal(rawBytes, networkData); err != nil {
+		glog.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkData)
+		return
+	}
+
+	metaData = &OSPMetaData{}
+
+	rawBytes, err = ioutil.ReadFile(ospMetaData)
+	if err != nil {
+		glog.Errorf("error reading file %s, %v", ospMetaData, err)
+		return
+	}
+
+	if err = json.Unmarshal(rawBytes, metaData); err != nil {
+		glog.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkData)
+		return
+	}
+
+	return
+}
+
+func parseOpenstackMetaData(pciAddr string, metaData *OSPMetaData, networkData *OSPNetworkData) (networkID string, macAddress string) {
+
+	if metaData == nil || networkData == nil {
+		return
+	}
+
+	for _, device := range metaData.Devices {
+		if pciAddr == device.Address {
+			for _, link := range networkData.Links {
+				if device.Mac == link.EthernetMac {
+					for _, network := range networkData.Networks {
+						if network.Link == link.ID {
+							networkID = sriovnetworkv1.OpenstackNetworkID.String() + ":" + network.NetworkID
+							macAddress = device.Mac
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return
+}
+
 // DiscoverSriovDevicesVirtual discovers VFs on a virtual platform
-func DiscoverSriovDevicesVirtual() ([]sriovnetworkv1.InterfaceExt, error) {
+func DiscoverSriovDevicesVirtual(platformType PlatformType) ([]sriovnetworkv1.InterfaceExt, error) {
 	glog.V(2).Info("DiscoverSriovDevicesVirtual")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
@@ -37,6 +179,8 @@ func DiscoverSriovDevicesVirtual() ([]sriovnetworkv1.InterfaceExt, error) {
 			continue
 		}
 
+		netFilter, metaMac := metaData(platformType, device.Address)
+
 		driver, err := dputils.GetDriverName(device.Address)
 		if err != nil {
 			glog.Warningf("DiscoverSriovDevicesVirtual(): unable to parse device driver for device %+v %q", device, err)
@@ -47,13 +191,16 @@ func DiscoverSriovDevicesVirtual() ([]sriovnetworkv1.InterfaceExt, error) {
 			Driver:     driver,
 			Vendor:     device.Vendor.ID,
 			DeviceID:   device.Product.ID,
+			NetFilter:  netFilter,
 		}
 		if mtu := getNetdevMTU(device.Address); mtu > 0 {
 			iface.Mtu = mtu
 		}
 		if name := tryGetInterfaceName(device.Address); name != "" {
 			iface.Name = name
-			iface.Mac = getNetDevMac(name)
+			if iface.Mac = getNetDevMac(name); iface.Mac == "" {
+				iface.Mac = metaMac
+			}
 			iface.LinkSpeed = getNetDevLinkSpeed(name)
 		}
 		iface.LinkType = getLinkType(iface)

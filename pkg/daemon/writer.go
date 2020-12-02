@@ -40,7 +40,7 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func()) *Node
 
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
-func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, destDir string, runonce bool, platformType PlatformType) {
+func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, destDir string, runonce bool, platformType utils.PlatformType) {
 	glog.V(0).Infof("Run(): start writer")
 	msg := Message{}
 	if runonce {
@@ -76,13 +76,13 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 	}
 }
 
-func (writer *NodeStateStatusWriter) pollNicStatus(platformType PlatformType) error {
+func (writer *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformType) error {
 	glog.V(2).Info("pollNicStatus()")
 	var iface []sriovnetworkv1.InterfaceExt
 	var err error
 
-	if platformType == Virtual {
-		iface, err = utils.DiscoverSriovDevicesVirtual()
+	if platformType == utils.VirtualOpenStack {
+		iface, err = utils.DiscoverSriovDevicesVirtual(platformType)
 	} else {
 		iface, err = utils.DiscoverSriovDevices()
 	}
