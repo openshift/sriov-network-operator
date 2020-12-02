@@ -95,16 +95,20 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 		return reconcile.Result{}, nil
 	}
 
-	if enableAdmissionController {
-		// Render and sync webhook objects
-		if err = r.syncWebhookObjs(defaultConfig); err != nil {
-			return reconcile.Result{}, err
-		}
+	// Render and sync webhook objects
+	if err = r.syncWebhookObjs(defaultConfig); err != nil {
+		return reconcile.Result{}, err
+	}
 
-		// Render and sync CA configmap
+	if *defaultConfig.Spec.EnableInjector {
+		// Render and sync resource injector CA configmap
 		if err = r.syncCAConfigMap(types.NamespacedName{Name: INJECTOR_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
 			return reconcile.Result{}, err
 		}
+	}
+
+	if *defaultConfig.Spec.EnableOperatorWebhook {
+		// Render and sync operator webhook CA configmap
 		if err = r.syncCAConfigMap(types.NamespacedName{Name: WEBHOOK_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
 			return reconcile.Result{}, err
 		}
