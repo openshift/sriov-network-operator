@@ -379,9 +379,12 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["SriovCniIpam"] = "\"ipam\":{}"
 	}
 
-	// TODO: this needs to be expanded if we want to support
 	// metaplugins for the infiniband cni
 	data.Data["MetaPluginsConfigured"] = false
+	if cr.Spec.MetaPluginsConfig != "" {
+		data.Data["MetaPluginsConfigured"] = true
+		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
+	}
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {
