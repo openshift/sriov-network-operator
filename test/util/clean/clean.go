@@ -21,14 +21,15 @@ func All() error {
 	if !namespaces.Exists(namespaces.Test, clients) {
 		return nil
 	}
-	err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, false)
+	err := namespaces.DeleteAndWait(clients, namespaces.Test, 5*time.Minute)
+	if err != nil {
+		return fmt.Errorf("Failed to delete sriov tests namespace %v", err)
+	}
+
+	err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, false)
 	if err != nil {
 		return fmt.Errorf("Failed to clean sriov resources %v", err)
 	}
 
-	err = namespaces.DeleteAndWait(clients, namespaces.Test, 5*time.Minute)
-	if err != nil {
-		return fmt.Errorf("Failed to delete sriov tests namespace %v", err)
-	}
 	return nil
 }

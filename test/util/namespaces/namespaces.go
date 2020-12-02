@@ -140,12 +140,16 @@ func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet, discov
 	if err != nil {
 		return err
 	}
-	if !discoveryEnabled {
-		err = CleanPolicies(operatorNamespace, cs)
-		if err != nil {
-			return err
-		}
-	}
 	err = CleanNetworks(operatorNamespace, cs)
-	return err
+	if err != nil {
+		return err
+	}
+	if discoveryEnabled {
+		return nil
+	}
+	err = CleanPolicies(operatorNamespace, cs)
+	if err != nil {
+		return err
+	}
+	return nil
 }
