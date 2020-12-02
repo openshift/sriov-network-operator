@@ -19,13 +19,13 @@ if [ -z $SKIP_VAR_SET ]; then
         OPERATOR_IMAGE_DIGEST=$(skopeo inspect docker://quay.io/openshift/origin-sriov-network-operator | jq --raw-output '.Digest')
         export SRIOV_NETWORK_OPERATOR_IMAGE=${SRIOV_NETWORK_OPERATOR_IMAGE:-quay.io/openshift/origin-sriov-network-operator@${OPERATOR_IMAGE_DIGEST}}
 else
-        [ -z $CNI_IMAGE_DIGEST ] && echo "CNI_IMAGE_DIGEST is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $INFINIBAND_CNI_IMAGE_DIGEST ] && echo "INFINIBAND_CNI_IMAGE_DIGEST is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $DP_IMAGE_DIGEST ] && echo "DP_IMAGE_DIGEST is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $INJECTOR_IMAGE_DIGEST ] && echo "INJECTOR_IMAGE_DIGEST is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $DAEMON_IMAGE_DIGEST ] && echo "DAEMON_IMAGE_DIGEST is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $WEBHOOK_IMAGE_DIGEST ] && echo "WEBHOOK_IMAGE_DIGEST is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $OPERATOR_IMAGE_DIGEST ] && echo "OPERATOR_IMAGE_DIGEST is empty but SKIP_VAR_SET is set" && exit 1
+        [ -z $SRIOV_CNI_IMAGE ] && echo "SRIOV_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
+        [ -z $SRIOV_INFINIBAND_CNI_IMAGE ] && echo "SRIOV_INFINIBAND_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
+        [ -z $SRIOV_DEVICE_PLUGIN_IMAGE ] && echo "SRIOV_DEVICE_PLUGIN_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
+        [ -z $NETWORK_RESOURCES_INJECTOR_IMAGE ] && echo "NETWORK_RESOURCES_INJECTOR_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
+        [ -z $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE ] && echo "SRIOV_NETWORK_CONFIG_DAEMON_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
+        [ -z $SRIOV_NETWORK_WEBHOOK_IMAGE ] && echo "SRIOV_NETWORK_WEBHOOK_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
+        [ -z $SRIOV_NETWORK_OPERATOR_IMAGE ] && echo "SRIOV_NETWORK_OPERATOR_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
 fi
 
 export RELEASE_VERSION=4.7.0
