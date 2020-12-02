@@ -25,6 +25,9 @@ type SriovIBNetworkSpec struct {
 	// VF link state (enable|disable|auto)
 	// +kubebuilder:validation:Enum={"auto","enable","disable"}
 	LinkState string `json:"linkState,omitempty"`
+	// MetaPluginsConfig configuration to be used in order to chain metaplugins to the sriov interface returned
+	// by the operator.
+	MetaPluginsConfig string `json:"metaPlugins,omitempty"`
 }
 
 // SriovIBNetworkStatus defines the observed state of SriovIBNetwork
