@@ -50,6 +50,8 @@ spec:
         - name: config-volume
           mountPath: /etc/pcidp/
           readOnly: true
+        - name: device-info
+          mountPath: /var/run/k8s.cni.cncf.io/devinfo/dp
       volumes:
         - name: devicesock
           hostPath:
@@ -60,3 +62,7 @@ spec:
         - name: config-volume
           configMap: 
             name: device-plugin-config
+        - name: device-info
+          hostPath:
+            path: /var/run/k8s.cni.cncf.io/devinfo/dp
+            type: DirectoryOrCreate
