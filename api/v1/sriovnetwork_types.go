@@ -44,7 +44,7 @@ type SriovNetworkSpec struct {
 	MaxTxRate *int `json:"maxTxRate,omitempty"`
 	// MetaPluginsConfig configuration to be used in order to chain metaplugins to the sriov interface returned
 	// by the operator.
-	MetaPluginsConfig string `json:"metaplugins,omitempty"`
+	MetaPluginsConfig string `json:"metaPlugins,omitempty"`
 }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork
