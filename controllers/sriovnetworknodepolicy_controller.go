@@ -38,6 +38,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
@@ -51,6 +52,8 @@ type SriovNetworkNodePolicyReconciler struct {
 	Log    logr.Logger
 	Scheme *runtime.Scheme
 }
+
+var ctlrlogger = logf.Log.WithName("SriovNetworkNodePolicyController")
 
 // +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworknodepolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworknodepolicies/status,verbs=get;update;patch
@@ -509,8 +512,8 @@ func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePo
 
 // renderDsForCR returns a busybox pod with the same name/namespace as the cr
 func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, error) {
-	// logger := r.Log.WithName("renderDsForCR")
-	// logger.Info("Start to render objects")
+	logger := ctlrlogger.WithName("renderDsForCR")
+	logger.Info("Start to render objects")
 	var err error
 	objs := []*uns.Unstructured{}
 
@@ -522,8 +525,8 @@ func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, e
 }
 
 func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node) (dptypes.ResourceConfList, error) {
-	// logger := r.Log.WithName("renderDevicePluginConfigData")
-	// logger.Info("Start to render device plugin config data")
+	logger := ctlrlogger.WithName("renderDevicePluginConfigData")
+	logger.Info("Start to render device plugin config data")
 	rcl := dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
 		if p.Name == "default" {
@@ -588,7 +591,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			}
 			rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
 			rcl.ResourceList[i].Selectors = &rawNetDeviceSelectors
-			// logger.Info("Update resource", "Resource", rcl.ResourceList[i])
+			logger.Info("Update resource", "Resource", rcl.ResourceList[i])
 		} else {
 			rc := &dptypes.ResourceConfig{
 				ResourceName: p.Spec.ResourceName,
@@ -641,7 +644,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
 			rc.Selectors = &rawNetDeviceSelectors
 			rcl.ResourceList = append(rcl.ResourceList, *rc)
-			// logger.Info("Add resource", "Resource", *rc, "Resource list", rcl.ResourceList)
+			logger.Info("Add resource", "Resource", *rc, "Resource list", rcl.ResourceList)
 		}
 	}
 	return rcl, nil
