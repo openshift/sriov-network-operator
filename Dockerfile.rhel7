@@ -13,4 +13,5 @@ COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_o
 COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/manifests /manifests
 COPY bindata /bindata
 ENV OPERATOR_NAME=sriov-network-operator
+ENV CLUSTER_TYPE=openshift
 CMD ["/usr/bin/sriov-network-operator"]

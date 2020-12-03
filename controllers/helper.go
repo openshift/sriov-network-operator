@@ -38,6 +38,7 @@ const (
 	DEFAULT_POLICY_NAME              = "default"
 	CONFIGMAP_NAME                   = "device-plugin-config"
 	DP_CONFIG_FILENAME               = "config.json"
+	HwOffloadNodeLabel               = "ovs-hw-offload-worker"
 )
 
 var webhooks = map[string](string){

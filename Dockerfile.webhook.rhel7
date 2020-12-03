@@ -9,4 +9,5 @@ LABEL io.k8s.display-name="OpenShift sriov-network-webhook" \
       io.openshift.tags="openshift,networking,sr-iov" \
       maintainer="Multus team <multus-dev@redhat.com>"
 COPY --from=builder /go/src/github.com/openshift/sriov-network-operator/build/_output/cmd/webhook /usr/bin/webhook
+ENV CLUSTER_TYPE=openshift
 CMD ["/usr/bin/webhook"]

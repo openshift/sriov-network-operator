@@ -18,10 +18,10 @@ require (
 	github.com/jaypipes/ghw v0.6.1
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20200626054723-37f83d1996bc
 	github.com/mitchellh/copystructure v1.0.0 // indirect
-	github.com/onsi/ginkgo v1.12.1
-	github.com/onsi/gomega v1.10.1
-	github.com/openshift/client-go v0.0.0-20200320150128-a906f3d8e723
-	github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible
+	github.com/onsi/ginkgo v1.14.1
+	github.com/onsi/gomega v1.10.2
+	github.com/openshift/client-go v0.0.0-20200827190008-3062137373b5
+	github.com/openshift/machine-config-operator v0.0.1-0.20201023110058-6c8bd9b2915c
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.0.0
 	github.com/vishvananda/netlink v1.1.0
@@ -30,16 +30,15 @@ require (
 	google.golang.org/genproto v0.0.0-20200610104632-a5b850bcf112 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	k8s.io/api v0.19.0
-	k8s.io/apiextensions-apiserver v0.18.8 // indirect
 	k8s.io/apimachinery v0.19.0
 	k8s.io/client-go v0.19.0
-	k8s.io/kubectl v0.0.0
+	k8s.io/kubectl v0.19.0
 	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
 	sigs.k8s.io/controller-runtime v0.6.2
 )
 
 replace (
-	github.com/openshift/machine-config-operator => github.com/openshift/machine-config-operator v0.0.1-0.20200606015452-b51bca192089 // release-4.6
+	github.com/openshift/api => github.com/openshift/api v0.0.0-20200827090112-c05698d102cf
 	k8s.io/kubectl => k8s.io/kubectl v0.19.0
 	k8s.io/kubelet => k8s.io/kubelet v0.19.0
 )

@@ -408,7 +408,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDsObject(dp *sriovnetworkv1.Sriov
 		}
 	case "DaemonSet":
 		ds := &appsv1.DaemonSet{}
-		err := kscheme.Scheme.Convert(obj, ds, nil)
+		err := r.Scheme.Convert(obj, ds, nil)
 		r.syncDaemonSet(dp, pl, ds)
 		if err != nil {
 			logger.Error(err, "Fail to sync DaemonSet", "Namespace", ds.Namespace, "Name", ds.Name)

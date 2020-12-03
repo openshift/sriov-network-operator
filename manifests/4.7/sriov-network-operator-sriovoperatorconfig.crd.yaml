@@ -51,6 +51,11 @@ spec:
                 description: Flag to control whether the operator admission controller
                   webhook shall be deployed
                 type: boolean
+              enableOvsOffload:
+                description: Flag to enable OVS hardware offload. Set to 'true' to
+                  provision switchdev-configuration.service and enable OpenvSwitch
+                  hw-offload on nodes.
+                type: boolean
               logLevel:
                 description: Flag to control the log verbose level of the operator.
                   Set to '0' to show only the basic logs. And set to '2' to show all

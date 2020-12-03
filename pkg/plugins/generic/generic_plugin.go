@@ -186,13 +186,24 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 		for _, iface := range desired {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
-				if iface.NumVfs != ifaceStatus.NumVfs || iface.Mtu != ifaceStatus.Mtu {
+				if iface.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
+					// ignore swichdev device
+					break
+				}
+				if iface.NumVfs != ifaceStatus.NumVfs {
+					glog.V(2).Infof("generic-plugin needDrainNode(): need drain, expect NumVfs %v, current NumVfs %v", iface.NumVfs, ifaceStatus.NumVfs)
+					needDrain = true
+					return
+				}
+				if iface.Mtu != 0 && iface.Mtu != ifaceStatus.Mtu {
+					glog.V(2).Infof("generic-plugin needDrainNode(): need drain, expect MTU %v, current MTU %v", iface.Mtu, ifaceStatus.Mtu)
 					needDrain = true
 					return
 				}
 			}
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {
+			glog.V(2).Infof("generic-plugin needDrainNode(): need drain, %v needs to be reset", ifaceStatus)
 			needDrain = true
 			return
 		}

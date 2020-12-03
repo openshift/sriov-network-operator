@@ -22,6 +22,8 @@ type SriovOperatorConfigSpec struct {
 	LogLevel int `json:"logLevel,omitempty"`
 	// Flag to disable nodes drain during debugging
 	DisableDrain bool `json:"disableDrain,omitempty"`
+	// Flag to enable OVS hardware offload. Set to 'true' to provision switchdev-configuration.service and enable OpenvSwitch hw-offload on nodes.
+	EnableOvsOffload bool `json:"enableOvsOffload,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
