@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -20,6 +21,8 @@ const (
 	IntelID    = "8086"
 	MellanoxID = "15b3"
 	MlxMaxVFs  = 128
+
+	UNSUPPORTED_NIC_ID_CONFIGMAP = "unsupported-nic-ids"
 )
 
 var (
@@ -61,6 +64,11 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 	if cr.GetNamespace() != os.Getenv("NAMESPACE") {
 		warnings = append(warnings, cr.GetName()+
 			" is created or updated but not used. Only policy in openshift-sriov-network-operator namespace is respected.")
+	}
+
+	// DELETE should always succeed unless it's for the default object
+	if operation == "DELETE" {
+		return true, warnings, nil
 	}
 
 	admit, err := staticValidateSriovNetworkNodePolicy(cr)
@@ -193,7 +201,7 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	glog.V(2).Infof("validatePolicyForNodeState(): validate policy %s for node %s.", policy.GetName(), state.GetName())
 	for _, iface := range state.Status.Interfaces {
-		if validateNicModel(&policy.Spec.NicSelector, &iface) {
+		if validateNicModel(&policy.Spec.NicSelector, &iface, state.GetName()) {
 			interfaceSelected = true
 			if policy.GetName() != "default" && policy.Spec.NumVfs == 0 {
 				return false, fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
@@ -251,7 +259,7 @@ func keys(m map[string]([]string)) []string {
 	return keys
 }
 
-func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt) bool {
+func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt, nodeName string) bool {
 	if selector.Vendor != "" && selector.Vendor != iface.Vendor {
 		return false
 	}
@@ -275,9 +283,49 @@ func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *s
 			return false
 		}
 	}
+
 	// check the vendor/device ID to make sure only devices in supported list are allowed.
-	if !sriovnetworkv1.IsSupportedModel(iface.Vendor, iface.DeviceID) {
+	if sriovnetworkv1.IsSupportedModel(iface.Vendor, iface.DeviceID) {
+		return true
+	}
+
+	// alternatively, an unsupported model has to be set in the config map
+	var unsupportedNicIdMap map[string]string
+	cm, err := kubeclient.CoreV1().ConfigMaps(namespace).Get(
+		context.Background(),
+		UNSUPPORTED_NIC_ID_CONFIGMAP,
+		metav1.GetOptions{},
+	)
+	// if the configmap does not exist, return false
+	if err != nil {
+		glog.V(2).Infof("validateNicModel(): Could not parse configmap %v due to: %v",
+			UNSUPPORTED_NIC_ID_CONFIGMAP,
+			err)
 		return false
 	}
-	return true
+
+	// if the ConfigMap's annotation for this node does not match the ConfigMap's
+	// ResourceVersion, then this means that the ConfigMap's configuration was not yet
+	// applied to the node's udev rules. In that case, drop the ConfigMap's annotation
+	annotationKey := "openshift.io/" + nodeName
+	annotationData, ok := cm.ObjectMeta.Annotations[annotationKey]
+	if !ok {
+		glog.V(2).Infof("validateNicModel(): No annotation for %v in ConfigMap",
+			annotationKey)
+		return false
+	}
+	jsonData, err := json.Marshal(cm.Data)
+	if err != nil || string(jsonData) != annotationData {
+		glog.V(2).Infof("validateNicModel(): Annotation %v: %v does not match content map content %v",
+			annotationKey, annotationData, string(jsonData))
+		return false
+	}
+
+	// return true if the NIC is in the user provided list
+	unsupportedNicIdMap = cm.Data
+	if sriovnetworkv1.IsEnabledUnsupportedModel(iface.Vendor, iface.DeviceID, unsupportedNicIdMap) {
+		return true
+	}
+
+	return false
 }
