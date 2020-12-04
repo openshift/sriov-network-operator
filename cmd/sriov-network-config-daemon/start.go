@@ -13,6 +13,7 @@ import (
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
 	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
 	"github.com/openshift/sriov-network-operator/pkg/daemon"
+	"github.com/openshift/sriov-network-operator/pkg/utils"
 	"github.com/openshift/sriov-network-operator/pkg/version"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,8 +38,8 @@ var (
 	}
 
 	// PlatformMap contains supported platforms for virtual VF
-	platformMap = map[string]daemon.PlatformType{
-		"openstack": daemon.Virtual,
+	platformMap = map[string]utils.PlatformType{
+		"openstack": utils.VirtualOpenStack,
 	}
 )
 
@@ -115,7 +116,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		destdir = "/host/etc"
 	}
 
-	platformType := daemon.Baremetal
+	platformType := utils.Baremetal
 
 	nodeInfo, err := kubeclient.CoreV1().Nodes().Get(context.Background(), startOpts.nodeName, v1.GetOptions{})
 	if err == nil {

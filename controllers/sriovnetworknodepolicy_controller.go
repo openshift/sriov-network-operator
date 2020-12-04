@@ -155,7 +155,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(pl *sriovne
 
 	configData := make(map[string]string)
 	for _, node := range nl.Items {
-		data, err := renderDevicePluginConfigData(pl, &node)
+		data, err := r.renderDevicePluginConfigData(pl, &node)
 		if err != nil {
 			return err
 		}
@@ -521,7 +521,7 @@ func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, e
 	return objs, nil
 }
 
-func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node) (dptypes.ResourceConfList, error) {
+func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node) (dptypes.ResourceConfList, error) {
 	// logger := r.Log.WithName("renderDevicePluginConfigData")
 	// logger.Info("Start to render device plugin config data")
 	rcl := dptypes.ResourceConfList{}
@@ -567,6 +567,20 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList,
 			if p.Spec.DeviceType == "vfio-pci" {
 				netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, p.Spec.DeviceType)
 			}
+			// Enable the selection of devices using NetFilter
+			if p.Spec.NicSelector.NetFilter != "" {
+				nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
+				err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: node.Name}, nodeState)
+				if err == nil {
+					// Loop through interfaces status to find a match for NetworkID or NetworkTag
+					for _, intf := range nodeState.Status.Interfaces {
+						if sriovnetworkv1.NetFilterMatch(p.Spec.NicSelector.NetFilter, intf.NetFilter) {
+							// Found a match add the Interfaces PciAddress
+							netDeviceSelectors.PciAddresses = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PciAddresses, intf.PciAddress)
+						}
+					}
+				}
+			}
 
 			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
 			if err != nil {
@@ -606,7 +620,20 @@ func renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList,
 			if p.Spec.DeviceType == "vfio-pci" {
 				netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, p.Spec.DeviceType)
 			}
-
+			// Enable the selection of devices using NetFilter
+			if p.Spec.NicSelector.NetFilter != "" {
+				nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
+				err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: node.Name}, nodeState)
+				if err == nil {
+					// Loop through interfaces status to find a match for NetworkID or NetworkTag
+					for _, intf := range nodeState.Status.Interfaces {
+						if sriovnetworkv1.NetFilterMatch(p.Spec.NicSelector.NetFilter, intf.NetFilter) {
+							// Found a match add the Interfaces PciAddress
+							netDeviceSelectors.PciAddresses = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PciAddresses, intf.PciAddress)
+						}
+					}
+				}
+			}
 			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
 			if err != nil {
 				return rcl, err

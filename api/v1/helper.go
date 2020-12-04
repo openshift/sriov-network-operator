@@ -3,7 +3,9 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -42,6 +44,23 @@ var NicIdMap = []string{
 	"15b3 1017 1018", // ConnectX-5, PCIe 3.0
 	"15b3 101b 101c", // ConnectX-6
 	"15b3 1013 1014", // ConnectX-4
+}
+
+// NetFilterType Represents the NetFilter tags to be used
+type NetFilterType int
+
+const (
+	// OpenstackNetworkID network UUID
+	OpenstackNetworkID NetFilterType = iota
+)
+
+func (e NetFilterType) String() string {
+	switch e {
+	case OpenstackNetworkID:
+		return "openstack/NetworkID"
+	default:
+		return fmt.Sprintf("%d", int(e))
+	}
 }
 
 func IsSupportedVendor(vendorId string) bool {
@@ -274,7 +293,8 @@ func UniqueAppend(inSlice []string, strings ...string) []string {
 // Apply policy to SriovNetworkNodeState CR
 func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, merge bool) {
 	s := p.Spec.NicSelector
-	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 {
+	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 &&
+		len(s.NetFilter) == 0 {
 		// Empty NicSelector match none
 		return
 	}
@@ -430,6 +450,10 @@ func (selector *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool {
 			return false
 		}
 	}
+	if selector.NetFilter != "" && NetFilterMatch(selector.NetFilter, iface.NetFilter) == false {
+		return false
+	}
+
 	return true
 }
 
@@ -655,4 +679,29 @@ func (cr *SriovNetwork) DeleteNetAttDef(c client.Client) error {
 		return err
 	}
 	return nil
+}
+
+// NetFilterMatch -- parse netFilter and check for a match
+func NetFilterMatch(netFilter string, netValue string) (isMatch bool) {
+	logger := log.WithName("NetFilterMatch")
+
+	var re = regexp.MustCompile(`(?m)^\s*([^\s]+)\s*:\s*([^\s]+)`)
+
+	netFilterResult := re.FindAllStringSubmatch(netFilter, -1)
+
+	if netFilterResult == nil {
+		logger.Info("Invalid NetFilter spec...", "netFilter", netFilter)
+
+		return false
+	}
+
+	netValueResult := re.FindAllStringSubmatch(netValue, -1)
+
+	if netValueResult == nil {
+		logger.Info("Invalid netValue...", "netValue", netValue)
+
+		return false
+	}
+
+	return netFilterResult[0][1] == netValueResult[0][1] && netFilterResult[0][2] == netValueResult[0][2]
 }
