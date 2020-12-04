@@ -8,6 +8,8 @@ import (
 	. "github.com/onsi/gomega"
 	. "github.com/openshift/sriov-network-operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
 func newNodeState() *SriovNetworkNodeState {
@@ -391,6 +393,13 @@ func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
+	var testEnv *envtest.Environment
+	testEnv = &envtest.Environment{}
+
+	cfg, err := testEnv.Start()
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(cfg).ToNot(BeNil())
+	kubeclient = kubernetes.NewForConfigOrDie(cfg)
 	ok, err := validatePolicyForNodeState(policy, state)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
