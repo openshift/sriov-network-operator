@@ -12,7 +12,7 @@ func TestRenderSimple(t *testing.T) {
 
 	d := MakeRenderData()
 
-	o1, err := RenderTemplate("testdata/simple.yaml", &d)
+	o1, err := RenderTemplate("testdata/manifests/simple.yaml", &d)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	g.Expect(o1).To(HaveLen(1))
@@ -36,7 +36,7 @@ func TestRenderSimple(t *testing.T) {
 	g.Expect(o1[0].MarshalJSON()).To(MatchJSON(expected))
 
 	// test that json parses the same
-	o2, err := RenderTemplate("testdata/simple.json", &d)
+	o2, err := RenderTemplate("testdata/manifests/simple.json", &d)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(o2).To(Equal(o1))
 }
@@ -44,7 +44,7 @@ func TestRenderSimple(t *testing.T) {
 func TestRenderMultiple(t *testing.T) {
 	g := NewGomegaWithT(t)
 
-	p := "testdata/multiple.yaml"
+	p := "testdata/manifests/multiple.yaml"
 	d := MakeRenderData()
 
 	o, err := RenderTemplate(p, &d)
@@ -60,7 +60,7 @@ func TestRenderMultiple(t *testing.T) {
 func TestTemplate(t *testing.T) {
 	g := NewGomegaWithT(t)
 
-	p := "testdata/template.yaml"
+	p := "testdata/manifests/template.yaml"
 
 	// Test that missing variables are detected
 	d := MakeRenderData()
@@ -92,7 +92,7 @@ func TestRenderDir(t *testing.T) {
 	d.Funcs["fname"] = func(s string) string { return s }
 	d.Data["Namespace"] = "myns"
 
-	o, err := RenderDir("testdata", &d)
+	o, err := RenderDir("testdata/manifests", &d)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(o).To(HaveLen(6))
 }
