@@ -12,6 +12,7 @@ require (
 	github.com/go-openapi/spec v0.19.4
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/google/go-cmp v0.4.0
 	github.com/intel/sriov-network-device-plugin v0.0.0-20200603101849-e116e9c7d0b8
 	github.com/jaypipes/ghw v0.6.0
 	github.com/onsi/ginkgo v1.12.0
