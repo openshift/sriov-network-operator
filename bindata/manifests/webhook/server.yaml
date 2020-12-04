@@ -46,6 +46,7 @@ spec:
         - -tls-private-key-file=/etc/tls/tls.key
         - -tls-cert-file=/etc/tls/tls.crt
         - -alsologtostderr=true
+        - -insecure=true
         volumeMounts:
         - mountPath: /etc/tls
           name: tls
