@@ -8,9 +8,9 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	sriovv1 "github.com/openshift/sriov-network-operator/api/v1"
-	testclient "github.com/openshift/sriov-network-operator/test/util/client"
-	"github.com/openshift/sriov-network-operator/test/util/nodes"
+	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
 )
 
 // EnabledNodes provides info on sriov enabled nodes of the cluster.

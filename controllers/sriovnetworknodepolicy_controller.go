@@ -41,9 +41,9 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
-	"github.com/openshift/sriov-network-operator/pkg/apply"
-	render "github.com/openshift/sriov-network-operator/pkg/render"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
+	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 )
 
 // SriovNetworkNodePolicyReconciler reconciles a SriovNetworkNodePolicy object

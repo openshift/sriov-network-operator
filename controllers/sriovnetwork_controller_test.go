@@ -16,8 +16,8 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
-	util "github.com/openshift/sriov-network-operator/test/util"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
 var _ = Describe("SriovNetwork Controller", func() {

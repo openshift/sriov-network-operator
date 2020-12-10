@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/openshift/sriov-network-operator/test/util/client"
-	"github.com/openshift/sriov-network-operator/test/util/namespaces"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
 )
 
 // All cleans all the dangling resources created by conformance tests.

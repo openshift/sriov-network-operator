@@ -3,8 +3,8 @@
 package sriovnetwork
 
 import (
-	internalinterfaces "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
-	v1 "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions/sriovnetwork/v1"
+	internalinterfaces "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
+	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions/sriovnetwork/v1"
 )
 
 // Interface provides access to each of this group's versions.

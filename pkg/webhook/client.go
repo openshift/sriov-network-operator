@@ -8,7 +8,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
+	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 )
 
 var snclient *snclientset.Clientset

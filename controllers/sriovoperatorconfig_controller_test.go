@@ -13,8 +13,8 @@ import (
 	. "github.com/onsi/gomega"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
-	util "github.com/openshift/sriov-network-operator/test/util"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
 var _ = Describe("Operator", func() {
