@@ -170,7 +170,7 @@ KUSTOMIZE=$(shell which kustomize)
 endif
 
 skopeo:
-	if ! which skopeo; then if [ -f /etc/redhat-release ]; then dnf -y install skopeo; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install skopeo; fi; fi
+	if ! which skopeo; then if [ -z ${SKIP_VAR_SET} ]; then if [ -f /etc/redhat-release ]; then dnf -y install skopeo; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install skopeo; fi; fi; fi
 
 # Generate bundle manifests and metadata, then validate generated files.
 .PHONY: bundle
