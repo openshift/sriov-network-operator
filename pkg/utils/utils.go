@@ -20,7 +20,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
 const (

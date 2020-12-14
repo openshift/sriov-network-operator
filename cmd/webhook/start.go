@@ -13,7 +13,7 @@ import (
 	"k8s.io/api/admission/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/openshift/sriov-network-operator/pkg/webhook"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/webhook"
 )
 
 var (

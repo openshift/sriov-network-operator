@@ -21,7 +21,7 @@ package fake
 import (
 	"context"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

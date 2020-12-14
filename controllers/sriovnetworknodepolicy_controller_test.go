@@ -3,7 +3,7 @@ package controllers
 import (
 	"testing"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/google/go-cmp/cmp"

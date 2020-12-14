@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	v1 "github.com/openshift/sriov-network-operator/api/v1"
+	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
 var update = flag.Bool("updategolden", false, "update .golden files")

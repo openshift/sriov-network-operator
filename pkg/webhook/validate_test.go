@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
+	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	. "github.com/onsi/gomega"
-	. "github.com/openshift/sriov-network-operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"

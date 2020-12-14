@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	sriovv1 "github.com/openshift/sriov-network-operator/api/v1"
+	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	k8sv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -15,7 +15,7 @@ import (
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	testclient "github.com/openshift/sriov-network-operator/test/util/client"
+	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 )
 
 // Test is the namespace to be use for testing

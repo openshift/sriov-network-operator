@@ -3,8 +3,8 @@
 package v1
 
 import (
-	v1 "github.com/openshift/sriov-network-operator/api/v1"
-	"github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned/scheme"
+	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

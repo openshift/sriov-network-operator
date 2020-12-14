@@ -6,16 +6,16 @@ import (
 	"os"
 	"testing"
 
-	"github.com/openshift/sriov-network-operator/test/util/clean"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/clean"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 
-	testclient "github.com/openshift/sriov-network-operator/test/util/client"
+	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 
-	_ "github.com/openshift/sriov-network-operator/test/conformance/tests"
-	"github.com/openshift/sriov-network-operator/test/util/k8sreporter"
+	_ "github.com/k8snetworkplumbingwg/sriov-network-operator/test/conformance/tests"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/k8sreporter"
 )
 
 var (
