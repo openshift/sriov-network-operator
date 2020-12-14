@@ -188,11 +188,13 @@ bundle-build:
 deploy-setup: skopeo install
 	hack/deploy-setup.sh $(NAMESPACE)
 
-deploy-setup-k8s: export NAMESPACE=sriov-network-operator
+deploy-setup-k8s-dev-mode: export NAMESPACE=sriov-network-operator
+deploy-setup-k8s-dev-mode: export CNI_BIN_PATH=/opt/cni/bin
+deploy-setup-k8s-dev-mode: export OPERATOR_EXEC=kubectl
+deploy-setup-k8s-dev-mode: deploy-setup
+
 deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
-deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
-deploy-setup-k8s: export OPERATOR_EXEC=kubectl
-deploy-setup-k8s: deploy-setup
+deploy-setup-k8s: deploy-setup-k8s-dev-mode
 
 test-e2e-conformance:
 	./hack/run-e2e-conformance.sh
