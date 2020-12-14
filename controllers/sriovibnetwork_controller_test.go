@@ -8,6 +8,7 @@ import (
 	"time"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	dynclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -142,5 +143,45 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 			Entry("with ipam updated", sriovnets["ib-test-4"], newsriovnets["ib-new-0"]),
 			Entry("with networkNamespace flag", sriovnets["ib-test-4"], newsriovnets["ib-new-1"]),
 		)
+	})
+	Context("When a derived net-att-def CR is removed", func() {
+		It("should regenerate the net-att-def CR", func() {
+			cr := sriovnetworkv1.SriovIBNetwork{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "SriovNetwork",
+					APIVersion: "sriovnetwork.openshift.io/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-5",
+					Namespace: testNamespace,
+				},
+				Spec: sriovnetworkv1.SriovIBNetworkSpec{
+					NetworkNamespace: "default",
+					ResourceName:     "resource_1",
+					IPAM:             `{"type":"dhcp"}`,
+				},
+			}
+			var err error
+			expect := util.GenerateExpectedIBNetConfig(&cr)
+
+			err = k8sClient.Create(goctx.TODO(), &cr)
+			Expect(err).NotTo(HaveOccurred())
+			ns := testNamespace
+			if cr.Spec.NetworkNamespace != "" {
+				ns = cr.Spec.NetworkNamespace
+			}
+			netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+			err = util.WaitForNamespacedObject(netAttDef, k8sClient, ns, cr.GetName(), util.RetryInterval, util.Timeout)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = k8sClient.Delete(goctx.TODO(), netAttDef)
+			Expect(err).NotTo(HaveOccurred())
+			time.Sleep(3 * time.Second)
+			err = util.WaitForNamespacedObject(netAttDef, k8sClient, ns, cr.GetName(), util.RetryInterval, util.Timeout)
+			Expect(err).NotTo(HaveOccurred())
+			anno := netAttDef.GetAnnotations()
+			Expect(anno["k8s.v1.cni.cncf.io/resourceName"]).To(Equal("openshift.io/" + cr.Spec.ResourceName))
+			Expect(strings.TrimSpace(netAttDef.Spec.Config)).To(Equal(expect))
+		})
 	})
 })
