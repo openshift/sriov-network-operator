@@ -78,6 +78,18 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			glog.Warningf("DiscoverSriovDevices(): unable to parse device driver for device %+v %q", device, err)
 			continue
 		}
+
+		deviceNames, err := dputils.GetNetNames(device.Address)
+		if err != nil {
+			glog.Warningf("DiscoverSriovDevices(): unable to get device names for device %+v %q", device, err)
+			continue
+		}
+
+		if len(deviceNames) == 0 {
+			// no network devices found, skipping device
+			continue
+		}
+
 		iface := sriovnetworkv1.InterfaceExt{
 			PciAddress: device.Address,
 			Driver:     driver,
