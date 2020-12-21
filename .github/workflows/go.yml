@@ -28,7 +28,7 @@ jobs:
       run: make all
 
     - name: test pkg
-      run: /bin/bash -c make test-pkg
+      run: make test-pkg
 
     - name: test controllers on opensfhit
-      run: /bin/bash -c CLUSTER_TYPE=openshift make test-controllers
+      run: CLUSTER_TYPE=openshift make test-controllers

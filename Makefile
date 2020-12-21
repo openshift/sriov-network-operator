@@ -1,3 +1,4 @@
+SHELL := /bin/bash
 CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
 KUBECONFIG?=$(HOME)/.kube/config
