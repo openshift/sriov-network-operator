@@ -50,57 +50,7 @@ spec:
         volumeMounts:
         - name: host
           mountPath: /host
-        # - name: hostetc
-        #   mountPath: /host/etc
-        # - name: hostdev
-        #   mountPath: /host/dev
-        # - name: hostproc
-        #   mountPath: /host/proc
-        # - name: hostboot
-        #   mountPath: /host/boot
-        # - name: hostusrlib
-        #   mountPath: /host/lib
-        # - name: hostusrlib64
-        #   mountPath: /host/lib64
-        # - name: hostusr
-        #   mountPath: /host/usr
-        # - name: hostusrbin
-        #   mountPath: /host/bin
-        # - name: hostusrsbin
-        #   mountPath: /host/sbin
-        # - name: hostsysmodule
-        #   mountPath: /host/sys/module
       volumes:
       - name: host
         hostPath:
           path: /
-      # - name: hostetc
-      #   hostPath:
-      #     path: /etc
-      # - name: hostdev
-      #   hostPath:
-      #     path: /dev
-      # - name: hostproc
-      #   hostPath:
-      #     path: /proc
-      # - name: hostboot
-      #   hostPath:
-      #     path: /boot
-      # - name: hostusr
-      #   hostPath:
-      #     path: /usr
-      # - name: hostusrbin
-      #   hostPath:
-      #     path: /usr/bin
-      # - name: hostusrlib
-      #   hostPath:
-      #     path: /usr/lib
-      # - name: hostusrlib64
-      #   hostPath:
-      #     path: /usr/lib64
-      # - name: hostusrsbin
-      #   hostPath:
-      #     path: /usr/sbin
-      # - name: hostsysmodule
-      #   hostPath:
-      #     path: /sys/module
