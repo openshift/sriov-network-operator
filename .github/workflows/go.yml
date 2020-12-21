@@ -1,0 +1,34 @@
+name: Go
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.15
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: fmt
+      run: IS_CONTAINER=yes make fmt
+
+    - name: Build
+      run: make all
+
+    - name: test pkg
+      run: /bin/bash -c make test-pkg
+
+    - name: test controllers on opensfhit
+      run: /bin/bash -c CLUSTER_TYPE=openshift make test-controllers
