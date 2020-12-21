@@ -316,9 +316,13 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 
 	if len(pl.Items) < 2 {
 		err := r.tryDeleteDsPods(namespace, "sriov-device-plugin")
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 		err = r.tryDeleteDsPods(namespace, "sriov-cni")
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
