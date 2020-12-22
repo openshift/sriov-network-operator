@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
-	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
-	"github.com/openshift/sriov-network-operator/pkg/utils"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"

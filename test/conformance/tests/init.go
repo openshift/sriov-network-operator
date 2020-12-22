@@ -3,7 +3,7 @@ package tests
 import (
 	"os"
 
-	testclient "github.com/openshift/sriov-network-operator/test/util/client"
+	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 )
 
 var (

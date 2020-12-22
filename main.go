@@ -35,8 +35,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
-	"github.com/openshift/sriov-network-operator/controllers"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
 	// +kubebuilder:scaffold:imports
 )
 

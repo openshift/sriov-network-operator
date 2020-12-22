@@ -6,8 +6,8 @@ import (
 	"syscall"
 
 	"github.com/golang/glog"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
-	"github.com/openshift/sriov-network-operator/pkg/utils"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 // VirtualPlugin Plugin type to use on a virtual platform

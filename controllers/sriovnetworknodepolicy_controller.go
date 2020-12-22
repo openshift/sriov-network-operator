@@ -41,9 +41,9 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
-	"github.com/openshift/sriov-network-operator/pkg/apply"
-	render "github.com/openshift/sriov-network-operator/pkg/render"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
+	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 )
 
 // SriovNetworkNodePolicyReconciler reconciles a SriovNetworkNodePolicy object
@@ -315,9 +315,14 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 	logger.Info("Start to sync sriov daemons objects")
 
 	if len(pl.Items) < 2 {
-		r.tryDeleteDsPods(namespace, "sriov-device-plugin")
-		r.tryDeleteDsPods(namespace, "sriov-cni")
-		return nil
+		err := r.tryDeleteDsPods(namespace, "sriov-device-plugin")
+		if err != nil {
+			return err
+		}
+		err = r.tryDeleteDsPods(namespace, "sriov-cni")
+		if err != nil {
+			return err
+		}
 	}
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()

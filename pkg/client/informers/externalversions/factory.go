@@ -7,9 +7,9 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
-	internalinterfaces "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
-	sriovnetwork "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions/sriovnetwork"
+	versioned "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	internalinterfaces "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
+	sriovnetwork "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions/sriovnetwork"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

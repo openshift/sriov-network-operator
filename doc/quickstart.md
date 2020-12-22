@@ -31,7 +31,7 @@ Mase sure to have installed the Operator-SDK, as shown in its [install documenta
 Clone this GitHub repository.
 
 ```bash
-go get github.com/openshift/sriov-network-operator
+go get github.com/k8snetworkplumbingwg/sriov-network-operator
 ```
 
 Deploy the operator. 

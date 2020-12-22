@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
 // SriovIBNetworkReconciler reconciles a SriovIBNetwork object

@@ -10,7 +10,7 @@ import (
 	"github.com/golang/glog"
 	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
 	"github.com/jaypipes/ghw"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
 // PlatformType ...

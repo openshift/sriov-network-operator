@@ -21,8 +21,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 
-	// "github.com/openshift/sriov-network-operator/pkg/apis"
-	sriovnetworkv1 "github.com/openshift/sriov-network-operator/api/v1"
+	// "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apis"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
 var (
