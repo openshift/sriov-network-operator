@@ -34,6 +34,12 @@ spec:
         args:
         - --log-level=10
         - --resource-prefix={{.ResourcePrefix}}
+        - --config-file=/etc/pcidp/$(NODE_NAME)
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         securityContext:
           privileged: true
         volumeMounts:
