@@ -620,3 +620,27 @@ func GetNicSriovMode(pciAddress string) (string, error) {
 	}
 	return devLink.Attrs.Eswitch.Mode, nil
 }
+
+func GetPhysSwitchID(name string) (string, error) {
+	swIDFile := filepath.Join(sysClassNet, name, "phys_switch_id")
+	physSwitchID, err := ioutil.ReadFile(swIDFile)
+	if err != nil {
+		return "", err
+	}
+	if physSwitchID != nil {
+		return strings.TrimSpace(string(physSwitchID)), nil
+	}
+	return "", nil
+}
+
+func GetPhysPortName(name string) (string, error) {
+	devicePortNameFile := filepath.Join(sysClassNet, name, "phys_port_name")
+	physPortName, err := ioutil.ReadFile(devicePortNameFile)
+	if err != nil {
+		return "", err
+	}
+	if physPortName != nil {
+		return strings.TrimSpace(string(physPortName)), nil
+	}
+	return "", nil
+}
