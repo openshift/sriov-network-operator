@@ -815,7 +815,8 @@ func tryEnableRdma() (bool, error) {
 
 func tryCreateUdevRule(unsupportedNicIdMap map[string]string) (bool, error) {
 	glog.V(2).Infof("tryCreateUdevRule()")
-	filePath := "/host/etc/udev/rules.d/10-nm-unmanaged.rules"
+	dirPath := "/host/etc/udev/rules.d/"
+	filePath := dirPath + "10-nm-unmanaged.rules"
 
 	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetMergedVfIds(unsupportedNicIdMap), "|"))
 
@@ -829,6 +830,12 @@ func tryCreateUdevRule(unsupportedNicIdMap map[string]string) (bool, error) {
 		strings.TrimSuffix(string(old_content), "\n"),
 		strings.TrimSuffix(new_content, "\n"),
 		filePath)
+
+	err = os.MkdirAll(dirPath, os.ModePerm)
+	if err != nil && !os.IsExist(err) {
+		glog.Errorf("tryCreateUdevRule(): failed to create dir %s: %v", dirPath, err)
+		return err
+	}
 
 	// if the file does not exist or if old_content != new_content
 	// write to file and create it if it doesn't exist
