@@ -8,6 +8,7 @@ import (
 	"time"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	dynclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -161,5 +162,47 @@ var _ = Describe("SriovNetwork Controller", func() {
 			Entry("with SpoofChk flag on", sriovnets["test-4"], newsriovnets["new-2"]),
 			Entry("with Trust flag on", sriovnets["test-4"], newsriovnets["new-3"]),
 		)
+
+		Context("When a derived net-att-def CR is removed", func() {
+			It("should regenerate the net-att-def CR", func() {
+				cr := sriovnetworkv1.SriovNetwork{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "SriovNetwork",
+						APIVersion: "sriovnetwork.openshift.io/v1",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-5",
+						Namespace: testNamespace,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						NetworkNamespace: "default",
+						ResourceName:     "resource_1",
+						IPAM:             `{"type":"dhcp"}`,
+						Vlan:             200,
+					},
+				}
+				var err error
+				expect := util.GenerateExpectedNetConfig(&cr)
+
+				err = k8sClient.Create(goctx.TODO(), &cr)
+				Expect(err).NotTo(HaveOccurred())
+				ns := testNamespace
+				if cr.Spec.NetworkNamespace != "" {
+					ns = cr.Spec.NetworkNamespace
+				}
+				netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+				err = util.WaitForNamespacedObject(netAttDef, k8sClient, ns, cr.GetName(), util.RetryInterval, util.Timeout)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = k8sClient.Delete(goctx.TODO(), netAttDef)
+				Expect(err).NotTo(HaveOccurred())
+				time.Sleep(3 * time.Second)
+				err = util.WaitForNamespacedObject(netAttDef, k8sClient, ns, cr.GetName(), util.RetryInterval, util.Timeout)
+				Expect(err).NotTo(HaveOccurred())
+				anno := netAttDef.GetAnnotations()
+				Expect(anno["k8s.v1.cni.cncf.io/resourceName"]).To(Equal("openshift.io/" + cr.Spec.ResourceName))
+				Expect(strings.TrimSpace(netAttDef.Spec.Config)).To(Equal(expect))
+			})
+		})
 	})
 })
