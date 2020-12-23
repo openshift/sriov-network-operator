@@ -184,6 +184,10 @@ func (dn *Daemon) annotateUnsupportedNicIdConfigMap(cm *v1.ConfigMap, nodeName s
 	if err != nil {
 		return nil, err
 	}
+
+	if cm.ObjectMeta.Annotations == nil {
+		cm.ObjectMeta.Annotations = make(map[string]string)
+	}
 	cm.ObjectMeta.Annotations["openshift.io/"+nodeName] = string(jsonData)
 	return dn.kubeClient.CoreV1().ConfigMaps(namespace).Update(context.Background(), cm, metav1.UpdateOptions{})
 }
