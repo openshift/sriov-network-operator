@@ -44,7 +44,10 @@ contents:
       ip link set ${new_name} down
       ip link set ${new_name} name ${names[i]}
       ip link set ${names[i]} up
-      # ip link set $new_name up
+
+      # turn hw-tc-offload on
+      /usr/sbin/ethtool -K ${names[i]} hw-tc-offload on
+
       i=$(( i+1 ))
 
       # load VF driver
