@@ -184,11 +184,18 @@ func (dn *Daemon) annotateUnsupportedNicIdConfigMap(cm *v1.ConfigMap, nodeName s
 	if err != nil {
 		return nil, err
 	}
+	cmData := string(jsonData)
+
+	annotationKey := "openshift.io/" + nodeName
+	annotationData, ok := cm.ObjectMeta.Annotations[annotationKey]
+	if ok && cmData == annotationData {
+		return cm, nil
+	}
 
 	if cm.ObjectMeta.Annotations == nil {
 		cm.ObjectMeta.Annotations = make(map[string]string)
 	}
-	cm.ObjectMeta.Annotations["openshift.io/"+nodeName] = string(jsonData)
+	cm.ObjectMeta.Annotations[annotationKey] = cmData
 	return dn.kubeClient.CoreV1().ConfigMaps(namespace).Update(context.Background(), cm, metav1.UpdateOptions{})
 }
 
@@ -204,17 +211,19 @@ func (dn *Daemon) tryCreateUdevRuleWrapper() error {
 	}
 
 	// update udev rule and if update succeeds
-	ruleWritten, err := tryCreateUdevRule(unsupportedNicIdMap)
+	err := tryCreateUdevRule(unsupportedNicIdMap)
 	if err != nil {
 		return err
 	}
 
-	// annotage ConfigMap if it exists
-	if configMapErr == nil && ruleWritten {
-		if _, err := dn.annotateUnsupportedNicIdConfigMap(cm, dn.name); err != nil {
-			glog.V(2).Info("Could not update Nic Id ConfigMap", "err", err)
-		}
+	if configMapErr != nil {
+		return nil
 	}
+
+	if _, err := dn.annotateUnsupportedNicIdConfigMap(cm, dn.name); err != nil {
+		glog.V(2).Info("Could not update Nic Id ConfigMap", "err", err)
+	}
+
 	return nil
 }
 
@@ -813,7 +822,7 @@ func tryEnableRdma() (bool, error) {
 	return false, err
 }
 
-func tryCreateUdevRule(unsupportedNicIdMap map[string]string) (bool, error) {
+func tryCreateUdevRule(unsupportedNicIdMap map[string]string) error {
 	glog.V(2).Infof("tryCreateUdevRule()")
 	dirPath := "/host/etc/udev/rules.d/"
 	filePath := dirPath + "10-nm-unmanaged.rules"
@@ -823,7 +832,7 @@ func tryCreateUdevRule(unsupportedNicIdMap map[string]string) (bool, error) {
 	old_content, err := ioutil.ReadFile(filePath)
 	// if old_content = new_content, don't do anything
 	if err == nil && new_content == string(old_content) {
-		return false, nil
+		return nil
 	}
 
 	glog.V(2).Infof("Old udev content '%v' and new content '%v' differ. Writing to file %v.",
@@ -842,7 +851,7 @@ func tryCreateUdevRule(unsupportedNicIdMap map[string]string) (bool, error) {
 	err = ioutil.WriteFile(filePath, []byte(new_content), 0666)
 	if err != nil {
 		glog.Errorf("tryCreateUdevRule(): fail to write file: %v", err)
-		return false, err
+		return err
 	}
-	return true, nil
+	return nil
 }
