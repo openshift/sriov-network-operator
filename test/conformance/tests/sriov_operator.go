@@ -1415,7 +1415,7 @@ var _ = Describe("[sriov] operator", func() {
 						}
 						return true
 
-					}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+					}, 2*time.Minute, 10*time.Second).Should(BeTrue())
 
 					Eventually(func() bool {
 						serviceList, err := clients.Services(operatorNamespace).List(context.Background(), metav1.ListOptions{})
@@ -1426,7 +1426,7 @@ var _ = Describe("[sriov] operator", func() {
 							}
 						}
 						return true
-					}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+					}, 2*time.Minute, 10*time.Second).Should(BeTrue())
 
 					Eventually(func() bool {
 						crs := rbacv1.ClusterRoleList{}
