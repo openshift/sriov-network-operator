@@ -1836,7 +1836,7 @@ func waitForSRIOVStable() {
 	// the status won't never go to not stable and the test will fail.
 	// TODO: find a better way to handle this scenario
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	fmt.Println("Waiting for the sriov state to stable")
 	Eventually(func() bool {
