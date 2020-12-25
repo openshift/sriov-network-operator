@@ -4,3 +4,4 @@ dropins:
   contents: |
     [Service]
     ExecStartPre=/bin/ovs-vsctl set Open_vSwitch . other_config:hw-offload=true
+    ExecStartPre=/bin/ovs-vsctl set Open_vSwitch . other_config:tc-policy=skip_sw

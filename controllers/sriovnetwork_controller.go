@@ -28,7 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
@@ -45,6 +47,8 @@ type SriovNetworkReconciler struct {
 
 func (r *SriovNetworkReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
+	// The SriovNetwork CR shall only be defined in operator namespace.
+	req.Namespace = namespace
 	reqLogger := r.Log.WithValues("sriovnetwork", req.NamespacedName)
 
 	reqLogger.Info("Reconciling SriovNetwork")
@@ -154,6 +158,6 @@ func (r *SriovNetworkReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 func (r *SriovNetworkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sriovnetworkv1.SriovNetwork{}).
-		Owns(&netattdefv1.NetworkAttachmentDefinition{}).
+		Watches(&source.Kind{Type: &netattdefv1.NetworkAttachmentDefinition{}}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
