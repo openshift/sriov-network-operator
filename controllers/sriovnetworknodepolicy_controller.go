@@ -314,16 +314,6 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 	logger := r.Log.WithName("syncPluginDaemonObjs")
 	logger.Info("Start to sync sriov daemons objects")
 
-	if len(pl.Items) < 2 {
-		err := r.tryDeleteDsPods(namespace, "sriov-device-plugin")
-		if err != nil {
-			return err
-		}
-		err = r.tryDeleteDsPods(namespace, "sriov-cni")
-		if err != nil {
-			return err
-		}
-	}
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
 	data.Data["Namespace"] = namespace
@@ -352,6 +342,17 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 	if err != nil {
 		return err
 	}
+
+	if len(pl.Items) < 2 {
+		for _, obj := range objs {
+			err := r.deleteK8sResource(obj)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	// Sync DaemonSets
 	for _, obj := range objs {
 		if obj.GetKind() == "DaemonSet" && len(defaultConfig.Spec.ConfigDaemonNodeSelector) > 0 {
@@ -378,25 +379,9 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 	return nil
 }
 
-func (r *SriovNetworkNodePolicyReconciler) tryDeleteDsPods(namespace, name string) error {
-	logger := r.Log.WithName("tryDeleteDsPods")
-	ds := &appsv1.DaemonSet{}
-	err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, ds)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		} else {
-			logger.Error(err, "Fail to get DaemonSet", "Namespace", namespace, "Name", name)
-			return err
-		}
-	} else {
-		ds.Spec.Template.Spec.NodeSelector = map[string]string{"beta.kubernetes.io/os": "none"}
-		ds.Spec.Template.Spec.Affinity = &corev1.Affinity{}
-		err = r.Update(context.TODO(), ds)
-		if err != nil {
-			logger.Error(err, "Fail to update DaemonSet", "Namespace", namespace, "Name", name)
-			return err
-		}
+func (r *SriovNetworkNodePolicyReconciler) deleteK8sResource(in *uns.Unstructured) error {
+	if err := apply.DeleteObject(context.TODO(), r, in); err != nil {
+		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
 	}
 	return nil
 }
