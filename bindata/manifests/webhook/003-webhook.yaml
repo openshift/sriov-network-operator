@@ -4,6 +4,8 @@ kind: MutatingWebhookConfiguration
 metadata:
   name: {{.SRIOVMutatingWebhookName}}
   namespace: {{.Namespace}}
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
 webhooks:
   - name: network-resources-injector-config.k8s.io
     clientConfig:
