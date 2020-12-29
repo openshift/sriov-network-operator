@@ -68,7 +68,8 @@ var _ = Describe("[sriov] operator", func() {
 		Expect(clients).NotTo(BeNil(), "Client misconfigured, check the $KUBECONFIG env variable")
 		err := namespaces.Create(namespaces.Test, clients)
 		Expect(err).ToNot(HaveOccurred())
-
+		err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
+		Expect(err).ToNot(HaveOccurred())
 		waitForSRIOVStable()
 		sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
 		Expect(err).ToNot(HaveOccurred())
@@ -155,6 +156,8 @@ var _ = Describe("[sriov] operator", func() {
 		execute.BeforeAll(func() {
 			var err error
 
+			err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
+			Expect(err).ToNot(HaveOccurred())
 			if discovery.Enabled() {
 				node, resourceName, numVfs, sriovDevice, err = discovery.DiscoveredResources(clients,
 					sriovInfos, operatorNamespace, defaultFilterPolicy,
