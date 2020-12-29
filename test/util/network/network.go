@@ -31,6 +31,9 @@ func CreateSriovNetwork(clientSet *testclient.ClientSet, intf *sriovv1.Interface
 			ResourceName:     resourceName,
 			IPAM:             ipam,
 			NetworkNamespace: namespace,
+			// Enable the linkState instead of auto so even if the PF is down we can still use the VF
+			// for pod to pod connectivity tests in the same host
+			LinkState: "enable",
 		}}
 
 	for _, o := range options {
