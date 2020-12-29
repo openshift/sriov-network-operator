@@ -1085,7 +1085,9 @@ var _ = Describe("[sriov] operator", func() {
 					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
 					Expect(err).ToNot(HaveOccurred())
 					unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
-					Expect(err).ToNot(HaveOccurred())
+					if err != nil {
+						Skip(err.Error())
+					}
 					unusedSriovDevice = unusedSriovDevices[0]
 					defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
 					Expect(err).ToNot(HaveOccurred())
@@ -1166,7 +1168,9 @@ var _ = Describe("[sriov] operator", func() {
 						sriovDeviceList, err := sriovInfos.FindSriovDevices(node)
 						Expect(err).ToNot(HaveOccurred())
 						unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
-						Expect(err).ToNot(HaveOccurred())
+						if err != nil {
+							Skip(err.Error())
+						}
 						intf = unusedSriovDevices[0]
 
 						mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
@@ -1607,9 +1611,6 @@ func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceEx
 		stdout, _, err = pod.ExecCommand(clients, createdPod, "ip", "link", "show", device.Name)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(stdout)).Should(Not(Equal(0)), "Unable to query link state")
-		if strings.Contains(stdout, "state DOWN") {
-			continue // The interface is not active
-		}
 		if strings.Contains(stdout, "master ovs-system") {
 			continue // The interface is not active
 		}
