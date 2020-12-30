@@ -103,20 +103,6 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 		return reconcile.Result{}, err
 	}
 
-	if *defaultConfig.Spec.EnableInjector {
-		// Render and sync resource injector CA configmap
-		if err = r.syncCAConfigMap(types.NamespacedName{Name: INJECTOR_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-
-	if *defaultConfig.Spec.EnableOperatorWebhook {
-		// Render and sync operator webhook CA configmap
-		if err = r.syncCAConfigMap(types.NamespacedName{Name: WEBHOOK_SERVICE_CA_CONFIGMAP, Namespace: req.Namespace}); err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-
 	// Sync SriovNetworkConfigDaemon objects
 	if err = r.syncConfigDaemonSet(defaultConfig); err != nil {
 		return reconcile.Result{}, err
@@ -141,77 +127,6 @@ func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&corev1.ConfigMap{}).
 		Complete(r)
-}
-
-func (r *SriovOperatorConfigReconciler) syncCAConfigMap(name types.NamespacedName) error {
-	logger := r.Log.WithName("syncCAConfigMap")
-	logger.Info("Reconciling CA", "ConfigMap", name)
-
-	whName := ""
-	if name.Name == INJECTOR_SERVICE_CA_CONFIGMAP {
-		whName = INJECTOR_WEBHOOK_NAME
-	} else if name.Name == WEBHOOK_SERVICE_CA_CONFIGMAP {
-		whName = OPERATOR_WEBHOOK_NAME
-	} else {
-		return nil
-	}
-
-	caBundleConfigMap := &corev1.ConfigMap{}
-	err := r.Get(context.TODO(), name, caBundleConfigMap)
-	if err != nil {
-		logger.Error(err, "Couldn't get caBundle ConfigMap", "name", name.Name)
-		return err
-	}
-
-	caBundleData, ok := caBundleConfigMap.Data["service-ca.crt"]
-	if !ok {
-		logger.Info("No service-ca.crt in ConfigMap", "name", caBundleConfigMap.GetName())
-	}
-
-	mutateWebhookConfig := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: whName}, mutateWebhookConfig)
-	if errors.IsNotFound(err) {
-		logger.Info("Couldn't find", "mutate webhook config:", whName)
-	}
-	modified := false
-	for idx, webhook := range mutateWebhookConfig.Webhooks {
-		// Update CABundle if CABundle is empty or updated.
-		if webhook.ClientConfig.CABundle == nil || !bytes.Equal(webhook.ClientConfig.CABundle, []byte(caBundleData)) {
-			modified = true
-			mutateWebhookConfig.Webhooks[idx].ClientConfig.CABundle = []byte(caBundleData)
-		}
-	}
-	if modified {
-		// Update webhookConfig
-		err = r.Update(context.TODO(), mutateWebhookConfig)
-		if err != nil {
-			logger.Error(err, "Couldn't update mutate webhook config")
-			return err
-		}
-	}
-
-	validateWebhookConfig := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: whName}, validateWebhookConfig)
-	if errors.IsNotFound(err) {
-		logger.Info("Couldn't find", "validate webhook config:", whName)
-	}
-	modified = false
-	for idx, webhook := range validateWebhookConfig.Webhooks {
-		// Update CABundle if CABundle is empty or updated.
-		if webhook.ClientConfig.CABundle == nil || !bytes.Equal(webhook.ClientConfig.CABundle, []byte(caBundleData)) {
-			modified = true
-			validateWebhookConfig.Webhooks[idx].ClientConfig.CABundle = []byte(caBundleData)
-		}
-	}
-	if modified {
-		// Update webhookConfig
-		err = r.Update(context.TODO(), validateWebhookConfig)
-		if err != nil {
-			logger.Error(err, "Couldn't update validate webhook config")
-			return err
-		}
-	}
-	return nil
 }
 
 func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
@@ -293,8 +208,6 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		// Render Webhook manifests
 		data := render.MakeRenderData()
 		data.Data["Namespace"] = namespace
-		data.Data["InjectorServiceCAConfigMap"] = INJECTOR_SERVICE_CA_CONFIGMAP
-		data.Data["WebhookServiceCAConfigMap"] = WEBHOOK_SERVICE_CA_CONFIGMAP
 		data.Data["SRIOVMutatingWebhookName"] = name
 		data.Data["NetworkResourcesInjectorImage"] = os.Getenv("NETWORK_RESOURCES_INJECTOR_IMAGE")
 		data.Data["SriovNetworkWebhookImage"] = os.Getenv("SRIOV_NETWORK_WEBHOOK_IMAGE")
@@ -372,14 +285,6 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObject(dc *sriovnetworkv1.Sri
 		r.syncValidatingWebhook(dc, whs)
 		if err != nil {
 			logger.Error(err, "Fail to sync validate webhook")
-			return err
-		}
-	case "ConfigMap":
-		cm := &corev1.ConfigMap{}
-		err = scheme.Convert(obj, cm, nil)
-		err = r.syncWebhookConfigMap(dc, cm)
-		if err != nil {
-			logger.Error(err, "Fail to sync webhook config map")
 			return err
 		}
 	case "ServiceAccount", "DaemonSet", "Service", "ClusterRole", "ClusterRoleBinding":
@@ -479,42 +384,6 @@ func (r *SriovOperatorConfigReconciler) syncValidatingWebhook(cr *sriovnetworkv1
 	// Note:
 	// we don't need to manage the update of MutatingWebhookConfiguration here
 	// as it's handled by caconfig controller
-
-	return nil
-}
-
-func (r *SriovOperatorConfigReconciler) syncWebhookConfigMap(cr *sriovnetworkv1.SriovOperatorConfig, in *corev1.ConfigMap) error {
-	logger := r.Log.WithName("syncWebhookConfigMap")
-	logger.Info("Start to sync config map", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
-		return err
-	}
-	cm := &corev1.ConfigMap{}
-	err := r.Get(context.TODO(), types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, cm)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create webhook config map: %v", err)
-			}
-			logger.Info("Create webhook config map for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get webhook config map: %v", err)
-		}
-	} else {
-		logger.Info("Webhook ConfigMap already exists, updating")
-		cm.ObjectMeta.Annotations[SERVICE_CA_CONFIGMAP_ANNOTATION] = "true"
-		err = r.Update(context.TODO(), cm)
-		if err != nil {
-			return fmt.Errorf("Couldn't update webhook config map: %v", err)
-		}
-
-	}
-
-	// Note:
-	// we don't need to manage the update of WebhookConfigMap here
-	// as service-ca.crt is automatically injected by service-ca-operator
 
 	return nil
 }
