@@ -1,0 +1,12 @@
+name: "Run Jobs on PR"
+on: pull_request
+
+jobs:
+  execute:
+    name: "remove the lgtm label"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: jpmcb/prow-github-actions@v1.1.2
+        with:
+          jobs: 'lgtm'
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
