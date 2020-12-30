@@ -202,6 +202,12 @@ var _ = Describe("SriovNetwork Controller", func() {
 				anno := netAttDef.GetAnnotations()
 				Expect(anno["k8s.v1.cni.cncf.io/resourceName"]).To(Equal("openshift.io/" + cr.Spec.ResourceName))
 				Expect(strings.TrimSpace(netAttDef.Spec.Config)).To(Equal(expect))
+
+				found := &sriovnetworkv1.SriovNetwork{}
+				err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
+				Expect(err).NotTo(HaveOccurred())
+				err = k8sClient.Delete(goctx.TODO(), found, []dynclient.DeleteOption{}...)
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})

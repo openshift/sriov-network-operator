@@ -68,7 +68,8 @@ var _ = Describe("[sriov] operator", func() {
 		Expect(clients).NotTo(BeNil(), "Client misconfigured, check the $KUBECONFIG env variable")
 		err := namespaces.Create(namespaces.Test, clients)
 		Expect(err).ToNot(HaveOccurred())
-
+		err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
+		Expect(err).ToNot(HaveOccurred())
 		waitForSRIOVStable()
 		sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
 		Expect(err).ToNot(HaveOccurred())
@@ -155,6 +156,8 @@ var _ = Describe("[sriov] operator", func() {
 		execute.BeforeAll(func() {
 			var err error
 
+			err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
+			Expect(err).ToNot(HaveOccurred())
 			if discovery.Enabled() {
 				node, resourceName, numVfs, sriovDevice, err = discovery.DiscoveredResources(clients,
 					sriovInfos, operatorNamespace, defaultFilterPolicy,
@@ -1082,7 +1085,9 @@ var _ = Describe("[sriov] operator", func() {
 					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
 					Expect(err).ToNot(HaveOccurred())
 					unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
-					Expect(err).ToNot(HaveOccurred())
+					if err != nil {
+						Skip(err.Error())
+					}
 					unusedSriovDevice = unusedSriovDevices[0]
 					defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
 					Expect(err).ToNot(HaveOccurred())
@@ -1163,7 +1168,9 @@ var _ = Describe("[sriov] operator", func() {
 						sriovDeviceList, err := sriovInfos.FindSriovDevices(node)
 						Expect(err).ToNot(HaveOccurred())
 						unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
-						Expect(err).ToNot(HaveOccurred())
+						if err != nil {
+							Skip(err.Error())
+						}
 						intf = unusedSriovDevices[0]
 
 						mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
@@ -1415,7 +1422,7 @@ var _ = Describe("[sriov] operator", func() {
 						}
 						return true
 
-					}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+					}, 2*time.Minute, 10*time.Second).Should(BeTrue())
 
 					Eventually(func() bool {
 						serviceList, err := clients.Services(operatorNamespace).List(context.Background(), metav1.ListOptions{})
@@ -1426,7 +1433,7 @@ var _ = Describe("[sriov] operator", func() {
 							}
 						}
 						return true
-					}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+					}, 2*time.Minute, 10*time.Second).Should(BeTrue())
 
 					Eventually(func() bool {
 						crs := rbacv1.ClusterRoleList{}
@@ -1604,9 +1611,6 @@ func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceEx
 		stdout, _, err = pod.ExecCommand(clients, createdPod, "ip", "link", "show", device.Name)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(stdout)).Should(Not(Equal(0)), "Unable to query link state")
-		if strings.Contains(stdout, "state DOWN") {
-			continue // The interface is not active
-		}
 		if strings.Contains(stdout, "master ovs-system") {
 			continue // The interface is not active
 		}
