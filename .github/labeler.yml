@@ -1,0 +1,8 @@
+# labels to be used with /area command
+area:
+  - 'bug'
+  - 'important'
+
+# File globs for PR labeler
+tests:
+  - '**/*.test.ts'
