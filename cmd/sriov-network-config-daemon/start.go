@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -84,6 +85,27 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	var config *rest.Config
 	var err error
+
+	if os.Getenv("CLUSTER_TYPE") == utils.ClusterTypeOpenshift {
+		kubeconfig, err := clientcmd.LoadFromFile("/host/etc/kubernetes/kubeconfig")
+		if err != nil {
+			glog.Errorf("failed to load kubelet kubeconfig: %v", err)
+		}
+		clusterName := kubeconfig.Contexts[kubeconfig.CurrentContext].Cluster
+		apiURL := kubeconfig.Clusters[clusterName].Server
+
+		url, err := url.Parse(apiURL)
+		if err != nil {
+			glog.Errorf("failed to parse api url from kubelet kubeconfig: %v", err)
+		}
+
+		// The kubernetes in-cluster functions don't let you override the apiserver
+		// directly; gotta "pass" it via environment vars.
+		glog.V(0).Infof("overriding kubernetes api to %s", apiURL)
+		os.Setenv("KUBERNETES_SERVICE_HOST", url.Hostname())
+		os.Setenv("KUBERNETES_SERVICE_PORT", url.Port())
+	}
+
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig != "" {
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)

@@ -4,6 +4,8 @@ kind: MutatingWebhookConfiguration
 metadata:
   name: {{.SRIOVMutatingWebhookName}}
   namespace: {{.Namespace}}
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
     failurePolicy: Fail
@@ -24,6 +26,8 @@ kind: ValidatingWebhookConfiguration
 metadata:
   name: {{.SRIOVMutatingWebhookName}}
   namespace: {{.Namespace}}
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
     failurePolicy: Fail
