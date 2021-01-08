@@ -11,6 +11,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/go-openapi/spec v0.19.4
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/google/go-cmp v0.4.0
 	github.com/intel/sriov-network-device-plugin v3.0.1-0.20191017093954-bf28fdc3e2d9+incompatible
 	github.com/jaypipes/ghw v0.5.0
 	github.com/onsi/ginkgo v1.12.0
