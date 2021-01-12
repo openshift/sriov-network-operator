@@ -10,8 +10,10 @@ import (
 )
 
 // SriovNetworkNodeStateLister helps list SriovNetworkNodeStates.
+// All objects returned here must be treated as read-only.
 type SriovNetworkNodeStateLister interface {
 	// List lists all SriovNetworkNodeStates in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.SriovNetworkNodeState, err error)
 	// SriovNetworkNodeStates returns an object that can list and get SriovNetworkNodeStates.
 	SriovNetworkNodeStates(namespace string) SriovNetworkNodeStateNamespaceLister
@@ -42,10 +44,13 @@ func (s *sriovNetworkNodeStateLister) SriovNetworkNodeStates(namespace string) S
 }
 
 // SriovNetworkNodeStateNamespaceLister helps list and get SriovNetworkNodeStates.
+// All objects returned here must be treated as read-only.
 type SriovNetworkNodeStateNamespaceLister interface {
 	// List lists all SriovNetworkNodeStates in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.SriovNetworkNodeState, err error)
 	// Get retrieves the SriovNetworkNodeState from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1.SriovNetworkNodeState, error)
 	SriovNetworkNodeStateNamespaceListerExpansion
 }

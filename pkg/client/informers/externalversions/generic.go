@@ -36,7 +36,7 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=sriovnetwork.openshift.io, Version=v1
+	// Group=sriovnetwork, Version=v1
 	case v1.SchemeGroupVersion.WithResource("sriovnetworks"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Sriovnetwork().V1().SriovNetworks().Informer()}, nil
 	case v1.SchemeGroupVersion.WithResource("sriovnetworknodepolicies"):
