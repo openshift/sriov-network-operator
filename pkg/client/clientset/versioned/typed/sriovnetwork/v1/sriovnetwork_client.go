@@ -16,7 +16,7 @@ type SriovnetworkV1Interface interface {
 	SriovOperatorConfigsGetter
 }
 
-// SriovnetworkV1Client is used to interact with features provided by the sriovnetwork.openshift.io group.
+// SriovnetworkV1Client is used to interact with features provided by the sriovnetwork group.
 type SriovnetworkV1Client struct {
 	restClient rest.Interface
 }

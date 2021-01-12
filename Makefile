@@ -51,7 +51,7 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-.PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests
+.PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests update-codegen
 
 all: generate vet build plugins
 
@@ -67,6 +67,9 @@ plugins: _plugin-intel _plugin-mellanox _plugin-generic _plugin-virtual _plugin-
 
 clean:
 	@rm -rf $(TARGET_DIR)
+
+update-codegen:
+	hack/update-codegen.sh
 
 image: ; $(info Building image...)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE) -t $(IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
