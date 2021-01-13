@@ -37,6 +37,9 @@ const (
 	CONFIGMAP_NAME                   = "device-plugin-config"
 	DP_CONFIG_FILENAME               = "config.json"
 	HwOffloadNodeLabel               = "ovs-hw-offload-worker"
+
+	linkTypeEthernet   = "ether"
+	linkTypeInfiniband = "infiniband"
 )
 
 var webhooks = map[string](string){
