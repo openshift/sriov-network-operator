@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/go-logr/logr"
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
@@ -553,6 +554,16 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			if len(p.Spec.NicSelector.PfNames) > 0 {
 				netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
+			if p.Spec.LinkType != "" {
+				linkType := linkTypeEthernet
+				if strings.ToLower(p.Spec.LinkType) == "ib" {
+					linkType = linkTypeInfiniband
+				}
+
+				if !sriovnetworkv1.StringInArray(linkType, netDeviceSelectors.LinkTypes) {
+					netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
+				}
+			}
 			if len(p.Spec.NicSelector.RootDevices) > 0 {
 				netDeviceSelectors.RootDevices = sriovnetworkv1.UniqueAppend(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
 			}
@@ -605,6 +616,13 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			}
 			if len(p.Spec.NicSelector.PfNames) > 0 {
 				netDeviceSelectors.PfNames = append(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
+			}
+			if p.Spec.LinkType != "" {
+				linkType := linkTypeEthernet
+				if strings.ToLower(p.Spec.LinkType) == "ib" {
+					linkType = linkTypeInfiniband
+				}
+				netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
 			}
 			if len(p.Spec.NicSelector.RootDevices) > 0 {
 				netDeviceSelectors.RootDevices = append(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
