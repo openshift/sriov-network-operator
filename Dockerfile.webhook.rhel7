@@ -1,9 +1,9 @@
-FROM registry.svc.ci.openshift.org/ocp/builder:rhel-8-golang-1.15-openshift-4.6 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.15-openshift-4.6 AS builder
 WORKDIR /go/src/github.com/openshift/sriov-network-operator
 COPY . .
 RUN make _build-webhook BIN_PATH=build/_output/cmd
 
-FROM registry.svc.ci.openshift.org/ocp/4.6:base
+FROM registry.ci.openshift.org/ocp/4.6:base
 LABEL io.k8s.display-name="OpenShift sriov-network-webhook" \
       io.k8s.description="This is an admission controller webhook that mutates and validates customer resources of sriov network operator." \
       io.openshift.tags="openshift,networking,sr-iov" \
