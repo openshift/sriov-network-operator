@@ -444,8 +444,13 @@ func (r *SriovNetworkNodePolicyReconciler) syncDaemonSet(cr *sriovnetworkv1.Srio
 		// This skips default values added by the api server.
 		// References in https://github.com/kubernetes-sigs/kubebuilder/issues/592#issuecomment-625738183
 		if equality.Semantic.DeepDerivative(in.Spec, ds.Spec) {
-			logger.Info("Daemonset spec did not change, not updating")
-			return nil
+			// DeepDerivative has issue detecting nodeAffinity change
+			// https://bugzilla.redhat.com/show_bug.cgi?id=1914066
+			if equality.Semantic.DeepEqual(in.Spec.Template.Spec.Affinity.NodeAffinity,
+				ds.Spec.Template.Spec.Affinity.NodeAffinity) {
+				logger.Info("Daemonset spec did not change, not updating")
+				return nil
+			}
 		}
 		err = r.Update(context.TODO(), in)
 		if err != nil {
