@@ -527,7 +527,7 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		}
 	}
 
-	if len(dn.LoadedPlugins) > 1 && !reqReboot {
+	if !reqReboot {
 		// Apply generic_plugin last
 		err = dn.LoadedPlugins[GenericPlugin].Apply()
 		if err != nil {
