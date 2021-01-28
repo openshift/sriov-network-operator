@@ -40,6 +40,9 @@ var NicIdMap = []string{
 	"8086 158b 154c", // I40e 25G SFP28
 	"8086 1572 154c", // I40e 10G X710 SFP+
 	"8086 0d58 154c", // I40e XXV710 N3000
+	"8086 1592 1889", // Columbiaville E810-CQDA2/2CQDA2
+	"8086 1593 1889", // Columbiaville E810-XXVDA4
+	"8086 159b 1889", // Columbiaville E810-XXVDA2
 	"15b3 1015 1016", // ConnectX-4LX
 	"15b3 1017 1018", // ConnectX-5, PCIe 3.0
 	"15b3 101b 101c", // ConnectX-6
@@ -518,9 +521,12 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["SriovCniIpam"] = "\"ipam\":{}"
 	}
 
-	// TODO: this needs to be expanded if we want to support
 	// metaplugins for the infiniband cni
 	data.Data["MetaPluginsConfigured"] = false
+	if cr.Spec.MetaPluginsConfig != "" {
+		data.Data["MetaPluginsConfigured"] = true
+		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
+	}
 
 	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {

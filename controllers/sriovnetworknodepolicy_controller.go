@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/go-logr/logr"
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
@@ -444,8 +445,13 @@ func (r *SriovNetworkNodePolicyReconciler) syncDaemonSet(cr *sriovnetworkv1.Srio
 		// This skips default values added by the api server.
 		// References in https://github.com/kubernetes-sigs/kubebuilder/issues/592#issuecomment-625738183
 		if equality.Semantic.DeepDerivative(in.Spec, ds.Spec) {
-			logger.Info("Daemonset spec did not change, not updating")
-			return nil
+			// DeepDerivative has issue detecting nodeAffinity change
+			// https://bugzilla.redhat.com/show_bug.cgi?id=1914066
+			if equality.Semantic.DeepEqual(in.Spec.Template.Spec.Affinity.NodeAffinity,
+				ds.Spec.Template.Spec.Affinity.NodeAffinity) {
+				logger.Info("Daemonset spec did not change, not updating")
+				return nil
+			}
 		}
 		err = r.Update(context.TODO(), in)
 		if err != nil {
@@ -553,6 +559,16 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			if len(p.Spec.NicSelector.PfNames) > 0 {
 				netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
+			if p.Spec.LinkType != "" {
+				linkType := linkTypeEthernet
+				if strings.ToLower(p.Spec.LinkType) == "ib" {
+					linkType = linkTypeInfiniband
+				}
+
+				if !sriovnetworkv1.StringInArray(linkType, netDeviceSelectors.LinkTypes) {
+					netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
+				}
+			}
 			if len(p.Spec.NicSelector.RootDevices) > 0 {
 				netDeviceSelectors.RootDevices = sriovnetworkv1.UniqueAppend(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
 			}
@@ -605,6 +621,13 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			}
 			if len(p.Spec.NicSelector.PfNames) > 0 {
 				netDeviceSelectors.PfNames = append(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
+			}
+			if p.Spec.LinkType != "" {
+				linkType := linkTypeEthernet
+				if strings.ToLower(p.Spec.LinkType) == "ib" {
+					linkType = linkTypeInfiniband
+				}
+				netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
 			}
 			if len(p.Spec.NicSelector.RootDevices) > 0 {
 				netDeviceSelectors.RootDevices = append(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
