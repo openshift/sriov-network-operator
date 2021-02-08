@@ -10,8 +10,10 @@ import (
 )
 
 // SriovOperatorConfigLister helps list SriovOperatorConfigs.
+// All objects returned here must be treated as read-only.
 type SriovOperatorConfigLister interface {
 	// List lists all SriovOperatorConfigs in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.SriovOperatorConfig, err error)
 	// SriovOperatorConfigs returns an object that can list and get SriovOperatorConfigs.
 	SriovOperatorConfigs(namespace string) SriovOperatorConfigNamespaceLister
@@ -42,10 +44,13 @@ func (s *sriovOperatorConfigLister) SriovOperatorConfigs(namespace string) Sriov
 }
 
 // SriovOperatorConfigNamespaceLister helps list and get SriovOperatorConfigs.
+// All objects returned here must be treated as read-only.
 type SriovOperatorConfigNamespaceLister interface {
 	// List lists all SriovOperatorConfigs in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1.SriovOperatorConfig, err error)
 	// Get retrieves the SriovOperatorConfig from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1.SriovOperatorConfig, error)
 	SriovOperatorConfigNamespaceListerExpansion
 }
