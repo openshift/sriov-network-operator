@@ -190,3 +190,13 @@ func IsClusterStable(clients *testclient.ClientSet) (bool, error) {
 
 	return true, nil
 }
+
+// IsSingleNode validates if the environment is single node cluster
+// This is done by checking numer of nodes, it can later be substituted by an env variable if needed
+func IsSingleNode(clients *testclient.ClientSet) (bool, error) {
+	nodes, err := clients.Nodes().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return false, err
+	}
+	return len(nodes.Items) == 1, nil
+}
