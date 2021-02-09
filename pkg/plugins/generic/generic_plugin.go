@@ -190,7 +190,7 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 					// ignore swichdev device
 					break
 				}
-				if iface.NumVfs != ifaceStatus.NumVfs {
+				if iface.NumVfs != ifaceStatus.NumVfs && ifaceStatus.NumVfs != 0 {
 					glog.V(2).Infof("generic-plugin needDrainNode(): need drain, expect NumVfs %v, current NumVfs %v", iface.NumVfs, ifaceStatus.NumVfs)
 					needDrain = true
 					return
