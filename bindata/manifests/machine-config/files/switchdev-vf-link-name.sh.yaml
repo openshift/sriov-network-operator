@@ -1,0 +1,9 @@
+mode: 0755
+overwrite: true
+path: "/etc/udev/switchdev-vf-link-name.sh"
+contents:
+  inline: |
+    #!/bin/bash
+    set -x
+    PORT="$1"
+    echo "NUMBER=${PORT##pf*vf}"
