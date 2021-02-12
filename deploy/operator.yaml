@@ -46,7 +46,7 @@ spec:
             - name: SRIOV_NETWORK_WEBHOOK_IMAGE
               value: $SRIOV_NETWORK_WEBHOOK_IMAGE
             - name: RESOURCE_PREFIX
-              value: openshift.io
+              value: $RESOURCE_PREFIX
             - name: ENABLE_ADMISSION_CONTROLLER
               value: "$ENABLE_ADMISSION_CONTROLLER"
             - name: NAMESPACE
