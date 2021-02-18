@@ -78,6 +78,18 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 			glog.Warningf("DiscoverSriovDevices(): unable to parse device driver for device %+v %q", device, err)
 			continue
 		}
+
+		deviceNames, err := dputils.GetNetNames(device.Address)
+		if err != nil {
+			glog.Warningf("DiscoverSriovDevices(): unable to get device names for device %+v %q", device, err)
+			continue
+		}
+
+		if len(deviceNames) == 0 {
+			// no network devices found, skipping device
+			continue
+		}
+
 		iface := sriovnetworkv1.InterfaceExt{
 			PciAddress: device.Address,
 			Driver:     driver,
@@ -619,4 +631,28 @@ func GetNicSriovMode(pciAddress string) (string, error) {
 		return "", err
 	}
 	return devLink.Attrs.Eswitch.Mode, nil
+}
+
+func GetPhysSwitchID(name string) (string, error) {
+	swIDFile := filepath.Join(sysClassNet, name, "phys_switch_id")
+	physSwitchID, err := ioutil.ReadFile(swIDFile)
+	if err != nil {
+		return "", err
+	}
+	if physSwitchID != nil {
+		return strings.TrimSpace(string(physSwitchID)), nil
+	}
+	return "", nil
+}
+
+func GetPhysPortName(name string) (string, error) {
+	devicePortNameFile := filepath.Join(sysClassNet, name, "phys_port_name")
+	physPortName, err := ioutil.ReadFile(devicePortNameFile)
+	if err != nil {
+		return "", err
+	}
+	if physPortName != nil {
+		return strings.TrimSpace(string(physPortName)), nil
+	}
+	return "", nil
 }
