@@ -24,7 +24,13 @@ spec:
       serviceAccountName: operator-webhook-sa
       nodeSelector:
         beta.kubernetes.io/os: linux
-        node-role.kubernetes.io/master:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
       tolerations:
       - key: "node-role.kubernetes.io/master"
         operator: Exists
