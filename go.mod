@@ -11,6 +11,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/google/go-cmp v0.5.0
 	github.com/huandu/xstrings v1.3.2 // indirect
@@ -25,7 +26,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.0.0
 	github.com/vishvananda/netlink v1.1.0
-	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/genproto v0.0.0-20200610104632-a5b850bcf112 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
@@ -39,6 +39,7 @@ require (
 )
 
 replace (
+	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
 	github.com/openshift/api => github.com/openshift/api v0.0.0-20200827090112-c05698d102cf
 	k8s.io/kubectl => k8s.io/kubectl v0.19.0
 	k8s.io/kubelet => k8s.io/kubelet v0.19.0
