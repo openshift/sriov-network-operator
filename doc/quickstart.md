@@ -4,10 +4,17 @@
 
 1. A supported SRIOV hardware on the cluster nodes. Currently the supported models are:
   
-   | Vendor-ID   | Device-ID   |
-   | ----------- | ----------- |
-   | Intel       | 158b        |
-   | Melanox     | 1015, 1017  |
+| Model                    | Vendor ID | Device ID |
+| ------------------------ | --------- | --------- |
+| Intel XXV710 25GbE SFP28 |  0x8086 | 0x158 |
+| Mellanox MT27710 Family [ConnectX-4 Lx] 25GbE dual-port SFP28 | 0x15b3 | 0x1015 |
+| Mellanox MT27800 Family [ConnectX-5] 25GbE dual-port SFP28 | 0x15b3 | 0x1017 |
+| Mellanox MT27800 Family [ConnectX-5] 100GbE | 0x15b3 | 0x1017 |
+| Mellanox MT27700 Family [ConnectX-4] VPI adapter card, EDR IB (100Gb/s), single-port QSFP28 | 0x15b3 | 0x1013 | 
+| Mellanox MT27800 Family [ConnectX-5] VPI adapter card, EDR IB (100Gb/s), single-port QSFP28 | 0x15b3 | 0x1017 |
+| Mellanox MT28908 Family [ConnectX-6] VPI adapter card, 100Gb/s (HDR100, EDR IB), single-port QSFP56 | 0x15b3 | 0x101b |
+| Mellanox MT28908 Family [ConnectX-6] VPI adapter card, HDR200 IB (200Gb/s), single-port QSFP56 | 0x15b3 | 0x101b |
+
 
 2. Kubernetes or Openshift cluster running on bare metal nodes.
 3. Multus-cni is deployed as default CNI plugin, and there is a default CNI plugin (flannel, openshift-sdn etc.) available for Multus-cni.
