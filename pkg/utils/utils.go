@@ -315,6 +315,17 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			}
 		}
 	}
+	// Set PF link up
+	pfLink, err := netlink.LinkByName(ifaceStatus.Name)
+	if err != nil {
+		return err
+	}
+	if pfLink.Attrs().OperState != netlink.OperUp {
+		err = netlink.LinkSetUp(pfLink)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
