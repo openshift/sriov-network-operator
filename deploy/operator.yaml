@@ -63,3 +63,5 @@ spec:
               value: $CNI_BIN_PATH
             - name: CLUSTER_TYPE
               value: $CLUSTER_TYPE
+            - name: WEBHOOK_CA_BUNDLE
+              value: "$WEBHOOK_CA_BUNDLE"

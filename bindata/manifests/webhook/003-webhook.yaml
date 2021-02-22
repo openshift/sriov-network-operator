@@ -5,7 +5,11 @@ metadata:
   name: {{.SRIOVMutatingWebhookName}}
   namespace: {{.Namespace}}
   annotations:
+    {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
+    {{- else if and (not .CaBundle) (eq .ClusterType "kubernetes") }}
+    cert-manager.io/inject-ca-from: {{.Namespace}}/network-resources-injector-secret
+    {{- end }}
 webhooks:
   - name: network-resources-injector-config.k8s.io
     clientConfig:
@@ -13,6 +17,9 @@ webhooks:
         name: network-resources-injector-service
         namespace: {{.Namespace}}
         path: "/mutate"
+      {{- if and (.CaBundle) (eq .ClusterType "kubernetes") }}
+      caBundle: "{{.CaBundle}}"
+      {{- end }}
     rules:
       - operations: [ "CREATE" ]
         apiGroups: ["apps", ""]

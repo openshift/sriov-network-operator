@@ -34,3 +34,4 @@ export RESOURCE_PREFIX=${RESOURCE_PREFIX:-openshift.io}
 export ENABLE_ADMISSION_CONTROLLER=${ENABLE_ADMISSION_CONTROLLER:-"true"}
 export CLUSTER_TYPE=${CLUSTER_TYPE:-openshift}
 export NAMESPACE=${NAMESPACE:-"openshift-sriov-network-operator"}
+export WEBHOOK_CA_BUNDLE=${WEBHOOK_CA_BUNDLE:-""}

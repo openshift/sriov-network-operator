@@ -213,6 +213,8 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		data.Data["NetworkResourcesInjectorImage"] = os.Getenv("NETWORK_RESOURCES_INJECTOR_IMAGE")
 		data.Data["SriovNetworkWebhookImage"] = os.Getenv("SRIOV_NETWORK_WEBHOOK_IMAGE")
 		data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
+		data.Data["ClusterType"] = utils.ClusterType
+		data.Data["CaBundle"] = os.Getenv("WEBHOOK_CA_BUNDLE")
 		objs, err := render.RenderDir(path, &data)
 		if err != nil {
 			logger.Error(err, "Fail to render webhook manifests")
