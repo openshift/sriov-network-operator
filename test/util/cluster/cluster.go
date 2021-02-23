@@ -95,6 +95,18 @@ func (n *EnabledNodes) FindSriovDevices(node string) ([]*sriovv1.InterfaceExt, e
 	return devices, nil
 }
 
+// FindOneVfioSriovDevice retrieves a node with a valid sriov device for vfio
+func (n *EnabledNodes) FindOneVfioSriovDevice() (string, sriovv1.InterfaceExt) {
+	for _, node := range n.Nodes {
+		for _, nic := range n.States[node].Status.Interfaces {
+			if nic.Vendor == "8086" {
+				return node, nic
+			}
+		}
+	}
+	return "", sriovv1.InterfaceExt{}
+}
+
 // FindOneMellanoxSriovDevice retrieves a valid sriov device for the given node.
 func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.InterfaceExt, error) {
 	s, ok := n.States[node]
