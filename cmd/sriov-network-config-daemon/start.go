@@ -28,7 +28,7 @@ import (
 var (
 	startCmd = &cobra.Command{
 		Use:   "start",
-		Short: "Starts Machine Config Daemon",
+		Short: "Starts SR-IOV Network Config Daemon",
 		Long:  "",
 		Run:   runStartCmd,
 	}
