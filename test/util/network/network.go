@@ -49,7 +49,7 @@ func CreateSriovNetwork(clientSet *testclient.ClientSet, intf *sriovv1.Interface
 	return err
 }
 
-func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string) (*sriovv1.SriovNetworkNodePolicy, error) {
+func defineSriovPolicy(generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string) *sriovv1.SriovNetworkNodePolicy {
 	nodePolicy := &sriovv1.SriovNetworkNodePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: generatedName,
@@ -65,9 +65,15 @@ func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, op
 			NicSelector: sriovv1.SriovNetworkNicSelector{
 				PfNames: []string{sriovDevice},
 			},
-			DeviceType: "netdevice",
+			DeviceType: deviceType,
 		},
 	}
+	return nodePolicy
+}
+
+// CreateSriovPolicy creates a SriovNetworkNodePolicy and returns it
+func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string) (*sriovv1.SriovNetworkNodePolicy, error) {
+	nodePolicy := defineSriovPolicy(generatedName, operatorNamespace, sriovDevice, testNode, numVfs, resourceName, deviceType)
 	err := clientSet.Create(context.Background(), nodePolicy)
 	return nodePolicy, err
 }
