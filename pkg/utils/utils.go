@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -37,6 +38,8 @@ const (
 
 var InitialState sriovnetworkv1.SriovNetworkNodeState
 var ClusterType string
+
+var pfPhysPortNameRe = regexp.MustCompile(`p\d+`)
 
 func init() {
 	ClusterType = os.Getenv("CLUSTER_TYPE")
@@ -371,8 +374,26 @@ func tryGetInterfaceName(pciAddr string) string {
 	if err != nil || len(names) < 1 {
 		return ""
 	}
-	glog.V(2).Infof("tryGetInterfaceName(): name is %s", names[0])
-	return names[0]
+	netDevName := names[0]
+
+	// Switchdev PF and their VFs representors are existing under the same PCI address since kernel 5.8
+	// if device is switchdev then return PF name
+	for _, name := range names {
+		if !isSwitchdev(name) {
+			continue
+		}
+		// Try to get the phys port name, if not exists then fallback to check without it
+		// phys_port_name should be in formant p<port-num> e.g p0,p1,p2 ...etc.
+		if physPortName, err := GetPhysPortName(name); err == nil {
+			if !pfPhysPortNameRe.MatchString(physPortName) {
+				continue
+			}
+		}
+		return name
+	}
+
+	glog.V(2).Infof("tryGetInterfaceName(): name is %s", netDevName)
+	return netDevName
 }
 
 func getNetdevMTU(pciAddr string) int {
@@ -662,4 +683,13 @@ func GetPhysPortName(name string) (string, error) {
 		return strings.TrimSpace(string(physPortName)), nil
 	}
 	return "", nil
+}
+
+func isSwitchdev(name string) bool {
+	switchID, err := GetPhysSwitchID(name)
+	if err != nil || switchID == "" {
+		return false
+	}
+
+	return true
 }
