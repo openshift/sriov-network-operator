@@ -47,6 +47,7 @@ var NicIdMap = []string{
 	"15b3 1017 1018", // ConnectX-5, PCIe 3.0
 	"15b3 101b 101c", // ConnectX-6
 	"15b3 1013 1014", // ConnectX-4
+	"15b3 a2d6 101e", // MT42822 BlueField-2 integrated ConnectX-6 Dx
 }
 
 // NetFilterType Represents the NetFilter tags to be used
