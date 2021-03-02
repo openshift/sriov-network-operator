@@ -653,6 +653,8 @@ func (dn *Daemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) er
 		pl = registerPlugins(ns)
 		if utils.ClusterType == utils.ClusterTypeOpenshift {
 			pl = append(pl, McoPlugin)
+		} else {
+			pl = append(pl, K8sPlugin)
 		}
 		pl = append(pl, GenericPlugin)
 	}

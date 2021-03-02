@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/golang/glog"
@@ -17,6 +15,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 type McoPlugin struct {
@@ -28,7 +27,6 @@ type McoPlugin struct {
 
 const (
 	switchdevUnitPath = "/host/etc/systemd/system/switchdev-configuration.service"
-	switchDevConfPath = "/host/etc/switchdev.conf"
 	nodeLabelPrefix   = "node-role.kubernetes.io/"
 )
 
@@ -80,16 +78,10 @@ func (p *McoPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
 func (p *McoPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("mco-plugin OnNodeStateChange()")
-	switchdevConfigured = false
-	for _, iface := range new.Spec.Interfaces {
-		if iface.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
-			switchdevConfigured = true
-			break
-		}
-	}
+	switchdevConfigured = utils.IsSwitchdevModeSpec(new.Spec)
 
 	var update, remove bool
-	if update, remove, err = writeSwitchdevConfFile(new); err != nil {
+	if update, remove, err = utils.WriteSwitchdevConfFile(new); err != nil {
 		glog.Errorf("mco-plugin OnNodeStateChange():fail to update switchdev.conf file: %v", err)
 		return
 	}
@@ -155,47 +147,4 @@ func (p *McoPlugin) Apply() error {
 	}
 	glog.Infof("Node %s is not in HW offload MachineConfigPool", node.Name)
 	return nil
-}
-
-func writeSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (update, remove bool, err error) {
-	_, err = os.Stat(switchDevConfPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			glog.V(2).Infof("writeSwitchdevConfFile(): file not existed, create it")
-			_, err = os.Create(switchDevConfPath)
-			if err != nil {
-				glog.Errorf("writeSwitchdevConfFile(): fail to create file: %v", err)
-				return
-			}
-		} else {
-			return
-		}
-	}
-	newContent := ""
-	for _, iface := range newState.Spec.Interfaces {
-		if iface.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
-			newContent = newContent + fmt.Sprintln(iface.PciAddress, iface.NumVfs)
-		}
-	}
-	oldContent, err := ioutil.ReadFile(switchDevConfPath)
-	if err != nil {
-		glog.Errorf("writeSwitchdevConfFile(): fail to read file: %v", err)
-		return
-	}
-	if newContent == string(oldContent) {
-		glog.V(2).Info("writeSwitchdevConfFile(): no update")
-		return
-	}
-	if newContent == "" {
-		remove = true
-		glog.V(2).Info("writeSwitchdevConfFile(): remove content in switchdev.conf")
-	}
-	update = true
-	glog.V(2).Infof("writeSwitchdevConfFile(): write %s to switchdev.conf", newContent)
-	err = ioutil.WriteFile(switchDevConfPath, []byte(newContent), 0666)
-	if err != nil {
-		glog.Errorf("writeSwitchdevConfFile(): fail to write file: %v", err)
-		return
-	}
-	return
 }

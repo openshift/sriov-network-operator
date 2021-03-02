@@ -50,6 +50,10 @@ spec:
         volumeMounts:
         - name: host
           mountPath: /host
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bindata/scripts/clean-k8s-services.sh"]
       volumes:
       - name: host
         hostPath:
