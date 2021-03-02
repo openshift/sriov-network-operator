@@ -8,6 +8,7 @@ require (
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/blang/semver v3.5.0+incompatible
 	github.com/cenkalti/backoff v2.2.1+incompatible
+	github.com/coreos/go-systemd/v22 v22.0.0
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0 // indirect
@@ -29,6 +30,7 @@ require (
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/genproto v0.0.0-20200610104632-a5b850bcf112 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
+	gopkg.in/yaml.v2 v2.3.0
 	k8s.io/api v0.19.0
 	k8s.io/apimachinery v0.19.0
 	k8s.io/client-go v0.19.0
