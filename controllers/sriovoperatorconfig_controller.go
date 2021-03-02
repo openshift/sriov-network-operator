@@ -417,11 +417,11 @@ func (r *SriovOperatorConfigReconciler) syncOffloadMachineConfig(dc *sriovnetwor
 	data.Data["HwOffloadNodeLabel"] = HwOffloadNodeLabel
 	mcName := "00-" + HwOffloadNodeLabel
 	mcpName := HwOffloadNodeLabel
-	mc, err := render.GenerateMachineConfig("bindata/manifests/machine-config", mcName, HwOffloadNodeLabel, dc.Spec.EnableOvsOffload, &data)
+	mc, err := render.GenerateMachineConfig("bindata/manifests/switchdev-config", mcName, HwOffloadNodeLabel, dc.Spec.EnableOvsOffload, &data)
 	if err != nil {
 		return err
 	}
-	mcpRaw, err := render.RenderTemplate("bindata/manifests/machine-config/machineconfigpool.yaml", &data)
+	mcpRaw, err := render.RenderTemplate("bindata/manifests/switchdev-config/machineconfigpool.yaml", &data)
 	if err != nil {
 		return err
 	}
