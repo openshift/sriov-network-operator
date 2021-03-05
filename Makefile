@@ -63,7 +63,7 @@ _build-%:
 _plugin-%: vet
 	@hack/build-plugins.sh $*
 
-plugins: _plugin-intel _plugin-mellanox _plugin-generic _plugin-virtual _plugin-mco
+plugins: _plugin-intel _plugin-mellanox _plugin-generic _plugin-virtual _plugin-mco _plugin-k8s
 
 clean:
 	@rm -rf $(TARGET_DIR)
@@ -196,7 +196,6 @@ deploy-setup-k8s: export NAMESPACE=sriov-network-operator
 deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
 deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 deploy-setup-k8s: export OPERATOR_EXEC=kubectl
-deploy-setup-k8s: export CLUSTER_TYPE=kubernetes
 deploy-setup-k8s: deploy-setup
 
 test-e2e-conformance:
