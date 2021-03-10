@@ -19,8 +19,7 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GH_IMAGE_REGISTRY_TOKEN }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push sriov-network-operator
         uses: docker/build-push-action@v2
@@ -47,8 +46,7 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GH_IMAGE_REGISTRY_TOKEN }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push sriov-network-operator-config-daemon
         uses: docker/build-push-action@v2
@@ -75,8 +73,7 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GH_IMAGE_REGISTRY_TOKEN }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push sriov-network-operator-webhook
         uses: docker/build-push-action@v2
