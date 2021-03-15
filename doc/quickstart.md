@@ -13,7 +13,9 @@
 | Mellanox MT27700 Family [ConnectX-4] | 15b3 | 1013 |
 | Mellanox MT27710 Family [ConnectX-4 Lx] | 15b3 | 1015 |
 | Mellanox MT27800 Family [ConnectX-5] | 15b3 | 1017 |
+| Mellanox MT28800 Family [ConnectX-5 Ex] | 15b3 | 1019 |
 | Mellanox MT28908 Family [ConnectX-6] | 15b3 | 101b |
+| Mellanox MT28908 Family [ConnectX-6 Dx] | 15b3 | 101d |
 | Mellanox MT42822 BlueField-2 integrated ConnectX-6 Dx | 15b3 | a2d6 |
 
 

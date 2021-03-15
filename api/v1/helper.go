@@ -43,10 +43,12 @@ var NicIdMap = []string{
 	"8086 1592 1889", // Columbiaville E810-CQDA2/2CQDA2
 	"8086 1593 1889", // Columbiaville E810-XXVDA4
 	"8086 159b 1889", // Columbiaville E810-XXVDA2
+	"15b3 1013 1014", // ConnectX-4
 	"15b3 1015 1016", // ConnectX-4LX
 	"15b3 1017 1018", // ConnectX-5, PCIe 3.0
+	"15b3 1019 101a", // ConnectX-5 Ex
 	"15b3 101b 101c", // ConnectX-6
-	"15b3 1013 1014", // ConnectX-4
+	"15b3 101d 101e", // ConnectX-6 Dx
 	"15b3 a2d6 101e", // MT42822 BlueField-2 integrated ConnectX-6 Dx
 }
 
