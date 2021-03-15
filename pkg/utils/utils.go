@@ -164,21 +164,14 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 }
 
 func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
-	mtu := ifaceStatus.Mtu
 	if iface.Mtu > 0 {
-		mtu = iface.Mtu
+		mtu := iface.Mtu
 		if mtu != ifaceStatus.Mtu {
 			glog.V(2).Infof("needUpdate(): MTU needs update, desired=%d, current=%d", mtu, ifaceStatus.Mtu)
 			return true
 		}
 	}
-	for _, vf := range ifaceStatus.VFs {
-		// 0 is a invalid value for mtu as defined in getNetdevMTU
-		if vf.Mtu != 0 && vf.Mtu != mtu && !sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
-			glog.V(2).Infof("needUpdate(): VF MTU needs update, desired=%d", mtu)
-			return true
-		}
-	}
+
 	if iface.NumVfs != ifaceStatus.NumVfs {
 		glog.V(2).Infof("needUpdate(): NumVfs needs update desired=%d, current=%d", iface.NumVfs, ifaceStatus.NumVfs)
 		return true
@@ -197,6 +190,10 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 					} else {
 						if sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
 							glog.V(2).Infof("needUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
+							return true
+						}
+						if vf.Mtu != 0 && vf.Mtu != group.Mtu {
+							glog.V(2).Infof("needUpdate(): VF %d MTU needs update, desired=%d", vf.VfID, group.Mtu)
 							return true
 						}
 					}
@@ -250,9 +247,11 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			glog.Warningf("configSriovDevice(): unable to parse VFs for device %+v %q", iface.PciAddress, err)
 		}
 		for _, addr := range vfAddrs {
+			var group sriovnetworkv1.VfGroup
+			i := 0
 			driver := ""
 			vfID, err := dputils.GetVFID(addr)
-			for _, group := range iface.VfGroups {
+			for i, group = range iface.VfGroups {
 				if err != nil {
 					glog.Warningf("configSriovDevice(): unable to get VF id %+v %q", iface.PciAddress, err)
 				}
@@ -267,11 +266,6 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 				if err := BindDefaultDriver(addr); err != nil {
 					glog.Warningf("configSriovDevice(): fail to bind default driver for device %s", addr)
 					return err
-				}
-				// keep VF MTU align with PF's
-				mtu := ifaceStatus.Mtu
-				if iface.Mtu > 0 {
-					mtu = iface.Mtu
 				}
 
 				// validate the device exist only with the default driver
@@ -303,9 +297,11 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 				}
 
 				// only set MTU for VF with default driver
-				if err := setNetdevMTU(addr, mtu); err != nil {
-					glog.Warningf("configSriovDevice(): fail to set mtu for VF %s: %v", addr, err)
-					return err
+				if iface.VfGroups[i].Mtu > 0 {
+					if err := setNetdevMTU(addr, iface.VfGroups[i].Mtu); err != nil {
+						glog.Warningf("configSriovDevice(): fail to set mtu for VF %s: %v", addr, err)
+						return err
+					}
 				}
 			} else {
 				if err := BindDpdkDriver(addr, driver); err != nil {
