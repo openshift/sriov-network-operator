@@ -59,6 +59,8 @@ spec:
                         properties:
                           deviceType:
                             type: string
+                          mtu:
+                            type: integer
                           policyName:
                             type: string
                           resourceName:
