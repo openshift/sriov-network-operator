@@ -11,6 +11,7 @@ import (
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // EnabledNodes provides info on sriov enabled nodes of the cluster.
@@ -201,4 +202,24 @@ func IsSingleNode(clients *testclient.ClientSet) (bool, error) {
 		return false, err
 	}
 	return len(nodes.Items) == 1, nil
+}
+
+func GetNodeDrainState(clients *testclient.ClientSet, operatorNamespace string) (bool, error) {
+	sriovOperatorConfg := &sriovv1.SriovOperatorConfig{}
+	err := clients.Get(context.TODO(), runtimeclient.ObjectKey{Name: "default", Namespace: operatorNamespace}, sriovOperatorConfg)
+	return sriovOperatorConfg.Spec.DisableDrain, err
+}
+
+func SetDisableNodeDrainState(clients *testclient.ClientSet, operatorNamespace string, state bool) error {
+	sriovOperatorConfg := &sriovv1.SriovOperatorConfig{}
+	err := clients.Get(context.TODO(), runtimeclient.ObjectKey{Name: "default", Namespace: operatorNamespace}, sriovOperatorConfg)
+	if err != nil {
+		return err
+	}
+	sriovOperatorConfg.Spec.DisableDrain = state
+	err = clients.Update(context.TODO(), sriovOperatorConfg)
+	if err != nil {
+		return err
+	}
+	return nil
 }
