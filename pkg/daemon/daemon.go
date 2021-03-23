@@ -33,12 +33,13 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubectl/pkg/drain"
-
-	// "k8s.io/client-go/kubernetes/scheme"
 	sriovnetworkv1 "github.com/openshift/sriov-network-operator/pkg/apis/sriovnetwork/v1"
 	snclientset "github.com/openshift/sriov-network-operator/pkg/client/clientset/versioned"
 	sninformer "github.com/openshift/sriov-network-operator/pkg/client/informers/externalversions"
 	"github.com/openshift/sriov-network-operator/pkg/utils"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
+	mcfginformers "github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions"
 )
 
 const (
@@ -63,6 +64,8 @@ type Daemon struct {
 	client snclientset.Interface
 	// kubeClient allows interaction with Kubernetes, including the node we are running on.
 	kubeClient *kubernetes.Clientset
+
+	mcClient *mcclientset.Clientset
 
 	nodeState *sriovnetworkv1.SriovNetworkNodeState
 
@@ -91,6 +94,8 @@ type Daemon struct {
 	nodeLister listerv1.NodeLister
 
 	workqueue workqueue.RateLimitingInterface
+
+	mcpName string
 }
 
 type workItem struct {
@@ -99,9 +104,10 @@ type workItem struct {
 
 const (
 	scriptsPath  = "/bindata/scripts/enable-rdma.sh"
-	annoKey      = "sriovnetwork.openshift.io/state"
-	annoIdle     = "Idle"
-	annoDraining = "Draining"
+	annoKey         = "sriovnetwork.openshift.io/state"
+	annoIdle        = "Idle"
+	annoDraining    = "Draining"
+	annoMcpPaused   = "Draining_MCP_Paused"
 )
 
 var namespace = os.Getenv("NAMESPACE")
@@ -122,6 +128,7 @@ func New(
 	nodeName string,
 	client snclientset.Interface,
 	kubeClient *kubernetes.Clientset,
+	mcClient *mcclientset.Clientset,
 	exitCh chan<- error,
 	stopCh <-chan struct{},
 	syncCh <-chan struct{},
@@ -131,11 +138,11 @@ func New(
 		name:       nodeName,
 		client:     client,
 		kubeClient: kubeClient,
+		mcClient:   mcClient,
 		exitCh:     exitCh,
 		stopCh:     stopCh,
 		syncCh:     syncCh,
 		refreshCh:  refreshCh,
-		drainable:  true,
 		nodeState:  &sriovnetworkv1.SriovNetworkNodeState{},
 		drainer: &drain.Helper{
 			Client:              kubeClient,
@@ -325,13 +332,11 @@ func (dn *Daemon) nodeUpdateHandler(old, new interface{}) {
 		return
 	}
 	for _, node := range nodes {
-		if node.GetName() != dn.name && node.Annotations[annoKey] == annoDraining {
-			glog.V(2).Infof("nodeUpdateHandler(): node %s is draining", node.Name)
+		if node.GetName() != dn.name && (node.Annotations[annoKey] == annoDraining || node.Annotations[annoKey] == annoMcpPaused) {
 			dn.drainable = false
 			return
 		}
 	}
-	glog.V(2).Infof("nodeUpdateHandler(): no other node is draining")
 	dn.drainable = true
 }
 
@@ -422,6 +427,10 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		}
 	}
 
+	if err = dn.getNodeMachinePool(); err != nil {
+		return err
+	}
+
 	if len(dn.LoadedPlugins) > 1 && !reqReboot {
 		// Apply generic_plugin last
 		err = dn.LoadedPlugins[GenericPlugin].Apply()
@@ -446,7 +455,7 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		}
 	}
 
-	if anno, ok := dn.node.Annotations[annoKey]; ok && anno == annoDraining {
+	if anno, ok := dn.node.Annotations[annoKey]; ok && (anno == annoDraining || anno == annoMcpPaused) {
 		if err := dn.completeDrain(); err != nil {
 			glog.Errorf("nodeStateSyncHandler(): failed to complete draining: %v", err)
 			return err
@@ -473,8 +482,15 @@ func (dn *Daemon) completeDrain() error {
 		return err
 	}
 
+	glog.Infof("completeDrain(): resume MCP %s", dn.mcpName)
+	pausePatch := []byte("{\"spec\":{\"paused\":false}}")
+	if _, err := dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{}); err != nil {
+		glog.Errorf("completeDrain(): failed to resume MCP %s: %v", dn.mcpName, err)
+		return err
+	}
+
 	if err := dn.annotateNode(dn.name, annoIdle); err != nil {
-		glog.Errorf("drainNode(): failed to annotate node: %v", err)
+		glog.Errorf("completeDrain(): failed to annotate node: %v", err)
 		return err
 	}
 	return nil
@@ -628,22 +644,125 @@ func (dn *Daemon) annotateNode(node, value string) error {
 	return nil
 }
 
+func (dn *Daemon) getNodeMachinePool() error {
+	mcpList, err := dn.mcClient.MachineconfigurationV1().MachineConfigPools().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		glog.Errorf("getNodeMachinePool(): Failed to list Machine Config Pools: %v", err)
+		return err
+	}
+	var mcp mcfgv1.MachineConfigPool
+	for _, mcp = range mcpList.Items {
+		selector, err := metav1.LabelSelectorAsSelector(mcp.Spec.NodeSelector)
+		if err != nil {
+			glog.Errorf("getNodeMachinePool(): Machine Config Pool %s invalid label selector: %v", mcp.GetName(), err)
+			return err
+		}
+
+		if selector.Matches(labels.Set(dn.node.Labels)) {
+			dn.mcpName = mcp.GetName()
+			glog.Infof("getNodeMachinePool(): find node in MCP %s", dn.mcpName)
+			return nil
+		}
+	}
+	return fmt.Errorf("getNodeMachinePool(): Failed to find the MCP of the node")
+}
+
 func (dn *Daemon) drainNode(name string) error {
 	glog.Info("drainNode(): Update prepared")
 	var err error
-	// wait a random time to avoid all the nodes drain at the same time
-	wait.PollUntil(time.Duration(rand.Intn(15)+1)*time.Second, func() (bool, error) {
-		if !dn.drainable {
-			glog.Info("drainNode(): other node is draining, waiting...")
-		}
-		return dn.drainable, nil
-	}, dn.stopCh)
 
-	err = dn.annotateNode(dn.name, annoDraining)
-	if err != nil {
-		glog.Errorf("drainNode(): Failed to annotate node: %v", err)
-		return err
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+	// wait a random time to avoid all the nodes drain at the same time
+	time.Sleep(wait.Jitter(3*time.Second, 3))
+	wait.JitterUntil(func() {
+		if !dn.drainable {
+			glog.V(2).Info("drainNode(): other node is draining")
+			return
+		}
+		glog.V(2).Info("drainNode(): no other node is draining")
+		err = dn.annotateNode(dn.name, annoDraining)
+		if err != nil {
+			glog.Errorf("drainNode(): Failed to annotate node: %v", err)
+			return
+		}
+		cancel()
+	}, 3*time.Second, 3, true, ctx.Done())
+
+
+	mcpInformerFactory := mcfginformers.NewSharedInformerFactory(dn.mcClient,
+		time.Second*30,
+	)
+	mcpInformer := mcpInformerFactory.Machineconfiguration().V1().MachineConfigPools().Informer()
+
+	paused := dn.node.Annotations[annoKey] == annoMcpPaused
+
+	mcpEventHandler := func(obj interface{}) {
+		mcp := obj.(*mcfgv1.MachineConfigPool)
+		if mcp.GetName() != dn.mcpName {
+			return
+		}
+		// Always get the latest object
+		newMcp, err := dn.mcClient.MachineconfigurationV1().MachineConfigPools().Get(ctx, dn.mcpName, metav1.GetOptions{})
+		if err != nil {
+			glog.V(2).Infof("drainNode(): Failed to get MCP %s: %v", dn.mcpName, err)
+			return
+		}
+		if mcfgv1.IsMachineConfigPoolConditionFalse(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolDegraded) &&
+			mcfgv1.IsMachineConfigPoolConditionTrue(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolUpdated) &&
+			mcfgv1.IsMachineConfigPoolConditionFalse(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolUpdating) {
+			glog.V(2).Infof("drainNode(): MCP %s is ready", dn.mcpName)
+			if paused {
+				glog.V(2).Info("drainNode(): stop MCP informer", dn.mcpName)
+				cancel()
+				return
+			}
+			if newMcp.Spec.Paused {
+				glog.V(2).Infof("drainNode(): MCP %s was paused by other, wait...", dn.mcpName)
+				return
+			}
+			glog.Infof("drainNode(): pause MCP %s", dn.mcpName)
+			pausePatch := []byte("{\"spec\":{\"paused\":true}}")
+			_, err = dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
+			if err != nil {
+				glog.V(2).Infof("drainNode(): Failed to pause MCP %s: %v", dn.mcpName, err)
+				return
+			}
+			err = dn.annotateNode(dn.name, annoMcpPaused)
+			if err != nil {
+				glog.V(2).Infof("drainNode(): Failed to annotate node: %v", err)
+				return
+			}
+			paused = true
+			return
+		}
+		if paused {
+			glog.Infof("drainNode(): MCP is processing, resume MCP %s", dn.mcpName)
+			pausePatch := []byte("{\"spec\":{\"paused\":false}}")
+			_, err = dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
+			if err != nil {
+				glog.V(2).Infof("drainNode(): fail to resume MCP %s: %v", dn.mcpName, err)
+				return
+			}
+			err = dn.annotateNode(dn.name, annoDraining)
+			if err != nil {
+				glog.V(2).Infof("drainNode(): Failed to annotate node: %v", err)
+				return
+			}
+			paused = false
+		}
+		glog.Infof("drainNode():MCP %s is not ready: %v, wait...", newMcp.GetName(), newMcp.Status.Conditions)
 	}
+
+	mcpInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: mcpEventHandler,
+		UpdateFunc: func(old, new interface{}) {
+			mcpEventHandler(new)
+		},
+	})
+	mcpInformerFactory.Start(ctx.Done())
+	mcpInformerFactory.WaitForCacheSync(ctx.Done())
+	<-ctx.Done()
 
 	backoff := wait.Backoff{
 		Steps:    5,
