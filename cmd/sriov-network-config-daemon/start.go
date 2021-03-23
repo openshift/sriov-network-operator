@@ -23,6 +23,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/connrotation"
+
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
 )
 
 var (
@@ -124,9 +127,11 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	}
 
 	sriovnetworkv1.AddToScheme(scheme.Scheme)
+	mcfgv1.AddToScheme(scheme.Scheme)
 
 	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
+	mcclient := mcclientset.NewForConfigOrDie(config)
 
 	config.Timeout = 5 * time.Second
 	writerclient := snclientset.NewForConfigOrDie(config)
@@ -161,6 +166,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		startOpts.nodeName,
 		snclient,
 		kubeclient,
+		mcclient,
 		exitCh,
 		stopCh,
 		syncCh,
