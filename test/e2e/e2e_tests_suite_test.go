@@ -31,11 +31,10 @@ import (
 var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
+var testNamespace string
 
 // Define utility constants for object names and testing timeouts/durations and intervals.
 const (
-	testNamespace = "openshift-sriov-network-operator"
-
 	timeout  = time.Second * 30
 	duration = time.Second * 300
 	interval = time.Second * 1
@@ -43,6 +42,9 @@ const (
 
 func TestSriovTests(t *testing.T) {
 	RegisterFailHandler(Fail)
+
+	testNamespace = os.Getenv("NAMESPACE")
+	Expect(testNamespace).NotTo(Equal(""))
 
 	RunSpecsWithDefaultAndCustomReporters(t,
 		"E2E Suite",
