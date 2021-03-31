@@ -47,6 +47,7 @@ spec:
         - -tls-cert-file=/etc/tls/tls.crt
         - -alsologtostderr=true
         - -insecure=true
+        - -injectHugepageDownApi=true
         volumeMounts:
         - mountPath: /etc/tls
           name: tls
