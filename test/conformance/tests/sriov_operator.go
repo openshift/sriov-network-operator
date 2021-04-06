@@ -21,6 +21,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/execute"
 
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/clean"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/network"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
@@ -69,7 +70,19 @@ var _ = Describe("[sriov] operator", func() {
 		isSingleNode, err := cluster.IsSingleNode(clients)
 		Expect(err).ToNot(HaveOccurred())
 		if isSingleNode {
+			disableDrainState, err := cluster.GetNodeDrainState(clients, operatorNamespace)
+			Expect(err).ToNot(HaveOccurred())
+			if discovery.Enabled() {
+				if !disableDrainState {
+					Skip("SriovOperatorConfig DisableDrain property must be enabled in a single node environment")
+				}
+			}
 			snoTimeoutMultiplier = 1
+			if !disableDrainState {
+				err = cluster.SetDisableNodeDrainState(clients, operatorNamespace, true)
+				Expect(err).ToNot(HaveOccurred())
+				clean.RestoreNodeDrainState = true
+			}
 		}
 
 		Expect(clients).NotTo(BeNil(), "Client misconfigured, check the $KUBECONFIG env variable")
