@@ -1003,10 +1003,7 @@ var _ = Describe("[sriov] operator", func() {
 				})
 
 				// 27630
-				/*It("Should not be possible to have overlapping pf ranges", func() {
-					// Skipping this test as blocking the override will
-					// be implemented in 4.5, as per bz #1798880
-					Skip("Overlapping is still not blocked")
+				It("Should not be possible to have overlapping pf ranges", func() {
 					node := sriovInfos.Nodes[0]
 					intf, err := sriovInfos.FindOneSriovDevice(node)
 					Expect(err).ToNot(HaveOccurred())
@@ -1035,7 +1032,7 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					Eventually(func() sriovv1.Interfaces {
-						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(node, metav1.GetOptions{})
+						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
 						return nodeState.Spec.Interfaces
 					}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -1068,7 +1065,7 @@ var _ = Describe("[sriov] operator", func() {
 
 					err = clients.Create(context.Background(), secondConfig)
 					Expect(err).To(HaveOccurred())
-				})*/
+				})
 			})
 			Context("Main PF", func() {
 				It("should work when vfs are used by pods", func() {
