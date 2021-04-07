@@ -6,8 +6,11 @@ import (
 	"time"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
 )
+
+var RestoreNodeDrainState bool
 
 // All cleans all the dangling resources created by conformance tests.
 // This includes pods, networks, policies and namespaces.
@@ -16,7 +19,6 @@ func All() error {
 	if !found {
 		operatorNamespace = "openshift-sriov-network-operator"
 	}
-
 	clients := client.New("")
 	if !namespaces.Exists(namespaces.Test, clients) {
 		return nil
@@ -31,5 +33,11 @@ func All() error {
 		return fmt.Errorf("Failed to clean sriov resources %v", err)
 	}
 
+	if RestoreNodeDrainState {
+		err = cluster.SetDisableNodeDrainState(clients, operatorNamespace, false)
+		if err != nil {
+			return fmt.Errorf("Failed to restore node drain state %v", err)
+		}
+	}
 	return nil
 }
