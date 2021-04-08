@@ -297,6 +297,8 @@ spec:
               name: sriov-network-operator
           template:
             metadata:
+              annotations:
+                workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
               labels:
                 name: sriov-network-operator
             spec:

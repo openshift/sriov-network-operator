@@ -16,6 +16,8 @@ spec:
     type: RollingUpdate
   template:
     metadata:
+      annotations:
+        workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
         app: sriov-cni
         component: network
