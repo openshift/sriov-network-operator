@@ -47,6 +47,8 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: CLUSTER_TYPE
+            value: "{{.ClusterType}}"
         volumeMounts:
         - name: host
           mountPath: /host

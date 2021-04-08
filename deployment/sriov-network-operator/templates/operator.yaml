@@ -1,7 +1,9 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sriov-network-operator
+  name: {{ include "sriov-network-operator.fullname" . }}
+  labels:
+  {{- include "sriov-network-operator.labels" . | nindent 4 }}
 spec:
   replicas: 1
   selector:
@@ -12,19 +14,20 @@ spec:
       labels:
         name: sriov-network-operator
     spec:
+      {{- with .Values.operator.nodeSelector }}
       nodeSelector:
-        node-role.kubernetes.io/master: ""
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.tolerations }}
       tolerations:
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/master
-        operator: Exists
-      serviceAccountName: sriov-network-operator
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "sriov-network-operator.fullname" . }}
       containers:
-        - name: sriov-network-operator
-          # Replace this with the built image name
-          image: $SRIOV_NETWORK_OPERATOR_IMAGE
+        - name: {{ include "sriov-network-operator.fullname" . }}
+          image: {{ .Values.images.operator }}
           command:
-          - sriov-network-operator
+            - sriov-network-operator
           imagePullPolicy: IfNotPresent
           env:
             - name: WATCH_NAMESPACE
@@ -32,23 +35,23 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             - name: SRIOV_CNI_IMAGE
-              value: $SRIOV_CNI_IMAGE
+              value: {{ .Values.images.sriovCni }}
             - name: SRIOV_INFINIBAND_CNI_IMAGE
-              value: $SRIOV_INFINIBAND_CNI_IMAGE
+              value: {{ .Values.images.ibSriovCni }}
             - name: SRIOV_DEVICE_PLUGIN_IMAGE
-              value: $SRIOV_DEVICE_PLUGIN_IMAGE
+              value: {{ .Values.images.sriovDevicePlugin }}
             - name: NETWORK_RESOURCES_INJECTOR_IMAGE
-              value: $NETWORK_RESOURCES_INJECTOR_IMAGE
+              value: {{ .Values.images.resourcesInjector }}
             - name: OPERATOR_NAME
               value: sriov-network-operator
             - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-              value: $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
+              value: {{ .Values.images.sriovConfigDaemon }}
             - name: SRIOV_NETWORK_WEBHOOK_IMAGE
-              value: $SRIOV_NETWORK_WEBHOOK_IMAGE
+              value: {{ .Values.images.webhook }}
             - name: RESOURCE_PREFIX
-              value: $RESOURCE_PREFIX
+              value: {{ .Values.operator.resourcePrefix }}
             - name: ENABLE_ADMISSION_CONTROLLER
-              value: "$ENABLE_ADMISSION_CONTROLLER"
+              value: {{ .Values.operator.enableAdmissionController | quote }}
             - name: NAMESPACE
               valueFrom:
                 fieldRef:
@@ -58,8 +61,6 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: RELEASE_VERSION
-              value: 4.3.0
+              value: {{ .Release.AppVersion }}
             - name: SRIOV_CNI_BIN_PATH
-              value: $CNI_BIN_PATH
-            - name: CLUSTER_TYPE
-              value: $CLUSTER_TYPE
+              value: {{ .Values.operator.cniBinPath }}

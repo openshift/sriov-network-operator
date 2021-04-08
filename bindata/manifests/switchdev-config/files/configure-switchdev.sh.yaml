@@ -6,10 +6,32 @@ contents:
     #!/bin/bash
     set -eux
     input="/etc/switchdev.conf"
+    UDEV_RULE_FILE='/etc/udev/rules.d/10-persistent-net.rules'
+
     if [ ! -f $input ]; then
       echo "File /etc/switchdev.conf not exist."
       exit
     fi
+
+    append_to_file(){
+      content="$1"
+      file_name="$2"
+      if ! test -f "$file_name"
+      then
+        echo "$content" > "$file_name"
+      else
+        if ! grep -Fxq "$content" "$file_name"
+        then
+          echo "$content" >> "$file_name"
+        fi
+      fi
+    }
+
+    add_udev_rule_for_sriov_pf(){
+        pf_pci=$(grep PCI_SLOT_NAME /sys/class/net/$1/device/uevent | cut -d'=' -f2)
+        udev_data_line="SUBSYSTEM==\"net\", ACTION==\"add\", DRIVERS==\"?*\", KERNELS==\"$pf_pci\", NAME=\"$1\""
+        append_to_file "$udev_data_line" "$UDEV_RULE_FILE"
+    }
 
     names=()
 
@@ -17,7 +39,11 @@ contents:
     do
       echo "Set $num_vfs VFs on device $pci_addr"
 
-      names+=($(ls /sys/bus/pci/devices/${pci_addr}/net/))
+      name=$(ls /sys/bus/pci/devices/${pci_addr}/net/)
+      names+=($name)
+      # Create udev rule to save PF name
+      add_udev_rule_for_sriov_pf $name
+
       # create VFs
       echo $num_vfs > /sys/bus/pci/devices/${pci_addr}/sriov_numvfs
     done <"$input"
@@ -39,10 +65,6 @@ contents:
       # set PF to switchdev mode
       devlink dev eswitch set pci/${pci_addr} mode switchdev
 
-      # reset the pf name
-      new_name=$(ls /sys/bus/pci/devices/${pci_addr}/net/)
-      ip link set ${new_name} down
-      ip link set ${new_name} name ${names[i]}
       ip link set ${names[i]} up
 
       # turn hw-tc-offload on
