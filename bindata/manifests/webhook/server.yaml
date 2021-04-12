@@ -48,6 +48,11 @@ spec:
         - -alsologtostderr=true
         - -insecure=true
         - -injectHugepageDownApi=true
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         volumeMounts:
         - mountPath: /etc/tls
           name: tls
