@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"k8s.io/api/admission/v1beta1"
+	"k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -30,7 +30,7 @@ var (
 	interfaceSelected bool
 )
 
-func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operation v1beta1.Operation) (bool, []string, error) {
+func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operation v1.Operation) (bool, []string, error) {
 	glog.V(2).Infof("validateSriovOperatorConfig: %v", cr)
 	var warnings []string
 
@@ -47,7 +47,7 @@ func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operati
 	return false, warnings, fmt.Errorf("only default SriovOperatorConfig is used")
 }
 
-func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1beta1.Operation) (bool, []string, error) {
+func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1.Operation) (bool, []string, error) {
 	glog.V(2).Infof("validateSriovNetworkNodePolicy: %v", cr)
 	var warnings []string
 

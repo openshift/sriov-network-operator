@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"k8s.io/api/admission/v1beta1"
+	"k8s.io/api/admission/v1"
 )
 
 var (
@@ -16,9 +16,9 @@ var (
 	InfiniBandIsRdmaPatch  = map[string]interface{}{"op": "add", "path": "/spec/isRdma", "value": true}
 )
 
-func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1beta1.AdmissionResponse, error) {
+func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1.AdmissionResponse, error) {
 	glog.V(2).Infof("mutateSriovNetworkNodePolicy(): set default value")
-	reviewResponse := v1beta1.AdmissionResponse{}
+	reviewResponse := v1.AdmissionResponse{}
 	reviewResponse.Allowed = true
 
 	name := cr["metadata"].(map[string]interface{})["name"]
@@ -56,7 +56,7 @@ func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1beta1.Admission
 		return nil, err
 	}
 
-	pt := v1beta1.PatchTypeJSONPatch
+	pt := v1.PatchTypeJSONPatch
 	reviewResponse.PatchType = &pt
 	return &reviewResponse, nil
 }
