@@ -3,7 +3,7 @@ package controllers
 import (
 	goctx "context"
 
-	admv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -54,11 +54,11 @@ var _ = Describe("Operator", func() {
 		})
 
 		It("should have webhook enable", func() {
-			mutateCfg := &admv1beta1.MutatingWebhookConfiguration{}
+			mutateCfg := &admv1.MutatingWebhookConfiguration{}
 			err := util.WaitForNamespacedObject(mutateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			validateCfg := &admv1beta1.ValidatingWebhookConfiguration{}
+			validateCfg := &admv1.ValidatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -89,7 +89,7 @@ var _ = Describe("Operator", func() {
 			err = util.WaitForNamespacedObjectDeleted(daemonSet, k8sClient, testNamespace, "network-resources-injector", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			mutateCfg := &admv1beta1.MutatingWebhookConfiguration{}
+			mutateCfg := &admv1.MutatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObjectDeleted(mutateCfg, k8sClient, testNamespace, "network-resources-injector-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -105,7 +105,7 @@ var _ = Describe("Operator", func() {
 			err = util.WaitForNamespacedObject(daemonSet, k8sClient, testNamespace, "network-resources-injector", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			mutateCfg = &admv1beta1.MutatingWebhookConfiguration{}
+			mutateCfg = &admv1.MutatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObject(mutateCfg, k8sClient, testNamespace, "network-resources-injector-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -125,11 +125,11 @@ var _ = Describe("Operator", func() {
 			err = util.WaitForNamespacedObjectDeleted(daemonSet, k8sClient, testNamespace, "operator-webhook", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			mutateCfg := &admv1beta1.MutatingWebhookConfiguration{}
+			mutateCfg := &admv1.MutatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObjectDeleted(mutateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			validateCfg := &admv1beta1.ValidatingWebhookConfiguration{}
+			validateCfg := &admv1.ValidatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObjectDeleted(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -145,11 +145,11 @@ var _ = Describe("Operator", func() {
 			err = util.WaitForNamespacedObject(daemonSet, k8sClient, testNamespace, "operator-webhook", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			mutateCfg = &admv1beta1.MutatingWebhookConfiguration{}
+			mutateCfg = &admv1.MutatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObject(mutateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			validateCfg = &admv1beta1.ValidatingWebhookConfiguration{}
+			validateCfg = &admv1.ValidatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 		})
