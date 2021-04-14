@@ -371,6 +371,8 @@ spec:
   labels:
     olm-owner-enterprise-app: sriov-network-operator
     olm-status-descriptors: sriov-network-operator.v4.8.0
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/arch.ppc64le: supported
   maintainers:
   - email: support@redhat.com
     name: Red Hat
