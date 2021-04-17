@@ -86,16 +86,12 @@ echo "## label KinD's control-plane-node as sriov capable"
 kubectl label node kind-worker feature.node.kubernetes.io/network-sriov.capable=true --overwrite
 echo "## label KinD worker as worker"
 kubectl label node kind-worker node-role.kubernetes.io/worker= --overwrite
-echo "## building PF/VF netns setter"
-go build -o "${root}/hack/pf-vf-netns-set" "${root}/hack/pf-vf-netns-set.go"
 echo "## retrieving netns path from container"
-netnspath="$(docker inspect --format '{{ .NetworkSettings.SandboxKey }}' "${kind_container}")"
-echo "## deploying monitoring of PF/VF network namespace"
-"${root}hack/pf-vf-netns-set" --pfpciaddress "${test_pf_pci_addr}" --netnspath "${netnspath}" &
-netns_set_pid=$!
+netns_path="$(docker inspect --format '{{ .NetworkSettings.SandboxKey }}' "${kind_container}")"
+echo "## exporting test device '${test_pf_pci_addr}' and test netns path '${netns_path}'"
+export TEST_PCI_DEVICE="${test_pf_pci_addr}"
+export TEST_NETNS_PATH="${netns_path}"
 echo "## deploying SRIOV Network Operator"
-make --directory "${root}" deploy-setup-k8s || true
+make --directory "${root}" deploy-setup-k8s
 echo "## Executing E2E tests"
-make --directory "${root}" test-e2e-k8s || true
-echo "## terminating PF/VF network namespace setter"
-kill -9 ${netns_set_pid}
+make --directory "${root}" test-e2e-k8s
