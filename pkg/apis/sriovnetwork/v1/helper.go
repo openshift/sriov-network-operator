@@ -33,6 +33,7 @@ var VfIds = []string{}
 // Vendor ID, Physical Function Device ID, Virtual Function Device ID
 var NicIdMap = []string{
 	"8086 158b 154c",
+	"8086 1572 154c",
 	"15b3 1015 1016",
 	"15b3 1017 1018",
 	"15b3 101b 101c",
