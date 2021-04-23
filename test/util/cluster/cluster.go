@@ -21,7 +21,7 @@ type EnabledNodes struct {
 }
 
 var (
-	supportedPFDrivers = []string{"mlx5_core", "i40e", "ixgbe"}
+	supportedPFDrivers = []string{"mlx5_core", "i40e", "ixgbe", "ice"}
 	supportedVFDrivers = []string{"iavf", "vfio-pci", "mlx5_core"}
 )
 
