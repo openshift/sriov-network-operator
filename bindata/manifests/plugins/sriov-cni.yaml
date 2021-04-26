@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       annotations:
-        workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
         app: sriov-cni
         component: network
