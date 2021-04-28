@@ -91,7 +91,7 @@ After the operator gets installed, you can configure it with creating the custom
 Here comes an example. As you can see, there are 2 SR-IOV NICs from Intel.
 
 ```bash
-$ oc get sriovnetworknodestates.sriovnetwork.openshift.io -n sriov-network-operator node-1 -o yaml
+$ kubectl get sriovnetworknodestates.sriovnetwork.openshift.io -n sriov-network-operator node-1 -o yaml
 
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodeState
@@ -138,7 +138,7 @@ spec:
 After applying your SriovNetworkNodePolicy CR, check the status of SriovNetworkNodeState again, you should be able to see the NIC has been configured as instructed.
 
 ```bash
-$ oc get sriovnetworknodestates.sriovnetwork.openshift.io -n sriov-network-operator node-1 -o yaml
+$ kubectl get sriovnetworknodestates.sriovnetwork.openshift.io -n sriov-network-operator node-1 -o yaml
 
 ...
 - Vfs:
