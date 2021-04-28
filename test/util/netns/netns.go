@@ -67,12 +67,14 @@ func SetPfVfLinkNetNs(pfPciAddr, netNsPath string, pollInterval time.Duration, q
 		errL = append(errL, fmt.Errorf("SetPfVfLinkNetNs(): unable to set physical function '%s' network namespace: '%s'", pfPciAddr,
 			err.Error()))
 	}
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-quitCh:
 			return
-		case <-time.Tick(pollInterval):
+		case <-ticker.C:
 			if err := setVfNetNs(pfPciAddr, targetNetNs); err != nil {
 				//save errors for returning but continue
 				errL = append(errL, err)
