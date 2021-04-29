@@ -20,6 +20,12 @@ func All() error {
 		operatorNamespace = "openshift-sriov-network-operator"
 	}
 	clients := client.New("")
+	if RestoreNodeDrainState {
+		err := cluster.SetDisableNodeDrainState(clients, operatorNamespace, false)
+		if err != nil {
+			return fmt.Errorf("Failed to restore node drain state %v", err)
+		}
+	}
 	if !namespaces.Exists(namespaces.Test, clients) {
 		return nil
 	}
@@ -33,11 +39,5 @@ func All() error {
 		return fmt.Errorf("Failed to clean sriov resources %v", err)
 	}
 
-	if RestoreNodeDrainState {
-		err = cluster.SetDisableNodeDrainState(clients, operatorNamespace, false)
-		if err != nil {
-			return fmt.Errorf("Failed to restore node drain state %v", err)
-		}
-	}
 	return nil
 }
