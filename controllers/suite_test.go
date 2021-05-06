@@ -114,6 +114,12 @@ var _ = BeforeSuite(func(done Done) {
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
+	err = (&SriovNetworkPoolConfigReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
 	os.Setenv("RESOURCE_PREFIX", "openshift.io")
 	os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
 	os.Setenv("ENABLE_ADMISSION_CONTROLLER", "true")
@@ -153,6 +159,12 @@ var _ = BeforeSuite(func(done Done) {
 		LogLevel:                 2,
 	}
 	Expect(k8sClient.Create(context.TODO(), config)).Should(Succeed())
+
+	poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
+	poolConfig.SetNamespace(testNamespace)
+	poolConfig.SetName(DEFAULT_CONFIG_NAME)
+	poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{}
+	Expect(k8sClient.Create(context.TODO(), poolConfig)).Should(Succeed())
 	close(done)
 }, 60)
 
