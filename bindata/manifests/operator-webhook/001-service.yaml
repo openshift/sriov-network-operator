@@ -5,7 +5,9 @@ metadata:
   name: operator-webhook-service
   namespace: {{.Namespace}}
   annotations:
+    {{- if eq .ClusterType "openshift" }}
     service.alpha.openshift.io/serving-cert-secret-name: operator-webhook-service
+    {{- end }}
 spec:
   ports:
   - port: 443

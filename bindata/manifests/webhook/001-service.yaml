@@ -5,7 +5,9 @@ metadata:
   name: network-resources-injector-service
   namespace: {{.Namespace}}
   annotations:
+    {{- if eq .ClusterType "openshift" }}
     service.alpha.openshift.io/serving-cert-secret-name: network-resources-injector-secret
+    {{- end }}
 spec:
   ports:
   - port: 443

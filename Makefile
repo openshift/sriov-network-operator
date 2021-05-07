@@ -18,7 +18,6 @@ IMAGE_TAG?=nfvpe/$(APP_NAME):latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export WATCH_NAMESPACE?=openshift-sriov-network-operator
-export ENABLE_ADMISSION_CONTROLLER?=true
 export GOFLAGS+=-mod=vendor
 export GO111MODULE=on
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
@@ -189,11 +188,12 @@ bundle: manifests
 bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
+deploy-setup: export ENABLE_ADMISSION_CONTROLLER?=true
 deploy-setup: skopeo install
 	hack/deploy-setup.sh $(NAMESPACE)
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
-deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
+deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER?=false
 deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 deploy-setup-k8s: export OPERATOR_EXEC=kubectl
 deploy-setup-k8s: export CLUSTER_TYPE=kubernetes

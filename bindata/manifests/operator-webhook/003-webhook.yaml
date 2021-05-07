@@ -5,7 +5,11 @@ metadata:
   name: {{.SRIOVMutatingWebhookName}}
   namespace: {{.Namespace}}
   annotations:
+    {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
+    {{- else if and (not .CaBundle) (eq .ClusterType "kubernetes") }}
+    cert-manager.io/inject-ca-from: {{.Namespace}}/operator-webhook-service
+    {{- end }}
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
     failurePolicy: Fail
@@ -14,6 +18,9 @@ webhooks:
         name: operator-webhook-service
         namespace: {{.Namespace}}
         path: "/mutating-custom-resource"
+      {{- if and (.CaBundle) (eq .ClusterType "kubernetes") }}
+      caBundle: "{{.CaBundle}}"
+      {{- end}}
     rules:
       - operations: [ "CREATE", "UPDATE" ]
         apiGroups: ["sriovnetwork.openshift.io"]
@@ -27,7 +34,11 @@ metadata:
   name: {{.SRIOVMutatingWebhookName}}
   namespace: {{.Namespace}}
   annotations:
+    {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
+    {{- else if and (not .CaBundle) (eq .ClusterType "kubernetes") }}
+    cert-manager.io/inject-ca-from: {{.Namespace}}/operator-webhook-service
+    {{- end }}
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
     failurePolicy: Fail
@@ -36,6 +47,9 @@ webhooks:
         name: operator-webhook-service
         namespace: {{.Namespace}}
         path: "/validating-custom-resource"
+      {{- if and (.CaBundle) (eq .ClusterType "kubernetes") }}
+      caBundle: "{{.CaBundle}}"
+      {{- end }}
     rules:
       - operations: [ "CREATE", "UPDATE", "DELETE" ]
         apiGroups: ["sriovnetwork.openshift.io"]
