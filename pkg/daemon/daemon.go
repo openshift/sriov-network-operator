@@ -18,6 +18,10 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	daemonconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
+	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
+	mcfginformers "github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions"
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -32,18 +36,15 @@ import (
 	"k8s.io/client-go/kubernetes"
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubectl/pkg/drain"
 
-	// "k8s.io/client-go/kubernetes/scheme"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	sninformer "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	daemonconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
-	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
-	mcfginformers "github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions"
 )
 
 const (
@@ -124,7 +125,7 @@ const (
 var namespace = os.Getenv("NAMESPACE")
 var pluginsPath = os.Getenv("PLUGINSPATH")
 
-// writer implements io.Writer interface as a pass-through for klog.
+// writer implements io.Writer interface as a pass-through for glog.
 type writer struct {
 	logFunc func(args ...interface{})
 }
@@ -791,27 +792,61 @@ func (dn *Daemon) getNodeMachinePool() error {
 	return fmt.Errorf("getNodeMachinePool(): Failed to find the MCP of the node")
 }
 
+func (dn *Daemon) getDrainLock(ctx context.Context, done chan bool) {
+	var err error
+
+	lock := &resourcelock.LeaseLock{
+		LeaseMeta: metav1.ObjectMeta{
+			Name:      "config-daemon-draining-lock",
+			Namespace: namespace,
+		},
+		Client: dn.kubeClient.CoordinationV1(),
+		LockConfig: resourcelock.ResourceLockConfig{
+			Identity: dn.name,
+		},
+	}
+
+	// start the leader election
+	leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
+		Lock:            lock,
+		ReleaseOnCancel: true,
+		LeaseDuration:   5 * time.Second,
+		RenewDeadline:   3 * time.Second,
+		RetryPeriod:     1 * time.Second,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: func(ctx context.Context) {
+				glog.V(2).Info("getDrainLock(): started leading")
+				for {
+					time.Sleep(3 * time.Second)
+					if dn.drainable {
+						glog.V(2).Info("getDrainLock(): no other node is draining")
+						err = dn.annotateNode(dn.name, annoDraining)
+						if err != nil {
+							glog.Errorf("getDrainLock(): Failed to annotate node: %v", err)
+							continue
+						}
+						done <- true
+						return
+					}
+					glog.V(3).Info("getDrainLock(): other node is draining, wait...")
+				}
+			},
+			OnStoppedLeading: func() {
+				glog.V(2).Info("getDrainLock(): stopped leading")
+			},
+		},
+	})
+}
+
 func (dn *Daemon) drainNode(name string) error {
 	glog.Info("drainNode(): Update prepared")
 	var err error
-
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	// wait a random time to avoid all the nodes drain at the same time
-	time.Sleep(wait.Jitter(3*time.Second, 3))
-	wait.JitterUntil(func() {
-		if !dn.drainable {
-			glog.V(2).Info("drainNode(): other node is draining")
-			return
-		}
-		glog.V(2).Info("drainNode(): no other node is draining")
-		err = dn.annotateNode(dn.name, annoDraining)
-		if err != nil {
-			glog.Errorf("drainNode(): Failed to annotate node: %v", err)
-			return
-		}
-		cancel()
-	}, 3*time.Second, 3, true, ctx.Done())
+
+	done := make(chan bool)
+	go dn.getDrainLock(ctx, done)
+	<-done
 
 	if utils.ClusterType == utils.ClusterTypeOpenshift {
 		mcpInformerFactory := mcfginformers.NewSharedInformerFactory(dn.mcClient,
