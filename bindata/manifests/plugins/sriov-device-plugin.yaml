@@ -45,6 +45,10 @@ spec:
               fieldPath: spec.nodeName
         securityContext:
           privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
         volumeMounts:
         - name: devicesock
           mountPath: /var/lib/kubelet/

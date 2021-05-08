@@ -51,6 +51,10 @@ spec:
                 fieldPath: metadata.namespace
           - name: CLUSTER_TYPE
             value: "{{.ClusterType}}"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
         volumeMounts:
         - name: host
           mountPath: /host
