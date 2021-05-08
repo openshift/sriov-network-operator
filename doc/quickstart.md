@@ -54,10 +54,71 @@ make deploy-setup
 
 If you are running a Kubernetes cluster:
 ```bash
-export OPERATOR_EXEC=kubectl
-export ENABLE_ADMISSION_CONTROLLER=false
 make deploy-setup-k8s
 ```
+
+Webhooks are disabled when deploying on a Kubernetes cluster as per the instructions above. To enable webhooks on Kubernetes cluster, there are two options:
+
+1. Create certificates for each of the two webhooks using a single CA whose cert you provide through an environment variable.
+
+   For example, given `cacert.pem`, `key.pem` and `cert.pem`:
+   ```bash
+   kubectl create ns sriov-network-operator
+   kubectl -n sriov-network-operator create secret tls operator-webhook-service --cert=cert.pem --key=key.pem
+   kubectl -n sriov-network-operator create secret tls network-resources-injector-secret --cert=cert.pem --key=key.pem
+   export ENABLE_ADMISSION_CONTROLLER=true
+   export WEBHOOK_CA_BUNDLE=$(base64 -w 0 < cacert.pem)
+   make deploy-setup-k8s
+   ```
+
+2. Using https://cert-manager.io/, deploy it as:
+   ```bash
+   kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.3.0/cert-manager.yaml
+   ```
+
+   Define the appropriate Issuer and Certificates, as an example:
+   ```bash
+   kubectl create ns sriov-network-operator
+   cat <<EOF | kubectl apply -f -
+   apiVersion: cert-manager.io/v1
+   kind: Issuer
+   metadata:
+     name: sriov-network-operator-selfsigned-issuer
+     namespace: sriov-network-operator
+   spec:
+     selfSigned: {}
+   ---
+   apiVersion: cert-manager.io/v1
+   kind: Certificate
+   metadata:
+     name: operator-webhook-service
+     namespace: sriov-network-operator
+   spec:
+     secretName: operator-webhook-service
+     dnsNames:
+     - operator-webhook-service.sriov-network-operator.svc
+     issuerRef:
+       name: sriov-network-operator-selfsigned-issuer
+   ---
+   apiVersion: cert-manager.io/v1
+   kind: Certificate
+   metadata:
+     name: network-resources-injector-service
+     namespace: sriov-network-operator
+   spec:
+     secretName: network-resources-injector-secret
+     dnsNames:
+     - network-resources-injector-service.sriov-network-operator.svc
+     issuerRef:
+       name: sriov-network-operator-selfsigned-issuer
+   EOF
+   ```
+
+    And then deploy the operator:
+    ```bash
+    export ENABLE_ADMISSION_CONTROLLER=true
+    make deploy-setup-k8s
+    ```
 
 By default, the operator will be deployed in namespace 'sriov-network-operator' for Kubernetes cluster, you can check if the deployment is finished successfully.
 
@@ -91,7 +152,7 @@ After the operator gets installed, you can configure it with creating the custom
 Here comes an example. As you can see, there are 2 SR-IOV NICs from Intel.
 
 ```bash
-$ oc get sriovnetworknodestates.sriovnetwork.openshift.io -n sriov-network-operator node-1 -o yaml
+$ kubectl get sriovnetworknodestates.sriovnetwork.openshift.io -n sriov-network-operator node-1 -o yaml
 
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodeState
@@ -138,7 +199,7 @@ spec:
 After applying your SriovNetworkNodePolicy CR, check the status of SriovNetworkNodeState again, you should be able to see the NIC has been configured as instructed.
 
 ```bash
-$ oc get sriovnetworknodestates.sriovnetwork.openshift.io -n sriov-network-operator node-1 -o yaml
+$ kubectl get sriovnetworknodestates.sriovnetwork.openshift.io -n sriov-network-operator node-1 -o yaml
 
 ...
 - Vfs:

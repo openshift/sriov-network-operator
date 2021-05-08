@@ -25,7 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/openshift/machine-config-operator/lib/resourcemerge"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -213,6 +213,8 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		data.Data["NetworkResourcesInjectorImage"] = os.Getenv("NETWORK_RESOURCES_INJECTOR_IMAGE")
 		data.Data["SriovNetworkWebhookImage"] = os.Getenv("SRIOV_NETWORK_WEBHOOK_IMAGE")
 		data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
+		data.Data["ClusterType"] = utils.ClusterType
+		data.Data["CaBundle"] = os.Getenv("WEBHOOK_CA_BUNDLE")
 		objs, err := render.RenderDir(path, &data)
 		if err != nil {
 			logger.Error(err, "Fail to render webhook manifests")
@@ -273,7 +275,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObject(dc *sriovnetworkv1.Sri
 	scheme := kscheme.Scheme
 	switch kind := obj.GetKind(); kind {
 	case "MutatingWebhookConfiguration":
-		whs := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
+		whs := &admissionregistrationv1.MutatingWebhookConfiguration{}
 		err = scheme.Convert(obj, whs, nil)
 		r.syncMutatingWebhook(dc, whs)
 		if err != nil {
@@ -281,7 +283,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObject(dc *sriovnetworkv1.Sri
 			return err
 		}
 	case "ValidatingWebhookConfiguration":
-		whs := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
+		whs := &admissionregistrationv1.ValidatingWebhookConfiguration{}
 		err = scheme.Convert(obj, whs, nil)
 		r.syncValidatingWebhook(dc, whs)
 		if err != nil {
@@ -297,14 +299,14 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObject(dc *sriovnetworkv1.Sri
 	return nil
 }
 
-func (r *SriovOperatorConfigReconciler) syncMutatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1beta1.MutatingWebhookConfiguration) error {
+func (r *SriovOperatorConfigReconciler) syncMutatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1.MutatingWebhookConfiguration) error {
 	logger := r.Log.WithName("syncMutatingWebhook")
 	logger.Info("Start to sync mutating webhook", "Name", in.Name, "Namespace", in.Namespace)
 
 	if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
 		return err
 	}
-	whs := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
+	whs := &admissionregistrationv1.MutatingWebhookConfiguration{}
 	err := r.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -319,7 +321,7 @@ func (r *SriovOperatorConfigReconciler) syncMutatingWebhook(cr *sriovnetworkv1.S
 	}
 
 	// Delete deprecated operator mutating webhook CR
-	deprecated_webhook := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
+	deprecated_webhook := &admissionregistrationv1.MutatingWebhookConfiguration{}
 	err = r.Get(context.TODO(), types.NamespacedName{Name: DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -343,14 +345,14 @@ func (r *SriovOperatorConfigReconciler) syncMutatingWebhook(cr *sriovnetworkv1.S
 	return nil
 }
 
-func (r *SriovOperatorConfigReconciler) syncValidatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1beta1.ValidatingWebhookConfiguration) error {
+func (r *SriovOperatorConfigReconciler) syncValidatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1.ValidatingWebhookConfiguration) error {
 	logger := r.Log.WithName("syncValidatingWebhook")
 	logger.Info("Start to sync validating webhook", "Name", in.Name, "Namespace", in.Namespace)
 
 	if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
 		return err
 	}
-	whs := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
+	whs := &admissionregistrationv1.ValidatingWebhookConfiguration{}
 	err := r.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -365,7 +367,7 @@ func (r *SriovOperatorConfigReconciler) syncValidatingWebhook(cr *sriovnetworkv1
 	}
 
 	// Delete deprecated operator validating webhook CR
-	deprecated_webhook := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
+	deprecated_webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{}
 	err = r.Get(context.TODO(), types.NamespacedName{Name: DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
 	if err != nil {
 		if errors.IsNotFound(err) {
