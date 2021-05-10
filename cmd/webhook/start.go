@@ -10,7 +10,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
-	"k8s.io/api/admission/v1beta1"
+	"k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/webhook"
@@ -36,13 +36,12 @@ var (
 	}
 )
 
-// admitv1beta1Func handles a v1beta1 admission
-type admitv1beta1Func func(v1beta1.AdmissionReview) *v1beta1.AdmissionResponse
+// admitv1Func handles a v1 admission
+type admitv1Func func(v1.AdmissionReview) *v1.AdmissionResponse
 
 // admitHandler is a handler, for both validators and mutators, that supports multiple admission review versions
 type admitHandler struct {
-	v1beta1 admitv1beta1Func
-	// v1      admitv1Func
+	v1 admitv1Func
 }
 
 func init() {
@@ -86,15 +85,15 @@ func serve(w http.ResponseWriter, r *http.Request, admit admitHandler) {
 
 	var responseObj runtime.Object
 	switch *gvk {
-	case v1beta1.SchemeGroupVersion.WithKind("AdmissionReview"):
-		requestedAdmissionReview, ok := obj.(*v1beta1.AdmissionReview)
+	case v1.SchemeGroupVersion.WithKind("AdmissionReview"):
+		requestedAdmissionReview, ok := obj.(*v1.AdmissionReview)
 		if !ok {
-			glog.Errorf("Expected v1beta1.AdmissionReview but got: %T", obj)
+			glog.Errorf("Expected v1.AdmissionReview but got: %T", obj)
 			return
 		}
-		responseAdmissionReview := &v1beta1.AdmissionReview{}
+		responseAdmissionReview := &v1.AdmissionReview{}
 		responseAdmissionReview.SetGroupVersionKind(*gvk)
-		responseAdmissionReview.Response = admit.v1beta1(*requestedAdmissionReview)
+		responseAdmissionReview.Response = admit.v1(*requestedAdmissionReview)
 		responseAdmissionReview.Response.UID = requestedAdmissionReview.Request.UID
 		responseObj = responseAdmissionReview
 	default:
@@ -118,16 +117,16 @@ func serve(w http.ResponseWriter, r *http.Request, admit admitHandler) {
 }
 
 func serveMutateCustomResource(w http.ResponseWriter, r *http.Request) {
-	serve(w, r, newDelegateToV1beta1AdmitHandler(webhook.MutateCustomResource))
+	serve(w, r, newDelegateToV1AdmitHandler(webhook.MutateCustomResource))
 }
 
 func serveValidateCustomResource(w http.ResponseWriter, r *http.Request) {
-	serve(w, r, newDelegateToV1beta1AdmitHandler(webhook.ValidateCustomResource))
+	serve(w, r, newDelegateToV1AdmitHandler(webhook.ValidateCustomResource))
 }
 
-func newDelegateToV1beta1AdmitHandler(f admitv1beta1Func) admitHandler {
+func newDelegateToV1AdmitHandler(f admitv1Func) admitHandler {
 	return admitHandler{
-		v1beta1: f,
+		v1: f,
 	}
 }
 

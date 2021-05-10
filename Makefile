@@ -18,7 +18,6 @@ IMAGE_TAG?=nfvpe/$(APP_NAME):latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export WATCH_NAMESPACE?=openshift-sriov-network-operator
-export ENABLE_ADMISSION_CONTROLLER?=true
 export GOFLAGS+=-mod=vendor
 export GO111MODULE=on
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
@@ -78,7 +77,7 @@ image: ; $(info Building image...)
 ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
 test: generate vet manifests
 	mkdir -p ${ENVTEST_ASSETS_DIR}
-	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/master/hack/setup-envtest.sh
+	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
 	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./... -coverprofile cover.out -v
 
 # Build manager binary
@@ -189,11 +188,12 @@ bundle: manifests
 bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
+deploy-setup: export ENABLE_ADMISSION_CONTROLLER?=true
 deploy-setup: skopeo install
 	hack/deploy-setup.sh $(NAMESPACE)
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
-deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
+deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER?=false
 deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 deploy-setup-k8s: export OPERATOR_EXEC=kubectl
 deploy-setup-k8s: export CLUSTER_TYPE=kubernetes
@@ -204,7 +204,7 @@ test-e2e-conformance:
 
 test-e2e: generate vet manifests skopeo
 	mkdir -p ${ENVTEST_ASSETS_DIR}
-	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/master/hack/setup-envtest.sh
+	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
 	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); source hack/env.sh; go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
 
 test-e2e-k8s: export NAMESPACE=sriov-network-operator
@@ -212,7 +212,7 @@ test-e2e-k8s: test-e2e
 
 test-%: generate vet manifests
 	mkdir -p ${ENVTEST_ASSETS_DIR}
-	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/master/hack/setup-envtest.sh
+	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.7.2/hack/setup-envtest.sh
 	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); go test ./$*/... -coverprofile cover.out -v
 
 # deploy-setup-k8s: export NAMESPACE=sriov-network-operator
