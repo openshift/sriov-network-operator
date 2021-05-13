@@ -90,7 +90,7 @@ var _ = Describe("[sriov] operator", func() {
 		Expect(err).ToNot(HaveOccurred())
 		err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 		Expect(err).ToNot(HaveOccurred())
-		waitForSRIOVStable()
+		WaitForSRIOVStable()
 		sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
 		Expect(err).ToNot(HaveOccurred())
 		initPassed = true
@@ -194,7 +194,7 @@ var _ = Describe("[sriov] operator", func() {
 			} else {
 				node = sriovInfos.Nodes[0]
 				createVanillaNetworkPolicy(node, sriovInfos, numVfs, resourceName)
-				waitForSRIOVStable()
+				WaitForSRIOVStable()
 				sriovDevice, err = sriovInfos.FindOneSriovDevice(node)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -854,7 +854,7 @@ var _ = Describe("[sriov] operator", func() {
 		BeforeEach(func() {
 			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 			Expect(err).ToNot(HaveOccurred())
-			waitForSRIOVStable()
+			WaitForSRIOVStable()
 		})
 
 		Describe("Configuration", func() {
@@ -888,7 +888,7 @@ var _ = Describe("[sriov] operator", func() {
 						})))
 
 					By("waiting the sriov to be stable on the node")
-					waitForSRIOVStable()
+					WaitForSRIOVStable()
 
 					By("waiting for the resources to be available")
 					Eventually(func() int64 {
@@ -935,7 +935,7 @@ var _ = Describe("[sriov] operator", func() {
 									})),
 						})))
 
-					waitForSRIOVStable()
+					WaitForSRIOVStable()
 
 					Eventually(func() int64 {
 						testedNode, err := clients.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
@@ -1223,7 +1223,7 @@ var _ = Describe("[sriov] operator", func() {
 						err = clients.Create(context.Background(), mtuPolicy)
 						Expect(err).ToNot(HaveOccurred())
 
-						waitForSRIOVStable()
+						WaitForSRIOVStable()
 						By("waiting for the resources to be available")
 						Eventually(func() int64 {
 							testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
@@ -1373,7 +1373,7 @@ var _ = Describe("[sriov] operator", func() {
 					})))
 
 				By("waiting the sriov to be stable on the node")
-				waitForSRIOVStable()
+				WaitForSRIOVStable()
 
 				By("waiting for the resources to be available")
 				Eventually(func() int64 {
@@ -1767,7 +1767,7 @@ func daemonsScheduledOnNodes(selector string) bool {
 func createSriovPolicy(sriovDevice string, testNode string, numVfs int, resourceName string) {
 	_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, sriovDevice, testNode, numVfs, resourceName, "netdevice")
 	Expect(err).ToNot(HaveOccurred())
-	waitForSRIOVStable()
+	WaitForSRIOVStable()
 
 	Eventually(func() int64 {
 		testedNode, err := clients.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})
@@ -1860,7 +1860,7 @@ func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
 	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodSucceeded))
 }
 
-func waitForSRIOVStable() {
+func WaitForSRIOVStable() {
 	// This used to be to check for sriov not to be stable first,
 	// then stable. The issue is that if no configuration is applied, then
 	// the status won't never go to not stable and the test will fail.

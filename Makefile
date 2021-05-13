@@ -200,7 +200,10 @@ deploy-setup-k8s: export CLUSTER_TYPE=kubernetes
 deploy-setup-k8s: deploy-setup
 
 test-e2e-conformance:
-	./hack/run-e2e-conformance.sh
+	SUITE=./test/conformance ./hack/run-e2e-conformance.sh
+
+test-e2e-validation-only:
+	SUITE=./test/validation ./hack/run-e2e-conformance.sh	
 
 test-e2e: generate vet manifests skopeo
 	mkdir -p ${ENVTEST_ASSETS_DIR}
@@ -219,6 +222,9 @@ test-%: generate vet manifests
 # deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
 # deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 # test-e2e-k8s: test-e2e
+
+deploy-wait:
+	hack/deploy-wait.sh
 
 undeploy: uninstall
 	@hack/undeploy.sh $(NAMESPACE)

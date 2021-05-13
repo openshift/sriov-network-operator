@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -x
 which ginkgo
 if [ $? -ne 0 ]; then
 # we are moving to a temp folder as in go.mod we have a dependency that is not
@@ -18,4 +18,4 @@ GOPATH="${GOPATH:-~/go}"
 JUNIT_OUTPUT="${JUNIT_OUTPUT:-/tmp/artifacts/unit_report.xml}"
 export PATH=$PATH:$GOPATH/bin
 
-GOFLAGS=-mod=vendor ginkgo ./test/conformance -- -junit $JUNIT_OUTPUT
+GOFLAGS=-mod=vendor ginkgo "$SUITE" -- -junit $JUNIT_OUTPUT
