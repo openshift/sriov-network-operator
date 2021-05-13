@@ -201,6 +201,9 @@ spec:
         - apiGroups: [""]
           resources: ["pods/eviction"]
           verbs: ["create"]
+        - apiGroups: ["machineconfiguration.openshift.io"]
+          resources: ["*"]
+          verbs: ["*"]
         serviceAccountName: sriov-network-config-daemon
       permissions:
       - rules:
