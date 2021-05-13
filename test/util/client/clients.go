@@ -10,6 +10,7 @@ import (
 	clientsriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/typed/sriovnetwork/v1"
 	clientconfigv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
 	clientmachineconfigv1 "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
+	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	discovery "k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -68,6 +69,7 @@ func New(kubeconfig string) *ClientSet {
 	clientgoscheme.AddToScheme(crScheme)
 	netattdefv1.SchemeBuilder.AddToScheme(crScheme)
 	sriovv1.AddToScheme(crScheme)
+	apiext.AddToScheme(crScheme)
 
 	clientSet.Client, err = runtimeclient.New(config, client.Options{
 		Scheme: crScheme,
