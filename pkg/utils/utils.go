@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -34,6 +35,7 @@ const (
 	scriptsPath           = "bindata/scripts/load-kmod.sh"
 	ClusterTypeOpenshift  = "openshift"
 	ClusterTypeKubernetes = "kubernetes"
+	VendorMellanox        = "15b3"
 )
 
 var InitialState sriovnetworkv1.SriovNetworkNodeState
@@ -136,6 +138,10 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 // SyncNodeState Attempt to update the node state to match the desired state
 //
 func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
+	if IsKernelLockdownMode() && hasMellanoxInterfacesInSpec(newState) {
+		glog.Warningf("cannot use mellanox devices when in kernel lockdown mode")
+		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
+	}
 	var err error
 	for _, ifaceStatus := range newState.Status.Interfaces {
 		configured := false
@@ -695,4 +701,43 @@ func isSwitchdev(name string) bool {
 	}
 
 	return true
+}
+
+// IsKernelLockdownMode returns true when kernel lockdown mode is enabled
+func IsKernelLockdownMode() bool {
+	out, err := RunCommand("cat", "/host/sys/kernel/security/lockdown")
+	glog.V(2).Infof("IsKernelLockdownMode(): %s, %+v", out, err)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(out, "[integrity]") || strings.Contains(out, "[confidentiality]")
+}
+
+// RunCommand runs a command
+func RunCommand(command string, args ...string) (string, error) {
+	glog.Infof("RunCommand(): %s %v", command, args)
+	var stdout, stderr bytes.Buffer
+
+	cmd := exec.Command(command, args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	glog.V(2).Infof("RunCommand(): %s, %v", command, args)
+	err := cmd.Run()
+	glog.V(2).Infof("RunCommand(): %s, %s", stdout.String(), err)
+	return stdout.String(), err
+}
+
+func hasMellanoxInterfacesInSpec(newState *sriovnetworkv1.SriovNetworkNodeState) bool {
+	for _, ifaceStatus := range newState.Status.Interfaces {
+		if ifaceStatus.Vendor == VendorMellanox {
+			for _, iface := range newState.Spec.Interfaces {
+				if iface.PciAddress == ifaceStatus.PciAddress {
+					glog.V(2).Infof("hasMellanoxInterfacesInSpec(): Mellanox device %s (pci: %s) specified in SriovNetworkNodeState spec", ifaceStatus.Name, ifaceStatus.PciAddress)
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
