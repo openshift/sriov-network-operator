@@ -30,6 +30,7 @@ spec:
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-network-config-daemon
+      priorityClassName: "system-node-critical"
       containers:
       - name: sriov-network-config-daemon
         image: {{.Image}}

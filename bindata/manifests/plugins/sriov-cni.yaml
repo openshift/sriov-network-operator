@@ -30,6 +30,7 @@ spec:
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-cni
+      priorityClassName: "system-node-critical"
       containers:
       - name: sriov-cni
         image: {{.SRIOVCNIImage}}
