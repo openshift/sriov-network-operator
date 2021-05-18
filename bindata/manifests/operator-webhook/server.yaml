@@ -24,6 +24,7 @@ spec:
         app: operator-webhook
     spec:
       serviceAccountName: operator-webhook-sa
+      priorityClassName: "system-cluster-critical"
       nodeSelector:
         beta.kubernetes.io/os: linux
         node-role.kubernetes.io/master:
