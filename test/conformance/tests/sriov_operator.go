@@ -219,7 +219,7 @@ var _ = Describe("[sriov] operator", func() {
 		})
 		Context("Resource Injector", func() {
 			// 25815
-			It("Should inject downward api volume", func() {
+			It("Should inject downward api volume with no labels present", func() {
 				sriovNetwork := &sriovv1.SriovNetwork{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-apivolnetwork",
@@ -263,6 +263,69 @@ var _ = Describe("[sriov] operator", func() {
 
 				Expect(downwardVolume).ToNot(BeNil(), "Downward volume not found")
 				Expect(downwardVolume.DownwardAPI).ToNot(BeNil(), "Downward api not found in volume")
+				Expect(downwardVolume.DownwardAPI.Items).ToNot(
+					ContainElement(corev1.DownwardAPIVolumeFile{
+						Path: "labels",
+						FieldRef: &corev1.ObjectFieldSelector{
+							APIVersion: "v1",
+							FieldPath:  "metadata.labels",
+						},
+					}))
+				Expect(downwardVolume.DownwardAPI.Items).To(
+					ContainElement(corev1.DownwardAPIVolumeFile{
+						Path: "annotations",
+						FieldRef: &corev1.ObjectFieldSelector{
+							APIVersion: "v1",
+							FieldPath:  "metadata.annotations",
+						},
+					}))
+			})
+
+			It("Should inject downward api volume with labels present", func() {
+				sriovNetwork := &sriovv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-apivolnetwork",
+						Namespace: operatorNamespace,
+					},
+					Spec: sriovv1.SriovNetworkSpec{
+						ResourceName:     resourceName,
+						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+						NetworkNamespace: namespaces.Test,
+					}}
+				err := clients.Create(context.Background(), sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: "test-apivolnetwork", Namespace: namespaces.Test}, netAttDef)
+				}, (10+snoTimeoutMultiplier*110)*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				podDefinition := pod.DefineWithNetworks([]string{sriovNetwork.Name})
+				podDefinition.ObjectMeta.Labels = map[string]string{"anyname": "anyvalue"}
+				created, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+
+				var runningPod *corev1.Pod
+				Eventually(func() corev1.PodPhase {
+					runningPod, err = clients.Pods(namespaces.Test).Get(context.Background(), created.Name, metav1.GetOptions{})
+					if errors.IsNotFound(err) {
+						return corev1.PodUnknown
+					}
+					Expect(err).ToNot(HaveOccurred())
+
+					return runningPod.Status.Phase
+				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+				var downwardVolume *corev1.Volume
+				for _, v := range runningPod.Spec.Volumes {
+					if v.Name == "podnetinfo" {
+						downwardVolume = v.DeepCopy()
+						break
+					}
+				}
+
+				Expect(downwardVolume).ToNot(BeNil(), "Downward volume not found")
+				Expect(downwardVolume.DownwardAPI).ToNot(BeNil(), "Downward api not found in volume")
 				Expect(downwardVolume.DownwardAPI.Items).To(SatisfyAll(
 					ContainElement(corev1.DownwardAPIVolumeFile{
 						Path: "labels",
@@ -278,7 +341,6 @@ var _ = Describe("[sriov] operator", func() {
 						},
 					})))
 			})
-
 		})
 
 		Context("VF flags", func() {
