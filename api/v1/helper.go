@@ -37,6 +37,7 @@ var VfIds = []string{}
 // NicIdMap contains supported mapping of IDs with each in the format of:
 // Vendor ID, Physical Function Device ID, Virtual Function Device ID
 var NicIdMap = []string{
+	"8086 158a 154c", // I40e XXV710
 	"8086 158b 154c", // I40e 25G SFP28
 	"8086 1572 154c", // I40e 10G X710 SFP+
 	"8086 0d58 154c", // I40e XXV710 N3000
