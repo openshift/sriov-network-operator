@@ -91,6 +91,8 @@ netns_path="$(docker inspect --format '{{ .NetworkSettings.SandboxKey }}' "${kin
 echo "## exporting test device '${test_pf_pci_addr}' and test netns path '${netns_path}'"
 export TEST_PCI_DEVICE="${test_pf_pci_addr}"
 export TEST_NETNS_PATH="${netns_path}"
+echo "## disabling webhooks"
+export ENABLE_ADMISSION_CONTROLLER=false
 echo "## deploying SRIOV Network Operator"
 make --directory "${root}" deploy-setup-k8s
 echo "## Executing E2E tests"

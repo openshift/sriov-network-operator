@@ -24,3 +24,6 @@ $ sudo make test-e2e-k8s
 ```
 $ ./hack/teardown-e2e-kind-cluster.sh
 ```
+
+### Known limitations / issues
+* Webhooks are disabled by default when testing
