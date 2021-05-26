@@ -15,4 +15,6 @@ for file in ${files}; do
   envsubst< ${file} | ${OPERATOR_EXEC} delete --ignore-not-found ${namespace} -f -
 done
 ${OPERATOR_EXEC} delete cm --ignore-not-found ${namespace} device-plugin-config
+${OPERATOR_EXEC} delete MutatingWebhookConfiguration --ignore-not-found ${namespace} network-resources-injector-config sriov-operator-webhook-config
+${OPERATOR_EXEC} delete ValidatingWebhookConfiguration --ignore-not-found ${namespace} sriov-operator-webhook-config
 popd

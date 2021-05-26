@@ -3,21 +3,51 @@ layout: go.kubebuilder.io/v2
 projectName: sriov-network-operator
 repo: github.com/k8snetworkplumbingwg/sriov-network-operator
 resources:
-- group: sriovnetwork
+-
+  # TODO(user): Uncomment the below line if this resource implements a controller, else delete it.
+  controller: true
+  domain: openshift.io
+  group: sriovnetwork
   kind: SriovNetwork
+  # TODO(user): Update the package path for your API if the below value is incorrect.
+  path: github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1
   version: v1
-- group: sriovnetwork
+-
+  # TODO(user): Uncomment the below line if this resource implements a controller, else delete it.
+  controller: true
+  domain: openshift.io
+  group: sriovnetwork
   kind: SriovIBNetwork
+  # TODO(user): Update the package path for your API if the below value is incorrect.
+  path: github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1
   version: v1
-- group: sriovnetwork
+-
+  # TODO(user): Uncomment the below line if this resource implements a controller, else delete it.
+  controller: true
+  domain: openshift.io
+  group: sriovnetwork
   kind: SriovNetworkNodePolicy
+  # TODO(user): Update the package path for your API if the below value is incorrect.
+  path: github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1
   version: v1
-- group: sriovnetwork
+-
+  # TODO(user): Uncomment the below line if this resource implements a controller, else delete it.
+  controller: true
+  domain: openshift.io
+  group: sriovnetwork
   kind: SriovNetworkNodeState
+  # TODO(user): Update the package path for your API if the below value is incorrect.
+  path: github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1
   version: v1
-- group: sriovnetwork
+-
+  # TODO(user): Uncomment the below line if this resource implements a controller, else delete it.
+  controller: true
+  domain: openshift.io
+  group: sriovnetwork
   kind: SriovOperatorConfig
+  # TODO(user): Update the package path for your API if the below value is incorrect.
+  path: github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1
   version: v1
-version: 3-alpha
+version: "3"
 plugins:
   go.sdk.operatorframework.io/v2-alpha: {}
