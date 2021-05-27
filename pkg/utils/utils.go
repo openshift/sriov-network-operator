@@ -138,7 +138,7 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 // SyncNodeState Attempt to update the node state to match the desired state
 //
 func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
-	if IsKernelLockdownMode() && hasMellanoxInterfacesInSpec(newState) {
+	if IsKernelLockdownMode(true) && hasMellanoxInterfacesInSpec(newState) {
 		glog.Warningf("cannot use mellanox devices when in kernel lockdown mode")
 		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
 	}
@@ -704,8 +704,12 @@ func isSwitchdev(name string) bool {
 }
 
 // IsKernelLockdownMode returns true when kernel lockdown mode is enabled
-func IsKernelLockdownMode() bool {
-	out, err := RunCommand("cat", "/host/sys/kernel/security/lockdown")
+func IsKernelLockdownMode(chroot bool) bool {
+	path := "/sys/kernel/security/lockdown"
+	if !chroot {
+		path = "/host" + path
+	}
+	out, err := RunCommand("cat", path)
 	glog.V(2).Infof("IsKernelLockdownMode(): %s, %+v", out, err)
 	if err != nil {
 		return false
