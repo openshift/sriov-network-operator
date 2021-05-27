@@ -102,7 +102,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 		mellanoxNicsSpec[iface.PciAddress] = iface
 	}
 
-	if utils.IsKernelLockdownMode() {
+	if utils.IsKernelLockdownMode(false) {
 		if len(mellanoxNicsSpec) > 0 {
 			glog.Info("Lockdown mode detected, failing on interface update for mellanox devices")
 			return false, false, fmt.Errorf("Mellanox device detected when in lockdown mode")
@@ -180,7 +180,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 
 // Apply config change
 func (p *MellanoxPlugin) Apply() error {
-	if utils.IsKernelLockdownMode() {
+	if utils.IsKernelLockdownMode(false) {
 		glog.Info("mellanox-plugin Apply() - skipping due to lockdown mode")
 		return nil
 	}
