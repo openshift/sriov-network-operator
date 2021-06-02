@@ -4,6 +4,10 @@ metadata:
   name: sriov-network-operator.v4.8.0
   namespace: openshift-sriov-network-operator
   annotations:
+    # This annotation injection is a workaround for BZ-1950047, since the associated
+    # annotation in spec.install.spec.deployments.template.metadata is presently ignored.
+    # TODO: remove the next line after BZ-1950047 is resolved.
+    target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
     alm-examples: |
       [
         {
