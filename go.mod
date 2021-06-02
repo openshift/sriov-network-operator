@@ -4,8 +4,7 @@ go 1.13
 
 require (
 	cloud.google.com/go v0.58.0 // indirect
-	github.com/Masterminds/semver v1.5.0 // indirect
-	github.com/Masterminds/sprig v2.22.0+incompatible
+	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/blang/semver v3.5.0+incompatible
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/coreos/go-systemd/v22 v22.0.0
@@ -19,7 +18,6 @@ require (
 	github.com/intel/sriov-network-device-plugin v0.0.0-20200924101303-b7f6d3e06797
 	github.com/jaypipes/ghw v0.6.1
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20200626054723-37f83d1996bc
-	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
 	github.com/openshift/client-go v0.0.0-20200827190008-3062137373b5
