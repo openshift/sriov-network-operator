@@ -64,3 +64,5 @@ spec:
               value: {{ .Release.AppVersion }}
             - name: SRIOV_CNI_BIN_PATH
               value: {{ .Values.operator.cniBinPath }}
+            - name: CLUSTER_TYPE
+              value: {{ .Values.operator.clusterType }}
