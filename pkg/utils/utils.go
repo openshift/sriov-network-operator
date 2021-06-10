@@ -319,6 +319,9 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 			glog.Warningf("setNetdevMTU(): fail to get interface name for %s: %s", pciAddr, err)
 			return err
 		}
+		if len(ifaceName) < 1 {
+			return fmt.Errorf("setNetdevMTU(): interface name is empty")
+		}
 		mtuFile := "net/" + ifaceName[0] + "/mtu"
 		mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
 		return ioutil.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
