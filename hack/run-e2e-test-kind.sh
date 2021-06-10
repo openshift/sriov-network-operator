@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
-
-root="$(dirname "$0")/../"
-export PATH="${PATH}:${root:?}bin"
+here="$(dirname "$(readlink --canonicalize "${BASH_SOURCE[0]}")")"
+root="$(readlink --canonicalize "$here/..")"
 export SRIOV_NETWORK_OPERATOR_IMAGE="${SRIOV_NETWORK_OPERATOR_IMAGE:-sriov-network-operator:latest}"
 export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE="${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-origin-sriov-network-config-daemon:latest}"
 RETRY_MAX=10
@@ -43,7 +42,7 @@ retry() {
     fi
     echo "Exit code: '$status'. Sleeping '$delay' seconds before retrying"
     sleep $delay
-    let retries--
+    (( retries-- ))
   done
   return $status
 }
@@ -59,11 +58,11 @@ nodes:
   - role: worker
 EOF
 echo "## build operator image"
-retry docker build -t "${SRIOV_NETWORK_OPERATOR_IMAGE}" -f "${root}Dockerfile" "${root}"
+retry docker build -t "${SRIOV_NETWORK_OPERATOR_IMAGE}" -f "${root}/Dockerfile" "${root}"
 echo "## load operator image into KinD"
 kind load docker-image "${SRIOV_NETWORK_OPERATOR_IMAGE}"
 echo "## build daemon image"
-retry docker build -t "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}" -f "${root}Dockerfile.sriov-network-config-daemon" "${root}"
+retry docker build -t "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}" -f "${root}/Dockerfile.sriov-network-config-daemon" "${root}"
 echo "## load daemon image into KinD"
 kind load docker-image "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
 echo "## export kube config for utilising locally"

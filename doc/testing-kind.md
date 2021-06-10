@@ -4,7 +4,7 @@ To execute E2E tests, a SR-IOV Physical Function device is required and will be 
 ```
 $ git clone https://github.com/k8snetworkplumbingwg/sriov-network-operator.git
 $ cd sriov-network-operator/
-$ ./hack/get-e2e-kind-tools.sh
+$ source hack/get-e2e-kind-tools.sh
 $ export TEST_PCI_DEVICE=0000:02:00.0
 $ sudo ./hack/run-e2e-test-kind.sh $TEST_PCI_DEVICE
 ```
