@@ -25,7 +25,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/openshift/machine-config-operator/lib/resourcemerge"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -250,7 +249,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 
 		// Sync Webhook
 		for _, obj := range objs {
-			err = r.syncWebhookObject(dc, obj)
+			err = r.syncK8sResource(dc, obj)
 			if err != nil {
 				logger.Error(err, "Couldn't sync webhook objects")
 				return err
@@ -268,129 +267,6 @@ func (r *SriovOperatorConfigReconciler) deleteWebhookObject(obj *uns.Unstructure
 	return nil
 }
 
-func (r *SriovOperatorConfigReconciler) syncWebhookObject(dc *sriovnetworkv1.SriovOperatorConfig, obj *uns.Unstructured) error {
-	var err error
-	logger := r.Log.WithName("syncWebhookObject")
-	logger.Info("Start to sync Objects")
-	scheme := kscheme.Scheme
-	switch kind := obj.GetKind(); kind {
-	case "MutatingWebhookConfiguration":
-		whs := &admissionregistrationv1.MutatingWebhookConfiguration{}
-		err = scheme.Convert(obj, whs, nil)
-		r.syncMutatingWebhook(dc, whs)
-		if err != nil {
-			logger.Error(err, "Fail to sync mutate webhook")
-			return err
-		}
-	case "ValidatingWebhookConfiguration":
-		whs := &admissionregistrationv1.ValidatingWebhookConfiguration{}
-		err = scheme.Convert(obj, whs, nil)
-		r.syncValidatingWebhook(dc, whs)
-		if err != nil {
-			logger.Error(err, "Fail to sync validate webhook")
-			return err
-		}
-	case "ServiceAccount", "DaemonSet", "Service", "ClusterRole", "ClusterRoleBinding":
-		err = r.syncK8sResource(dc, obj)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *SriovOperatorConfigReconciler) syncMutatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1.MutatingWebhookConfiguration) error {
-	logger := r.Log.WithName("syncMutatingWebhook")
-	logger.Info("Start to sync mutating webhook", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
-		return err
-	}
-	whs := &admissionregistrationv1.MutatingWebhookConfiguration{}
-	err := r.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create webhook: %v", err)
-			}
-			logger.Info("Create webhook for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get webhook: %v", err)
-		}
-	}
-
-	// Delete deprecated operator mutating webhook CR
-	deprecated_webhook := &admissionregistrationv1.MutatingWebhookConfiguration{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		} else {
-			logger.Info("Failed to get deprecated operator mutating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
-		}
-	} else {
-		err := r.Delete(context.TODO(), deprecated_webhook)
-		if err != nil {
-			logger.Info("Failed to delete deprecated operator mutating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
-		} else {
-			logger.Info("Deleted deprecated operator mutating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
-		}
-	}
-
-	// Note:
-	// we don't need to manage the update of MutatingWebhookConfiguration here
-	// as it's handled by caconfig controller
-
-	return nil
-}
-
-func (r *SriovOperatorConfigReconciler) syncValidatingWebhook(cr *sriovnetworkv1.SriovOperatorConfig, in *admissionregistrationv1.ValidatingWebhookConfiguration) error {
-	logger := r.Log.WithName("syncValidatingWebhook")
-	logger.Info("Start to sync validating webhook", "Name", in.Name, "Namespace", in.Namespace)
-
-	if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
-		return err
-	}
-	whs := &admissionregistrationv1.ValidatingWebhookConfiguration{}
-	err := r.Get(context.TODO(), types.NamespacedName{Name: in.Name}, whs)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			err = r.Create(context.TODO(), in)
-			if err != nil {
-				return fmt.Errorf("Couldn't create webhook: %v", err)
-			}
-			logger.Info("Create webhook for", in.Namespace, in.Name)
-		} else {
-			return fmt.Errorf("Fail to get webhook: %v", err)
-		}
-	}
-
-	// Delete deprecated operator validating webhook CR
-	deprecated_webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		} else {
-			logger.Info("Failed to get deprecated operator validating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
-		}
-	} else {
-		err := r.Delete(context.TODO(), deprecated_webhook)
-		if err != nil {
-			logger.Info("Failed to delete deprecated operator validating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
-		} else {
-			logger.Info("Deleted deprecated operator validating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
-		}
-	}
-
-	// Note:
-	// we don't need to manage the update of MutatingWebhookConfiguration here
-	// as it's handled by caconfig controller
-
-	return nil
-}
-
 func (r *SriovOperatorConfigReconciler) deleteK8sResource(in *uns.Unstructured) error {
 	if err := apply.DeleteObject(context.TODO(), r, in); err != nil {
 		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
@@ -399,8 +275,10 @@ func (r *SriovOperatorConfigReconciler) deleteK8sResource(in *uns.Unstructured) 
 }
 
 func (r *SriovOperatorConfigReconciler) syncK8sResource(cr *sriovnetworkv1.SriovOperatorConfig, in *uns.Unstructured) error {
-	// set owner-reference only for namespaced objects
-	if in.GetKind() != "ClusterRole" && in.GetKind() != "ClusterRoleBinding" {
+	switch in.GetKind() {
+	case "ClusterRole", "ClusterRoleBinding", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration":
+	default:
+		// set owner-reference only for namespaced objects
 		if err := controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
 			return err
 		}
