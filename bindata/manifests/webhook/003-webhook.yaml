@@ -3,7 +3,6 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: {{.SRIOVMutatingWebhookName}}
-  namespace: {{.Namespace}}
   annotations:
     {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
