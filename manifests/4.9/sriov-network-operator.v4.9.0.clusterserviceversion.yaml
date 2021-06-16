@@ -1,7 +1,7 @@
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
-  name: sriov-network-operator.v4.8.0
+  name: sriov-network-operator.v4.9.0
   namespace: openshift-sriov-network-operator
   annotations:
     # This annotation injection is a workaround for BZ-1950047, since the associated
@@ -93,9 +93,9 @@ metadata:
         }
       ]
     certified: "false"
-    containerImage: quay.io/openshift/origin-sriov-network-operator:4.8
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.9
     createdAt: 2019/04/30
-    olm.skipRange: ">=4.3.0-0 <4.8.0"
+    olm.skipRange: ">=4.3.0-0 <4.9.0"
     description: An operator for configuring SR-IOV components and initializing SRIOV network devices in Openshift cluster.
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
@@ -315,7 +315,7 @@ spec:
                 operator: Exists
               containers:
                 - name: sriov-network-operator
-                  image: quay.io/openshift/origin-sriov-network-operator:4.8
+                  image: quay.io/openshift/origin-sriov-network-operator:4.9
                   command:
                   - sriov-network-operator
                   imagePullPolicy: IfNotPresent
@@ -325,21 +325,21 @@ spec:
                         fieldRef:
                           fieldPath: metadata.namespace
                     - name: SRIOV_CNI_IMAGE
-                      value: quay.io/openshift/origin-sriov-cni:4.8
+                      value: quay.io/openshift/origin-sriov-cni:4.9
                     - name: SRIOV_DEVICE_PLUGIN_IMAGE
-                      value: quay.io/openshift/origin-sriov-network-device-plugin:4.8
+                      value: quay.io/openshift/origin-sriov-network-device-plugin:4.9
                     - name: NETWORK_RESOURCES_INJECTOR_IMAGE
-                      value: quay.io/openshift/origin-sriov-dp-admission-controller:4.8
+                      value: quay.io/openshift/origin-sriov-dp-admission-controller:4.9
                     - name: OPERATOR_NAME
                       value: sriov-network-operator
                     - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-                      value: quay.io/openshift/origin-sriov-network-config-daemon:4.8
+                      value: quay.io/openshift/origin-sriov-network-config-daemon:4.9
                     - name: SRIOV_NETWORK_WEBHOOK_IMAGE
-                      value: quay.io/openshift/origin-sriov-network-webhook:4.8
+                      value: quay.io/openshift/origin-sriov-network-webhook:4.9
                     - name: SRIOV_INFINIBAND_CNI_IMAGE
-                      value: quay.io/openshift/origin-sriov-infiniband-cni:4.8
+                      value: quay.io/openshift/origin-sriov-infiniband-cni:4.9
                     - name: SRIOV_OPERATOR_MUST_GATHER_IMAGE
-                      value: quay.io/openshift/origin-sriov-operator-must-gather:4.8
+                      value: quay.io/openshift/origin-sriov-operator-must-gather:4.9
                     - name: RESOURCE_PREFIX
                       value: openshift.io
                     - name: ENABLE_ADMISSION_CONTROLLER
@@ -353,7 +353,7 @@ spec:
                         fieldRef:
                           fieldPath: metadata.name
                     - name: RELEASE_VERSION
-                      value: 4.8.0
+                      value: 4.9.0
     strategy: deployment
   installModes:
   - supported: true
@@ -366,7 +366,7 @@ spec:
     type: AllNamespaces
   provider:
     name: Red Hat
-  version: 4.8.0
+  version: 4.9.0
   links:
   - name: Source Code
     url: https://github.com/k8snetworkplumbingwg/sriov-network-operator
@@ -376,7 +376,7 @@ spec:
   keywords: ["network", "sr-iov", "sriov"]
   labels:
     olm-owner-enterprise-app: sriov-network-operator
-    olm-status-descriptors: sriov-network-operator.v4.8.0
+    olm-status-descriptors: sriov-network-operator.v4.9.0
     operatorframework.io/arch.amd64: supported
     operatorframework.io/arch.ppc64le: supported
   maintainers:

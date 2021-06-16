@@ -12,5 +12,5 @@ LABEL operators.operatorframework.io.metrics.project_layout=go.kubebuilder.io/v2
 LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
 
-COPY manifests/4.8/*.yaml /manifests/
+COPY manifests/4.9/*.yaml /manifests/
 COPY bundle/metadata /metadata/
