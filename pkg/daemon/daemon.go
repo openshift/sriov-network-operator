@@ -40,6 +40,7 @@ import (
 	sninformer "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	daemonconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
 	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
 	mcfginformers "github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions"
 )
@@ -513,8 +514,10 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		}
 		return nil
 	}
-	if err = dn.getNodeMachinePool(); err != nil {
-		return err
+	if utils.ClusterType == utils.ClusterTypeOpenshift {
+		if err = dn.getNodeMachinePool(); err != nil {
+			return err
+		}
 	}
 
 	if reqDrain && !dn.disableDrain {
@@ -750,25 +753,23 @@ func (dn *Daemon) annotateNode(node, value string) error {
 }
 
 func (dn *Daemon) getNodeMachinePool() error {
-	mcpList, err := dn.mcClient.MachineconfigurationV1().MachineConfigPools().List(context.TODO(), metav1.ListOptions{})
+	desiredConfig, ok := dn.node.Annotations[daemonconsts.DesiredMachineConfigAnnotationKey]
+	if !ok {
+		glog.Error("getNodeMachinePool(): Failed to find the the desiredConfig Annotation")
+		return fmt.Errorf("getNodeMachinePool(): Failed to find the the desiredConfig Annotation")
+	}
+	mc, err := dn.mcClient.MachineconfigurationV1().MachineConfigs().Get(context.TODO(), desiredConfig, metav1.GetOptions{})
 	if err != nil {
-		glog.Errorf("getNodeMachinePool(): Failed to list Machine Config Pools: %v", err)
+		glog.Errorf("getNodeMachinePool(): Failed to get the desired Machine Config: %v", err)
 		return err
 	}
-	var mcp mcfgv1.MachineConfigPool
-	for _, mcp = range mcpList.Items {
-		selector, err := metav1.LabelSelectorAsSelector(mcp.Spec.NodeSelector)
-		if err != nil {
-			glog.Errorf("getNodeMachinePool(): Machine Config Pool %s invalid label selector: %v", mcp.GetName(), err)
-			return err
-		}
-
-		if selector.Matches(labels.Set(dn.node.Labels)) {
-			dn.mcpName = mcp.GetName()
-			glog.Infof("getNodeMachinePool(): find node in MCP %s", dn.mcpName)
+	for _, owner := range mc.OwnerReferences {
+		if owner.Kind == "MachineConfigPool" {
+			dn.mcpName = owner.Name
 			return nil
 		}
 	}
+	glog.Error("getNodeMachinePool(): Failed to find the MCP of the node")
 	return fmt.Errorf("getNodeMachinePool(): Failed to find the MCP of the node")
 }
 
