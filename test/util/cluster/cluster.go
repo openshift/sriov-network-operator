@@ -5,35 +5,45 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
-	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
 )
 
 // EnabledNodes provides info on sriov enabled nodes of the cluster.
 type EnabledNodes struct {
-	Nodes  []string
-	States map[string]sriovv1.SriovNetworkNodeState
+	Nodes               []string
+	States              map[string]sriovv1.SriovNetworkNodeState
+	IsSecureBootEnabled map[string]bool
 }
 
 var (
 	supportedPFDrivers = []string{"mlx5_core", "i40e", "ixgbe", "ice"}
 	supportedVFDrivers = []string{"iavf", "vfio-pci", "mlx5_core"}
+	mlxVendorID        = "15b3"
+	intelVendorID      = "8086"
 )
 
 // DiscoverSriov retrieves Sriov related information of a given cluster.
 func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*EnabledNodes, error) {
 	nodeStates, err := clients.SriovNetworkNodeStates(operatorNamespace).List(context.Background(), metav1.ListOptions{})
-	res := &EnabledNodes{}
-	res.States = make(map[string]sriovv1.SriovNetworkNodeState)
-	res.Nodes = make([]string, 0)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to retrieve note states %v", err)
 	}
+
+	res := &EnabledNodes{}
+	res.States = make(map[string]sriovv1.SriovNetworkNodeState)
+	res.Nodes = make([]string, 0)
+	res.IsSecureBootEnabled = make(map[string]bool)
 
 	ss, err := nodes.MatchingOptionalSelectorState(clients, nodeStates.Items)
 	if err != nil {
@@ -59,6 +69,15 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 		}
 	}
 
+	for _, node := range res.Nodes {
+		isSecureBootEnabled, err := GetNodeSecureBootState(clients, node)
+		if err != nil {
+			return nil, err
+		}
+
+		res.IsSecureBootEnabled[node] = isSecureBootEnabled
+	}
+
 	if len(res.Nodes) == 0 {
 		return nil, fmt.Errorf("No sriov enabled node found")
 	}
@@ -73,6 +92,13 @@ func (n *EnabledNodes) FindOneSriovDevice(node string) (*sriovv1.InterfaceExt, e
 	}
 	for _, itf := range s.Status.Interfaces {
 		if IsPFDriverSupported(itf.Driver) && sriovv1.IsSupportedDevice(itf.DeviceID) {
+
+			// Skip mlx interfaces if secure boot is enabled
+			// TODO: remove this when mlx support secure boot/lockdown mode
+			if itf.Vendor == mlxVendorID && n.IsSecureBootEnabled[node] {
+				continue
+			}
+
 			return &itf, nil
 		}
 	}
@@ -89,6 +115,12 @@ func (n *EnabledNodes) FindSriovDevices(node string) ([]*sriovv1.InterfaceExt, e
 
 	for i, itf := range s.Status.Interfaces {
 		if IsPFDriverSupported(itf.Driver) && sriovv1.IsSupportedDevice(itf.DeviceID) {
+			// Skip mlx interfaces if secure boot is enabled
+			// TODO: remove this when mlx support secure boot/lockdown mode
+			if itf.Vendor == mlxVendorID && n.IsSecureBootEnabled[node] {
+				continue
+			}
+
 			devices = append(devices, &s.Status.Interfaces[i])
 		}
 	}
@@ -99,7 +131,7 @@ func (n *EnabledNodes) FindSriovDevices(node string) ([]*sriovv1.InterfaceExt, e
 func (n *EnabledNodes) FindOneVfioSriovDevice() (string, sriovv1.InterfaceExt) {
 	for _, node := range n.Nodes {
 		for _, nic := range n.States[node].Status.Interfaces {
-			if nic.Vendor == "8086" {
+			if nic.Vendor == intelVendorID {
 				return node, nic
 			}
 		}
@@ -113,8 +145,15 @@ func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.Interfa
 	if !ok {
 		return nil, fmt.Errorf("Node %s not found", node)
 	}
+
+	// return error here as mlx interfaces are not supported when secure boot is enabled
+	// TODO: remove this when mlx support secure boot/lockdown mode
+	if n.IsSecureBootEnabled[node] {
+		return nil, fmt.Errorf("Secure boot is enabled on the node mellanox cards are not supported")
+	}
+
 	for _, itf := range s.Status.Interfaces {
-		if itf.Driver == "mlx5_core" {
+		if itf.Vendor == mlxVendorID {
 			return &itf, nil
 		}
 	}
@@ -222,4 +261,46 @@ func SetDisableNodeDrainState(clients *testclient.ClientSet, operatorNamespace s
 		return err
 	}
 	return nil
+}
+
+func GetNodeSecureBootState(clients *testclient.ClientSet, nodeName string) (bool, error) {
+	podDefinition := pod.GetDefinition()
+	podDefinition = pod.RedefineWithNodeSelector(podDefinition, nodeName)
+	podDefinition = pod.RedefineAsPrivileged(podDefinition)
+
+	volume := corev1.Volume{Name: "host", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/"}}}
+	mount := corev1.VolumeMount{Name: "host", MountPath: "/host"}
+	podDefinition = pod.RedefineWithMount(podDefinition, volume, mount)
+	created, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	var runningPod *corev1.Pod
+	err = wait.PollImmediate(time.Second, 3*time.Minute, func() (bool, error) {
+		runningPod, err = clients.Pods(namespaces.Test).Get(context.Background(), created.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		if runningPod.Status.Phase != corev1.PodRunning {
+			return false, nil
+		}
+
+		return true, nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	stdout, stderr, err := pod.ExecCommand(clients, runningPod, "cat", "/host/sys/kernel/security/lockdown")
+	if err != nil {
+		return false, err
+	}
+
+	if stderr != "" {
+		return false, fmt.Errorf("command return non 0 code: %s", stderr)
+	}
+
+	return strings.Contains(stdout, "[integrity]") || strings.Contains(stdout, "[confidentiality]"), nil
 }
