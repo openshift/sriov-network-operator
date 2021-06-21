@@ -35,6 +35,10 @@ spec:
         image: {{.SRIOVCNIImage}}
         securityContext:
           privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
         volumeMounts:
         - name: cnibin
           mountPath: /host/opt/cni/bin
@@ -42,6 +46,10 @@ spec:
         image: {{.SRIOVInfiniBandCNIImage}}
         securityContext:
           privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
         volumeMounts:
         - name: cnibin
           mountPath: /host/opt/cni/bin
