@@ -16,6 +16,8 @@ spec:
       app: network-resources-injector
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
   template:
     metadata:
       annotations:

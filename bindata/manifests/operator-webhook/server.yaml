@@ -16,6 +16,8 @@ spec:
       app: operator-webhook
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
   template:
     metadata:
       annotations:
