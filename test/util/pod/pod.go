@@ -21,7 +21,7 @@ import (
 
 const hostnameLabel = "kubernetes.io/hostname"
 
-func getDefinition() *corev1.Pod {
+func GetDefinition() *corev1.Pod {
 	podObject := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "testpod-",
@@ -36,14 +36,14 @@ func getDefinition() *corev1.Pod {
 }
 
 func DefineWithNetworks(networks []string) *corev1.Pod {
-	podObject := getDefinition()
+	podObject := GetDefinition()
 	podObject.Annotations = map[string]string{"k8s.v1.cni.cncf.io/networks": strings.Join(networks, ",")}
 
 	return podObject
 }
 
 func DefineWithHostNetwork(nodeName string) *corev1.Pod {
-	podObject := getDefinition()
+	podObject := GetDefinition()
 	podObject.Spec.HostNetwork = true
 	podObject.Spec.NodeSelector = map[string]string{
 		"kubernetes.io/hostname": nodeName,
@@ -52,7 +52,7 @@ func DefineWithHostNetwork(nodeName string) *corev1.Pod {
 	return podObject
 }
 
-// RedefineAsPrivileged uppdates the pod to be privileged
+// RedefineAsPrivileged updates the pod to be privileged
 func RedefineAsPrivileged(pod *corev1.Pod) *corev1.Pod {
 	pod.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{}
 	b := true
@@ -60,17 +60,25 @@ func RedefineAsPrivileged(pod *corev1.Pod) *corev1.Pod {
 	return pod
 }
 
-// RedefineWithHostNetwork uppdates the pod definition Spec.HostNetwork to true
+// RedefineWithHostNetwork updates the pod definition Spec.HostNetwork to true
 func RedefineWithHostNetwork(pod *corev1.Pod) *corev1.Pod {
 	pod.Spec.HostNetwork = true
 	return pod
 }
 
-// RedefineWithNodeSelector uppdates the pod definition with a node selector
+// RedefineWithNodeSelector updates the pod definition with a node selector
 func RedefineWithNodeSelector(pod *corev1.Pod, node string) *corev1.Pod {
 	pod.Spec.NodeSelector = map[string]string{
 		hostnameLabel: node,
 	}
+	return pod
+}
+
+// RedefineWithMount updates the pod definition with a volume and volume mount
+func RedefineWithMount(pod *corev1.Pod, volume corev1.Volume, mount corev1.VolumeMount) *corev1.Pod {
+	pod.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{mount}
+	pod.Spec.Volumes = []corev1.Volume{volume}
+
 	return pod
 }
 
