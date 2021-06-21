@@ -27,6 +27,7 @@ spec:
         openshift.io/component: network
     spec:
       serviceAccountName: network-resources-injector-sa
+      priorityClassName: "system-cluster-critical"
       nodeSelector:
         beta.kubernetes.io/os: linux
         node-role.kubernetes.io/master:
