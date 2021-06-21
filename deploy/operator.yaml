@@ -7,6 +7,10 @@ spec:
   selector:
     matchLabels:
       name: sriov-network-operator
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
   template:
     metadata:
       labels:
@@ -24,6 +28,7 @@ spec:
         key: node-role.kubernetes.io/master
         operator: Exists
       serviceAccountName: sriov-network-operator
+      priorityClassName: "system-node-critical"
       containers:
         - name: sriov-network-operator
           # Replace this with the built image name
@@ -31,6 +36,10 @@ spec:
           command:
           - sriov-network-operator
           imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
           env:
             - name: WATCH_NAMESPACE
               valueFrom:

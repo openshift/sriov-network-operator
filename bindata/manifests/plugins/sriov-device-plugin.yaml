@@ -14,6 +14,8 @@ spec:
       app: sriov-device-plugin
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
   template:
     metadata:
       labels:
@@ -29,6 +31,7 @@ spec:
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-device-plugin
+      priorityClassName: "system-node-critical"
       containers:
       - name: sriov-device-plugin
         image: {{.SRIOVDevicePluginImage}}
@@ -43,6 +46,10 @@ spec:
               fieldPath: spec.nodeName
         securityContext:
           privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
         volumeMounts:
         - name: devicesock
           mountPath: /var/lib/kubelet/

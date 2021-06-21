@@ -14,6 +14,8 @@ spec:
       app: sriov-cni
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
   template:
     metadata:
       labels:
@@ -28,11 +30,16 @@ spec:
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-cni
+      priorityClassName: "system-node-critical"
       containers:
       - name: sriov-cni
         image: {{.SRIOVCNIImage}}
         securityContext:
           privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
         volumeMounts:
         - name: cnibin
           mountPath: /host/opt/cni/bin
@@ -40,6 +47,10 @@ spec:
         image: {{.SRIOVInfiniBandCNIImage}}
         securityContext:
           privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
         volumeMounts:
         - name: cnibin
           mountPath: /host/opt/cni/bin

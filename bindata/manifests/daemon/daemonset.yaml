@@ -12,6 +12,8 @@ spec:
       app: sriov-network-config-daemon
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
   template:
     metadata:
       labels:
@@ -28,6 +30,7 @@ spec:
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-network-config-daemon
+      priorityClassName: "system-node-critical"
       containers:
       - name: sriov-network-config-daemon
         image: {{.Image}}
@@ -49,6 +52,10 @@ spec:
                 fieldPath: metadata.namespace
           - name: CLUSTER_TYPE
             value: "{{.ClusterType}}"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
         volumeMounts:
         - name: host
           mountPath: /host

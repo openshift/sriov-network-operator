@@ -16,12 +16,15 @@ spec:
       app: operator-webhook
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
   template:
     metadata:
       labels:
         app: operator-webhook
     spec:
       serviceAccountName: operator-webhook-sa
+      priorityClassName: "system-cluster-critical"
       nodeSelector:
         beta.kubernetes.io/os: linux
       affinity:
@@ -55,6 +58,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
         volumeMounts:
         - mountPath: /etc/tls
           name: tls
