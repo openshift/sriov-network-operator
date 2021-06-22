@@ -53,8 +53,6 @@ const (
 	// maxUpdateBackoff is the maximum time to react to a change as we back off
 	// in the face of errors.
 	maxUpdateBackoff = 60 * time.Second
-
-	UNSUPPORTED_NIC_ID_CONFIGMAP = "unsupported-nic-ids"
 )
 
 type Message struct {
@@ -181,15 +179,6 @@ func New(
 	}
 }
 
-func (dn *Daemon) getUnsupportedNicIdConfigMap() (*v1.ConfigMap, error) {
-	cm, err := dn.kubeClient.CoreV1().ConfigMaps(namespace).Get(
-		context.Background(),
-		UNSUPPORTED_NIC_ID_CONFIGMAP,
-		metav1.GetOptions{},
-	)
-	return cm, err
-}
-
 func (dn *Daemon) annotateUnsupportedNicIdConfigMap(cm *v1.ConfigMap, nodeName string) (*v1.ConfigMap, error) {
 	jsonData, err := json.Marshal(cm.Data)
 	if err != nil {
@@ -211,8 +200,6 @@ func (dn *Daemon) annotateUnsupportedNicIdConfigMap(cm *v1.ConfigMap, nodeName s
 }
 
 func (dn *Daemon) tryCreateUdevRuleWrapper() error {
-	var unsupportedNicIdMap map[string]string
-
 	ns, nodeStateErr := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(
 		context.Background(),
 		dn.name,
@@ -227,26 +214,10 @@ func (dn *Daemon) tryCreateUdevRuleWrapper() error {
 		}
 	}
 
-	// retrieve config map
-	cm, configMapErr := dn.getUnsupportedNicIdConfigMap()
-	if configMapErr != nil {
-		glog.V(2).Info("Could not retrieve Nic Id ConfigMap: ", configMapErr)
-	} else {
-		unsupportedNicIdMap = cm.Data
-	}
-
 	// update udev rule and if update succeeds
-	err := tryCreateNMUdevRule(unsupportedNicIdMap)
+	err := tryCreateNMUdevRule()
 	if err != nil {
 		return err
-	}
-
-	if configMapErr != nil {
-		return nil
-	}
-
-	if _, err := dn.annotateUnsupportedNicIdConfigMap(cm, dn.name); err != nil {
-		glog.V(2).Info("Could not update Nic Id ConfigMap", "err", err)
 	}
 
 	return nil
@@ -260,6 +231,10 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	defer dn.workqueue.ShutDown()
 
 	tryEnableRdma()
+
+	if err := sriovnetworkv1.InitNicIdMap(dn.kubeClient, namespace); err != nil {
+		return err
+	}
 
 	if err := dn.tryCreateUdevRuleWrapper(); err != nil {
 		return err
@@ -1024,12 +999,12 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 	return nil
 }
 
-func tryCreateNMUdevRule(unsupportedNicIdMap map[string]string) error {
+func tryCreateNMUdevRule() error {
 	glog.V(2).Infof("tryCreateNMUdevRule()")
 	dirPath := "/host/etc/udev/rules.d/"
 	filePath := dirPath + "10-nm-unmanaged.rules"
 
-	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetMergedVfIds(unsupportedNicIdMap), "|"))
+	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetSupportedVfIds(), "|"))
 
 	// add NM udev rules for renaming VF rep
 	new_content = new_content + fmt.Sprintf("SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n")

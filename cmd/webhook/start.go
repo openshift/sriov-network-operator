@@ -136,6 +136,11 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		panic(err)
 	}
 
+	if err := webhook.RetriveSupportedNics(); err != nil {
+		glog.Error(err)
+		panic(err)
+	}
+
 	keyPair, err := webhook.NewTlsKeypairReloader(certFile, keyFile)
 	if err != nil {
 		glog.Fatalf("error load certificate: %s", err.Error())
