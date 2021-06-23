@@ -422,6 +422,7 @@ github.com/openshift/client-go/config/clientset/versioned/scheme
 github.com/openshift/client-go/config/clientset/versioned/typed/config/v1
 # github.com/openshift/machine-config-operator v4.2.0-alpha.0.0.20190917115525-033375cbe820+incompatible => github.com/openshift/machine-config-operator v0.0.1-0.20200606015452-b51bca192089
 github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1
+github.com/openshift/machine-config-operator/pkg/daemon/constants
 github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned
 github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/scheme
 github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1
