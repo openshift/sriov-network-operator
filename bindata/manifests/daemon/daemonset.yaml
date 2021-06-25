@@ -32,6 +32,28 @@ spec:
       serviceAccountName: sriov-network-config-daemon
       priorityClassName: "system-node-critical"
       containers:
+      - name: sriov-cni
+        image: {{.SRIOVCNIImage}}
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+        volumeMounts:
+        - name: cnibin
+          mountPath: /host/opt/cni/bin
+      - name: sriov-infiniband-cni
+        image: {{.SRIOVInfiniBandCNIImage}}
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+        volumeMounts:
+        - name: cnibin
+          mountPath: /host/opt/cni/bin
       - name: sriov-network-config-daemon
         image: {{.Image}}
         command:
@@ -67,3 +89,6 @@ spec:
       - name: host
         hostPath:
           path: /
+      - name: cnibin
+        hostPath:
+          path: {{.CNIBinPath}}
