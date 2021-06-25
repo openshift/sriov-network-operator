@@ -1,5 +1,5 @@
 /*
-
+Copyright 2021.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/go-logr/logr"
 	"github.com/openshift/machine-config-operator/lib/resourcemerge"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -36,6 +35,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -47,19 +47,27 @@ import (
 // SriovOperatorConfigReconciler reconciles a SriovOperatorConfig object
 type SriovOperatorConfigReconciler struct {
 	client.Client
-	Log    logr.Logger
 	Scheme *runtime.Scheme
 }
 
 var injectorServiceCaCmVersion = ""
 var webhookServiceCaCmVersion = ""
 
-// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs/finalizers,verbs=update
 
-func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	logger := r.Log.WithValues("sriovoperatorconfig", req.NamespacedName)
+// Reconcile is part of the main kubernetes reconciliation loop which aims to
+// move the current state of the cluster closer to the desired state.
+// TODO(user): Modify the Reconcile function to compare the state specified by
+// the SriovOperatorConfig object against the actual cluster state, and then
+// perform operations to make the cluster state reflect the state specified by
+// the user.
+//
+// For more details, check Reconcile and its Result here:
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
+func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("sriovoperatorconfig", req.NamespacedName)
 
 	logger.Info("Reconciling SriovOperatorConfig")
 
@@ -120,6 +128,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
 }
 
+// SetupWithManager sets up the controller with the Manager.
 func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sriovnetworkv1.SriovOperatorConfig{}).
@@ -129,7 +138,7 @@ func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error
 }
 
 func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := r.Log.WithName("syncConfigDaemonset")
+	logger := log.Log.WithName("syncConfigDaemonset")
 	logger.Info("Start to sync SRIOV plugin daemonsets nodeSelector")
 	ds := &appsv1.DaemonSet{}
 
@@ -159,7 +168,7 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.S
 }
 
 func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := r.Log.WithName("syncConfigDaemonset")
+	logger := log.Log.WithName("syncConfigDaemonset")
 	logger.Info("Start to sync config daemonset")
 	// var err error
 	objs := []*uns.Unstructured{}
@@ -210,7 +219,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 }
 
 func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := r.Log.WithName("syncWebhookObjs")
+	logger := log.Log.WithName("syncWebhookObjs")
 	logger.Info("Start to sync webhook objects")
 
 	for name, path := range webhooks {
@@ -277,7 +286,7 @@ func (r *SriovOperatorConfigReconciler) deleteWebhookObject(obj *uns.Unstructure
 }
 
 func (r *SriovOperatorConfigReconciler) deleteK8sResource(in *uns.Unstructured) error {
-	if err := apply.DeleteObject(context.TODO(), r, in); err != nil {
+	if err := apply.DeleteObject(context.TODO(), r.Client, in); err != nil {
 		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
 	}
 	return nil
@@ -292,14 +301,14 @@ func (r *SriovOperatorConfigReconciler) syncK8sResource(cr *sriovnetworkv1.Sriov
 			return err
 		}
 	}
-	if err := apply.ApplyObject(context.TODO(), r, in); err != nil {
+	if err := apply.ApplyObject(context.TODO(), r.Client, in); err != nil {
 		return fmt.Errorf("failed to apply object %v with err: %v", in, err)
 	}
 	return nil
 }
 
 func (r *SriovOperatorConfigReconciler) syncOffloadMachineConfig(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := r.Log.WithName("syncOffloadMachineConfig")
+	logger := log.Log.WithName("syncOffloadMachineConfig")
 	var err error
 
 	logger.Info("Start to render MachineConfig and MachineConfigPool for OVS HW offloading")

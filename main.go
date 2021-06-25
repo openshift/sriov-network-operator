@@ -1,5 +1,5 @@
 /*
-
+Copyright 2021.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,10 @@ import (
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// to ensure that exec-entrypoint and run can make use of them.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -33,11 +37,12 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
-	// +kubebuilder:scaffold:imports
+	//+kubebuilder:scaffold:imports
 )
 
 var (
@@ -51,27 +56,34 @@ func init() {
 	utilruntime.Must(sriovnetworkv1.AddToScheme(scheme))
 	utilruntime.Must(netattdefv1.AddToScheme(scheme))
 	utilruntime.Must(mcfgv1.AddToScheme(scheme))
-	// +kubebuilder:scaffold:scheme
+	//+kubebuilder:scaffold:scheme
 }
 
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controllers manager. "+
-			"Enabling this will ensure there is only one active controllers manager.")
+	var probeAddr string
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
+	opts := zap.Options{
+		Development: true,
+	}
+	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	namespace := os.Getenv("NAMESPACE")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		Port:               9443,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "578c20de.sriovnetwork.openshift.io",
-		Namespace:          namespace,
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		Port:                   9443,
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "a56def2a.openshift.io",
+		Namespace:              namespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -86,40 +98,35 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.SriovIBNetworkReconciler{
-		Client: mgrGlobal.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SriovIBNetwork"),
-		Scheme: mgrGlobal.GetScheme(),
-	}).SetupWithManager(mgrGlobal); err != nil {
-		setupLog.Error(err, "unable to create controllers", "controllers", "SriovIBNetwork")
-		os.Exit(1)
-	}
 	if err = (&controllers.SriovNetworkReconciler{
 		Client: mgrGlobal.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SriovNetwork"),
 		Scheme: mgrGlobal.GetScheme(),
-	}).SetupWithManager(mgrGlobal); err != nil {
-		setupLog.Error(err, "unable to create controllers", "controllers", "SriovNetwork")
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SriovNetwork")
+		os.Exit(1)
+	}
+	if err = (&controllers.SriovIBNetworkReconciler{
+		Client: mgrGlobal.GetClient(),
+		Scheme: mgrGlobal.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SriovIBNetwork")
 		os.Exit(1)
 	}
 	if err = (&controllers.SriovNetworkNodePolicyReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SriovNetworkNodePolicy"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controllers", "controllers", "SriovNetworkNodePolicy")
+		setupLog.Error(err, "unable to create controller", "controller", "SriovNetworkNodePolicy")
 		os.Exit(1)
 	}
 	if err = (&controllers.SriovOperatorConfigReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SriovOperatorConfig"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controllers", "controllers", "SriovOperatorConfig")
+		setupLog.Error(err, "unable to create controller", "controller", "SriovOperatorConfig")
 		os.Exit(1)
 	}
-	// +kubebuilder:scaffold:builder
-
+	//+kubebuilder:scaffold:builder
 	// Create a default SriovNetworkNodePolicy
 	err = createDefaultPolicy(ctrl.GetConfigOrDie())
 	if err != nil {
@@ -131,6 +138,15 @@ func main() {
 	err = createDefaultOperatorConfig(ctrl.GetConfigOrDie())
 	if err != nil {
 		setupLog.Error(err, "unable to create default SriovOperatorConfig")
+		os.Exit(1)
+	}
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 
