@@ -167,8 +167,17 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 	data := render.MakeRenderData()
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
 	data.Data["Namespace"] = namespace
+	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
+	data.Data["SRIOVInfiniBandCNIImage"] = os.Getenv("SRIOV_INFINIBAND_CNI_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ClusterType"] = utils.ClusterType
+	envCniBinPath := os.Getenv("SRIOV_CNI_BIN_PATH")
+	if envCniBinPath == "" {
+		data.Data["CNIBinPath"] = "/var/lib/cni/bin"
+	} else {
+		logger.Info("New cni bin found", "CNIBinPath", envCniBinPath)
+		data.Data["CNIBinPath"] = envCniBinPath
+	}
 	objs, err := render.RenderDir(CONFIG_DAEMON_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render config daemon manifests")
