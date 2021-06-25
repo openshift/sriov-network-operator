@@ -10,7 +10,7 @@ if [ -n "${namespace}" ] ; then
 fi
 
 pushd ${repo_dir}/deploy
-files="operator.yaml service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml"
+files="operator.yaml service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml configmap.yaml"
 for file in ${files}; do
   envsubst< ${file} | ${OPERATOR_EXEC} delete --ignore-not-found ${namespace} -f -
 done

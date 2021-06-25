@@ -12,6 +12,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 )
 
+func TestMain(m *testing.M) {
+	NicIdMap = []string{
+		"8086 158a 154c", // I40e XXV710
+		"8086 158b 154c", // I40e 25G SFP28
+		"8086 1572 154c", // I40e 10G X710 SFP+
+		"8086 0d58 154c", // I40e XXV710 N3000
+		"8086 1583 154c", // I40e 40G XL710 QSFP+
+		"8086 1592 1889", // Columbiaville E810-CQDA2/2CQDA2
+		"8086 1593 1889", // Columbiaville E810-XXVDA4
+		"8086 159b 1889", // Columbiaville E810-XXVDA2
+		"15b3 1013 1014", // ConnectX-4
+		"15b3 1015 1016", // ConnectX-4LX
+		"15b3 1017 1018", // ConnectX-5, PCIe 3.0
+		"15b3 1019 101a", // ConnectX-5 Ex
+		"15b3 101b 101c", // ConnectX-6
+		"15b3 101d 101e", // ConnectX-6 Dx
+		"15b3 a2d6 101e", // MT42822 BlueField-2 integrated ConnectX-6 Dx
+		"14e4 16d7 16dc", // BCM57414 2x25G
+		"14e4 1750 1806", // BCM75508 2x100G
+	}
+	os.Exit(m.Run())
+}
+
 func newNodeState() *SriovNetworkNodeState {
 	return &SriovNetworkNodeState{
 		Spec: SriovNetworkNodeStateSpec{
