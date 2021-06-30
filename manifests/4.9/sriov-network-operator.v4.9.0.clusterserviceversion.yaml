@@ -8,6 +8,7 @@ metadata:
     # annotation in spec.install.spec.deployments.template.metadata is presently ignored.
     # TODO: remove the next line after BZ-1950047 is resolved.
     target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+    operators.openshift.io/infrastructure-features: '["disconnected", "cni"]'
     alm-examples: |
       [
         {
