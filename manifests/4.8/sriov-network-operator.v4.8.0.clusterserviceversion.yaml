@@ -3,6 +3,10 @@ kind: ClusterServiceVersion
 metadata:
   name: sriov-network-operator.v4.8.0
   namespace: openshift-sriov-network-operator
+  labels:
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/arch.ppc64le: supported
+  maintainers:
   annotations:
     # This annotation injection is a workaround for BZ-1950047, since the associated
     # annotation in spec.install.spec.deployments.template.metadata is presently ignored.
