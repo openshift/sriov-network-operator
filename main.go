@@ -75,7 +75,10 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	setupLog.Error(nil, "byebye")
+	os.Exit(1)
+
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 	namespace := os.Getenv("NAMESPACE")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
