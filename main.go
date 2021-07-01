@@ -63,6 +63,9 @@ func main() {
 			"Enabling this will ensure there is only one active controllers manager.")
 	flag.Parse()
 
+	setupLog.Error(nil, "byebye")
+	os.Exit(1)
+
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 	namespace := os.Getenv("NAMESPACE")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
