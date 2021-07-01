@@ -3,6 +3,9 @@ kind: ClusterServiceVersion
 metadata:
   name: sriov-network-operator.v4.9.0
   namespace: openshift-sriov-network-operator
+  labels:
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/arch.ppc64le: supported
   annotations:
     # This annotation injection is a workaround for BZ-1950047, since the associated
     # annotation in spec.install.spec.deployments.template.metadata is presently ignored.
@@ -377,8 +380,6 @@ spec:
   labels:
     olm-owner-enterprise-app: sriov-network-operator
     olm-status-descriptors: sriov-network-operator.v4.9.0
-    operatorframework.io/arch.amd64: supported
-    operatorframework.io/arch.ppc64le: supported
   maintainers:
   - email: support@redhat.com
     name: Red Hat
