@@ -29,6 +29,7 @@ import (
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -315,21 +316,12 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 	logger := r.Log.WithName("syncPluginDaemonObjs")
 	logger.Info("Start to sync sriov daemons objects")
 
-	// render RawCNIConfig manifests
+	// render plugin manifests
 	data := render.MakeRenderData()
 	data.Data["Namespace"] = namespace
-	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
-	data.Data["SRIOVInfiniBandCNIImage"] = os.Getenv("SRIOV_INFINIBAND_CNI_IMAGE")
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
-	envCniBinPath := os.Getenv("SRIOV_CNI_BIN_PATH")
-	if envCniBinPath == "" {
-		data.Data["CNIBinPath"] = "/var/lib/cni/bin"
-	} else {
-		logger.Info("New cni bin found", "CNIBinPath", envCniBinPath)
-		data.Data["CNIBinPath"] = envCniBinPath
-	}
 
 	objs, err := renderDsForCR(PLUGIN_PATH, &data)
 	if err != nil {
@@ -377,6 +369,58 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 			return err
 		}
 	}
+
+	// Sriov-cni container has been moved to sriov-network-config-daemon DaemonSet.
+	// Delete stale sriov-cni manifests. Revert this change once sriov-cni daemonSet
+	// is deprecated.
+	err = r.deleteSriovCniManifests()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *SriovNetworkNodePolicyReconciler) deleteSriovCniManifests() error {
+	ds := &appsv1.DaemonSet{}
+	err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "sriov-cni"}, ds)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	} else {
+		err = r.Delete(context.TODO(), ds)
+		if err != nil {
+			return err
+		}
+	}
+
+	rb := &rbacv1.RoleBinding{}
+	err = r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "sriov-cni"}, rb)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	} else {
+		err = r.Delete(context.TODO(), rb)
+		if err != nil {
+			return err
+		}
+	}
+
+	sa := &corev1.ServiceAccount{}
+	err = r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "sriov-cni"}, sa)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	} else {
+		err = r.Delete(context.TODO(), sa)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
