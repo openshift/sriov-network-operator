@@ -1,7 +1,8 @@
 package utils
 
 import (
-	"fmt"
+	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"os"
 
@@ -11,8 +12,12 @@ import (
 )
 
 const (
-	switchDevConfPath = "/host/etc/switchdev.conf"
+	switchDevConfPath = "/host/etc/sriov_config.json"
 )
+
+type config struct {
+	Interfaces []sriovnetworkv1.Interface `json:"interfaces"`
+}
 
 func IsSwitchdevModeSpec(spec sriovnetworkv1.SriovNetworkNodeStateSpec) bool {
 	for _, iface := range spec.Interfaces {
@@ -37,10 +42,17 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 			return
 		}
 	}
-	newContent := ""
+	cfg := config{}
 	for _, iface := range newState.Spec.Interfaces {
 		if iface.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
-			newContent = newContent + fmt.Sprintln(iface.PciAddress, iface.NumVfs)
+			// Not passing all the contents, since only NumVfs and EswitchMode can be configured by configure-switchdev.sh currently.
+			i := sriovnetworkv1.Interface{
+				Name:        iface.Name,
+				PciAddress:  iface.PciAddress,
+				EswitchMode: iface.EswitchMode,
+				NumVfs:      iface.NumVfs,
+			}
+			cfg.Interfaces = append(cfg.Interfaces, i)
 		}
 	}
 	oldContent, err := ioutil.ReadFile(switchDevConfPath)
@@ -48,7 +60,12 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 		glog.Errorf("WriteSwitchdevConfFile(): fail to read file: %v", err)
 		return
 	}
-	if newContent == string(oldContent) {
+	newContent, err := json.Marshal(cfg)
+	if err != nil {
+		glog.Errorf("WriteSwitchdevConfFile(): fail to marshal config: %v", err)
+		return
+	}
+	if bytes.Equal(newContent, oldContent) {
 		glog.V(2).Info("WriteSwitchdevConfFile(): no update")
 		return
 	}
