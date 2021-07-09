@@ -82,15 +82,15 @@ func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
 		// registering our finalizer.
-		if !sriovnetworkv1.StringInArray(sriovnetworkv1.FINALIZERNAME, instance.ObjectMeta.Finalizers) {
-			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, sriovnetworkv1.FINALIZERNAME)
+		if !sriovnetworkv1.StringInArray(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers) {
+			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, sriovnetworkv1.NETATTDEFFINALIZERNAME)
 			if err := r.Update(context.Background(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
 	} else {
 		// The object is being deleted
-		if sriovnetworkv1.StringInArray(sriovnetworkv1.FINALIZERNAME, instance.ObjectMeta.Finalizers) {
+		if sriovnetworkv1.StringInArray(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers) {
 			// our finalizer is present, so lets handle any external dependency
 			reqLogger.Info("delete NetworkAttachmentDefinition CR", "Namespace", instance.Spec.NetworkNamespace, "Name", instance.Name)
 			if err := instance.DeleteNetAttDef(r.Client); err != nil {
@@ -99,7 +99,7 @@ func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				return reconcile.Result{}, err
 			}
 			// remove our finalizer from the list and update it.
-			instance.ObjectMeta.Finalizers = sriovnetworkv1.RemoveString(sriovnetworkv1.FINALIZERNAME, instance.ObjectMeta.Finalizers)
+			instance.ObjectMeta.Finalizers = sriovnetworkv1.RemoveString(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers)
 			if err := r.Update(context.Background(), instance); err != nil {
 				return reconcile.Result{}, err
 			}

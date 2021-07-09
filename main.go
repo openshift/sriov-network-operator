@@ -25,6 +25,7 @@ import (
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -126,7 +127,15 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovOperatorConfig")
 		os.Exit(1)
 	}
-	//+kubebuilder:scaffold:builder
+	if err = (&controllers.SriovNetworkPoolConfigReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SriovNetworkPoolConfig")
+		os.Exit(1)
+	}
+	// +kubebuilder:scaffold:builder
+
 	// Create a default SriovNetworkNodePolicy
 	err = createDefaultPolicy(ctrl.GetConfigOrDie())
 	if err != nil {
