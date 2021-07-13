@@ -1,0 +1,12 @@
+[Unit]
+Description=Switch all VFs of the configured driver to the specified namespace
+After=network.target 
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/vf-netns-switcher.sh -c /etc/vf-switcher/vf-switcher.yaml
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=network-online.target
