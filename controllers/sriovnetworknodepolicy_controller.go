@@ -1,5 +1,5 @@
 /*
-
+Copyright 2021.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,11 +24,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-logr/logr"
 	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +39,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -50,18 +50,24 @@ import (
 // SriovNetworkNodePolicyReconciler reconciles a SriovNetworkNodePolicy object
 type SriovNetworkNodePolicyReconciler struct {
 	client.Client
-	Log    logr.Logger
 	Scheme *runtime.Scheme
 }
 
-var ctlrlogger = logf.Log.WithName("SriovNetworkNodePolicyController")
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworknodepolicies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworknodepolicies/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworknodepolicies/finalizers,verbs=update
 
-// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworknodepolicies,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworknodepolicies/status,verbs=get;update;patch
-
-func (r *SriovNetworkNodePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	reqLogger := r.Log.WithValues("sriovnetworknodepolicy", req.NamespacedName)
+// Reconcile is part of the main kubernetes reconciliation loop which aims to
+// move the current state of the cluster closer to the desired state.
+// TODO(user): Modify the Reconcile function to compare the state specified by
+// the SriovNetworkNodePolicy object against the actual cluster state, and then
+// perform operations to make the cluster state reflect the state specified by
+// the user.
+//
+// For more details, check Reconcile and its Result here:
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
+func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	reqLogger := log.FromContext(ctx).WithValues("sriovnetworknodepolicy", req.NamespacedName)
 
 	reqLogger.Info("Reconciling")
 
@@ -145,16 +151,15 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
 }
 
+// SetupWithManager sets up the controller with the Manager.
 func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sriovnetworkv1.SriovNetworkNodePolicy{}).
-		Owns(&appsv1.DaemonSet{}).
-		Owns(&sriovnetworkv1.SriovNetworkNodeState{}).
 		Complete(r)
 }
 
 func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
-	logger := r.Log.WithName("syncDevicePluginConfigMap")
+	logger := log.Log.WithName("syncDevicePluginConfigMap")
 	logger.Info("Start to sync device plugin ConfigMap")
 
 	configData := make(map[string]string)
@@ -204,7 +209,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(pl *sriovne
 }
 
 func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(np *sriovnetworkv1.SriovNetworkNodePolicy, npl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
-	logger := r.Log.WithName("syncAllSriovNetworkNodeStates")
+	logger := log.Log.WithName("syncAllSriovNetworkNodeStates")
 	logger.Info("Start to sync all SriovNetworkNodeState custom resource")
 	found := &corev1.ConfigMap{}
 	if err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: CONFIGMAP_NAME}, found); err != nil {
@@ -253,7 +258,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(np *sri
 }
 
 func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(np *sriovnetworkv1.SriovNetworkNodePolicy, npl *sriovnetworkv1.SriovNetworkNodePolicyList, ns *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node, cksum string) error {
-	logger := r.Log.WithName("syncSriovNetworkNodeState")
+	logger := log.Log.WithName("syncSriovNetworkNodeState")
 	logger.Info("Start to sync SriovNetworkNodeState", "Name", ns.Name, "cksum", cksum)
 
 	if err := controllerutil.SetControllerReference(np, ns, r.Scheme); err != nil {
@@ -312,24 +317,15 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(np *sriovne
 }
 
 func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
-	logger := r.Log.WithName("syncPluginDaemonObjs")
+	logger := log.Log.WithName("syncPluginDaemonObjs")
 	logger.Info("Start to sync sriov daemons objects")
 
-	// render RawCNIConfig manifests
+	// render plugin manifests
 	data := render.MakeRenderData()
 	data.Data["Namespace"] = namespace
-	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
-	data.Data["SRIOVInfiniBandCNIImage"] = os.Getenv("SRIOV_INFINIBAND_CNI_IMAGE")
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
-	envCniBinPath := os.Getenv("SRIOV_CNI_BIN_PATH")
-	if envCniBinPath == "" {
-		data.Data["CNIBinPath"] = "/var/lib/cni/bin"
-	} else {
-		logger.Info("New cni bin found", "CNIBinPath", envCniBinPath)
-		data.Data["CNIBinPath"] = envCniBinPath
-	}
 
 	objs, err := renderDsForCR(PLUGIN_PATH, &data)
 	if err != nil {
@@ -377,18 +373,70 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 			return err
 		}
 	}
+
+	// Sriov-cni container has been moved to sriov-network-config-daemon DaemonSet.
+	// Delete stale sriov-cni manifests. Revert this change once sriov-cni daemonSet
+	// is deprecated.
+	err = r.deleteSriovCniManifests()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *SriovNetworkNodePolicyReconciler) deleteSriovCniManifests() error {
+	ds := &appsv1.DaemonSet{}
+	err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "sriov-cni"}, ds)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	} else {
+		err = r.Delete(context.TODO(), ds)
+		if err != nil {
+			return err
+		}
+	}
+
+	rb := &rbacv1.RoleBinding{}
+	err = r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "sriov-cni"}, rb)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	} else {
+		err = r.Delete(context.TODO(), rb)
+		if err != nil {
+			return err
+		}
+	}
+
+	sa := &corev1.ServiceAccount{}
+	err = r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: "sriov-cni"}, sa)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	} else {
+		err = r.Delete(context.TODO(), sa)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 func (r *SriovNetworkNodePolicyReconciler) deleteK8sResource(in *uns.Unstructured) error {
-	if err := apply.DeleteObject(context.TODO(), r, in); err != nil {
+	if err := apply.DeleteObject(context.TODO(), r.Client, in); err != nil {
 		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
 	}
 	return nil
 }
 
 func (r *SriovNetworkNodePolicyReconciler) syncDsObject(dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, obj *uns.Unstructured) error {
-	logger := r.Log.WithName("syncDsObject")
+	logger := log.Log.WithName("syncDsObject")
 	kind := obj.GetKind()
 	logger.Info("Start to sync Objects", "Kind", kind)
 	switch kind {
@@ -396,7 +444,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDsObject(dp *sriovnetworkv1.Sriov
 		if err := controllerutil.SetControllerReference(dp, obj, r.Scheme); err != nil {
 			return err
 		}
-		if err := apply.ApplyObject(context.TODO(), r, obj); err != nil {
+		if err := apply.ApplyObject(context.TODO(), r.Client, obj); err != nil {
 			logger.Error(err, "Fail to sync", "Kind", kind)
 			return err
 		}
@@ -413,7 +461,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDsObject(dp *sriovnetworkv1.Sriov
 }
 
 func (r *SriovNetworkNodePolicyReconciler) syncDaemonSet(cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *appsv1.DaemonSet) error {
-	logger := r.Log.WithName("syncDaemonSet")
+	logger := log.Log.WithName("syncDaemonSet")
 	logger.Info("Start to sync DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
 	var err error
 
@@ -508,7 +556,7 @@ func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePo
 
 // renderDsForCR returns a busybox pod with the same name/namespace as the cr
 func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, error) {
-	logger := ctlrlogger.WithName("renderDsForCR")
+	logger := log.Log.WithName("renderDsForCR")
 	logger.Info("Start to render objects")
 	var err error
 	objs := []*uns.Unstructured{}
@@ -521,7 +569,7 @@ func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, e
 }
 
 func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node) (dptypes.ResourceConfList, error) {
-	logger := ctlrlogger.WithName("renderDevicePluginConfigData")
+	logger := log.Log.WithName("renderDevicePluginConfigData")
 	logger.Info("Start to render device plugin config data")
 	rcl := dptypes.ResourceConfList{}
 	for _, p := range pl.Items {

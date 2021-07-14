@@ -12,7 +12,7 @@ metadata:
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
     sideEffects: None
-    admissionReviewVersions: [v1]
+    admissionReviewVersions: ["v1", "v1beta1"]
     failurePolicy: Fail
     clientConfig:
       service:
@@ -42,7 +42,7 @@ metadata:
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
     sideEffects: None
-    admissionReviewVersions: [v1]
+    admissionReviewVersions: ["v1", "v1beta1"]
     failurePolicy: Fail
     clientConfig:
       service:

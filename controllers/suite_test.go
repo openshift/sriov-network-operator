@@ -1,5 +1,5 @@
 /*
-
+Copyright 2021.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	// +kubebuilder:scaffold:imports
+	//+kubebuilder:scaffold:imports
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -61,21 +61,20 @@ const (
 )
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	// Go to project root directory
 	os.Chdir("..")
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("config", "crd", "bases"), filepath.Join("test", "util", "crds")},
-		// UseExistingCluster: func() *bool { b := true; return &b }(),
+		CRDDirectoryPaths:     []string{filepath.Join("config", "crd", "bases"), filepath.Join("test", "util", "crds")},
+		ErrorIfCRDPathMissing: true,
 	}
 
-	var err error
-	cfg, err = testEnv.Start()
-	Expect(err).ToNot(HaveOccurred())
-	Expect(cfg).ToNot(BeNil())
+	cfg, err := testEnv.Start()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(cfg).NotTo(BeNil())
 
 	err = sriovnetworkv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -84,12 +83,12 @@ var _ = BeforeSuite(func(done Done) {
 	err = mcfgv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	// +kubebuilder:scaffold:scheme
+	//+kubebuilder:scaffold:scheme
 
 	// A client is created for our test CRUD operations.
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).ToNot(HaveOccurred())
-	Expect(k8sClient).ToNot(BeNil())
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
 
 	// Start controllers
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
@@ -99,21 +98,24 @@ var _ = BeforeSuite(func(done Done) {
 
 	err = (&SriovNetworkReconciler{
 		Client: k8sManager.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SriovNetwork"),
 		Scheme: k8sManager.GetScheme(),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&SriovIBNetworkReconciler{
 		Client: k8sManager.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SriovIBNetwork"),
 		Scheme: k8sManager.GetScheme(),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&SriovOperatorConfigReconciler{
 		Client: k8sManager.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SriovOperatorConfig"),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = (&SriovNetworkPoolConfigReconciler{
+		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
@@ -131,6 +133,7 @@ var _ = BeforeSuite(func(done Done) {
 	os.Setenv("OPERATOR_NAME", "sriov-network-operator")
 
 	go func() {
+		defer GinkgoRecover()
 		err = k8sManager.Start(ctrl.SetupSignalHandler())
 		Expect(err).ToNot(HaveOccurred())
 	}()
@@ -156,13 +159,19 @@ var _ = BeforeSuite(func(done Done) {
 		LogLevel:                 2,
 	}
 	Expect(k8sClient.Create(context.TODO(), config)).Should(Succeed())
+
+	poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
+	poolConfig.SetNamespace(testNamespace)
+	poolConfig.SetName(DEFAULT_CONFIG_NAME)
+	poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{}
+	Expect(k8sClient.Create(context.TODO(), poolConfig)).Should(Succeed())
 	close(done)
 }, 60)
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 })
 
 func TestAPIs(t *testing.T) {

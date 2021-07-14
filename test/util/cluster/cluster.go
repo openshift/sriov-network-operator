@@ -10,11 +10,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
 )
@@ -50,6 +50,11 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 		return nil, fmt.Errorf("Failed to find matching node states %v", err)
 	}
 
+	err = sriovv1.InitNicIdMap(kubernetes.NewForConfigOrDie(clients.Config), operatorNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to InitNicIdMap %v", err)
+	}
+
 	for _, state := range ss {
 		isStable, err := stateStable(state)
 		if err != nil {
@@ -70,7 +75,7 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 	}
 
 	for _, node := range res.Nodes {
-		isSecureBootEnabled, err := GetNodeSecureBootState(clients, node)
+		isSecureBootEnabled, err := GetNodeSecureBootState(clients, node, operatorNamespace)
 		if err != nil {
 			return nil, err
 		}
@@ -263,22 +268,23 @@ func SetDisableNodeDrainState(clients *testclient.ClientSet, operatorNamespace s
 	return nil
 }
 
-func GetNodeSecureBootState(clients *testclient.ClientSet, nodeName string) (bool, error) {
+func GetNodeSecureBootState(clients *testclient.ClientSet, nodeName, namespace string) (bool, error) {
 	podDefinition := pod.GetDefinition()
 	podDefinition = pod.RedefineWithNodeSelector(podDefinition, nodeName)
 	podDefinition = pod.RedefineAsPrivileged(podDefinition)
+	podDefinition.Namespace = namespace
 
 	volume := corev1.Volume{Name: "host", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/"}}}
 	mount := corev1.VolumeMount{Name: "host", MountPath: "/host"}
 	podDefinition = pod.RedefineWithMount(podDefinition, volume, mount)
-	created, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+	created, err := clients.Pods(namespace).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	if err != nil {
 		return false, err
 	}
 
 	var runningPod *corev1.Pod
 	err = wait.PollImmediate(time.Second, 3*time.Minute, func() (bool, error) {
-		runningPod, err = clients.Pods(namespaces.Test).Get(context.Background(), created.Name, metav1.GetOptions{})
+		runningPod, err = clients.Pods(namespace).Get(context.Background(), created.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -293,13 +299,13 @@ func GetNodeSecureBootState(clients *testclient.ClientSet, nodeName string) (boo
 		return false, err
 	}
 
-	stdout, stderr, err := pod.ExecCommand(clients, runningPod, "cat", "/host/sys/kernel/security/lockdown")
+	stdout, _, err := pod.ExecCommand(clients, runningPod, "cat", "/host/sys/kernel/security/lockdown")
+
+	if strings.Contains(stdout, "No such file or directory") {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
-	}
-
-	if stderr != "" {
-		return false, fmt.Errorf("command return non 0 code: %s", stderr)
 	}
 
 	return strings.Contains(stdout, "[integrity]") || strings.Contains(stdout, "[confidentiality]"), nil

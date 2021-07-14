@@ -5,13 +5,11 @@ import (
 
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
@@ -174,64 +172,5 @@ var _ = Describe("Operator", func() {
 			}, timeout*10, interval).Should(Equal(config.Spec.ConfigDaemonNodeSelector))
 		})
 
-		It("should be able to create/remove hw offload MCO and MC", func() {
-			config := &sriovnetworkv1.SriovOperatorConfig{}
-			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", interval, timeout)
-			Expect(err).NotTo(HaveOccurred())
-			By("by default")
-			mcName := "00-" + HwOffloadNodeLabel
-			mc := &mcfgv1.MachineConfig{}
-			err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcName, Namespace: testNamespace}, mc)
-			Expect(errors.IsNotFound(err)).Should(BeTrue())
-
-			mcpName := HwOffloadNodeLabel
-			mcp := &mcfgv1.MachineConfigPool{}
-			err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcpName, Namespace: testNamespace}, mcp)
-			Expect(errors.IsNotFound(err)).Should(BeTrue())
-
-			By("set EnableOvsOffload to true to create MC and MCP resources")
-			config.Spec.EnableOvsOffload = true
-			err = k8sClient.Update(goctx.TODO(), config)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() error {
-				mc := &mcfgv1.MachineConfig{}
-				err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcName, Namespace: testNamespace}, mc)
-				if err != nil {
-					return err
-				}
-				return nil
-			}, timeout*3, interval).Should(Succeed())
-			Eventually(func() error {
-				mcp := &mcfgv1.MachineConfigPool{}
-				err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcpName, Namespace: testNamespace}, mcp)
-				if err != nil {
-					return err
-				}
-				return nil
-			}, timeout*3, interval).Should(Succeed())
-
-			By("set EnableOvsOffload to false to delete MC and MCP resources")
-			config.Spec.EnableOvsOffload = false
-			err = k8sClient.Update(goctx.TODO(), config)
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() bool {
-				mc := &mcfgv1.MachineConfig{}
-				err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcName, Namespace: testNamespace}, mc)
-				if err != nil {
-					return errors.IsNotFound(err)
-				}
-				return false
-			}, timeout*3, interval).Should(BeTrue())
-			Eventually(func() bool {
-				mcp := &mcfgv1.MachineConfigPool{}
-				err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcpName, Namespace: testNamespace}, mcp)
-				if err != nil {
-					return errors.IsNotFound(err)
-				}
-				return false
-			}, timeout*3, interval).Should(BeTrue())
-		})
 	})
 })

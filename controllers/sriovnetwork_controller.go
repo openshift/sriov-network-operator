@@ -1,5 +1,5 @@
 /*
-
+Copyright 2021.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,15 +20,16 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/go-logr/logr"
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -38,18 +39,25 @@ import (
 // SriovNetworkReconciler reconciles a SriovNetwork object
 type SriovNetworkReconciler struct {
 	client.Client
-	Log    logr.Logger
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworks,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworks/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworks,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworks/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworks/finalizers,verbs=update
 
-func (r *SriovNetworkReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	// The SriovNetwork CR shall only be defined in operator namespace.
+// Reconcile is part of the main kubernetes reconciliation loop which aims to
+// move the current state of the cluster closer to the desired state.
+// TODO(user): Modify the Reconcile function to compare the state specified by
+// the SriovNetwork object against the actual cluster state, and then
+// perform operations to make the cluster state reflect the state specified by
+// the user.
+//
+// For more details, check Reconcile and its Result here:
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
+func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	req.Namespace = namespace
-	reqLogger := r.Log.WithValues("sriovnetwork", req.NamespacedName)
+	reqLogger := log.FromContext(ctx).WithValues("sriovnetwork", req.NamespacedName)
 
 	reqLogger.Info("Reconciling SriovNetwork")
 	var err error
@@ -74,24 +82,24 @@ func (r *SriovNetworkReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
 		// registering our finalizer.
-		if !sriovnetworkv1.StringInArray(sriovnetworkv1.FINALIZERNAME, instance.ObjectMeta.Finalizers) {
-			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, sriovnetworkv1.FINALIZERNAME)
+		if !sriovnetworkv1.StringInArray(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers) {
+			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, sriovnetworkv1.NETATTDEFFINALIZERNAME)
 			if err := r.Update(context.Background(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
 	} else {
 		// The object is being deleted
-		if sriovnetworkv1.StringInArray(sriovnetworkv1.FINALIZERNAME, instance.ObjectMeta.Finalizers) {
+		if sriovnetworkv1.StringInArray(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers) {
 			// our finalizer is present, so lets handle any external dependency
 			reqLogger.Info("delete NetworkAttachmentDefinition CR", "Namespace", instance.Spec.NetworkNamespace, "Name", instance.Name)
-			if err := instance.DeleteNetAttDef(r); err != nil {
+			if err := instance.DeleteNetAttDef(r.Client); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return reconcile.Result{}, err
 			}
 			// remove our finalizer from the list and update it.
-			instance.ObjectMeta.Finalizers = sriovnetworkv1.RemoveString(sriovnetworkv1.FINALIZERNAME, instance.ObjectMeta.Finalizers)
+			instance.ObjectMeta.Finalizers = sriovnetworkv1.RemoveString(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers)
 			if err := r.Update(context.Background(), instance); err != nil {
 				return reconcile.Result{}, err
 			}
@@ -155,6 +163,7 @@ func (r *SriovNetworkReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager sets up the controller with the Manager.
 func (r *SriovNetworkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sriovnetworkv1.SriovNetwork{}).

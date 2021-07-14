@@ -1,3 +1,19 @@
+/*
+Copyright 2021.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1
 
 import (
@@ -8,7 +24,6 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
-// +k8s:openapi-gen=true
 type SriovNetworkNodeStateSpec struct {
 	DpConfigVersion string     `json:"dpConfigVersion,omitempty"`
 	Interfaces      Interfaces `json:"interfaces,omitempty"`
@@ -66,19 +81,16 @@ type VirtualFunction struct {
 }
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
-// +k8s:openapi-gen=true
 type SriovNetworkNodeStateStatus struct {
 	Interfaces    InterfaceExts `json:"interfaces,omitempty"`
 	SyncStatus    string        `json:"syncStatus,omitempty"`
 	LastSyncError string        `json:"lastSyncError,omitempty"`
 }
 
-// +genclient
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
+
 // SriovNetworkNodeState is the Schema for the sriovnetworknodestates API
-// +k8s:openapi-gen=true
-// +kubebuilder:subresource:status
-// +kubebuilder:resource:path=sriovnetworknodestates,scope=Namespaced
 type SriovNetworkNodeState struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -87,7 +99,7 @@ type SriovNetworkNodeState struct {
 	Status SriovNetworkNodeStateStatus `json:"status,omitempty"`
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // SriovNetworkNodeStateList contains a list of SriovNetworkNodeState
 type SriovNetworkNodeStateList struct {

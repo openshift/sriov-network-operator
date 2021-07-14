@@ -1,5 +1,5 @@
 /*
-
+Copyright 2021.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,14 +17,10 @@ limitations under the License.
 package controllers
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
 
-	"github.com/go-logr/logr"
-	"github.com/openshift/machine-config-operator/lib/resourcemerge"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -36,6 +32,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -47,19 +44,27 @@ import (
 // SriovOperatorConfigReconciler reconciles a SriovOperatorConfig object
 type SriovOperatorConfigReconciler struct {
 	client.Client
-	Log    logr.Logger
 	Scheme *runtime.Scheme
 }
 
 var injectorServiceCaCmVersion = ""
 var webhookServiceCaCmVersion = ""
 
-// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs/finalizers,verbs=update
 
-func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	logger := r.Log.WithValues("sriovoperatorconfig", req.NamespacedName)
+// Reconcile is part of the main kubernetes reconciliation loop which aims to
+// move the current state of the cluster closer to the desired state.
+// TODO(user): Modify the Reconcile function to compare the state specified by
+// the SriovOperatorConfig object against the actual cluster state, and then
+// perform operations to make the cluster state reflect the state specified by
+// the user.
+//
+// For more details, check Reconcile and its Result here:
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
+func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("sriovoperatorconfig", req.NamespacedName)
 
 	logger.Info("Reconciling SriovOperatorConfig")
 
@@ -111,15 +116,10 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 		return reconcile.Result{}, err
 	}
 
-	if utils.ClusterType == utils.ClusterTypeOpenshift {
-		if err = r.syncOffloadMachineConfig(defaultConfig); err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-
 	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
 }
 
+// SetupWithManager sets up the controller with the Manager.
 func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sriovnetworkv1.SriovOperatorConfig{}).
@@ -129,7 +129,7 @@ func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error
 }
 
 func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := r.Log.WithName("syncConfigDaemonset")
+	logger := log.Log.WithName("syncConfigDaemonset")
 	logger.Info("Start to sync SRIOV plugin daemonsets nodeSelector")
 	ds := &appsv1.DaemonSet{}
 
@@ -159,7 +159,7 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.S
 }
 
 func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := r.Log.WithName("syncConfigDaemonset")
+	logger := log.Log.WithName("syncConfigDaemonset")
 	logger.Info("Start to sync config daemonset")
 	// var err error
 	objs := []*uns.Unstructured{}
@@ -167,8 +167,17 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 	data := render.MakeRenderData()
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
 	data.Data["Namespace"] = namespace
+	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
+	data.Data["SRIOVInfiniBandCNIImage"] = os.Getenv("SRIOV_INFINIBAND_CNI_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ClusterType"] = utils.ClusterType
+	envCniBinPath := os.Getenv("SRIOV_CNI_BIN_PATH")
+	if envCniBinPath == "" {
+		data.Data["CNIBinPath"] = "/var/lib/cni/bin"
+	} else {
+		logger.Info("New cni bin found", "CNIBinPath", envCniBinPath)
+		data.Data["CNIBinPath"] = envCniBinPath
+	}
 	objs, err := render.RenderDir(CONFIG_DAEMON_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render config daemon manifests")
@@ -201,7 +210,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 }
 
 func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := r.Log.WithName("syncWebhookObjs")
+	logger := log.Log.WithName("syncWebhookObjs")
 	logger.Info("Start to sync webhook objects")
 
 	for name, path := range webhooks {
@@ -268,7 +277,7 @@ func (r *SriovOperatorConfigReconciler) deleteWebhookObject(obj *uns.Unstructure
 }
 
 func (r *SriovOperatorConfigReconciler) deleteK8sResource(in *uns.Unstructured) error {
-	if err := apply.DeleteObject(context.TODO(), r, in); err != nil {
+	if err := apply.DeleteObject(context.TODO(), r.Client, in); err != nil {
 		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
 	}
 	return nil
@@ -283,107 +292,8 @@ func (r *SriovOperatorConfigReconciler) syncK8sResource(cr *sriovnetworkv1.Sriov
 			return err
 		}
 	}
-	if err := apply.ApplyObject(context.TODO(), r, in); err != nil {
+	if err := apply.ApplyObject(context.TODO(), r.Client, in); err != nil {
 		return fmt.Errorf("failed to apply object %v with err: %v", in, err)
-	}
-	return nil
-}
-
-func (r *SriovOperatorConfigReconciler) syncOffloadMachineConfig(dc *sriovnetworkv1.SriovOperatorConfig) error {
-	logger := r.Log.WithName("syncOffloadMachineConfig")
-	var err error
-
-	logger.Info("Start to render MachineConfig and MachineConfigPool for OVS HW offloading")
-	data := render.MakeRenderData()
-	data.Data["HwOffloadNodeLabel"] = HwOffloadNodeLabel
-	mcName := "00-" + HwOffloadNodeLabel
-	mcpName := HwOffloadNodeLabel
-	mc, err := render.GenerateMachineConfig("bindata/manifests/switchdev-config", mcName, HwOffloadNodeLabel, dc.Spec.EnableOvsOffload, &data)
-	if err != nil {
-		return err
-	}
-	mcpRaw, err := render.RenderTemplate("bindata/manifests/switchdev-config/machineconfigpool.yaml", &data)
-	if err != nil {
-		return err
-	}
-	mcp := &mcfgv1.MachineConfigPool{}
-	if len(mcpRaw) != 1 {
-		return fmt.Errorf("Invalid MachineConfigPool CR template")
-	}
-	err = r.Scheme.Convert(mcpRaw[0], mcp, context.TODO())
-	if err != nil {
-		return err
-	}
-
-	foundMC := &mcfgv1.MachineConfig{}
-	foundMCP := &mcfgv1.MachineConfigPool{}
-
-	err = r.Get(context.TODO(), types.NamespacedName{Name: mcName}, foundMC)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			if dc.Spec.EnableOvsOffload {
-				err = r.Create(context.TODO(), mc)
-				if err != nil {
-					return fmt.Errorf("Couldn't create MachineConfig: %v", err)
-				}
-				logger.Info("Created MachineConfig CR")
-			}
-		} else {
-			return fmt.Errorf("Failed to get MachineConfig: %v", err)
-		}
-	} else {
-		if dc.Spec.EnableOvsOffload {
-			if bytes.Compare(foundMC.Spec.Config.Raw, mc.Spec.Config.Raw) == 0 {
-				logger.Info("MachineConfig already exists, updating")
-				err = r.Update(context.TODO(), foundMC)
-				if err != nil {
-					return fmt.Errorf("Couldn't update MachineConfig: %v", err)
-				}
-			} else {
-				logger.Info("No content change, skip updating MC")
-			}
-		} else {
-			logger.Info("offload disabled, delete MachineConfig")
-			err = r.Delete(context.TODO(), foundMC)
-			if err != nil {
-				return fmt.Errorf("Couldn't delete MachineConfig: %v", err)
-			}
-		}
-	}
-
-	err = r.Get(context.TODO(), types.NamespacedName{Name: mcpName}, foundMCP)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			if dc.Spec.EnableOvsOffload {
-				err = r.Create(context.TODO(), mcp)
-				if err != nil {
-					return fmt.Errorf("Couldn't create MachineConfigPool: %v", err)
-				}
-				logger.Info("Created MachineConfigPool CR")
-			}
-		} else {
-			return fmt.Errorf("Failed to get MachineConfigPool: %v", err)
-		}
-	} else {
-		if dc.Spec.EnableOvsOffload {
-			modified := resourcemerge.BoolPtr(false)
-			resourcemerge.EnsureMachineConfigPool(modified, foundMCP, *mcp)
-			if *modified {
-				logger.Info("MachineConfig already exists, updating")
-				err = r.Update(context.TODO(), foundMCP)
-				if err != nil {
-					return fmt.Errorf("Couldn't update MachineConfig: %v", err)
-				}
-			} else {
-				logger.Info("No content change, skip updating MCP")
-			}
-		} else {
-			logger.Info("offload disabled, delete MachineConfigPool")
-			err = r.Delete(context.TODO(), foundMCP)
-			if err != nil {
-				return fmt.Errorf("Couldn't delete MachineConfigPool: %v", err)
-			}
-		}
 	}
 	return nil
 }

@@ -59,18 +59,10 @@ func (p *GenericPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeSta
 	p.DesireState = state
 
 	needDrain = needDrainNode(state.Spec.Interfaces, state.Status.Interfaces)
+	needReboot = needRebootNode(state, &p.LoadVfioDriver)
 
-	if p.LoadVfioDriver != loaded {
-		if needVfioDriver(state) {
-			p.LoadVfioDriver = loading
-			if needReboot, err = tryEnableIommuInKernelArgs(); err != nil {
-				glog.Errorf("generic-plugin OnNodeStateAdd():fail to enable iommu in kernel args: %v", err)
-				return
-			}
-		}
-		if needReboot {
-			needDrain = true
-		}
+	if needReboot {
+		needDrain = true
 	}
 	return
 }
@@ -84,18 +76,10 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 	p.DesireState = new
 
 	needDrain = needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
+	needReboot = needRebootNode(new, &p.LoadVfioDriver)
 
-	if p.LoadVfioDriver != loaded {
-		if needVfioDriver(new) {
-			p.LoadVfioDriver = loading
-			if needReboot, err = tryEnableIommuInKernelArgs(); err != nil {
-				glog.Errorf("generic-plugin OnNodeStateAdd():fail to enable iommu in kernel args: %v", err)
-				return
-			}
-		}
-		if needReboot {
-			needDrain = true
-		}
+	if needReboot {
+		needDrain = true
 	}
 	return
 }
@@ -209,6 +193,35 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 			needDrain = true
 			return
 		}
+	}
+	return
+}
+
+func needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState, loadVfioDriver *uint) (needReboot bool) {
+	needReboot = false
+	if *loadVfioDriver != loaded {
+		if needVfioDriver(state) {
+			*loadVfioDriver = loading
+			update, err := tryEnableIommuInKernelArgs()
+			if err != nil {
+				glog.Errorf("generic-plugin needRebootNode():fail to enable iommu in kernel args: %v", err)
+			}
+			if update {
+				glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for enabling iommu kernel args")
+			}
+			needReboot = needReboot || update
+		}
+	}
+
+	if utils.IsSwitchdevModeSpec(state.Spec) {
+		update, err := utils.WriteSwitchdevConfFile(state)
+		if err != nil {
+			glog.Errorf("generic-plugin needRebootNode(): fail to write switchdev device config file")
+		}
+		if update {
+			glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for updating switchdev device configuration")
+		}
+		needReboot = needReboot || update
 	}
 	return
 }

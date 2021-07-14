@@ -9,7 +9,7 @@ spec:
   selector:
     matchLabels:
       name: sriov-network-operator
-  updateStrategy:
+  strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 33%

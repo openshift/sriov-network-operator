@@ -24,10 +24,11 @@ import (
 )
 
 const (
-	LASTNETWORKNAMESPACE  = "operator.sriovnetwork.openshift.io/last-network-namespace"
-	FINALIZERNAME         = "netattdef.finalizers.sriovnetwork.openshift.io"
-	ESWITCHMODE_LEGACY    = "legacy"
-	ESWITCHMODE_SWITCHDEV = "switchdev"
+	LASTNETWORKNAMESPACE    = "operator.sriovnetwork.openshift.io/last-network-namespace"
+	NETATTDEFFINALIZERNAME  = "netattdef.finalizers.sriovnetwork.openshift.io"
+	POOLCONFIGFINALIZERNAME = "poolconfig.finalizers.sriovnetwork.openshift.io"
+	ESWITCHMODE_LEGACY      = "legacy"
+	ESWITCHMODE_SWITCHDEV   = "switchdev"
 )
 
 const invalidVfIndex = -1

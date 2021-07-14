@@ -23,7 +23,7 @@ func IsSwitchdevModeSpec(spec sriovnetworkv1.SriovNetworkNodeStateSpec) bool {
 	return false
 }
 
-func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (update, remove bool, err error) {
+func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (update bool, err error) {
 	_, err = os.Stat(switchDevConfPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -51,10 +51,6 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 	if newContent == string(oldContent) {
 		glog.V(2).Info("WriteSwitchdevConfFile(): no update")
 		return
-	}
-	if newContent == "" {
-		remove = true
-		glog.V(2).Info("WriteSwitchdevConfFile(): remove content in switchdev.conf")
 	}
 	update = true
 	glog.V(2).Infof("WriteSwitchdevConfFile(): write %s to switchdev.conf", newContent)

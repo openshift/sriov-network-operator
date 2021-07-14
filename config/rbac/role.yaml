@@ -21,6 +21,12 @@ rules:
 - apiGroups:
   - sriovnetwork.openshift.io
   resources:
+  - sriovibnetworks/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
   - sriovibnetworks/status
   verbs:
   - get
@@ -41,23 +47,9 @@ rules:
 - apiGroups:
   - sriovnetwork.openshift.io
   resources:
-  - sriovnetworknodepolicies/status
+  - sriovnetworknodepolicies/finalizers
   verbs:
-  - get
-  - patch
   - update
-- apiGroups:
-  - sriovnetwork.openshift.io
-  resources:
-  - sriovnetworknodepolicies
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - sriovnetwork.openshift.io
   resources:
@@ -81,6 +73,12 @@ rules:
 - apiGroups:
   - sriovnetwork.openshift.io
   resources:
+  - sriovnetworks/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
   - sriovnetworks/status
   verbs:
   - get
@@ -98,6 +96,12 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovoperatorconfigs/finalizers
+  verbs:
+  - update
 - apiGroups:
   - sriovnetwork.openshift.io
   resources:

@@ -30,7 +30,6 @@ const (
 	SpecVersion   = "1.0"
 	GenericPlugin = "generic_plugin"
 	VirtualPlugin = "virtual_plugin"
-	McoPlugin     = "mco_plugin"
 	K8sPlugin     = "k8s_plugin"
 )
 
