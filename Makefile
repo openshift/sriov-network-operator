@@ -26,7 +26,7 @@ PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
 # Current Operator version
-VERSION ?= 4.7.0
+VERSION ?= 4.9.0
 # Default bundle image tag
 BUNDLE_IMG ?= controller-bundle:$(VERSION)
 # Options for 'bundle-build'
