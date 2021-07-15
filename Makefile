@@ -112,21 +112,6 @@ uninstall: manifests kustomize
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=$(CRD_BASES)
 
-
-sync-manifests-%: manifests
-	@mkdir -p manifests/$*
-	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovibnetworks.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovibnetworks_crd.yaml
-	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodepolicies.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
-	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodestates.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
-	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovoperatorconfigs.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
-	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworks.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
-	@echo ""
-	@echo "*************************************************************************************************************************************************"
-	@echo "* Please manually update the sriov-network-operator.v4.7.0.clusterserviceversion.yaml and image-references files in the manifests/$* directory *"
-	@echo "*************************************************************************************************************************************************"
-	@echo ""
-
-
 # Run go fmt against code
 
 fmt: ## Go fmt your code
@@ -186,6 +171,7 @@ bundle: manifests
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
+	cp bundle/manifests/* manifests/4.9
 
 # Build the bundle image.
 .PHONY: bundle-build
