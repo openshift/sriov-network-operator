@@ -14,10 +14,10 @@ operator:
 
 # Image URIs for sriov-network-operator components
 images:
-  operator: quay.io/openshift/origin-sriov-network-operator
-  sriovConfigDaemon: quay.io/openshift/origin-sriov-network-config-daemon
-  sriovCni: quay.io/openshift/origin-sriov-cni
-  ibSriovCni: quay.io/openshift/origin-sriov-infiniband-cni
-  sriovDevicePlugin: quay.io/openshift/origin-sriov-network-device-plugin
-  resourcesInjector: quay.io/openshift/origin-sriov-dp-admission-controller
-  webhook: quay.io/openshift/origin-sriov-network-webhook
+  operator: ghcr.io/k8snetworkplumbingwg/sriov-network-operator
+  sriovConfigDaemon: ghcr.io/k8snetworkplumbingwg/sriov-network-operator-config-daemon
+  sriovCni: ghcr.io/k8snetworkplumbingwg/sriov-cni
+  ibSriovCni: ghcr.io/k8snetworkplumbingwg/ib-sriov-cni
+  sriovDevicePlugin: ghcr.io/k8snetworkplumbingwg/sriov-network-device-plugin
+  resourcesInjector: ghcr.io/k8snetworkplumbingwg/network-resources-injector
+  webhook: ghcr.io/k8snetworkplumbingwg/sriov-network-operator-webhook
