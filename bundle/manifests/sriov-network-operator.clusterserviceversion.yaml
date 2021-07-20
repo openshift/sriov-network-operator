@@ -2,15 +2,99 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    alm-examples: '[]'
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "sriovnetwork.openshift.io/v1",
+          "kind": "SriovIBNetwork",
+          "metadata": {
+            "name": "sriovibnetwork-sample"
+          },
+          "spec": {
+            "foo": "bar"
+          }
+        },
+        {
+          "apiVersion": "sriovnetwork.openshift.io/v1",
+          "kind": "SriovNetwork",
+          "metadata": {
+            "name": "sriovnetwork-sample"
+          },
+          "spec": {
+            "foo": "bar"
+          }
+        },
+        {
+          "apiVersion": "sriovnetwork.openshift.io/v1",
+          "kind": "SriovNetworkNodePolicy",
+          "metadata": {
+            "name": "sriovnetworknodepolicy-sample"
+          },
+          "spec": {
+            "foo": "bar"
+          }
+        },
+        {
+          "apiVersion": "sriovnetwork.openshift.io/v1",
+          "kind": "SriovNetworkNodeState",
+          "metadata": {
+            "name": "sriovnetworknodestate-sample"
+          },
+          "spec": {
+            "foo": "bar"
+          }
+        },
+        {
+          "apiVersion": "sriovnetwork.openshift.io/v1",
+          "kind": "SriovOperatorConfig",
+          "metadata": {
+            "name": "sriovoperatorconfig-sample"
+          },
+          "spec": {
+            "foo": "bar"
+          }
+        }
+      ]
     capabilities: Basic Install
-    operators.operatorframework.io/builder: operator-sdk-v1.0.1
-    operators.operatorframework.io/project_layout: go.kubebuilder.io/v2
+    operators.operatorframework.io/builder: operator-sdk-v1.8.0+git
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: sriov-network-operator.v4.7.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
-  customresourcedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: SriovIBNetwork is the Schema for the sriovibnetworks API
+      displayName: Sriov IBNetwork
+      kind: SriovIBNetwork
+      name: sriovibnetworks.sriovnetwork.openshift.io
+      version: v1
+    - description: SriovNetworkNodePolicy is the Schema for the sriovnetworknodepolicies
+        API
+      displayName: Sriov Network Node Policy
+      kind: SriovNetworkNodePolicy
+      name: sriovnetworknodepolicies.sriovnetwork.openshift.io
+      version: v1
+    - description: SriovNetworkNodeState is the Schema for the sriovnetworknodestates
+        API
+      displayName: Sriov Network Node State
+      kind: SriovNetworkNodeState
+      name: sriovnetworknodestates.sriovnetwork.openshift.io
+      version: v1
+    - kind: SriovNetworkPoolConfig
+      name: sriovnetworkpoolconfigs.sriovnetwork.openshift.io
+      version: v1
+    - description: SriovNetwork is the Schema for the sriovnetworks API
+      displayName: Sriov Network
+      kind: SriovNetwork
+      name: sriovnetworks.sriovnetwork.openshift.io
+      version: v1
+    - description: SriovOperatorConfig is the Schema for the sriovoperatorconfigs
+        API
+      displayName: Sriov Operator Config
+      kind: SriovOperatorConfig
+      name: sriovoperatorconfigs.sriovnetwork.openshift.io
+      version: v1
   description: Sriov Network Operator description. TODO.
   displayName: Sriov Network Operator
   icon:
@@ -18,7 +102,217 @@ spec:
     mediatype: ""
   install:
     spec:
-      deployments: []
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovibnetworks
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovibnetworks/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovibnetworks/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovnetworknodepolicies
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovnetworknodepolicies/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovnetworknodepolicies/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovnetworks
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovnetworks/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovnetworks/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovoperatorconfigs
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovoperatorconfigs/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - sriovnetwork.openshift.io
+          resources:
+          - sriovoperatorconfigs/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        serviceAccountName: sriov-network-operator-controller-manager
+      deployments:
+      - name: sriov-network-operator-controller-manager
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              control-plane: controller-manager
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                control-plane: controller-manager
+            spec:
+              containers:
+              - args:
+                - --secure-listen-address=0.0.0.0:8443
+                - --upstream=http://127.0.0.1:8080/
+                - --logtostderr=true
+                - --v=10
+                image: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
+                name: kube-rbac-proxy
+                ports:
+                - containerPort: 8443
+                  name: https
+                resources: {}
+              - args:
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=127.0.0.1:8080
+                - --leader-elect
+                command:
+                - /manager
+                image: controller:latest
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 100m
+                    memory: 30Mi
+                  requests:
+                    cpu: 100m
+                    memory: 20Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: sriov-network-operator-controller-manager
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: sriov-network-operator-controller-manager
     strategy: deployment
   installModes:
   - supported: false

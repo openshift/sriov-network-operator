@@ -117,7 +117,7 @@ var _ = Describe("Operator", func() {
 
 				By("provision the cni and device plugin daemonsets")
 				cniDaemonSet := &appsv1.DaemonSet{}
-				err = WaitForDaemonSetReady(cniDaemonSet, k8sClient, testNamespace, "sriov-cni", RetryInterval, Timeout)
+				err = WaitForDaemonSetReady(cniDaemonSet, k8sClient, testNamespace, "sriov-network-config-daemon", RetryInterval, Timeout)
 				Expect(err).NotTo(HaveOccurred())
 
 				dpDaemonSet := &appsv1.DaemonSet{}
@@ -249,7 +249,7 @@ var _ = Describe("Operator", func() {
 
 				By("provision the cni and device plugin daemonsets")
 				cniDaemonSet := &appsv1.DaemonSet{}
-				err = WaitForDaemonSetReady(cniDaemonSet, k8sClient, testNamespace, "sriov-cni", RetryInterval, Timeout)
+				err = WaitForDaemonSetReady(cniDaemonSet, k8sClient, testNamespace, "sriov-network-config-daemon", RetryInterval, Timeout)
 				Expect(err).NotTo(HaveOccurred())
 
 				dpDaemonSet := &appsv1.DaemonSet{}
@@ -393,7 +393,7 @@ var _ = Describe("Operator", func() {
 
 				By("provision the cni and device plugin daemonsets")
 				cniDaemonSet := &appsv1.DaemonSet{}
-				err = WaitForDaemonSetReady(cniDaemonSet, k8sClient, testNamespace, "sriov-cni", RetryInterval, Timeout)
+				err = WaitForDaemonSetReady(cniDaemonSet, k8sClient, testNamespace, "sriov-network-config-daemon", RetryInterval, Timeout)
 				Expect(err).NotTo(HaveOccurred())
 
 				dpDaemonSet := &appsv1.DaemonSet{}
