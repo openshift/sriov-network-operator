@@ -2,6 +2,7 @@
 # used to generate the 'manifests/' directory in a bundle.
 resources:
 - bases/sriov-network-operator.clusterserviceversion.yaml
+- bases/sriov-network-operator_configmap.yaml
 - ../default
 - ../samples
 - ../scorecard
