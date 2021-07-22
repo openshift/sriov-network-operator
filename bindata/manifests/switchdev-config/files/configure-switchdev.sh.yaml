@@ -5,11 +5,11 @@ contents:
   inline: |
     #!/bin/bash
     set -eux
-    input="/etc/switchdev.conf"
+    input="/etc/sriov_config.json"
     UDEV_RULE_FILE='/etc/udev/rules.d/10-persistent-net.rules'
 
     if [ ! -f $input ]; then
-      echo "File /etc/switchdev.conf not exist."
+      echo "File /etc/sriov_config.json not exist."
       exit
     fi
 
@@ -33,49 +33,46 @@ contents:
         append_to_file "$udev_data_line" "$UDEV_RULE_FILE"
     }
 
-    names=()
-
-    while read pci_addr num_vfs
-    do
+    jq -c '.interfaces[]' ${input} | while read iface;do
+      num_vfs=$(echo $iface | jq '.numVfs' -r)
+      pci_addr=$(echo $iface | jq '.pciAddress' -r)
       echo "Set $num_vfs VFs on device $pci_addr"
-
-      name=$(ls /sys/bus/pci/devices/${pci_addr}/net/)
-      names+=($name)
-      # Create udev rule to save PF name
-      add_udev_rule_for_sriov_pf $name
 
       # create VFs
       echo $num_vfs > /sys/bus/pci/devices/${pci_addr}/sriov_numvfs
-    done <"$input"
-
+    done
     # wait for vfs to be ready
     sleep 5
-    i=0
-    while read pci_addr num_vfs
+
+    jq -c '.interfaces[]' $input | while read iface;
     do
-      # unload VF driver
-      VfDirs=$(ls /sys/bus/pci/devices/${pci_addr} | grep virtfn)
-      for VfDir in $VfDirs
-      do
-        VfPciAddr=$(basename "$( readlink -f /sys/bus/pci/devices/${pci_addr}/$VfDir )")
-        echo $VfPciAddr > /sys/bus/pci/drivers/mlx5_core/unbind || true
+      eswitch_mode=$(echo $iface | jq '.eSwitchMode' -r)
+      if [[ "$eswitch_mode" == "switchdev" ]]; then
+        pci_addr=$(echo $iface | jq '.pciAddress' -r)
+        name=$(echo $iface | jq '.name' -r)
 
-      done
+        # Create udev rule to save PF name
+        add_udev_rule_for_sriov_pf $name
 
-      # set PF to switchdev mode
-      devlink dev eswitch set pci/${pci_addr} mode switchdev
+        echo "unload VF driver for $pci_addr"
+        VfDirs=$(ls /sys/bus/pci/devices/${pci_addr} | grep virtfn)
+        for VfDir in $VfDirs
+        do
+          VfPciAddr=$(basename "$( readlink -f /sys/bus/pci/devices/${pci_addr}/$VfDir )")
+          echo $VfPciAddr > /sys/bus/pci/drivers/mlx5_core/unbind || true
+        done
+        # set PF to switchdev mode
+        devlink dev eswitch set pci/${pci_addr} mode switchdev
+        ip link set ${name} up
 
-      ip link set ${names[i]} up
+        # turn hw-tc-offload on
+        /usr/sbin/ethtool -K ${name} hw-tc-offload on
 
-      # turn hw-tc-offload on
-      /usr/sbin/ethtool -K ${names[i]} hw-tc-offload on
-
-      i=$(( i+1 ))
-
-      # load VF driver
-      for VfDir in $VfDirs
-      do
-        VfPciAddr=$(basename "$( readlink -f /sys/bus/pci/devices/${pci_addr}/$VfDir )")
-        echo $VfPciAddr > /sys/bus/pci/drivers_probe
-      done
-    done <"$input"
+        # load VF driver
+        for VfDir in $VfDirs
+        do
+          VfPciAddr=$(basename "$( readlink -f /sys/bus/pci/devices/${pci_addr}/$VfDir )")
+          echo $VfPciAddr > /sys/bus/pci/drivers_probe
+        done
+      fi
+    done

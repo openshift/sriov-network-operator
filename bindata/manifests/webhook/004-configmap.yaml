@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nri-control-switches
+  namespace: {{.Namespace}}
+data:
+  config.json: |
+    {
+      "features": {
+        "enableHugePageDownApi": true
+      }
+    }
