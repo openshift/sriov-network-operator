@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	// +kubebuilder:scaffold:imports
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/netns"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -32,12 +34,15 @@ var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 var testNamespace string
+var quitNetNsSet chan bool
+var doneNetNsSet chan error
 
 // Define utility constants for object names and testing timeouts/durations and intervals.
 const (
-	timeout  = time.Second * 30
-	duration = time.Second * 300
-	interval = time.Second * 1
+	timeout         = time.Second * 30
+	duration        = time.Second * 300
+	interval        = time.Second * 1
+	devPollInterval = time.Millisecond * 400
 )
 
 func TestSriovTests(t *testing.T) {
@@ -55,7 +60,7 @@ var sriovInfos *cluster.EnabledNodes
 var sriovIface *sriovnetworkv1.InterfaceExt
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	// Go to project root directory
 	os.Chdir("..")
@@ -92,6 +97,16 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(k8sClient).ToNot(BeNil())
 
+	// get test device PCI address & target netns path. This path is the target netns for the PCI device.
+	testPciDev := os.Getenv("TEST_PCI_DEVICE")
+	testNsPath := os.Getenv("TEST_NETNS_PATH")
+	if testPciDev != "" && testNsPath != "" {
+		By("Moving test PCI device '" + testPciDev + "' to netns defined by path '" + testNsPath + "'")
+		quitNetNsSet = make(chan bool, 1)
+		doneNetNsSet = make(chan error, 1)
+		go netns.SetPfVfLinkNetNs(testPciDev, testNsPath, devPollInterval, quitNetNsSet, doneNetNsSet)
+	}
+
 	close(done)
 }, 60)
 
@@ -99,4 +114,15 @@ var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
+	if quitNetNsSet != nil && doneNetNsSet != nil {
+		By("closing PF/VF link netns watcher")
+		quitNetNsSet <- true            // non-blocking
+		for msg := range doneNetNsSet { // blocking until goroutine exists
+			if msg != nil {
+				fmt.Fprintf(GinkgoWriter, "Messages from goroutine during execution of SetPfVfLinkNetNs(): '%s'",
+					msg.Error())
+			}
+		}
+		close(quitNetNsSet)
+	}
 })

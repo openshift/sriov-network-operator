@@ -12,8 +12,10 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -22,10 +24,11 @@ import (
 )
 
 const (
-	LASTNETWORKNAMESPACE  = "operator.sriovnetwork.openshift.io/last-network-namespace"
-	FINALIZERNAME         = "netattdef.finalizers.sriovnetwork.openshift.io"
-	ESWITCHMODE_LEGACY    = "legacy"
-	ESWITCHMODE_SWITCHDEV = "switchdev"
+	LASTNETWORKNAMESPACE    = "operator.sriovnetwork.openshift.io/last-network-namespace"
+	NETATTDEFFINALIZERNAME  = "netattdef.finalizers.sriovnetwork.openshift.io"
+	POOLCONFIGFINALIZERNAME = "poolconfig.finalizers.sriovnetwork.openshift.io"
+	ESWITCHMODE_LEGACY      = "legacy"
+	ESWITCHMODE_SWITCHDEV   = "switchdev"
 )
 
 const invalidVfIndex = -1
@@ -36,24 +39,7 @@ var VfIds = []string{}
 
 // NicIdMap contains supported mapping of IDs with each in the format of:
 // Vendor ID, Physical Function Device ID, Virtual Function Device ID
-var NicIdMap = []string{
-	"8086 158b 154c", // I40e 25G SFP28
-	"8086 1572 154c", // I40e 10G X710 SFP+
-	"8086 0d58 154c", // I40e XXV710 N3000
-	"8086 1583 154c", // I40e 40G XL710 QSFP+
-	"8086 1592 1889", // Columbiaville E810-CQDA2/2CQDA2
-	"8086 1593 1889", // Columbiaville E810-XXVDA4
-	"8086 159b 1889", // Columbiaville E810-XXVDA2
-	"15b3 1013 1014", // ConnectX-4
-	"15b3 1015 1016", // ConnectX-4LX
-	"15b3 1017 1018", // ConnectX-5, PCIe 3.0
-	"15b3 1019 101a", // ConnectX-5 Ex
-	"15b3 101b 101c", // ConnectX-6
-	"15b3 101d 101e", // ConnectX-6 Dx
-	"15b3 a2d6 101e", // MT42822 BlueField-2 integrated ConnectX-6 Dx
-	"14e4 16d7 16dc", // BCM57414 2x25G
-	"14e4 1750 1806", // BCM75508 2x100G
-}
+var NicIdMap = []string{}
 
 // NetFilterType Represents the NetFilter tags to be used
 type NetFilterType int
@@ -61,6 +47,8 @@ type NetFilterType int
 const (
 	// OpenstackNetworkID network UUID
 	OpenstackNetworkID NetFilterType = iota
+
+	SUPPORTED_NIC_ID_CONFIGMAP = "supported-nic-ids"
 )
 
 func (e NetFilterType) String() string {
@@ -70,6 +58,22 @@ func (e NetFilterType) String() string {
 	default:
 		return fmt.Sprintf("%d", int(e))
 	}
+}
+
+func InitNicIdMap(client *kubernetes.Clientset, namespace string) error {
+	cm, err := client.CoreV1().ConfigMaps(namespace).Get(
+		context.Background(),
+		SUPPORTED_NIC_ID_CONFIGMAP,
+		metav1.GetOptions{},
+	)
+	// if the configmap does not exist, return false
+	if err != nil {
+		return err
+	}
+	for _, v := range cm.Data {
+		NicIdMap = append(NicIdMap, v)
+	}
+	return nil
 }
 
 func IsSupportedVendor(vendorId string) bool {
@@ -107,30 +111,6 @@ func IsEnabledUnsupportedVendor(vendorId string, unsupportedNicIdMap map[string]
 		if IsValidPciString(n) {
 			ids := strings.Split(n, " ")
 			if vendorId == ids[0] {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func IsEnabledUnsupportedDevice(deviceId string, unsupportedNicIdMap map[string]string) bool {
-	for _, n := range unsupportedNicIdMap {
-		if IsValidPciString(n) {
-			ids := strings.Split(n, " ")
-			if deviceId == ids[1] {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func IsEnabledUnsupportedModel(vendorId, deviceId string, unsupportedNicIdMap map[string]string) bool {
-	for _, n := range unsupportedNicIdMap {
-		if IsValidPciString(n) {
-			ids := strings.Split(n, " ")
-			if vendorId == ids[0] && deviceId == ids[1] {
 				return true
 			}
 		}
@@ -182,50 +162,13 @@ func GetSupportedVfIds() []string {
 			vfIds = append(vfIds, vfId)
 		}
 	}
-	return vfIds
-}
-
-func GetUnsupportedVfIds(unsupportedNicIdMap map[string]string) []string {
-	var vfIds []string
-	for k, n := range unsupportedNicIdMap {
-		if !IsValidPciString(n) {
-			log.Info("GetUnsupportedVfIds():", "name", k,
-				"Invalid Pci string", n)
-			continue
-		}
-		ids := strings.Split(n, " ")
-		vfId := "0x" + ids[2]
-		if !StringInArray(vfId, vfIds) {
-			vfIds = append(vfIds, vfId)
-		}
-	}
-	return vfIds
-}
-
-func GetMergedVfIds(unsupportedNicIdMap map[string]string) []string {
-	supportedVfIds := VfIds
-	unsupportedVfIds := GetUnsupportedVfIds(unsupportedNicIdMap)
-	var mergedVfIds []string
-
-	mergedVfIdsSet := make(map[string]struct{})
-	for _, v := range supportedVfIds {
-		mergedVfIdsSet[v] = struct{}{}
-	}
-	for _, v := range unsupportedVfIds {
-		mergedVfIdsSet[v] = struct{}{}
-	}
-	for k := range mergedVfIdsSet {
-		mergedVfIds = append(mergedVfIds, k)
-	}
-
 	// return a sorted slice so that udev rule is stable
-	sort.Slice(mergedVfIds, func(i, j int) bool {
-		ip, _ := strconv.ParseInt(mergedVfIds[i], 0, 32)
-		jp, _ := strconv.ParseInt(mergedVfIds[j], 0, 32)
+	sort.Slice(vfIds, func(i, j int) bool {
+		ip, _ := strconv.ParseInt(vfIds[i], 0, 32)
+		jp, _ := strconv.ParseInt(vfIds[j], 0, 32)
 		return ip < jp
 	})
-
-	return mergedVfIds
+	return vfIds
 }
 
 func GetVfDeviceId(deviceId string) string {
@@ -236,10 +179,6 @@ func GetVfDeviceId(deviceId string) string {
 		}
 	}
 	return ""
-}
-
-func init() {
-	VfIds = GetSupportedVfIds()
 }
 
 type ByPriority []SriovNetworkNodePolicy

@@ -3,7 +3,6 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: {{.SRIOVMutatingWebhookName}}
-  namespace: {{.Namespace}}
   annotations:
     {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
@@ -13,7 +12,7 @@ metadata:
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
     sideEffects: None
-    admissionReviewVersions: [v1]
+    admissionReviewVersions: ["v1", "v1beta1"]
     failurePolicy: Fail
     clientConfig:
       service:
@@ -34,7 +33,6 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   name: {{.SRIOVMutatingWebhookName}}
-  namespace: {{.Namespace}}
   annotations:
     {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
@@ -44,7 +42,7 @@ metadata:
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
     sideEffects: None
-    admissionReviewVersions: [v1]
+    admissionReviewVersions: ["v1", "v1beta1"]
     failurePolicy: Fail
     clientConfig:
       service:

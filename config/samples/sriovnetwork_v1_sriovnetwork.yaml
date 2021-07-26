@@ -1,7 +1,22 @@
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetwork
 metadata:
-  name: sriovnetwork-sample
+  name: example-sriovnetwork
+  namespace: openshift-sriov-network-operator
 spec:
-  # Add fields here
-  foo: bar
+  ipam: |
+    {
+      "type": "host-local",
+      "subnet": "10.56.217.0/24",
+      "rangeStart": "10.56.217.171",
+      "rangeEnd": "10.56.217.181",
+      "routes": [{
+        "dst": "0.0.0.0/0"
+      }],
+      "gateway": "10.56.217.1"
+    }
+  vlan: 0
+  spoofChk: 'on'
+  trust: 'off'
+  resourceName: intelnics
+  networkNamespace: default

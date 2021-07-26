@@ -16,7 +16,6 @@ import (
 	// corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
@@ -84,7 +83,7 @@ func WaitForDaemonSetReady(ds *appsv1.DaemonSet, client client.Client, namespace
 	return nil
 }
 
-func WaitForNamespacedObject(obj runtime.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
+func WaitForNamespacedObject(obj client.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
@@ -106,7 +105,7 @@ func WaitForNamespacedObject(obj runtime.Object, client client.Client, namespace
 	return nil
 }
 
-func WaitForNamespacedObjectDeleted(obj runtime.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
+func WaitForNamespacedObjectDeleted(obj client.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)

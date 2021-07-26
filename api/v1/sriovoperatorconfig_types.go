@@ -1,3 +1,19 @@
+/*
+Copyright 2021.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package v1
 
 import (
@@ -8,7 +24,6 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // SriovOperatorConfigSpec defines the desired state of SriovOperatorConfig
-// +k8s:openapi-gen=true
 type SriovOperatorConfigSpec struct {
 	// NodeSelector selects the nodes to be configured
 	ConfigDaemonNodeSelector map[string]string `json:"configDaemonNodeSelector,omitempty"`
@@ -27,7 +42,6 @@ type SriovOperatorConfigSpec struct {
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
-// +k8s:openapi-gen=true
 type SriovOperatorConfigStatus struct {
 	// Show the runtime status of the network resource injector webhook
 	Injector string `json:"injector,omitempty"`
@@ -35,13 +49,10 @@ type SriovOperatorConfigStatus struct {
 	OperatorWebhook string `json:"operatorWebhook,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // SriovOperatorConfig is the Schema for the sriovoperatorconfigs API
-// +genclient
-// +k8s:openapi-gen=true
-// +kubebuilder:subresource:status
-// +kubebuilder:resource:path=sriovoperatorconfigs,scope=Namespaced
 type SriovOperatorConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -50,7 +61,7 @@ type SriovOperatorConfig struct {
 	Status SriovOperatorConfigStatus `json:"status,omitempty"`
 }
 
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+//+kubebuilder:object:root=true
 
 // SriovOperatorConfigList contains a list of SriovOperatorConfig
 type SriovOperatorConfigList struct {

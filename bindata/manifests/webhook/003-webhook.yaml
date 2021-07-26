@@ -3,7 +3,6 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   name: {{.SRIOVMutatingWebhookName}}
-  namespace: {{.Namespace}}
   annotations:
     {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
@@ -13,7 +12,7 @@ metadata:
 webhooks:
   - name: network-resources-injector-config.k8s.io
     sideEffects: None
-    admissionReviewVersions: [v1]
+    admissionReviewVersions: ["v1", "v1beta1"]
     failurePolicy: Ignore
     clientConfig:
       service:

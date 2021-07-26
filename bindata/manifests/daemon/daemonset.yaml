@@ -12,6 +12,8 @@ spec:
       app: sriov-network-config-daemon
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
   template:
     metadata:
       annotations:
@@ -30,7 +32,30 @@ spec:
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-network-config-daemon
+      priorityClassName: "system-node-critical"
       containers:
+      - name: sriov-cni
+        image: {{.SRIOVCNIImage}}
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+        volumeMounts:
+        - name: cnibin
+          mountPath: /host/opt/cni/bin
+      - name: sriov-infiniband-cni
+        image: {{.SRIOVInfiniBandCNIImage}}
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+        volumeMounts:
+        - name: cnibin
+          mountPath: /host/opt/cni/bin
       - name: sriov-network-config-daemon
         image: {{.Image}}
         command:
@@ -51,6 +76,10 @@ spec:
                 fieldPath: metadata.namespace
           - name: CLUSTER_TYPE
             value: "{{.ClusterType}}"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
         volumeMounts:
         - name: host
           mountPath: /host
@@ -62,3 +91,6 @@ spec:
       - name: host
         hostPath:
           path: /
+      - name: cnibin
+        hostPath:
+          path: {{.CNIBinPath}}

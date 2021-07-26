@@ -13,6 +13,13 @@ import (
 
 var namespace = os.Getenv("NAMESPACE")
 
+func RetriveSupportedNics() error {
+	if err := sriovnetworkv1.InitNicIdMap(kubeclient, namespace); err != nil {
+		return err
+	}
+	return nil
+}
+
 func MutateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
 	glog.V(2).Info("mutating custom resource")
 

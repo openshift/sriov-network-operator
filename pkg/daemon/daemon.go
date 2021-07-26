@@ -18,6 +18,10 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	daemonconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
+	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
+	mcfginformers "github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions"
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -32,18 +36,15 @@ import (
 	"k8s.io/client-go/kubernetes"
 	listerv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubectl/pkg/drain"
 
-	// "k8s.io/client-go/kubernetes/scheme"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	sninformer "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	daemonconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
-	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
-	mcfginformers "github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions"
 )
 
 const (
@@ -53,8 +54,6 @@ const (
 	// maxUpdateBackoff is the maximum time to react to a change as we back off
 	// in the face of errors.
 	maxUpdateBackoff = 60 * time.Second
-
-	UNSUPPORTED_NIC_ID_CONFIGMAP = "unsupported-nic-ids"
 )
 
 type Message struct {
@@ -124,7 +123,7 @@ const (
 var namespace = os.Getenv("NAMESPACE")
 var pluginsPath = os.Getenv("PLUGINSPATH")
 
-// writer implements io.Writer interface as a pass-through for klog.
+// writer implements io.Writer interface as a pass-through for glog.
 type writer struct {
 	logFunc func(args ...interface{})
 }
@@ -161,7 +160,7 @@ func New(
 			Client:              kubeClient,
 			Force:               true,
 			IgnoreAllDaemonSets: true,
-			DeleteLocalData:     true,
+			DeleteEmptyDirData:  true,
 			GracePeriodSeconds:  -1,
 			Timeout:             90 * time.Second,
 			OnPodDeletedOrEvicted: func(pod *corev1.Pod, usingEviction bool) {
@@ -169,8 +168,7 @@ func New(
 				if usingEviction {
 					verbStr = "Evicted"
 				}
-				glog.Info(fmt.Sprintf("%s pod from Node", verbStr),
-					"pod", fmt.Sprintf("%s/%s", pod.Name, pod.Namespace))
+				glog.Info(fmt.Sprintf("%s pod from Node %s/%s", verbStr, pod.Namespace, pod.Name))
 			},
 			Out:    writer{glog.Info},
 			ErrOut: writer{glog.Error},
@@ -179,15 +177,6 @@ func New(
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(updateDelay), 1)},
 			workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, maxUpdateBackoff)), "SriovNetworkNodeState"),
 	}
-}
-
-func (dn *Daemon) getUnsupportedNicIdConfigMap() (*v1.ConfigMap, error) {
-	cm, err := dn.kubeClient.CoreV1().ConfigMaps(namespace).Get(
-		context.Background(),
-		UNSUPPORTED_NIC_ID_CONFIGMAP,
-		metav1.GetOptions{},
-	)
-	return cm, err
 }
 
 func (dn *Daemon) annotateUnsupportedNicIdConfigMap(cm *v1.ConfigMap, nodeName string) (*v1.ConfigMap, error) {
@@ -211,8 +200,6 @@ func (dn *Daemon) annotateUnsupportedNicIdConfigMap(cm *v1.ConfigMap, nodeName s
 }
 
 func (dn *Daemon) tryCreateUdevRuleWrapper() error {
-	var unsupportedNicIdMap map[string]string
-
 	ns, nodeStateErr := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(
 		context.Background(),
 		dn.name,
@@ -227,26 +214,10 @@ func (dn *Daemon) tryCreateUdevRuleWrapper() error {
 		}
 	}
 
-	// retrieve config map
-	cm, configMapErr := dn.getUnsupportedNicIdConfigMap()
-	if configMapErr != nil {
-		glog.V(2).Info("Could not retrieve Nic Id ConfigMap: ", configMapErr)
-	} else {
-		unsupportedNicIdMap = cm.Data
-	}
-
 	// update udev rule and if update succeeds
-	err := tryCreateNMUdevRule(unsupportedNicIdMap)
+	err := tryCreateNMUdevRule()
 	if err != nil {
 		return err
-	}
-
-	if configMapErr != nil {
-		return nil
-	}
-
-	if _, err := dn.annotateUnsupportedNicIdConfigMap(cm, dn.name); err != nil {
-		glog.V(2).Info("Could not update Nic Id ConfigMap", "err", err)
 	}
 
 	return nil
@@ -260,6 +231,10 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	defer dn.workqueue.ShutDown()
 
 	tryEnableRdma()
+
+	if err := sriovnetworkv1.InitNicIdMap(dn.kubeClient, namespace); err != nil {
+		return err
+	}
 
 	if err := dn.tryCreateUdevRuleWrapper(); err != nil {
 		return err
@@ -489,7 +464,6 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 
 	reqReboot := false
 	reqDrain := false
-	mcoReboot := false
 	for k, p := range dn.LoadedPlugins {
 		d, r := false, false
 		if dn.nodeState.GetName() == "" {
@@ -501,11 +475,6 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 			glog.Errorf("nodeStateSyncHandler(): plugin %s error: %v", k, err)
 			return err
 		}
-
-		if p.Name() == "mco_plugin" && d && !r {
-			mcoReboot = true
-		}
-
 		glog.V(0).Infof("nodeStateSyncHandler(): plugin %s: reqDrain %v, reqReboot %v", k, d, r)
 		reqDrain = reqDrain || d
 		reqReboot = reqReboot || r
@@ -513,22 +482,13 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	glog.V(0).Infof("nodeStateSyncHandler(): reqDrain %v, reqReboot %v disableDrain %v", reqDrain, reqReboot, dn.disableDrain)
 
 	for k, p := range dn.LoadedPlugins {
-		if k != GenericPlugin && k != McoPlugin {
+		if k != GenericPlugin {
 			err := p.Apply()
 			if err != nil {
 				glog.Errorf("nodeStateSyncHandler(): plugin %s fail to apply: %v", k, err)
 				return err
 			}
 		}
-	}
-	if mcoReboot {
-		glog.V(0).Infof("nodeStateSyncHandler(): MCO will trigger reboot")
-		err = dn.LoadedPlugins[McoPlugin].Apply()
-		if err != nil {
-			glog.Errorf("nodeStateSyncHandler(): mco_plugin fail to apply: %v", err)
-			return err
-		}
-		return nil
 	}
 	if utils.ClusterType == utils.ClusterTypeOpenshift {
 		if err = dn.getNodeMachinePool(); err != nil {
@@ -674,9 +634,7 @@ func (dn *Daemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) er
 		pl = append(pl, VirtualPlugin)
 	} else {
 		pl = registerPlugins(ns)
-		if utils.ClusterType == utils.ClusterTypeOpenshift {
-			pl = append(pl, McoPlugin)
-		} else {
+		if utils.ClusterType != utils.ClusterTypeOpenshift {
 			pl = append(pl, K8sPlugin)
 		}
 		pl = append(pl, GenericPlugin)
@@ -791,27 +749,61 @@ func (dn *Daemon) getNodeMachinePool() error {
 	return fmt.Errorf("getNodeMachinePool(): Failed to find the MCP of the node")
 }
 
+func (dn *Daemon) getDrainLock(ctx context.Context, done chan bool) {
+	var err error
+
+	lock := &resourcelock.LeaseLock{
+		LeaseMeta: metav1.ObjectMeta{
+			Name:      "config-daemon-draining-lock",
+			Namespace: namespace,
+		},
+		Client: dn.kubeClient.CoordinationV1(),
+		LockConfig: resourcelock.ResourceLockConfig{
+			Identity: dn.name,
+		},
+	}
+
+	// start the leader election
+	leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
+		Lock:            lock,
+		ReleaseOnCancel: true,
+		LeaseDuration:   5 * time.Second,
+		RenewDeadline:   3 * time.Second,
+		RetryPeriod:     1 * time.Second,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: func(ctx context.Context) {
+				glog.V(2).Info("getDrainLock(): started leading")
+				for {
+					time.Sleep(3 * time.Second)
+					if dn.drainable {
+						glog.V(2).Info("getDrainLock(): no other node is draining")
+						err = dn.annotateNode(dn.name, annoDraining)
+						if err != nil {
+							glog.Errorf("getDrainLock(): Failed to annotate node: %v", err)
+							continue
+						}
+						done <- true
+						return
+					}
+					glog.V(3).Info("getDrainLock(): other node is draining, wait...")
+				}
+			},
+			OnStoppedLeading: func() {
+				glog.V(2).Info("getDrainLock(): stopped leading")
+			},
+		},
+	})
+}
+
 func (dn *Daemon) drainNode(name string) error {
 	glog.Info("drainNode(): Update prepared")
 	var err error
-
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	// wait a random time to avoid all the nodes drain at the same time
-	time.Sleep(wait.Jitter(3*time.Second, 3))
-	wait.JitterUntil(func() {
-		if !dn.drainable {
-			glog.V(2).Info("drainNode(): other node is draining")
-			return
-		}
-		glog.V(2).Info("drainNode(): no other node is draining")
-		err = dn.annotateNode(dn.name, annoDraining)
-		if err != nil {
-			glog.Errorf("drainNode(): Failed to annotate node: %v", err)
-			return
-		}
-		cancel()
-	}, 3*time.Second, 3, true, ctx.Done())
+
+	done := make(chan bool)
+	go dn.getDrainLock(ctx, done)
+	<-done
 
 	if utils.ClusterType == utils.ClusterTypeOpenshift {
 		mcpInformerFactory := mcfginformers.NewSharedInformerFactory(dn.mcClient,
@@ -1024,12 +1016,12 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 	return nil
 }
 
-func tryCreateNMUdevRule(unsupportedNicIdMap map[string]string) error {
+func tryCreateNMUdevRule() error {
 	glog.V(2).Infof("tryCreateNMUdevRule()")
 	dirPath := "/host/etc/udev/rules.d/"
 	filePath := dirPath + "10-nm-unmanaged.rules"
 
-	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetMergedVfIds(unsupportedNicIdMap), "|"))
+	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetSupportedVfIds(), "|"))
 
 	// add NM udev rules for renaming VF rep
 	new_content = new_content + fmt.Sprintf("SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n")

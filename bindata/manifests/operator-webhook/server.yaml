@@ -16,6 +16,8 @@ spec:
       app: operator-webhook
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
   template:
     metadata:
       annotations:
@@ -24,9 +26,16 @@ spec:
         app: operator-webhook
     spec:
       serviceAccountName: operator-webhook-sa
+      priorityClassName: "system-cluster-critical"
       nodeSelector:
         beta.kubernetes.io/os: linux
-        node-role.kubernetes.io/master:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
       tolerations:
       - key: "node-role.kubernetes.io/master"
         operator: Exists
@@ -51,6 +60,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
         volumeMounts:
         - mountPath: /etc/tls
           name: tls

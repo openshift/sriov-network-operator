@@ -1,7 +1,7 @@
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovNetworkNodeState
 metadata:
-  name: sriovnetworknodestate-sample
+  name: minikube
+  namespace: openshift-sriov-network-operator
 spec:
-  # Add fields here
-  foo: bar
+  interfaces: []
