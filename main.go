@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
@@ -96,6 +97,11 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start global manager")
+		os.Exit(1)
+	}
+
+	if err := initNicIdMap(); err != nil {
+		setupLog.Error(err, "unable to init NicIdMap")
 		os.Exit(1)
 	}
 
@@ -172,6 +178,16 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func initNicIdMap() error {
+	namespace := os.Getenv("NAMESPACE")
+	kubeclient := kubernetes.NewForConfigOrDie(ctrl.GetConfigOrDie())
+	if err := sriovnetworkv1.InitNicIdMap(kubeclient, namespace); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func createDefaultPolicy(cfg *rest.Config) error {
