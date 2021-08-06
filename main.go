@@ -44,6 +44,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -172,6 +173,9 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+
+	// Remove all finalizers after controller is shut down
+	defer utils.Shutdown(mgr.GetClient())
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(stopCh); err != nil {
