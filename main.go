@@ -144,7 +144,7 @@ func main() {
 	}()
 
 	// Remove all finalizers after controller is shut down
-	defer utils.Shutdown(mgr.GetClient())
+	defer utils.Shutdown()
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(stopCh); err != nil {
