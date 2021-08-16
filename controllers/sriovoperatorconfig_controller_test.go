@@ -14,6 +14,7 @@ import (
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
@@ -179,12 +180,12 @@ var _ = Describe("Operator", func() {
 			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", interval, timeout)
 			Expect(err).NotTo(HaveOccurred())
 			By("by default")
-			mcName := "00-" + HwOffloadNodeLabel
+			mcName := "00-" + constants.HwOffloadNodeLabel
 			mc := &mcfgv1.MachineConfig{}
 			err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcName, Namespace: testNamespace}, mc)
 			Expect(errors.IsNotFound(err)).Should(BeTrue())
 
-			mcpName := HwOffloadNodeLabel
+			mcpName := constants.HwOffloadNodeLabel
 			mcp := &mcfgv1.MachineConfigPool{}
 			err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcpName, Namespace: testNamespace}, mcp)
 			Expect(errors.IsNotFound(err)).Should(BeTrue())

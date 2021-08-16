@@ -280,12 +280,15 @@ func StringInArray(val string, array []string) bool {
 	return false
 }
 
-func RemoveString(s string, slice []string) (result []string) {
-	for _, item := range slice {
-		if item == s {
-			continue
+func RemoveString(s string, slice []string) (result []string, found bool) {
+	if len(slice) != 0 {
+		for _, item := range slice {
+			if item == s {
+				found = true
+				continue
+			}
+			result = append(result, item)
 		}
-		result = append(result, item)
 	}
 	return
 }
