@@ -45,6 +45,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 // SriovNetworkNodePolicyReconciler reconciles a SriovNetworkNodePolicy object
@@ -66,12 +67,12 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	reqLogger.Info("Reconciling")
 
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-	err := r.Get(context.TODO(), types.NamespacedName{Name: DEFAULT_POLICY_NAME, Namespace: namespace}, defaultPolicy)
+	err := r.Get(context.TODO(), types.NamespacedName{Name: constants.DEFAULT_POLICY_NAME, Namespace: namespace}, defaultPolicy)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Default policy object not found, create it.
 			defaultPolicy.SetNamespace(namespace)
-			defaultPolicy.SetName(DEFAULT_POLICY_NAME)
+			defaultPolicy.SetName(constants.DEFAULT_POLICY_NAME)
 			defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
 				NumVfs:       0,
 				NodeSelector: make(map[string]string),
@@ -79,7 +80,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 			}
 			err = r.Create(context.TODO(), defaultPolicy)
 			if err != nil {
-				reqLogger.Error(err, "Failed to create default Policy", "Namespace", namespace, "Name", DEFAULT_POLICY_NAME)
+				reqLogger.Error(err, "Failed to create default Policy", "Namespace", namespace, "Name", constants.DEFAULT_POLICY_NAME)
 				return reconcile.Result{}, err
 			}
 			return reconcile.Result{}, nil
@@ -105,7 +106,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	nodeList := &corev1.NodeList{}
 	lo := &client.MatchingLabels{}
 	defaultOpConf := &sriovnetworkv1.SriovOperatorConfig{}
-	if err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: DEFAULT_CONFIG_NAME}, defaultOpConf); err != nil {
+	if err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: constants.DEFAULT_CONFIG_NAME}, defaultOpConf); err != nil {
 		return reconcile.Result{}, err
 	}
 	if len(defaultOpConf.Spec.ConfigDaemonNodeSelector) > 0 {
@@ -142,7 +143,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 
 	// All was successful. Request that this be re-triggered after ResyncPeriod,
 	// so we can reconcile state again.
-	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
+	return reconcile.Result{RequeueAfter: constants.ResyncPeriod}, nil
 }
 
 func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -176,7 +177,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(pl *sriovne
 			Kind:       "ConfigMap",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      CONFIGMAP_NAME,
+			Name:      constants.CONFIGMAP_NAME,
 			Namespace: namespace,
 		},
 		Data: configData,
@@ -207,8 +208,8 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(np *sri
 	logger := r.Log.WithName("syncAllSriovNetworkNodeStates")
 	logger.Info("Start to sync all SriovNetworkNodeState custom resource")
 	found := &corev1.ConfigMap{}
-	if err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: CONFIGMAP_NAME}, found); err != nil {
-		logger.Info("Fail to get", "ConfigMap", CONFIGMAP_NAME)
+	if err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: constants.CONFIGMAP_NAME}, found); err != nil {
+		logger.Info("Fail to get", "ConfigMap", constants.CONFIGMAP_NAME)
 	}
 	for _, node := range nl.Items {
 		logger.Info("Sync SriovNetworkNodeState CR", "name", node.Name)
@@ -331,7 +332,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 		data.Data["CNIBinPath"] = envCniBinPath
 	}
 
-	objs, err := renderDsForCR(PLUGIN_PATH, &data)
+	objs, err := renderDsForCR(constants.PLUGIN_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render SR-IoV manifests")
 		return err
@@ -339,7 +340,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
 	err = r.Get(context.TODO(), types.NamespacedName{
-		Name: DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
+		Name: constants.DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
 	if err != nil {
 		return err
 	}
@@ -562,9 +563,9 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			// vfio-pci device link type is not detectable
 			if p.Spec.DeviceType != "vfio-pci" {
 				if p.Spec.LinkType != "" {
-					linkType := linkTypeEthernet
+					linkType := constants.LinkTypeEthernet
 					if strings.ToLower(p.Spec.LinkType) == "ib" {
-						linkType = linkTypeInfiniband
+						linkType = constants.LinkTypeInfiniband
 					}
 					if !sriovnetworkv1.StringInArray(linkType, netDeviceSelectors.LinkTypes) {
 						netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
@@ -627,9 +628,9 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 			// vfio-pci device link type is not detectable
 			if p.Spec.DeviceType != "vfio-pci" {
 				if p.Spec.LinkType != "" {
-					linkType := linkTypeEthernet
+					linkType := constants.LinkTypeEthernet
 					if strings.ToLower(p.Spec.LinkType) == "ib" {
-						linkType = linkTypeInfiniband
+						linkType = constants.LinkTypeInfiniband
 					}
 					netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
 				}

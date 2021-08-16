@@ -43,6 +43,7 @@ import (
 	apply "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 // SriovOperatorConfigReconciler reconciles a SriovOperatorConfig object
@@ -70,12 +71,12 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 	}
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
 	err := r.Get(context.TODO(), types.NamespacedName{
-		Name: DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
+		Name: constants.DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Default Config object not found, create it.
 			defaultConfig.SetNamespace(namespace)
-			defaultConfig.SetName(DEFAULT_CONFIG_NAME)
+			defaultConfig.SetName(constants.DEFAULT_CONFIG_NAME)
 			defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 				EnableInjector:           func() *bool { b := enableAdmissionController; return &b }(),
 				EnableOperatorWebhook:    func() *bool { b := enableAdmissionController; return &b }(),
@@ -85,7 +86,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 			err = r.Create(context.TODO(), defaultConfig)
 			if err != nil {
 				logger.Error(err, "Failed to create default Operator Config", "Namespace",
-					namespace, "Name", DEFAULT_CONFIG_NAME)
+					namespace, "Name", constants.DEFAULT_CONFIG_NAME)
 				return reconcile.Result{}, err
 			}
 			return reconcile.Result{}, nil
@@ -118,7 +119,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 		}
 	}
 
-	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
+	return reconcile.Result{RequeueAfter: constants.ResyncPeriod}, nil
 }
 
 func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -169,7 +170,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
 	data.Data["Namespace"] = namespace
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	objs, err := render.RenderDir(CONFIG_DAEMON_PATH, &data)
+	objs, err := render.RenderDir(constants.CONFIG_DAEMON_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render config daemon manifests")
 		return err
@@ -219,7 +220,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		}
 
 		// Delete injector webhook
-		if *dc.Spec.EnableInjector != true && path == INJECTOR_WEBHOOK_PATH {
+		if *dc.Spec.EnableInjector != true && path == constants.INJECTOR_WEBHOOK_PATH {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(obj)
 				if err != nil {
@@ -232,7 +233,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 			continue
 		}
 		// Delete operator webhook
-		if *dc.Spec.EnableOperatorWebhook != true && path == OPERATOR_WEBHOOK_PATH {
+		if *dc.Spec.EnableOperatorWebhook != true && path == constants.OPERATOR_WEBHOOK_PATH {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(obj)
 				if err != nil {
@@ -319,19 +320,19 @@ func (r *SriovOperatorConfigReconciler) syncMutatingWebhook(cr *sriovnetworkv1.S
 
 	// Delete deprecated operator mutating webhook CR
 	deprecated_webhook := &admissionregistrationv1beta1.MutatingWebhookConfiguration{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
+	err = r.Get(context.TODO(), types.NamespacedName{Name: constants.DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil
 		} else {
-			logger.Info("Failed to get deprecated operator mutating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+			logger.Info("Failed to get deprecated operator mutating webhook for", namespace, constants.DEPRECATED_OPERATOR_WEBHOOK_NAME)
 		}
 	} else {
 		err := r.Delete(context.TODO(), deprecated_webhook)
 		if err != nil {
-			logger.Info("Failed to delete deprecated operator mutating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+			logger.Info("Failed to delete deprecated operator mutating webhook for", namespace, constants.DEPRECATED_OPERATOR_WEBHOOK_NAME)
 		} else {
-			logger.Info("Deleted deprecated operator mutating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+			logger.Info("Deleted deprecated operator mutating webhook for", namespace, constants.DEPRECATED_OPERATOR_WEBHOOK_NAME)
 		}
 	}
 
@@ -365,19 +366,19 @@ func (r *SriovOperatorConfigReconciler) syncValidatingWebhook(cr *sriovnetworkv1
 
 	// Delete deprecated operator validating webhook CR
 	deprecated_webhook := &admissionregistrationv1beta1.ValidatingWebhookConfiguration{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
+	err = r.Get(context.TODO(), types.NamespacedName{Name: constants.DEPRECATED_OPERATOR_WEBHOOK_NAME}, deprecated_webhook)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil
 		} else {
-			logger.Info("Failed to get deprecated operator validating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+			logger.Info("Failed to get deprecated operator validating webhook for", namespace, constants.DEPRECATED_OPERATOR_WEBHOOK_NAME)
 		}
 	} else {
 		err := r.Delete(context.TODO(), deprecated_webhook)
 		if err != nil {
-			logger.Info("Failed to delete deprecated operator validating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+			logger.Info("Failed to delete deprecated operator validating webhook for", namespace, constants.DEPRECATED_OPERATOR_WEBHOOK_NAME)
 		} else {
-			logger.Info("Deleted deprecated operator validating webhook for", namespace, DEPRECATED_OPERATOR_WEBHOOK_NAME)
+			logger.Info("Deleted deprecated operator validating webhook for", namespace, constants.DEPRECATED_OPERATOR_WEBHOOK_NAME)
 		}
 	}
 
@@ -414,10 +415,10 @@ func (r *SriovOperatorConfigReconciler) syncOffloadMachineConfig(dc *sriovnetwor
 
 	logger.Info("Start to render MachineConfig and MachineConfigPool for OVS HW offloading")
 	data := render.MakeRenderData()
-	data.Data["HwOffloadNodeLabel"] = HwOffloadNodeLabel
-	mcName := "00-" + HwOffloadNodeLabel
-	mcpName := HwOffloadNodeLabel
-	mc, err := render.GenerateMachineConfig("bindata/manifests/machine-config", mcName, HwOffloadNodeLabel, dc.Spec.EnableOvsOffload, &data)
+	data.Data["HwOffloadNodeLabel"] = constants.HwOffloadNodeLabel
+	mcName := "00-" + constants.HwOffloadNodeLabel
+	mcpName := constants.HwOffloadNodeLabel
+	mc, err := render.GenerateMachineConfig("bindata/manifests/machine-config", mcName, constants.HwOffloadNodeLabel, dc.Spec.EnableOvsOffload, &data)
 	if err != nil {
 		return err
 	}
