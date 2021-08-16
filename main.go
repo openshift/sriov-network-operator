@@ -102,14 +102,14 @@ func main() {
 	if err = (&controllers.SriovNetworkReconciler{
 		Client: mgrGlobal.GetClient(),
 		Scheme: mgrGlobal.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgrGlobal); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovNetwork")
 		os.Exit(1)
 	}
 	if err = (&controllers.SriovIBNetworkReconciler{
 		Client: mgrGlobal.GetClient(),
 		Scheme: mgrGlobal.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgrGlobal); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovIBNetwork")
 		os.Exit(1)
 	}
