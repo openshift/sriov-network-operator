@@ -41,7 +41,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	// +kubebuilder:scaffold:imports
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	//+kubebuilder:scaffold:imports
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -148,7 +149,7 @@ var _ = BeforeSuite(func(done Done) {
 
 	config := &sriovnetworkv1.SriovOperatorConfig{}
 	config.SetNamespace(testNamespace)
-	config.SetName(DEFAULT_CONFIG_NAME)
+	config.SetName(constants.DEFAULT_CONFIG_NAME)
 	config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 		EnableInjector:           func() *bool { b := true; return &b }(),
 		EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
