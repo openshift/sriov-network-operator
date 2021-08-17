@@ -4,6 +4,7 @@ reviewers:
   - dougbtv
   - fepan
   - s1061123
+  - SchSeba
 approvers:
   - pliurh
   - zshi-redhat
@@ -11,5 +12,6 @@ approvers:
   - squeed
   - fepan
   - s1061123
+  - SchSeba
 component: "Networking"
 subcomponent: "SR-IOV"
