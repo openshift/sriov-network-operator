@@ -775,6 +775,11 @@ func (dn *Daemon) getDrainLock(ctx context.Context, done chan bool) {
 				glog.V(2).Info("getDrainLock(): started leading")
 				for {
 					time.Sleep(3 * time.Second)
+					if dn.node.Annotations[annoKey] == annoMcpPaused {
+						// The node in Draining_MCP_Paused state, no other node is draining. Skip drainable checking
+						done <- true
+						return
+					}
 					if dn.drainable {
 						glog.V(2).Info("getDrainLock(): no other node is draining")
 						err = dn.annotateNode(dn.name, annoDraining)
@@ -831,7 +836,7 @@ func (dn *Daemon) drainNode(name string) error {
 				mcfgv1.IsMachineConfigPoolConditionFalse(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolUpdating) {
 				glog.V(2).Infof("drainNode(): MCP %s is ready", dn.mcpName)
 				if paused {
-					glog.V(2).Info("drainNode(): stop MCP informer", dn.mcpName)
+					glog.V(2).Info("drainNode(): stop MCP informer")
 					cancel()
 					return
 				}
@@ -878,9 +883,14 @@ func (dn *Daemon) drainNode(name string) error {
 				mcpEventHandler(new)
 			},
 		})
-		mcpInformerFactory.Start(ctx.Done())
-		mcpInformerFactory.WaitForCacheSync(ctx.Done())
-		<-ctx.Done()
+
+		// The Draining_MCP_Paused state means the MCP work has been paused by the config daemon in previous round.
+		// Only check MCP state if the node is not in Draining_MCP_Paused state
+		if !paused {
+			mcpInformerFactory.Start(ctx.Done())
+			mcpInformerFactory.WaitForCacheSync(ctx.Done())
+			<-ctx.Done()
+		}
 	}
 
 	backoff := wait.Backoff{
