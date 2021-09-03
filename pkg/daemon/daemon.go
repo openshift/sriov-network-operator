@@ -890,9 +890,14 @@ func (dn *Daemon) drainNode(name string) error {
 				mcpEventHandler(new)
 			},
 		})
-		mcpInformerFactory.Start(ctx.Done())
-		mcpInformerFactory.WaitForCacheSync(ctx.Done())
-		<-ctx.Done()
+
+		// The Draining_MCP_Paused state means the MCP work has been paused by the config daemon in previous round.
+		// Only check MCP state if the node is not in Draining_MCP_Paused state
+		if !paused {
+			mcpInformerFactory.Start(ctx.Done())
+			mcpInformerFactory.WaitForCacheSync(ctx.Done())
+			<-ctx.Done()
+		}
 	}
 
 	backoff := wait.Backoff{
