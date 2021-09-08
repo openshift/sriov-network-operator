@@ -16,6 +16,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
@@ -86,15 +87,18 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 				}
 			}
 			// remove our finalizer from the list and update it.
-			instance.ObjectMeta.Finalizers = sriovnetworkv1.RemoveString(sriovnetworkv1.POOLCONFIGFINALIZERNAME, instance.ObjectMeta.Finalizers)
-			if err := r.Update(context.Background(), instance); err != nil {
-				return reconcile.Result{}, err
+			var found bool
+			instance.ObjectMeta.Finalizers, found = sriovnetworkv1.RemoveString(sriovnetworkv1.POOLCONFIGFINALIZERNAME, instance.ObjectMeta.Finalizers)
+			if found {
+				if err := r.Update(context.Background(), instance); err != nil {
+					return reconcile.Result{}, err
+				}
 			}
 		}
 		return reconcile.Result{}, err
 	}
 
-	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
+	return reconcile.Result{RequeueAfter: constants.ResyncPeriod}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -108,7 +112,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 	logger := log.Log.WithName("syncOvsHardwareOffloadMachineConfigs")
 
 	mcpName := nc.Spec.OvsHardwareOffloadConfig.Name
-	mcName := "00-" + mcpName + "-" + OVS_HWOL_MACHINE_CONFIG_NAME_SUFFIX
+	mcName := "00-" + mcpName + "-" + constants.OVS_HWOL_MACHINE_CONFIG_NAME_SUFFIX
 
 	foundMC := &mcfgv1.MachineConfig{}
 	mcp := &mcfgv1.MachineConfigPool{}

@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -151,7 +152,7 @@ var _ = BeforeSuite(func(done Done) {
 
 	config := &sriovnetworkv1.SriovOperatorConfig{}
 	config.SetNamespace(testNamespace)
-	config.SetName(DEFAULT_CONFIG_NAME)
+	config.SetName(constants.DEFAULT_CONFIG_NAME)
 	config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 		EnableInjector:           func() *bool { b := true; return &b }(),
 		EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
@@ -162,7 +163,7 @@ var _ = BeforeSuite(func(done Done) {
 
 	poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
 	poolConfig.SetNamespace(testNamespace)
-	poolConfig.SetName(DEFAULT_CONFIG_NAME)
+	poolConfig.SetName(constants.DEFAULT_CONFIG_NAME)
 	poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{}
 	Expect(k8sClient.Create(context.TODO(), poolConfig)).Should(Succeed())
 	close(done)

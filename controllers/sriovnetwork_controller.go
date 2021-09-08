@@ -99,9 +99,12 @@ func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				return reconcile.Result{}, err
 			}
 			// remove our finalizer from the list and update it.
-			instance.ObjectMeta.Finalizers = sriovnetworkv1.RemoveString(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers)
-			if err := r.Update(context.Background(), instance); err != nil {
-				return reconcile.Result{}, err
+			var found bool
+			instance.ObjectMeta.Finalizers, found = sriovnetworkv1.RemoveString(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers)
+			if found {
+				if err := r.Update(context.Background(), instance); err != nil {
+					return reconcile.Result{}, err
+				}
 			}
 		}
 		return reconcile.Result{}, err
