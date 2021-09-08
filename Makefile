@@ -30,7 +30,7 @@ PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
 # Current Operator version
-VERSION ?= 4.9.0
+VERSION ?= 4.10.0
 # Default bundle image tag
 BUNDLE_IMG ?= controller-bundle:$(VERSION)
 # Options for 'bundle-build'
@@ -158,12 +158,12 @@ skopeo:
 .PHONY: bundle
 bundle: manifests
 	rm -f bundle/manifests/*
-	rm -f manifests/4.9/*.yaml
+	rm -f manifests/4.10/*.yaml
 	operator-sdk generate kustomize manifests --interactive=false -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) --extra-service-accounts sriov-network-config-daemon
 	operator-sdk bundle validate ./bundle
-	cp bundle/manifests/* manifests/4.9
+	cp bundle/manifests/* manifests/4.10
 
 # Build the bundle image.
 .PHONY: bundle-build
