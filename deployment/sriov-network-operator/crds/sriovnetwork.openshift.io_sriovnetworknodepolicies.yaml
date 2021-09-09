@@ -66,6 +66,9 @@ spec:
                 description: MTU of VF
                 minimum: 1
                 type: integer
+              needVhostNet:
+                description: mount vhost-net device. Defaults to false.
+                type: boolean
               nicSelector:
                 description: NicSelector selects the NICs to be configured
                 properties:
