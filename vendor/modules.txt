@@ -42,7 +42,8 @@ github.com/blang/semver
 # github.com/cenkalti/backoff v2.2.1+incompatible
 ## explicit
 github.com/cenkalti/backoff
-# github.com/cespare/xxhash/v2 v2.1.1
+# github.com/cespare/xxhash/v2 v2.1.2
+## explicit
 github.com/cespare/xxhash/v2
 # github.com/clarketm/json v1.14.1
 github.com/clarketm/json
@@ -293,7 +294,6 @@ github.com/openshift/client-go/operator/listers/operator/v1alpha1
 # github.com/openshift/machine-config-operator v0.0.1-0.20201023110058-6c8bd9b2915c
 ## explicit
 github.com/openshift/machine-config-operator/internal/clients
-github.com/openshift/machine-config-operator/lib/resourcemerge
 github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1
 github.com/openshift/machine-config-operator/pkg/controller/common
 github.com/openshift/machine-config-operator/pkg/daemon/constants
