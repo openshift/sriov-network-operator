@@ -504,11 +504,14 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	}
 
 	if !reqReboot {
-		// Apply generic_plugin last
-		err = dn.LoadedPlugins[GenericPlugin].Apply()
-		if err != nil {
-			glog.Errorf("nodeStateSyncHandler(): generic_plugin fail to apply: %v", err)
-			return err
+		plugin, ok := dn.LoadedPlugins[GenericPlugin]
+		if ok {
+			// Apply generic_plugin last
+			err = plugin.Apply()
+			if err != nil {
+				glog.Errorf("nodeStateSyncHandler(): generic_plugin fail to apply: %v", err)
+				return err
+			}
 		}
 	}
 
@@ -519,14 +522,11 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	}
 
 	// restart device plugin pod
-	if reqDrain || latestState.Spec.DpConfigVersion != dn.nodeState.Spec.DpConfigVersion {
-		glog.Info("nodeStateSyncHandler(): restart device plugin pod")
-		if err := dn.restartDevicePluginPod(); err != nil {
-			glog.Errorf("nodeStateSyncHandler(): fail to restart device plugin pod: %v", err)
-			return err
-		}
+	glog.Info("nodeStateSyncHandler(): restart device plugin pod")
+	if err := dn.restartDevicePluginPod(); err != nil {
+		glog.Errorf("nodeStateSyncHandler(): fail to restart device plugin pod: %v", err)
+		return err
 	}
-
 	if anno, ok := dn.node.Annotations[annoKey]; ok && (anno == annoDraining || anno == annoMcpPaused) {
 		if err := dn.completeDrain(); err != nil {
 			glog.Errorf("nodeStateSyncHandler(): failed to complete draining: %v", err)
