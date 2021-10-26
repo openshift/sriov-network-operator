@@ -121,9 +121,9 @@ metadata:
 spec:
   interfaces:
   - deviceType: vfio-pci
-  mtu: 1500
-  numVfs: 4
-  pciAddress: 0000:86:00.0
+    mtu: 1500
+    numVfs: 4
+    pciAddress: 0000:86:00.0
 status:
   interfaces:
   - deviceID: "1583"
@@ -197,6 +197,19 @@ In a virtual deployment:
 - The mtu of the PF is set by the underlying virtualization platform and cannot be changed by the sriov-network-operator.
 - The numVfs parameter has no effect as there is always 1 VF
 - The deviceType field depends upon whether the underlying device/driver is [native-bifurcating or non-bifurcating](https://doc.dpdk.org/guides/howto/flow_bifurcation.html) For example, the supported Mellanox devices support native-bifurcating drivers and therefore deviceType should be netdevice (default).  The support Intel devices are non-bifurcating and should be set to vfio-pci.
+
+#### Multiple policies
+
+When multiple SriovNetworkNodeConfigPolicy CRs are present, the `priority` field
+(0 is the highest priority) is used to resolve any conflicts. Conflicts occur
+only when same PF is referenced by multiple policies. The final desired
+configuration is saved in `SriovNetworkNodeState.spec.interfaces`.
+
+Policies processing order is based on priority (lowest first), followed by `name`
+field (starting from `a`). Policies with same **priority** or **non-overlapping
+VF groups** (when #-notation is used in pfName field) are merged, otherwise only
+the highest priority policy is applied. In case of same-priority policies and
+overlapping VF groups, only the last processed policy is applied.
 
 ## Components and design
 
