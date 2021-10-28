@@ -3,6 +3,7 @@ package webhook
 import (
 	"context"
 	"fmt"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"os"
 	"regexp"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/golang/glog"
 	"k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -169,7 +171,7 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 			nodesSelected = true
 			for _, ns := range nsList.Items {
 				if ns.GetName() == node.GetName() {
-					if ok, err := validatePolicyForNodeState(cr, &ns); err != nil || !ok {
+					if ok, err := validatePolicyForNodeState(cr, &ns, &node); err != nil || !ok {
 						return false, err
 					}
 				}
@@ -195,10 +197,10 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	return true, nil
 }
 
-func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) (bool, error) {
 	glog.V(2).Infof("validatePolicyForNodeState(): validate policy %s for node %s.", policy.GetName(), state.GetName())
 	for _, iface := range state.Status.Interfaces {
-		if validateNicModel(&policy.Spec.NicSelector, &iface, state.GetName()) {
+		if validateNicModel(&policy.Spec.NicSelector, &iface, node) {
 			interfaceSelected = true
 			if policy.GetName() != "default" && policy.Spec.NumVfs == 0 {
 				return false, fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
@@ -256,7 +258,7 @@ func keys(m map[string]([]string)) []string {
 	return keys
 }
 
-func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt, nodeName string) bool {
+func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt, node *corev1.Node) bool {
 	if selector.Vendor != "" && selector.Vendor != iface.Vendor {
 		return false
 	}
@@ -285,5 +287,12 @@ func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *s
 	if sriovnetworkv1.IsSupportedModel(iface.Vendor, iface.DeviceID) {
 		return true
 	}
+
+	for key := range utils.PlatformMap {
+		if strings.Contains(strings.ToLower(node.Spec.ProviderID), strings.ToLower(key)) && sriovnetworkv1.IsVfSupportedModel(iface.Vendor, iface.DeviceID) {
+			return true
+		}
+	}
+
 	return false
 }

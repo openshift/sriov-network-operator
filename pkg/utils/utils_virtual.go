@@ -34,6 +34,13 @@ func (e PlatformType) String() string {
 	}
 }
 
+var (
+	// PlatformMap contains supported platforms for virtual VF
+	PlatformMap = map[string]PlatformType{
+		"openstack": VirtualOpenStack,
+	}
+)
+
 const (
 	ospMetaDataDir = "/host/var/config/openstack/latest/"
 	ospNetworkData = ospMetaDataDir + "/network_data.json"
