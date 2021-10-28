@@ -60,7 +60,7 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 
 	if cr.GetNamespace() != os.Getenv("NAMESPACE") {
 		warnings = append(warnings, cr.GetName()+
-			" is created or updated but not used. Only policy in openshift-sriov-network-operator namespace is respected.")
+			fmt.Sprintf(" is created or updated but not used. Only policy in %s namespace is respected.", os.Getenv("NAMESPACE")))
 	}
 
 	// DELETE should always succeed unless it's for the default object
