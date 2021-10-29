@@ -136,7 +136,7 @@ func (n *EnabledNodes) FindSriovDevices(node string) ([]*sriovv1.InterfaceExt, e
 func (n *EnabledNodes) FindOneVfioSriovDevice() (string, sriovv1.InterfaceExt) {
 	for _, node := range n.Nodes {
 		for _, nic := range n.States[node].Status.Interfaces {
-			if nic.Vendor == intelVendorID {
+			if nic.Vendor == intelVendorID && sriovv1.IsSupportedModel(nic.Vendor, nic.DeviceID) {
 				return node, nic
 			}
 		}
@@ -158,7 +158,7 @@ func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.Interfa
 	}
 
 	for _, itf := range s.Status.Interfaces {
-		if itf.Vendor == mlxVendorID {
+		if itf.Vendor == mlxVendorID && sriovv1.IsSupportedModel(itf.Vendor, itf.DeviceID) {
 			return &itf, nil
 		}
 	}
