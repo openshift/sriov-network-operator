@@ -106,6 +106,16 @@ func IsSupportedModel(vendorId, deviceId string) bool {
 	return false
 }
 
+func IsVfSupportedModel(vendorId, deviceId string) bool {
+	for _, n := range NicIdMap {
+		ids := strings.Split(n, " ")
+		if vendorId == ids[0] && deviceId == ids[2] {
+			return true
+		}
+	}
+	return false
+}
+
 func IsEnabledUnsupportedVendor(vendorId string, unsupportedNicIdMap map[string]string) bool {
 	for _, n := range unsupportedNicIdMap {
 		if IsValidPciString(n) {
