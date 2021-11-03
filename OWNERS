@@ -5,6 +5,9 @@ reviewers:
   - fepan
   - s1061123
   - SchSeba
+  - bn222
+  - Billy99
+  - fabrizio8
 approvers:
   - pliurh
   - zshi-redhat
@@ -13,5 +16,8 @@ approvers:
   - fepan
   - s1061123
   - SchSeba
+  - bn222
+  - Billy99
+  - fabrizio8
 component: "Networking"
 subcomponent: "SR-IOV"
