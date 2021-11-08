@@ -40,11 +40,6 @@ var (
 		kubeconfig string
 		nodeName   string
 	}
-
-	// PlatformMap contains supported platforms for virtual VF
-	platformMap = map[string]utils.PlatformType{
-		"openstack": utils.VirtualOpenStack,
-	}
 )
 
 func init() {
@@ -147,7 +142,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	nodeInfo, err := kubeclient.CoreV1().Nodes().Get(context.Background(), startOpts.nodeName, v1.GetOptions{})
 	if err == nil {
-		for key, pType := range platformMap {
+		for key, pType := range utils.PlatformMap {
 			if strings.Contains(strings.ToLower(nodeInfo.Spec.ProviderID), strings.ToLower(key)) {
 				platformType = pType
 			}
