@@ -170,10 +170,6 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 		for _, iface := range desired {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
-				if iface.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
-					// ignore swichdev device
-					break
-				}
 				if ifaceStatus.NumVfs != 0 {
 					if iface.NumVfs != ifaceStatus.NumVfs {
 						glog.V(2).Infof("generic-plugin needDrainNode(): need drain, expect NumVfs %v, current NumVfs %v", iface.NumVfs, ifaceStatus.NumVfs)
@@ -213,15 +209,13 @@ func needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState, loadVfioDriver 
 		}
 	}
 
-	if utils.IsSwitchdevModeSpec(state.Spec) {
-		update, err := utils.WriteSwitchdevConfFile(state)
-		if err != nil {
-			glog.Errorf("generic-plugin needRebootNode(): fail to write switchdev device config file")
-		}
-		if update {
-			glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for updating switchdev device configuration")
-		}
-		needReboot = needReboot || update
+	update, err := utils.WriteSwitchdevConfFile(state)
+	if err != nil {
+		glog.Errorf("generic-plugin needRebootNode(): fail to write switchdev device config file")
 	}
+	if update {
+		glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for updating switchdev device configuration")
+	}
+	needReboot = needReboot || update
 	return
 }
