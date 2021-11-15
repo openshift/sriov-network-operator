@@ -3,5 +3,5 @@ dropins:
 - name: 10-switchdev.conf
   contents: |
     [Unit]
-    Wants=switchdev-configuration.service
-    After=switchdev-configuration.service
+    Wants=switchdev-configuration-before-NM.service
+    After=switchdev-configuration-before-NM.service
