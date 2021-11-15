@@ -1,0 +1,19 @@
+contents: |
+  [Unit]
+  Description=Binds SRIOV VFs to switchdev driver
+  # Removal of this file signals firstboot completion
+  ConditionPathExists=!/etc/ignition-machine-config-encapsulated.json
+  # This service is used to rebind SR-IOV netdev driver after switchdev and NetworkManager configurations
+  Wants=NetworkManager.service
+  After=NetworkManager.service
+
+  [Service]
+  Type=oneshot
+  ExecStart=/usr/local/bin/switchdev-configuration-after-NM.sh
+  StandardOutput=journal+console
+  StandardError=journal+console
+
+  [Install]
+  WantedBy=network-online.target
+enabled: true
+name: switchdev-configuration-after-NM.service

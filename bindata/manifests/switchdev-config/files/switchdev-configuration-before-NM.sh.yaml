@@ -1,6 +1,6 @@
 mode: 0755
 overwrite: true
-path: "/usr/local/bin/configure-switchdev.sh"
+path: "/usr/local/bin/switchdev-configuration-before-NM.sh"
 contents:
   inline: |
     #!/bin/bash
@@ -72,12 +72,5 @@ contents:
 
         # turn hw-tc-offload on
         /usr/sbin/ethtool -K ${name} hw-tc-offload on
-
-        # load VF driver
-        for VfDir in $VfDirs
-        do
-          VfPciAddr=$(basename "$( readlink -f /sys/bus/pci/devices/${pci_addr}/$VfDir )")
-          echo $VfPciAddr > /sys/bus/pci/drivers_probe
-        done
       fi
     done
