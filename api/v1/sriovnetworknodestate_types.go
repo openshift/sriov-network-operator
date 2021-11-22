@@ -45,6 +45,7 @@ type VfGroup struct {
 	VfRange      string `json:"vfRange,omitempty"`
 	PolicyName   string `json:"policyName,omitempty"`
 	Mtu          int    `json:"mtu,omitempty"`
+	IsRdma       bool   `json:"isRdma,omitempty"`
 }
 
 type Interfaces []Interface
