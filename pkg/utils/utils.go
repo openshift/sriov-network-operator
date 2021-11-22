@@ -233,13 +233,6 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
 			return err
 		}
-		if strings.EqualFold(iface.LinkType, "IB") {
-			if err = setVfsGuid(iface); err != nil {
-				return err
-			}
-		} else if err = setVfsAdminMac(ifaceStatus); err != nil {
-			return err
-		}
 	}
 	// set PF mtu
 	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
@@ -255,21 +248,39 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		if err != nil {
 			glog.Warningf("configSriovDevice(): unable to parse VFs for device %+v %q", iface.PciAddress, err)
 		}
+		pfLink, err := netlink.LinkByName(iface.Name)
+		if err != nil {
+			glog.Errorf("setVfGuid(): unable to get PF link for device %+v %q", iface, err)
+			return err
+		}
+
 		for _, addr := range vfAddrs {
 			var group sriovnetworkv1.VfGroup
 			i := 0
-			driver := ""
+			var driver string
+			var isRdma bool
 			vfID, err := dputils.GetVFID(addr)
 			for i, group = range iface.VfGroups {
 				if err != nil {
 					glog.Warningf("configSriovDevice(): unable to get VF id %+v %q", iface.PciAddress, err)
 				}
 				if sriovnetworkv1.IndexInRange(vfID, group.VfRange) {
+					isRdma = group.IsRdma
 					if sriovnetworkv1.StringInArray(group.DeviceType, DpdkDrivers) {
 						driver = group.DeviceType
 					}
 					break
 				}
+			}
+			if strings.EqualFold(iface.LinkType, "IB") {
+				if err = setVfGuid(addr, pfLink); err != nil {
+					return err
+				}
+			} else if err = setVfAdminMac(addr, pfLink); err != nil {
+				return err
+			}
+			if err = unbindDriverIfNeeded(addr, isRdma); err != nil {
+				return err
 			}
 			if driver == "" {
 				if err := BindDefaultDriver(addr); err != nil {
@@ -558,39 +569,33 @@ func vfIsReady(pciAddr string) (netlink.Link, error) {
 	return vfLink, nil
 }
 
-func setVfsAdminMac(iface *sriovnetworkv1.InterfaceExt) error {
-	glog.Infof("setVfsAdminMac(): device %s", iface.PciAddress)
-	pfLink, err := netlink.LinkByName(iface.Name)
+func setVfAdminMac(vfAddr string, pfLink netlink.Link) error {
+	glog.Infof("setVfAdminMac(): VF %s", vfAddr)
+
+	vfID, err := dputils.GetVFID(vfAddr)
 	if err != nil {
-		glog.Errorf("setVfsAdminMac(): unable to get PF link for device %+v %q", iface, err)
+		glog.Errorf("setVfAdminMac(): unable to get VF id %+v %q", vfAddr, err)
 		return err
 	}
-	vfs, err := dputils.GetVFList(iface.PciAddress)
+	vfLink, err := vfIsReady(vfAddr)
 	if err != nil {
+		glog.Errorf("setVfAdminMac(): VF link is not ready for device %+v %q", vfAddr, err)
 		return err
 	}
-	for _, addr := range vfs {
-		vfID, err := dputils.GetVFID(addr)
-		if err != nil {
-			glog.Errorf("setVfsAdminMac(): unable to get VF id %+v %q", iface.PciAddress, err)
-			return err
-		}
-		vfLink, err := vfIsReady(addr)
-		if err != nil {
-			glog.Errorf("setVfsAdminMac(): VF link is not ready for device %+v %q", addr, err)
-			return err
-		}
-		if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
-			return err
-		}
-		if err = Unbind(addr); err != nil {
-			return err
-		}
-		if err = BindDefaultDriver(addr); err != nil {
-			return err
-		}
+	if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
+		return err
 	}
 
+	return nil
+}
+
+func unbindDriverIfNeeded(vfAddr string, isRdma bool) error {
+	if isRdma {
+		glog.Infof("unbindDriverIfNeeded(): unbind driver for %s", vfAddr)
+		if err := Unbind(vfAddr); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -613,36 +618,22 @@ func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
 	return ""
 }
 
-func setVfsGuid(iface *sriovnetworkv1.Interface) error {
-	glog.Infof("setVfsGuid(): device %s", iface.PciAddress)
-	pfLink, err := netlink.LinkByName(iface.Name)
+func setVfGuid(vfAddr string, pfLink netlink.Link) error {
+	glog.Infof("setVfGuid(): VF %s", vfAddr)
+	vfID, err := dputils.GetVFID(vfAddr)
 	if err != nil {
-		glog.Errorf("setVfsGuid(): unable to get PF link for device %+v %q", iface, err)
+		glog.Errorf("setVfGuid(): unable to get VF id %+v %q", vfAddr, err)
 		return err
 	}
-	vfs, err := dputils.GetVFList(iface.PciAddress)
-	if err != nil {
+	guid := generateRandomGuid()
+	if err := netlink.LinkSetVfNodeGUID(pfLink, vfID, guid); err != nil {
 		return err
 	}
-	for _, addr := range vfs {
-		vfID, err := dputils.GetVFID(addr)
-		if err != nil {
-			glog.Errorf("setVfsGuid(): unable to get VF id %+v %q", iface.PciAddress, err)
-			return err
-		}
-		guid := generateRandomGuid()
-		if err := netlink.LinkSetVfNodeGUID(pfLink, vfID, guid); err != nil {
-			return err
-		}
-		if err := netlink.LinkSetVfPortGUID(pfLink, vfID, guid); err != nil {
-			return err
-		}
-		if err = Unbind(addr); err != nil {
-			return err
-		}
-		if err = BindDefaultDriver(addr); err != nil {
-			return err
-		}
+	if err := netlink.LinkSetVfPortGUID(pfLink, vfID, guid); err != nil {
+		return err
+	}
+	if err = Unbind(vfAddr); err != nil {
+		return err
 	}
 
 	return nil
