@@ -1136,7 +1136,7 @@ var _ = Describe("[sriov] operator", func() {
 						resourceName := "mainpfresource"
 						sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
 						Expect(err).ToNot(HaveOccurred())
-						executorPod := createCustomTestPod(testNode, []string{}, true)
+						executorPod := createCustomTestPod(testNode, []string{}, true, nil)
 						mainDeviceForNode := findMainSriovDevice(executorPod, sriovDeviceList)
 						if mainDeviceForNode == nil {
 							Skip("Could not find pf used as gateway")
@@ -1572,7 +1572,7 @@ var _ = Describe("[sriov] operator", func() {
 
 		})
 
-		Context("vhost-net device Validation", func() {
+		Context("vhost-net and tun devices Validation", func() {
 			var node string
 			resourceName := "vhostresource"
 			vhostnetwork := "test-vhostnetwork"
@@ -1679,17 +1679,35 @@ var _ = Describe("[sriov] operator", func() {
 
 			It("Should have the vhost-net device inside the container", func() {
 				By("creating a pod")
-				podObj := createTestPod(node, []string{vhostnetwork})
+				podObj := createCustomTestPod(node, []string{vhostnetwork}, false, []corev1.Capability{"NET_ADMIN", "NET_RAW"})
 				ips, err := network.GetSriovNicIPs(podObj, "net1")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ips).NotTo(BeNil(), "No sriov network interface found.")
 				Expect(len(ips)).Should(Equal(1))
 
-				By("check the /dev/vhost device exist inside the container")
+				By("checking the /dev/vhost device exist inside the container")
 				output, errOutput, err := pod.ExecCommand(clients, podObj, "ls", "/dev/vhost-net")
 				Expect(err).ToNot(HaveOccurred())
 				Expect(errOutput).To(Equal(""))
 				Expect(output).ToNot(ContainSubstring("cannot access"))
+
+				By("checking the /dev/vhost device exist inside the container")
+				output, errOutput, err = pod.ExecCommand(clients, podObj, "ls", "/dev/net/tun")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+				Expect(output).ToNot(ContainSubstring("cannot access"))
+
+				By("creating a tap device inside the container")
+				output, errOutput, err = pod.ExecCommand(clients, podObj, "ip", "tuntap", "add", "tap23", "mode", "tap", "multi_queue")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+				Expect(output).ToNot(ContainSubstring("No such file"))
+
+				By("checking the tap device was created inside the container")
+				output, errOutput, err = pod.ExecCommand(clients, podObj, "ip", "link", "show", "tap23")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+				Expect(output).To(ContainSubstring("tap23: <BROADCAST,MULTICAST> mtu 1500"))
 			})
 		})
 	})
@@ -1738,7 +1756,7 @@ func discoverResourceForMainSriov(nodes *cluster.EnabledNodes) (*sriovv1.Interfa
 			continue
 		}
 
-		executorPod := createCustomTestPod(node, []string{}, true)
+		executorPod := createCustomTestPod(node, []string{}, true, nil)
 		mainDevice := findMainSriovDevice(executorPod, nodeDevices)
 		if mainDevice == nil {
 			return nil, "", "", false
@@ -1810,7 +1828,7 @@ func findMainSriovDevice(executorPod *corev1.Pod, sriovDevices []*sriovv1.Interf
 }
 
 func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceExt) ([]*sriovv1.InterfaceExt, error) {
-	createdPod := createCustomTestPod(testNode, []string{}, true)
+	createdPod := createCustomTestPod(testNode, []string{}, true, nil)
 	filteredDevices := []*sriovv1.InterfaceExt{}
 	stdout, _, err := pod.ExecCommand(clients, createdPod, "ip", "route")
 	Expect(err).ToNot(HaveOccurred())
@@ -1991,10 +2009,10 @@ func isPodConditionUnschedulable(pod *k8sv1.Pod, resourceName string) bool {
 }
 
 func createTestPod(node string, networks []string) *k8sv1.Pod {
-	return createCustomTestPod(node, networks, false)
+	return createCustomTestPod(node, networks, false, nil)
 }
 
-func createCustomTestPod(node string, networks []string, hostNetwork bool) *k8sv1.Pod {
+func createCustomTestPod(node string, networks []string, hostNetwork bool, podCapabilities []corev1.Capability) *k8sv1.Pod {
 	var podDefinition *corev1.Pod
 	if hostNetwork {
 		podDefinition = pod.DefineWithHostNetwork(node)
@@ -2004,6 +2022,17 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool) *k8sv
 			node,
 		)
 	}
+
+	if podCapabilities != nil && len(podCapabilities) != 0 {
+		if podDefinition.Spec.Containers[0].SecurityContext == nil {
+			podDefinition.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{}
+		}
+		if podDefinition.Spec.Containers[0].SecurityContext.Capabilities == nil {
+			podDefinition.Spec.Containers[0].SecurityContext.Capabilities = &corev1.Capabilities{}
+		}
+		podDefinition.Spec.Containers[0].SecurityContext.Capabilities.Add = podCapabilities
+	}
+
 	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
