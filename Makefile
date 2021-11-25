@@ -97,7 +97,7 @@ install: manifests kustomize
 
 # Uninstall CRDs from a cluster
 uninstall: manifests kustomize
-	$(KUSTOMIZE) build config/crd | kubectl --ignore-not-found delete -f -
+	$(KUSTOMIZE) build config/crd | kubectl delete --ignore-not-found -f -
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 # deploy: manifests kustomize

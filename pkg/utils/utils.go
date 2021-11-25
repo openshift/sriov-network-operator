@@ -276,35 +276,6 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 					glog.Warningf("configSriovDevice(): fail to bind default driver for device %s", addr)
 					return err
 				}
-
-				// validate the device exist only with the default driver
-				// TODO: remove this work around after the BZ is close
-				// https://bugzilla.redhat.com/show_bug.cgi?id=1875338
-				b := backoff.NewConstantBackOff(1 * time.Second)
-				err = backoff.Retry(func() error {
-					_, err := dputils.GetNetNames(addr)
-					if err != nil {
-						glog.Warningf("configSriovDevice(): fail to get interface name for %s: %s", addr, err)
-						return err
-					}
-					return nil
-				}, backoff.WithMaxRetries(b, 10))
-				if err != nil {
-					glog.Warningf("configSriovDevice(): unbind PCI %s from default driver and return the error: %v", addr, err)
-					err = Unbind(addr)
-					if err != nil {
-						return fmt.Errorf("configSriovDevice(): failed to unbind PCI %s: %v", addr, err)
-					}
-
-					if err := BindDefaultDriver(addr); err != nil {
-						glog.Warningf("configSriovDevice(): fail to rebind default driver for device %s", addr)
-						return err
-					}
-
-					glog.Warningf("configSriovDevice(): W/A rebind for PCI %s", addr)
-
-				}
-
 				// only set MTU for VF with default driver
 				if iface.VfGroups[i].Mtu > 0 {
 					if err := setNetdevMTU(addr, iface.VfGroups[i].Mtu); err != nil {
