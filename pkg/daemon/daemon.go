@@ -231,6 +231,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	defer dn.workqueue.ShutDown()
 
 	tryEnableRdma()
+	tryEnableTun()
 
 	if err := sriovnetworkv1.InitNicIdMap(dn.kubeClient, namespace); err != nil {
 		return err
@@ -940,6 +941,12 @@ func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
 		nameList[i] = rawList[i].String()
 	}
 	return nameList
+}
+
+func tryEnableTun() {
+	if err := utils.LoadKernelModule("tun"); err != nil {
+		glog.Errorf("tryEnableTun(): TUN kernel module not loaded: %v", err)
+	}
 }
 
 func tryEnableRdma() (bool, error) {
