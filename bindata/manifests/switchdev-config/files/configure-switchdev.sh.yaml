@@ -54,14 +54,19 @@ contents:
         # Create udev rule to save PF name
         add_udev_rule_for_sriov_pf $name
 
-        echo "unload VF driver for $pci_addr"
+        echo "Unload VF driver for $pci_addr"
         VfDirs=$(ls /sys/bus/pci/devices/${pci_addr} | grep virtfn)
         for VfDir in $VfDirs
         do
           VfPciAddr=$(basename "$( readlink -f /sys/bus/pci/devices/${pci_addr}/$VfDir )")
           echo $VfPciAddr > /sys/bus/pci/drivers/mlx5_core/unbind || true
         done
+        # set flow steering mode before entering switchdev mode
+        echo "Set flow steering mode to dmfs"
+        devlink dev param set pci/${pci_addr} name flow_steering_mode value dmfs cmode runtime
+
         # set PF to switchdev mode
+        echo "Set eswitch mode to switchdev"
         devlink dev eswitch set pci/${pci_addr} mode switchdev
         ip link set ${name} up
 
