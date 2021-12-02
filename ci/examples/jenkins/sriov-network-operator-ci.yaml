@@ -59,7 +59,7 @@
           failure-status: "Build Failed, comment `/test-e2e-all`, /test-e2e-nvidia-all, or `/test-all` to retrigger"
           error-status: "Build Failed, comment `/test-e2e-all`, /test-e2e-nvidia-all, or `/test-all` to retrigger"
           status-context: '{project} CI'
-          trigger-phrase: ".*/test-(all|e2e-all|e2e-nvidia-all(,| |$)).*"
+          trigger-phrase: "^(?!Thanks for your PR).*/test-(all|e2e-all|e2e-nvidia-all(,| |$)).*"
           white-list:
             - '*'
           white-list-target-branches:
