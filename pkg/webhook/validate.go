@@ -3,14 +3,15 @@ package webhook
 import (
 	"context"
 	"fmt"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+
 	"github.com/golang/glog"
-	"k8s.io/api/admission/v1"
+	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -91,8 +92,8 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 		return false, fmt.Errorf("resource name \"%s\" contains invalid characters, the accepted syntax of the regular expressions is: \"^[a-zA-Z0-9_]+$\"", cr.Spec.ResourceName)
 	}
 
-	if cr.Spec.NicSelector.Vendor == "" && cr.Spec.NicSelector.DeviceID == "" && len(cr.Spec.NicSelector.PfNames) == 0 && len(cr.Spec.NicSelector.RootDevices) == 0 {
-		return false, fmt.Errorf("at least one of these parameters (vendor, deviceID, pfNames or rootDevices) has to be defined in nicSelector in CR %s", cr.GetName())
+	if cr.Spec.NicSelector.Vendor == "" && cr.Spec.NicSelector.DeviceID == "" && len(cr.Spec.NicSelector.PfNames) == 0 && len(cr.Spec.NicSelector.RootDevices) == 0 && cr.Spec.NicSelector.NetFilter == "" {
+		return false, fmt.Errorf("at least one of these parameters (vendor, deviceID, pfNames, rootDevices or netFilter) has to be defined in nicSelector in CR %s", cr.GetName())
 	}
 
 	if cr.Spec.NicSelector.Vendor != "" {
