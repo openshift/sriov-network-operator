@@ -1,0 +1,31 @@
+on:
+  pull_request_target:
+
+jobs:
+  vendors-ci-triggers-list:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v5
+        env:
+          MESSAGE: >-
+            Thanks for your PR,\n
+            To run vendors CIs use one of:\n
+            * `/test-all`: To run all tests for all vendors.\n
+            * `/test-e2e-all`: To run all E2E tests for all vendors.\n
+            * `/test-e2e-nvidia-all`: To run all E2E tests for NVIDIA vendor.\n
+            \n
+            To skip the vendors CIs use one of:\n
+            * `/skip-all`: To skip all tests for all vendors.\n
+            * `/skip-e2e-all`: To skip all E2E tests for all vendors.\n
+            * `/skip-e2e-nvidia-all`: To skip all E2E tests for NVIDIA vendor.\n
+            Best regards.
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "${{ env.MESSAGE }}"
+            })
+
