@@ -42,6 +42,7 @@ import (
 	apply "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 // SriovOperatorConfigReconciler reconciles a SriovOperatorConfig object
@@ -69,12 +70,12 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 	}
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
 	err := r.Get(context.TODO(), types.NamespacedName{
-		Name: DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
+		Name: constants.DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Default Config object not found, create it.
 			defaultConfig.SetNamespace(namespace)
-			defaultConfig.SetName(DEFAULT_CONFIG_NAME)
+			defaultConfig.SetName(constants.DEFAULT_CONFIG_NAME)
 			defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 				EnableInjector:           func() *bool { b := enableAdmissionController; return &b }(),
 				EnableOperatorWebhook:    func() *bool { b := enableAdmissionController; return &b }(),
@@ -84,7 +85,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 			err = r.Create(context.TODO(), defaultConfig)
 			if err != nil {
 				logger.Error(err, "Failed to create default Operator Config", "Namespace",
-					namespace, "Name", DEFAULT_CONFIG_NAME)
+					namespace, "Name", constants.DEFAULT_CONFIG_NAME)
 				return reconcile.Result{}, err
 			}
 			return reconcile.Result{}, nil
@@ -117,7 +118,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 		}
 	}
 
-	return reconcile.Result{RequeueAfter: ResyncPeriod}, nil
+	return reconcile.Result{RequeueAfter: constants.ResyncPeriod}, nil
 }
 
 func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -169,7 +170,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 	data.Data["Namespace"] = namespace
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ClusterType"] = utils.ClusterType
-	objs, err := render.RenderDir(CONFIG_DAEMON_PATH, &data)
+	objs, err := render.RenderDir(constants.CONFIG_DAEMON_PATH, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render config daemon manifests")
 		return err
@@ -221,7 +222,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		}
 
 		// Delete injector webhook
-		if *dc.Spec.EnableInjector != true && path == INJECTOR_WEBHOOK_PATH {
+		if *dc.Spec.EnableInjector != true && path == constants.INJECTOR_WEBHOOK_PATH {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(obj)
 				if err != nil {
@@ -234,7 +235,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 			continue
 		}
 		// Delete operator webhook
-		if *dc.Spec.EnableOperatorWebhook != true && path == OPERATOR_WEBHOOK_PATH {
+		if *dc.Spec.EnableOperatorWebhook != true && path == constants.OPERATOR_WEBHOOK_PATH {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(obj)
 				if err != nil {
@@ -295,10 +296,10 @@ func (r *SriovOperatorConfigReconciler) syncOffloadMachineConfig(dc *sriovnetwor
 
 	logger.Info("Start to render MachineConfig and MachineConfigPool for OVS HW offloading")
 	data := render.MakeRenderData()
-	data.Data["HwOffloadNodeLabel"] = HwOffloadNodeLabel
-	mcName := "00-" + HwOffloadNodeLabel
-	mcpName := HwOffloadNodeLabel
-	mc, err := render.GenerateMachineConfig("bindata/manifests/switchdev-config", mcName, HwOffloadNodeLabel, dc.Spec.EnableOvsOffload, &data)
+	data.Data["HwOffloadNodeLabel"] = constants.HwOffloadNodeLabel
+	mcName := "00-" + constants.HwOffloadNodeLabel
+	mcpName := constants.HwOffloadNodeLabel
+	mc, err := render.GenerateMachineConfig("bindata/manifests/switchdev-config", mcName, constants.HwOffloadNodeLabel, dc.Spec.EnableOvsOffload, &data)
 	if err != nil {
 		return err
 	}
