@@ -498,24 +498,26 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	}
 
 	if reqDrain {
-		ctx, cancel := context.WithCancel(context.TODO())
-		defer cancel()
+		if !dn.disableDrain {
+			ctx, cancel := context.WithCancel(context.TODO())
+			defer cancel()
 
-		glog.Infof("nodeStateSyncHandler(): get drain lock for sriov daemon")
-		done := make(chan bool)
-		go dn.getDrainLock(ctx, done)
-		<-done
-
-		glog.Infof("nodeStateSyncHandler(): pause MCP")
-		if err := dn.pauseMCP(); err != nil {
-			return err
+			glog.Infof("nodeStateSyncHandler(): get drain lock for sriov daemon")
+			done := make(chan bool)
+			go dn.getDrainLock(ctx, done)
+			<-done
 		}
 
-		if !dn.disableDrain {
-			glog.Info("nodeStateSyncHandler(): drain node")
-			if err := dn.drainNode(); err != nil {
+		if utils.ClusterType == utils.ClusterTypeOpenshift {
+			glog.Infof("nodeStateSyncHandler(): pause MCP")
+			if err := dn.pauseMCP(); err != nil {
 				return err
 			}
+		}
+
+		glog.Info("nodeStateSyncHandler(): drain node")
+		if err := dn.drainNode(); err != nil {
+			return err
 		}
 	}
 
@@ -819,13 +821,8 @@ func (dn *Daemon) getDrainLock(ctx context.Context, done chan bool) {
 }
 
 func (dn *Daemon) pauseMCP() error {
-	glog.Info("pauseMCP(): check if pausing MCP is possible")
+	glog.Info("pauseMCP(): pausing MCP")
 	var err error
-
-	if utils.ClusterType != utils.ClusterTypeOpenshift {
-		glog.Infof("pauseMCP(): skipping MCP pause as the cluster is not an openshift cluster")
-		return nil
-	}
 
 	mcpInformerFactory := mcfginformers.NewSharedInformerFactory(dn.mcClient,
 		time.Second*30,
@@ -913,6 +910,11 @@ func (dn *Daemon) pauseMCP() error {
 }
 
 func (dn *Daemon) drainNode() error {
+	if dn.disableDrain {
+		glog.Info("drainNode(): disable drain is true skipping drain")
+		return nil
+	}
+
 	glog.Info("drainNode(): Update prepared")
 	var err error
 
