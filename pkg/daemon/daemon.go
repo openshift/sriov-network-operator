@@ -497,9 +497,26 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		}
 	}
 
-	if reqDrain && !dn.disableDrain {
+	if reqDrain {
+		if !dn.disableDrain {
+			ctx, cancel := context.WithCancel(context.TODO())
+			defer cancel()
+
+			glog.Infof("nodeStateSyncHandler(): get drain lock for sriov daemon")
+			done := make(chan bool)
+			go dn.getDrainLock(ctx, done)
+			<-done
+		}
+
+		if utils.ClusterType == utils.ClusterTypeOpenshift {
+			glog.Infof("nodeStateSyncHandler(): pause MCP")
+			if err := dn.pauseMCP(); err != nil {
+				return err
+			}
+		}
+
 		glog.Info("nodeStateSyncHandler(): drain node")
-		if err := dn.drainNode(dn.name); err != nil {
+		if err := dn.drainNode(); err != nil {
 			return err
 		}
 	}
@@ -801,98 +818,102 @@ func (dn *Daemon) getDrainLock(ctx context.Context, done chan bool) {
 	})
 }
 
-func (dn *Daemon) drainNode(name string) error {
-	glog.Info("drainNode(): Update prepared")
+func (dn *Daemon) pauseMCP() error {
+	glog.Info("pauseMCP(): pausing MCP")
 	var err error
+
+	mcpInformerFactory := mcfginformers.NewSharedInformerFactory(dn.mcClient,
+		time.Second*30,
+	)
+	mcpInformer := mcpInformerFactory.Machineconfiguration().V1().MachineConfigPools().Informer()
+
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
+	paused := dn.node.Annotations[annoKey] == annoMcpPaused
 
-	done := make(chan bool)
-	go dn.getDrainLock(ctx, done)
-	<-done
-
-	if utils.ClusterType == utils.ClusterTypeOpenshift {
-		mcpInformerFactory := mcfginformers.NewSharedInformerFactory(dn.mcClient,
-			time.Second*30,
-		)
-		mcpInformer := mcpInformerFactory.Machineconfiguration().V1().MachineConfigPools().Informer()
-
-		ctx, cancel := context.WithCancel(context.TODO())
-		defer cancel()
-		paused := dn.node.Annotations[annoKey] == annoMcpPaused
-
-		mcpEventHandler := func(obj interface{}) {
-			mcp := obj.(*mcfgv1.MachineConfigPool)
-			if mcp.GetName() != dn.mcpName {
-				return
-			}
-			// Always get the latest object
-			newMcp, err := dn.mcClient.MachineconfigurationV1().MachineConfigPools().Get(ctx, dn.mcpName, metav1.GetOptions{})
-			if err != nil {
-				glog.V(2).Infof("drainNode(): Failed to get MCP %s: %v", dn.mcpName, err)
-				return
-			}
-			if mcfgv1.IsMachineConfigPoolConditionFalse(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolDegraded) &&
-				mcfgv1.IsMachineConfigPoolConditionTrue(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolUpdated) &&
-				mcfgv1.IsMachineConfigPoolConditionFalse(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolUpdating) {
-				glog.V(2).Infof("drainNode(): MCP %s is ready", dn.mcpName)
-				if paused {
-					glog.V(2).Info("drainNode(): stop MCP informer")
-					cancel()
-					return
-				}
-				if newMcp.Spec.Paused {
-					glog.V(2).Infof("drainNode(): MCP %s was paused by other, wait...", dn.mcpName)
-					return
-				}
-				glog.Infof("drainNode(): pause MCP %s", dn.mcpName)
-				pausePatch := []byte("{\"spec\":{\"paused\":true}}")
-				_, err = dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
-				if err != nil {
-					glog.V(2).Infof("drainNode(): Failed to pause MCP %s: %v", dn.mcpName, err)
-					return
-				}
-				err = dn.annotateNode(dn.name, annoMcpPaused)
-				if err != nil {
-					glog.V(2).Infof("drainNode(): Failed to annotate node: %v", err)
-					return
-				}
-				paused = true
-				return
-			}
+	mcpEventHandler := func(obj interface{}) {
+		mcp := obj.(*mcfgv1.MachineConfigPool)
+		if mcp.GetName() != dn.mcpName {
+			return
+		}
+		// Always get the latest object
+		newMcp, err := dn.mcClient.MachineconfigurationV1().MachineConfigPools().Get(ctx, dn.mcpName, metav1.GetOptions{})
+		if err != nil {
+			glog.V(2).Infof("drainNode(): Failed to get MCP %s: %v", dn.mcpName, err)
+			return
+		}
+		if mcfgv1.IsMachineConfigPoolConditionFalse(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolDegraded) &&
+			mcfgv1.IsMachineConfigPoolConditionTrue(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolUpdated) &&
+			mcfgv1.IsMachineConfigPoolConditionFalse(newMcp.Status.Conditions, mcfgv1.MachineConfigPoolUpdating) {
+			glog.V(2).Infof("drainNode(): MCP %s is ready", dn.mcpName)
 			if paused {
-				glog.Infof("drainNode(): MCP is processing, resume MCP %s", dn.mcpName)
-				pausePatch := []byte("{\"spec\":{\"paused\":false}}")
-				_, err = dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
-				if err != nil {
-					glog.V(2).Infof("drainNode(): fail to resume MCP %s: %v", dn.mcpName, err)
-					return
-				}
-				err = dn.annotateNode(dn.name, annoDraining)
-				if err != nil {
-					glog.V(2).Infof("drainNode(): Failed to annotate node: %v", err)
-					return
-				}
-				paused = false
+				glog.V(2).Info("drainNode(): stop MCP informer")
+				cancel()
+				return
 			}
-			glog.Infof("drainNode():MCP %s is not ready: %v, wait...", newMcp.GetName(), newMcp.Status.Conditions)
+			if newMcp.Spec.Paused {
+				glog.V(2).Infof("drainNode(): MCP %s was paused by other, wait...", dn.mcpName)
+				return
+			}
+			glog.Infof("drainNode(): pause MCP %s", dn.mcpName)
+			pausePatch := []byte("{\"spec\":{\"paused\":true}}")
+			_, err = dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
+			if err != nil {
+				glog.V(2).Infof("drainNode(): Failed to pause MCP %s: %v", dn.mcpName, err)
+				return
+			}
+			err = dn.annotateNode(dn.name, annoMcpPaused)
+			if err != nil {
+				glog.V(2).Infof("drainNode(): Failed to annotate node: %v", err)
+				return
+			}
+			paused = true
+			return
 		}
-
-		mcpInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: mcpEventHandler,
-			UpdateFunc: func(old, new interface{}) {
-				mcpEventHandler(new)
-			},
-		})
-
-		// The Draining_MCP_Paused state means the MCP work has been paused by the config daemon in previous round.
-		// Only check MCP state if the node is not in Draining_MCP_Paused state
-		if !paused {
-			mcpInformerFactory.Start(ctx.Done())
-			mcpInformerFactory.WaitForCacheSync(ctx.Done())
-			<-ctx.Done()
+		if paused {
+			glog.Infof("drainNode(): MCP is processing, resume MCP %s", dn.mcpName)
+			pausePatch := []byte("{\"spec\":{\"paused\":false}}")
+			_, err = dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
+			if err != nil {
+				glog.V(2).Infof("drainNode(): fail to resume MCP %s: %v", dn.mcpName, err)
+				return
+			}
+			err = dn.annotateNode(dn.name, annoDraining)
+			if err != nil {
+				glog.V(2).Infof("drainNode(): Failed to annotate node: %v", err)
+				return
+			}
+			paused = false
 		}
+		glog.Infof("drainNode():MCP %s is not ready: %v, wait...", newMcp.GetName(), newMcp.Status.Conditions)
 	}
+
+	mcpInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: mcpEventHandler,
+		UpdateFunc: func(old, new interface{}) {
+			mcpEventHandler(new)
+		},
+	})
+
+	// The Draining_MCP_Paused state means the MCP work has been paused by the config daemon in previous round.
+	// Only check MCP state if the node is not in Draining_MCP_Paused state
+	if !paused {
+		mcpInformerFactory.Start(ctx.Done())
+		mcpInformerFactory.WaitForCacheSync(ctx.Done())
+		<-ctx.Done()
+	}
+
+	return err
+}
+
+func (dn *Daemon) drainNode() error {
+	if dn.disableDrain {
+		glog.Info("drainNode(): disable drain is true skipping drain")
+		return nil
+	}
+
+	glog.Info("drainNode(): Update prepared")
+	var err error
 
 	backoff := wait.Backoff{
 		Steps:    5,
