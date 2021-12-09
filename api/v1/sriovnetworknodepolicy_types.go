@@ -32,6 +32,8 @@ type SriovNetworkNodePolicySpec struct {
 	DeviceType string `json:"deviceType,omitempty"`
 	// RDMA mode. Defaults to false.
 	IsRdma bool `json:"isRdma,omitempty"`
+	// mount vhost-net device. Defaults to false.
+	NeedVhostNet bool `json:"needVhostNet,omitempty"`
 	// +kubebuilder:validation:Enum=eth;ETH;ib;IB
 	// NIC Link Type. Allowed value "eth", "ETH", "ib", and "IB".
 	LinkType string `json:"linkType,omitempty"`

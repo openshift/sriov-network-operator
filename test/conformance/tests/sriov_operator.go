@@ -1136,7 +1136,7 @@ var _ = Describe("[sriov] operator", func() {
 						resourceName := "mainpfresource"
 						sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
 						Expect(err).ToNot(HaveOccurred())
-						executorPod := createCustomTestPod(testNode, []string{}, true)
+						executorPod := createCustomTestPod(testNode, []string{}, true, nil)
 						mainDeviceForNode := findMainSriovDevice(executorPod, sriovDeviceList)
 						if mainDeviceForNode == nil {
 							Skip("Could not find pf used as gateway")
@@ -1572,6 +1572,144 @@ var _ = Describe("[sriov] operator", func() {
 
 		})
 
+		Context("vhost-net and tun devices Validation", func() {
+			var node string
+			resourceName := "vhostresource"
+			vhostnetwork := "test-vhostnetwork"
+			numVfs := 5
+			var intf *sriovv1.InterfaceExt
+			var err error
+
+			execute.BeforeAll(func() {
+				if discovery.Enabled() {
+					node, resourceName, numVfs, intf, err = discovery.DiscoveredResources(clients,
+						sriovInfos, operatorNamespace,
+						func(policy sriovv1.SriovNetworkNodePolicy) bool {
+							if !defaultFilterPolicy(policy) {
+								return false
+							}
+							if !policy.Spec.NeedVhostNet {
+								return false
+							}
+							return true
+						},
+						func(node string, sriovDeviceList []*sriovv1.InterfaceExt) (*sriovv1.InterfaceExt, bool) {
+							if len(sriovDeviceList) == 0 {
+								return nil, false
+							}
+							return sriovDeviceList[0], true
+						},
+					)
+					Expect(err).ToNot(HaveOccurred())
+					if node == "" || resourceName == "" || numVfs < 5 || intf == nil {
+						Skip("Insufficient resources to run test in discovery mode")
+					}
+				} else {
+					node = sriovInfos.Nodes[0]
+					sriovDeviceList, err := sriovInfos.FindSriovDevices(node)
+					Expect(err).ToNot(HaveOccurred())
+					unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
+					if err != nil {
+						Skip(err.Error())
+					}
+					intf = unusedSriovDevices[0]
+
+					mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							GenerateName: "test-vhostpolicy",
+							Namespace:    operatorNamespace,
+						},
+
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NodeSelector: map[string]string{
+								"kubernetes.io/hostname": node,
+							},
+							NumVfs:       5,
+							ResourceName: resourceName,
+							Priority:     99,
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name},
+							},
+							DeviceType:   "netdevice",
+							NeedVhostNet: true,
+						},
+					}
+
+					err = clients.Create(context.Background(), mtuPolicy)
+					Expect(err).ToNot(HaveOccurred())
+
+					WaitForSRIOVStable()
+					By("waiting for the resources to be available")
+					Eventually(func() int64 {
+						testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+						allocatable, _ := resNum.AsInt64()
+						return allocatable
+					}, 10*time.Minute, time.Second).Should(Equal(int64(5)))
+				}
+
+				sriovNetwork := &sriovv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      vhostnetwork,
+						Namespace: operatorNamespace,
+					},
+					Spec: sriovv1.SriovNetworkSpec{
+						ResourceName:     resourceName,
+						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+						NetworkNamespace: namespaces.Test,
+						LinkState:        "enable",
+					}}
+
+				// We need this to be able to run the connectivity checks on Mellanox cards
+				if intf.DeviceID == "1015" {
+					sriovNetwork.Spec.SpoofChk = "off"
+				}
+
+				err = clients.Create(context.Background(), sriovNetwork)
+
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() error {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: vhostnetwork, Namespace: namespaces.Test}, netAttDef)
+				}, (10+snoTimeoutMultiplier*110)*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+			})
+
+			It("Should have the vhost-net device inside the container", func() {
+				By("creating a pod")
+				podObj := createCustomTestPod(node, []string{vhostnetwork}, false, []corev1.Capability{"NET_ADMIN", "NET_RAW"})
+				ips, err := network.GetSriovNicIPs(podObj, "net1")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ips).NotTo(BeNil(), "No sriov network interface found.")
+				Expect(len(ips)).Should(Equal(1))
+
+				By("checking the /dev/vhost device exist inside the container")
+				output, errOutput, err := pod.ExecCommand(clients, podObj, "ls", "/dev/vhost-net")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+				Expect(output).ToNot(ContainSubstring("cannot access"))
+
+				By("checking the /dev/vhost device exist inside the container")
+				output, errOutput, err = pod.ExecCommand(clients, podObj, "ls", "/dev/net/tun")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+				Expect(output).ToNot(ContainSubstring("cannot access"))
+
+				By("creating a tap device inside the container")
+				output, errOutput, err = pod.ExecCommand(clients, podObj, "ip", "tuntap", "add", "tap23", "mode", "tap", "multi_queue")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+				Expect(output).ToNot(ContainSubstring("No such file"))
+
+				By("checking the tap device was created inside the container")
+				output, errOutput, err = pod.ExecCommand(clients, podObj, "ip", "link", "show", "tap23")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+				Expect(output).To(ContainSubstring("tap23: <BROADCAST,MULTICAST> mtu 1500"))
+			})
+		})
 	})
 })
 
@@ -1618,7 +1756,7 @@ func discoverResourceForMainSriov(nodes *cluster.EnabledNodes) (*sriovv1.Interfa
 			continue
 		}
 
-		executorPod := createCustomTestPod(node, []string{}, true)
+		executorPod := createCustomTestPod(node, []string{}, true, nil)
 		mainDevice := findMainSriovDevice(executorPod, nodeDevices)
 		if mainDevice == nil {
 			return nil, "", "", false
@@ -1690,7 +1828,7 @@ func findMainSriovDevice(executorPod *corev1.Pod, sriovDevices []*sriovv1.Interf
 }
 
 func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceExt) ([]*sriovv1.InterfaceExt, error) {
-	createdPod := createCustomTestPod(testNode, []string{}, true)
+	createdPod := createCustomTestPod(testNode, []string{}, true, nil)
 	filteredDevices := []*sriovv1.InterfaceExt{}
 	stdout, _, err := pod.ExecCommand(clients, createdPod, "ip", "route")
 	Expect(err).ToNot(HaveOccurred())
@@ -1871,10 +2009,10 @@ func isPodConditionUnschedulable(pod *k8sv1.Pod, resourceName string) bool {
 }
 
 func createTestPod(node string, networks []string) *k8sv1.Pod {
-	return createCustomTestPod(node, networks, false)
+	return createCustomTestPod(node, networks, false, nil)
 }
 
-func createCustomTestPod(node string, networks []string, hostNetwork bool) *k8sv1.Pod {
+func createCustomTestPod(node string, networks []string, hostNetwork bool, podCapabilities []corev1.Capability) *k8sv1.Pod {
 	var podDefinition *corev1.Pod
 	if hostNetwork {
 		podDefinition = pod.DefineWithHostNetwork(node)
@@ -1884,6 +2022,17 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool) *k8sv
 			node,
 		)
 	}
+
+	if podCapabilities != nil && len(podCapabilities) != 0 {
+		if podDefinition.Spec.Containers[0].SecurityContext == nil {
+			podDefinition.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{}
+		}
+		if podDefinition.Spec.Containers[0].SecurityContext.Capabilities == nil {
+			podDefinition.Spec.Containers[0].SecurityContext.Capabilities = &corev1.Capabilities{}
+		}
+		podDefinition.Spec.Containers[0].SecurityContext.Capabilities.Add = podCapabilities
+	}
+
 	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
