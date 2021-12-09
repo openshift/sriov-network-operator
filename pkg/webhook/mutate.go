@@ -5,14 +5,13 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"k8s.io/api/admission/v1"
+	v1 "k8s.io/api/admission/v1"
 )
 
 var (
 	defaultPriorityPatch   = map[string]interface{}{"op": "add", "path": "/spec/priority", "value": 99}
 	defaultDeviceTypePatch = map[string]interface{}{"op": "add", "path": "/spec/deviceType", "value": "netdevice"}
 	defaultIsRdmaPatch     = map[string]interface{}{"op": "add", "path": "/spec/isRdma", "value": false}
-	defaultLinkTypePatch   = map[string]interface{}{"op": "add", "path": "/spec/linkType", "value": "eth"}
 	InfiniBandIsRdmaPatch  = map[string]interface{}{"op": "add", "path": "/spec/isRdma", "value": true}
 )
 
@@ -40,10 +39,6 @@ func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1.AdmissionRespo
 	if _, ok := spec.(map[string]interface{})["isRdma"]; !ok {
 		glog.V(2).Infof("mutateSriovNetworkNodePolicy(): set default isRdma to false for %v", name)
 		patchs = append(patchs, defaultIsRdmaPatch)
-	}
-	if _, ok := spec.(map[string]interface{})["linkType"]; !ok {
-		glog.V(2).Infof("mutateSriovNetworkNodePolicy(): set default linkType to eth for %v", name)
-		patchs = append(patchs, defaultLinkTypePatch)
 	}
 	// Device with InfiniBand link type requires isRdma to be true
 	if str, ok := spec.(map[string]interface{})["linkType"].(string); ok && strings.ToLower(str) == "ib" {
