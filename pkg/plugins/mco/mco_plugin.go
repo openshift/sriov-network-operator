@@ -16,7 +16,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 type McoPlugin struct {
@@ -123,7 +123,7 @@ func (p *McoPlugin) Apply() error {
 	if err != nil {
 		return err
 	}
-	label := nodeLabelPrefix + controllers.HwOffloadNodeLabel
+	label := nodeLabelPrefix + constants.HwOffloadNodeLabel
 	if switchdevConfigured {
 		if _, ok := node.Labels[label]; !ok {
 			glog.Infof("Move node %s into HW offload MachineConfigPool", node.Name)
