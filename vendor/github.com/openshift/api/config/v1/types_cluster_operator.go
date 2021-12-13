@@ -130,7 +130,8 @@ type ClusterOperatorStatusCondition struct {
 	Reason string `json:"reason,omitempty"`
 
 	// message provides additional information about the current condition.
-	// This is only to be consumed by humans.
+	// This is only to be consumed by humans.  It may contain Line Feed
+	// characters (U+000A), which should be rendered as new lines.
 	// +optional
 	Message string `json:"message,omitempty"`
 }
@@ -141,6 +142,8 @@ type ClusterStatusConditionType string
 const (
 	// Available indicates that the operand (eg: openshift-apiserver for the
 	// openshift-apiserver-operator), is functional and available in the cluster.
+	// Available=False means at least part of the component is non-functional,
+	// and that the condition requires immediate administrator intervention.
 	OperatorAvailable ClusterStatusConditionType = "Available"
 
 	// Progressing indicates that the operator is actively rolling out new code,
@@ -161,10 +164,10 @@ const (
 	// persist over a long enough period to report Degraded.  A service should not
 	// report Degraded during the course of a normal upgrade.  A service may report
 	// Degraded in response to a persistent infrastructure failure that requires
-	// administrator intervention.  For example, if a control plane host is unhealthy
-	// and must be replaced.  An operator should report Degraded if unexpected
-	// errors occur over a period, but the expectation is that all unexpected errors
-	// are handled as operators mature.
+	// eventual administrator intervention.  For example, if a control plane host
+	// is unhealthy and must be replaced.  An operator should report Degraded if
+	// unexpected errors occur over a period, but the expectation is that all
+	// unexpected errors are handled as operators mature.
 	OperatorDegraded ClusterStatusConditionType = "Degraded"
 
 	// Upgradeable indicates whether the operator is in a state that is safe to upgrade. When status is `False`

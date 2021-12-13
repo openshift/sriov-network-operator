@@ -44,6 +44,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/leaderelection"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
@@ -76,16 +77,21 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+	restConfig := ctrl.GetConfigOrDie()
+	le := leaderelection.GetLeaderElectionConfig(restConfig, enableLeaderElection)
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	namespace := os.Getenv("NAMESPACE")
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "a56def2a.openshift.io",
+		LeaseDuration:          &le.LeaseDuration.Duration,
+		RenewDeadline:          &le.RenewDeadline.Duration,
+		RetryPeriod:            &le.RetryPeriod.Duration,
 		Namespace:              namespace,
 	})
 	if err != nil {
