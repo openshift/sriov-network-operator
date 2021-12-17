@@ -1,0 +1,92 @@
+- project:
+    name: sriov-network-operator-github-ci
+    jobs:
+      - 'sriov-network-operator-ci':
+          project: sriov-network-operator
+          disabled_var: false
+          concurrent: false
+          node: <node label>
+          git-site: https://github.com
+          git-root: k8snetworkplumbingwg
+          git-project: sriov-network-operator
+
+- job-template:
+    name: 'sriov-network-operator-ci'
+    node: '{node}'
+    builders:
+      - inject:
+          properties-content: |
+            KUBECONFIG=/etc/kubernetes/admin.conf
+            INTERFACES_SWITCHER=system-service
+      - run-e2e-test
+    concurrent: false
+    description: <!-- Managed by Jenkins Job Builder -->
+    disabled: false
+    project-type: freestyle
+    properties:
+      - build-discarder:
+          artifact-days-to-keep: 60
+          artifact-num-to-keep: 100
+          days-to-keep: 60
+          num-to-keep: 100
+      - github:
+          url: '{git-site}/{git-root}/{git-project}'
+    scm:
+      - git:
+          branches: ["${{sha1}}"]
+          credentials-id: '{credentials-id}'
+          name: '{git-project}'
+          refspec: +refs/pull/*:refs/remotes/origin/pr/*
+          url: '{git-site}/{git-root}/{git-project}'
+          wipe-workspace: true
+    triggers:
+      - github-pull-request:
+          admin-list:
+            - mellanox-ci
+          allow-whitelist-orgs-as-admins: true
+          org-list:
+            - Mellanox
+          auth-id: '{auth-id}'
+          auto-close-on-fail: false
+          build-desc-template: null
+          cron: H/5 * * * *
+          github-hooks: false
+          only-trigger-phrase: true
+          cancel-builds-on-update: true
+          permit-all: false
+          status-url: --none--
+          success-status: "Build Passed"
+          failure-status: "Build Failed, comment `/test-e2e-all`, /test-e2e-nvidia-all, or `/test-all` to retrigger"
+          error-status: "Build Failed, comment `/test-e2e-all`, /test-e2e-nvidia-all, or `/test-all` to retrigger"
+          status-context: '{project} CI'
+          trigger-phrase: "^(?!Thanks for your PR).*/test-(all|e2e-all|e2e-nvidia-all(,| |$)).*"
+          white-list:
+            - '*'
+          white-list-target-branches:
+            - master
+      - github
+    wrappers:
+      - timeout:
+          timeout: 120
+          fail: true
+      - timestamps
+
+- builder:
+    name: run-e2e-test
+    builders:
+      - shell: |
+          #!/bin/bash
+          status=0
+          ./hack/teardown-e2e-kind-cluster.sh
+          sleep 5
+
+          # This line is vendor specific, it should be changed according to hardware.
+          mlnx_pci=$(lspci | grep Mellanox | grep -Ev 'MT27500|MT27520|Virt' | head -n 1 | awk '{print $1}')
+          ./hack/run-e2e-test-kind.sh 0000:${mlnx_pci}
+          let status=$status+$?
+
+          ./hack/teardown-e2e-kind-cluster.sh
+          sleep 5
+
+          exit $status
+
