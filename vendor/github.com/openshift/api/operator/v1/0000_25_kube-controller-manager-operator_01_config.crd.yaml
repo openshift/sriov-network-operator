@@ -2,7 +2,9 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
   name: kubecontrollermanagers.operator.openshift.io
 spec:
   group: operator.openshift.io
@@ -56,6 +58,12 @@ spec:
                   to manage coarse grained logging choices that operators have to
                   interpret for their operands. \n Valid values are: \"Normal\", \"Debug\",
                   \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
+                enum:
+                - ""
+                - Normal
+                - Debug
+                - Trace
+                - TraceAll
                 type: string
               managementState:
                 description: managementState indicates whether and how the operator
@@ -70,10 +78,18 @@ spec:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               operatorLogLevel:
-                description: operatorLogLevel is an intent based logging for the operator
-                  itself.  It does not give fine grained control, but it is a simple
-                  way to manage coarse grained logging choices that operators have
-                  to interpret for themselves.
+                default: Normal
+                description: "operatorLogLevel is an intent based logging for the
+                  operator itself.  It does not give fine grained control, but it
+                  is a simple way to manage coarse grained logging choices that operators
+                  have to interpret for themselves. \n Valid values are: \"Normal\",
+                  \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
+                enum:
+                - ""
+                - Normal
+                - Debug
+                - Trace
+                - TraceAll
                 type: string
               succeededRevisionLimit:
                 description: succeededRevisionLimit is the number of successful static
@@ -165,6 +181,10 @@ spec:
                         successful deployment
                       format: int32
                       type: integer
+                    lastFailedCount:
+                      description: lastFailedCount is how often the last failed revision
+                        failed.
+                      type: integer
                     lastFailedRevision:
                       description: lastFailedRevision is the generation of the deployment
                         we tried and failed to deploy.
@@ -176,6 +196,11 @@ spec:
                       items:
                         type: string
                       type: array
+                    lastFailedTime:
+                      description: lastFailedTime is the time the last failed revision
+                        failed the last time.
+                      format: date-time
+                      type: string
                     nodeName:
                       description: nodeName is the name of the node
                       type: string
