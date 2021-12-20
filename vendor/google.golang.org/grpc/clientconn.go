@@ -194,13 +194,12 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.mkp = cc.dopts.copts.KeepaliveParams
 
 	if cc.dopts.copts.Dialer == nil {
-		cc.dopts.copts.Dialer = func(ctx context.Context, addr string) (net.Conn, error) {
-			network, addr := parseDialTarget(addr)
-			return (&net.Dialer{}).DialContext(ctx, network, addr)
-		}
-		if cc.dopts.withProxy {
-			cc.dopts.copts.Dialer = newProxyDialer(cc.dopts.copts.Dialer)
-		}
+		cc.dopts.copts.Dialer = newProxyDialer(
+			func(ctx context.Context, addr string) (net.Conn, error) {
+				network, addr := parseDialTarget(addr)
+				return (&net.Dialer{}).DialContext(ctx, network, addr)
+			},
+		)
 	}
 
 	if cc.dopts.copts.UserAgent != "" {
@@ -1526,9 +1525,9 @@ var ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
 
 func (cc *ClientConn) getResolver(scheme string) resolver.Builder {
 	for _, rb := range cc.dopts.resolvers {
-		if scheme == rb.Scheme() {
+		if cc.parsedTarget.Scheme == rb.Scheme() {
 			return rb
 		}
 	}
-	return resolver.Get(scheme)
+	return resolver.Get(cc.parsedTarget.Scheme)
 }
