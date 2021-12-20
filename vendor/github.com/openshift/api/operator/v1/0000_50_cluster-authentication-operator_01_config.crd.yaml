@@ -4,6 +4,7 @@ metadata:
   name: authentications.operator.openshift.io
   annotations:
     include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
 spec:
   scope: Cluster
   group: operator.openshift.io
@@ -48,6 +49,12 @@ spec:
                   \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
                 type: string
                 default: Normal
+                enum:
+                - ""
+                - Normal
+                - Debug
+                - Trace
+                - TraceAll
               managementState:
                 description: managementState indicates whether and how the operator
                   should manage the component
@@ -61,11 +68,19 @@ spec:
                 nullable: true
                 x-kubernetes-preserve-unknown-fields: true
               operatorLogLevel:
-                description: operatorLogLevel is an intent based logging for the operator
-                  itself.  It does not give fine grained control, but it is a simple
-                  way to manage coarse grained logging choices that operators have
-                  to interpret for themselves.
+                description: "operatorLogLevel is an intent based logging for the
+                  operator itself.  It does not give fine grained control, but it
+                  is a simple way to manage coarse grained logging choices that operators
+                  have to interpret for themselves. \n Valid values are: \"Normal\",
+                  \"Debug\", \"Trace\", \"TraceAll\". Defaults to \"Normal\"."
                 type: string
+                default: Normal
+                enum:
+                - ""
+                - Normal
+                - Debug
+                - Trace
+                - TraceAll
               unsupportedConfigOverrides:
                 description: 'unsupportedConfigOverrides holds a sparse config that
                   will override any previously set options.  It only needs to be the
@@ -127,13 +142,6 @@ spec:
                       description: resource is the resource type of the thing you're
                         tracking
                       type: string
-              managingOAuthAPIServer:
-                description: ManagingOAuthAPIServer indicates whether this operator
-                  is managing OAuth related APIs. Setting this field to true will
-                  cause OAS-O to step down. Note that this field will be removed in
-                  the future releases, once https://github.com/openshift/enhancements/blob/master/enhancements/authentication/separate-oauth-resources.md
-                  is fully implemented
-                type: boolean
               oauthAPIServer:
                 description: OAuthAPIServer holds status specific only to oauth-apiserver
                 type: object
