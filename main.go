@@ -36,7 +36,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -44,6 +43,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/leaderelection"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
@@ -77,14 +77,26 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
+	restConfig := ctrl.GetConfigOrDie()
+	kubeClient, err := client.New(restConfig, client.Options{Scheme: scheme})
+	if err != nil {
+		setupLog.Error(err, "couldn't create client")
+		os.Exit(1)
+	}
+
+	le := leaderelection.GetLeaderElectionConfig(kubeClient, enableLeaderElection)
+
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	namespace := os.Getenv("NAMESPACE")
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
+		LeaseDuration:          &le.LeaseDuration,
+		RenewDeadline:          &le.RenewDeadline,
+		RetryPeriod:            &le.RetryPeriod,
 		LeaderElectionID:       "a56def2a.openshift.io",
 		Namespace:              namespace,
 	})
@@ -92,7 +104,7 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-	mgrGlobal, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgrGlobal, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: "0",
 	})
@@ -144,14 +156,14 @@ func main() {
 	// +kubebuilder:scaffold:builder
 
 	// Create a default SriovNetworkNodePolicy
-	err = createDefaultPolicy(ctrl.GetConfigOrDie())
+	err = createDefaultPolicy(kubeClient)
 	if err != nil {
 		setupLog.Error(err, "unable to create default SriovNetworkNodePolicy")
 		os.Exit(1)
 	}
 
 	// Create default SriovOperatorConfig
-	err = createDefaultOperatorConfig(ctrl.GetConfigOrDie())
+	err = createDefaultOperatorConfig(kubeClient)
 	if err != nil {
 		setupLog.Error(err, "unable to create default SriovOperatorConfig")
 		os.Exit(1)
@@ -194,12 +206,8 @@ func initNicIdMap() error {
 	return nil
 }
 
-func createDefaultPolicy(cfg *rest.Config) error {
+func createDefaultPolicy(c client.Client) error {
 	logger := setupLog.WithName("createDefaultPolicy")
-	c, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		return fmt.Errorf("Couldn't create client: %v", err)
-	}
 	policy := &sriovnetworkv1.SriovNetworkNodePolicy{
 		Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
 			NumVfs:       0,
@@ -209,7 +217,7 @@ func createDefaultPolicy(cfg *rest.Config) error {
 	}
 	name := "default"
 	namespace := os.Getenv("NAMESPACE")
-	err = c.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, policy)
+	err := c.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, policy)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("Create a default SriovNetworkNodePolicy")
@@ -226,16 +234,11 @@ func createDefaultPolicy(cfg *rest.Config) error {
 	return nil
 }
 
-func createDefaultOperatorConfig(cfg *rest.Config) error {
+func createDefaultOperatorConfig(c client.Client) error {
 	logger := setupLog.WithName("createDefaultOperatorConfig")
-	c, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		return fmt.Errorf("Couldn't create client: %v", err)
-	}
-
 	singleNode, err := utils.IsSingleNodeCluster(c)
 	if err != nil {
-		return fmt.Errorf("Couldn't check the anount of nodes in the cluster")
+		return fmt.Errorf("Couldn't check the amount of nodes in the cluster")
 	}
 
 	enableAdmissionController := os.Getenv("ENABLE_ADMISSION_CONTROLLER") == "true"

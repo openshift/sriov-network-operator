@@ -3,7 +3,6 @@ module github.com/k8snetworkplumbingwg/sriov-network-operator
 go 1.16
 
 require (
-	cloud.google.com/go v0.58.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cenkalti/backoff v2.2.1+incompatible
