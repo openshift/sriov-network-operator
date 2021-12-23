@@ -232,6 +232,12 @@ func createDefaultOperatorConfig(cfg *rest.Config) error {
 	if err != nil {
 		return fmt.Errorf("Couldn't create client: %v", err)
 	}
+
+	singleNode, err := utils.IsSingleNodeCluster(c)
+	if err != nil {
+		return fmt.Errorf("Couldn't check the anount of nodes in the cluster")
+	}
+
 	enableAdmissionController := os.Getenv("ENABLE_ADMISSION_CONTROLLER") == "true"
 	config := &sriovnetworkv1.SriovOperatorConfig{
 		Spec: sriovnetworkv1.SriovOperatorConfigSpec{
@@ -239,6 +245,7 @@ func createDefaultOperatorConfig(cfg *rest.Config) error {
 			EnableOperatorWebhook:    func() *bool { b := enableAdmissionController; return &b }(),
 			ConfigDaemonNodeSelector: map[string]string{},
 			LogLevel:                 2,
+			DisableDrain:             singleNode,
 		},
 	}
 	name := "default"
