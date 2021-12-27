@@ -78,11 +78,6 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		Name: constants.DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			singleNode, err := utils.IsSingleNodeCluster(r.Client)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("Couldn't check the anount of nodes in the cluster")
-			}
-
 			// Default Config object not found, create it.
 			defaultConfig.SetNamespace(namespace)
 			defaultConfig.SetName(constants.DEFAULT_CONFIG_NAME)
@@ -91,9 +86,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 				EnableOperatorWebhook:    func() *bool { b := enableAdmissionController; return &b }(),
 				ConfigDaemonNodeSelector: map[string]string{},
 				LogLevel:                 2,
-				DisableDrain:             singleNode,
 			}
-
 			err = r.Create(context.TODO(), defaultConfig)
 			if err != nil {
 				logger.Error(err, "Failed to create default Operator Config", "Namespace",
