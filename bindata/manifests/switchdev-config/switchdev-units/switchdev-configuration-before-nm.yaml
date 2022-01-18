@@ -9,11 +9,11 @@ contents: |
 
   [Service]
   Type=oneshot
-  ExecStart=/usr/local/bin/switchdev-configuration-before-NM.sh
+  ExecStart=/usr/local/bin/switchdev-configuration-before-nm.sh
   StandardOutput=journal+console
   StandardError=journal+console
 
   [Install]
   WantedBy=network-online.target
 enabled: true
-name: switchdev-configuration-before-NM.service
+name: switchdev-configuration-before-nm.service

@@ -1,6 +1,6 @@
 mode: 0755
 overwrite: true
-path: "/usr/local/bin/switchdev-configuration-after-NM.sh"
+path: "/usr/local/bin/switchdev-configuration-after-nm.sh"
 contents:
   inline: |
     #!/bin/bash
