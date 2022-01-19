@@ -16,9 +16,8 @@ DOCKERFILE?=Dockerfile
 CRD_BASES=./config/crd/bases
 
 export APP_NAME=sriov-network-operator
-APP_REPO=github.com/openshift/$(APP_NAME)
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
-IMAGE_TAG?=nfvpe/$(APP_NAME):latest
+IMAGE_TAG?=ghcr.io/k8snetworkplumbingwg/$(APP_NAME):latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export WATCH_NAMESPACE?=openshift-sriov-network-operator
