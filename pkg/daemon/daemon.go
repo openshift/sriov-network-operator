@@ -503,20 +503,23 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	}
 
 	if reqDrain {
-		if !dn.disableDrain {
-			ctx, cancel := context.WithCancel(context.TODO())
-			defer cancel()
+		if !dn.isNodeDraining() {
+			if !dn.disableDrain {
+				ctx, cancel := context.WithCancel(context.TODO())
+				defer cancel()
 
-			glog.Infof("nodeStateSyncHandler(): get drain lock for sriov daemon")
-			done := make(chan bool)
-			go dn.getDrainLock(ctx, done)
-			<-done
-		}
+				glog.Infof("nodeStateSyncHandler(): get drain lock for sriov daemon")
+				done := make(chan bool)
+				go dn.getDrainLock(ctx, done)
+				<-done
 
-		if utils.ClusterType == utils.ClusterTypeOpenshift {
-			glog.Infof("nodeStateSyncHandler(): pause MCP")
-			if err := dn.pauseMCP(); err != nil {
-				return err
+			}
+
+			if utils.ClusterType == utils.ClusterTypeOpenshift {
+				glog.Infof("nodeStateSyncHandler(): pause MCP")
+				if err := dn.pauseMCP(); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -550,12 +553,12 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		glog.Errorf("nodeStateSyncHandler(): fail to restart device plugin pod: %v", err)
 		return err
 	}
-	if anno, ok := dn.node.Annotations[annoKey]; ok && (anno == annoDraining || anno == annoMcpPaused) {
+	if dn.isNodeDraining() {
 		if err := dn.completeDrain(); err != nil {
 			glog.Errorf("nodeStateSyncHandler(): failed to complete draining: %v", err)
 			return err
 		}
-	} else if !ok {
+	} else {
 		if err := dn.annotateNode(dn.name, annoIdle); err != nil {
 			glog.Errorf("nodeStateSyncHandler(): failed to annotate node: %v", err)
 			return err
@@ -570,6 +573,13 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	// wait for writer to refresh the status
 	<-dn.syncCh
 	return nil
+}
+
+func (dn *Daemon) isNodeDraining() bool {
+	if anno, ok := dn.node.Annotations[annoKey]; ok && (anno == annoDraining || anno == annoMcpPaused) {
+		return true
+	}
+	return false
 }
 
 func (dn *Daemon) completeDrain() error {
@@ -815,7 +825,7 @@ func (dn *Daemon) getDrainLock(ctx context.Context, done chan bool) {
 						done <- true
 						return
 					}
-					glog.V(3).Info("getDrainLock(): other node is draining, wait...")
+					glog.V(2).Info("getDrainLock(): other node is draining, wait...")
 				}
 			},
 			OnStoppedLeading: func() {
