@@ -697,17 +697,6 @@ func rebootNode() {
 	}
 }
 
-type GlogLogger struct {
-}
-
-func (a GlogLogger) Log(v ...interface{}) {
-	glog.Info(v...)
-}
-
-func (a GlogLogger) Logf(format string, v ...interface{}) {
-	glog.Infof(format, v...)
-}
-
 func (dn *Daemon) annotateNode(node, value string) error {
 	glog.Infof("annotateNode(): Annotate node %s with: %s", node, value)
 
