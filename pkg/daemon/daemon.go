@@ -559,9 +559,11 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 			return err
 		}
 	} else {
-		if err := dn.annotateNode(dn.name, annoIdle); err != nil {
-			glog.Errorf("nodeStateSyncHandler(): failed to annotate node: %v", err)
-			return err
+		if !dn.nodeHasAnnotation(annoKey, annoIdle) {
+			if err := dn.annotateNode(dn.name, annoIdle); err != nil {
+				glog.Errorf("nodeStateSyncHandler(): failed to annotate node: %v", err)
+				return err
+			}
 		}
 	}
 	glog.Info("nodeStateSyncHandler(): sync succeeded")
@@ -573,6 +575,14 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	// wait for writer to refresh the status
 	<-dn.syncCh
 	return nil
+}
+
+func (dn *Daemon) nodeHasAnnotation(annoKey string, value string) bool {
+	// Check if node already contains annotation
+	if anno, ok := dn.node.Annotations[annoKey]; ok && (anno == value) {
+		return true
+	}
+	return false
 }
 
 func (dn *Daemon) isNodeDraining() bool {
