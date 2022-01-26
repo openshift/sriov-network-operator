@@ -23,6 +23,7 @@ import (
 	"os"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	openshiftconfigv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 
@@ -59,6 +60,7 @@ func init() {
 	utilruntime.Must(sriovnetworkv1.AddToScheme(scheme))
 	utilruntime.Must(netattdefv1.AddToScheme(scheme))
 	utilruntime.Must(mcfgv1.AddToScheme(scheme))
+	utilruntime.Must(openshiftconfigv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -238,7 +240,7 @@ func createDefaultOperatorConfig(c client.Client) error {
 	logger := setupLog.WithName("createDefaultOperatorConfig")
 	singleNode, err := utils.IsSingleNodeCluster(c)
 	if err != nil {
-		return fmt.Errorf("Couldn't check the amount of nodes in the cluster")
+		return fmt.Errorf("Couldn't get cluster single node status: %s", err)
 	}
 
 	enableAdmissionController := os.Getenv("ENABLE_ADMISSION_CONTROLLER") == "true"
