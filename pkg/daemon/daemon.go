@@ -527,12 +527,15 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		}
 	}
 
-	if len(dn.LoadedPlugins) > 1 && !reqReboot {
-		// Apply generic_plugin last
-		err = dn.LoadedPlugins[GenericPlugin].Apply()
-		if err != nil {
-			glog.Errorf("nodeStateSyncHandler(): generic_plugin fail to apply: %v", err)
-			return err
+	if !reqReboot {
+		plugin, ok := dn.LoadedPlugins[GenericPlugin]
+		if ok {
+			// Apply generic_plugin last
+			err = plugin.Apply()
+			if err != nil {
+				glog.Errorf("nodeStateSyncHandler(): generic_plugin fail to apply: %v", err)
+				return err
+			}
 		}
 	}
 
