@@ -80,7 +80,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		if errors.IsNotFound(err) {
 			singleNode, err := utils.IsSingleNodeCluster(r.Client)
 			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("Couldn't check the amount of nodes in the cluster")
+				return reconcile.Result{}, fmt.Errorf("Couldn't get cluster single node status: %s", err)
 			}
 
 			// Default Config object not found, create it.
