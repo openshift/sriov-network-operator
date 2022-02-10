@@ -272,7 +272,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		for _, addr := range vfAddrs {
 			var group sriovnetworkv1.VfGroup
 			i := 0
-			var driver string
+			var dpdkDriver string
 			var isRdma bool
 			vfID, err := dputils.GetVFID(addr)
 			for i, group = range iface.VfGroups {
@@ -282,22 +282,38 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 				if sriovnetworkv1.IndexInRange(vfID, group.VfRange) {
 					isRdma = group.IsRdma
 					if sriovnetworkv1.StringInArray(group.DeviceType, DpdkDrivers) {
-						driver = group.DeviceType
+						dpdkDriver = group.DeviceType
 					}
 					break
 				}
 			}
-			if strings.EqualFold(iface.LinkType, "IB") {
-				if err = setVfGuid(addr, pfLink); err != nil {
-					return err
+
+			// only set GUID and MAC for VF with default driver
+			// for userspace drivers like vfio we configure the vf mac using the kernel nic mac address
+			// before we switch to the userspace driver
+			if yes, d := hasDriver(addr); yes && !sriovnetworkv1.StringInArray(d, DpdkDrivers) {
+				if strings.EqualFold(iface.LinkType, "IB") {
+					if err = setVfGuid(addr, pfLink); err != nil {
+						return err
+					}
+				} else {
+					vfLink, err := vfIsReady(addr)
+					if err != nil {
+						glog.Errorf("configSriovDevice(): VF link is not ready for device %s %q", addr, err)
+						return err
+					}
+					if err = setVfAdminMac(addr, pfLink, vfLink); err != nil {
+						glog.Errorf("configSriovDevice(): fail to configure VF admin mac address for device %s %q", addr, err)
+						return err
+					}
 				}
-			} else if err = setVfAdminMac(addr, pfLink); err != nil {
-				return err
 			}
+
 			if err = unbindDriverIfNeeded(addr, isRdma); err != nil {
 				return err
 			}
-			if driver == "" {
+
+			if dpdkDriver == "" {
 				if err := BindDefaultDriver(addr); err != nil {
 					glog.Warningf("configSriovDevice(): fail to bind default driver for device %s", addr)
 					return err
@@ -310,8 +326,8 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 					}
 				}
 			} else {
-				if err := BindDpdkDriver(addr, driver); err != nil {
-					glog.Warningf("configSriovDevice(): fail to bind driver %s for device %s", driver, addr)
+				if err := BindDpdkDriver(addr, dpdkDriver); err != nil {
+					glog.Warningf("configSriovDevice(): fail to bind driver %s for device %s", dpdkDriver, addr)
 					return err
 				}
 			}
@@ -541,7 +557,7 @@ func vfIsReady(pciAddr string) (netlink.Link, error) {
 	glog.Infof("vfIsReady(): VF device %s", pciAddr)
 	var err error
 	var vfLink netlink.Link
-	err = wait.PollImmediate(time.Second, 5*time.Second, func() (bool, error) {
+	err = wait.PollImmediate(time.Second, 10*time.Second, func() (bool, error) {
 		vfName := tryGetInterfaceName(pciAddr)
 		vfLink, err = netlink.LinkByName(vfName)
 		if err != nil {
@@ -555,7 +571,7 @@ func vfIsReady(pciAddr string) (netlink.Link, error) {
 	return vfLink, nil
 }
 
-func setVfAdminMac(vfAddr string, pfLink netlink.Link) error {
+func setVfAdminMac(vfAddr string, pfLink, vfLink netlink.Link) error {
 	glog.Infof("setVfAdminMac(): VF %s", vfAddr)
 
 	vfID, err := dputils.GetVFID(vfAddr)
@@ -563,11 +579,7 @@ func setVfAdminMac(vfAddr string, pfLink netlink.Link) error {
 		glog.Errorf("setVfAdminMac(): unable to get VF id %+v %q", vfAddr, err)
 		return err
 	}
-	vfLink, err := vfIsReady(vfAddr)
-	if err != nil {
-		glog.Errorf("setVfAdminMac(): VF link is not ready for device %+v %q", vfAddr, err)
-		return err
-	}
+
 	if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
 		return err
 	}
