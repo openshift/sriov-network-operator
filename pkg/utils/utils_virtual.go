@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 
 	"github.com/golang/glog"
@@ -42,7 +42,7 @@ var (
 )
 
 const (
-	ospMetaDataDir = "/host/var/config/openstack/latest/"
+	ospMetaDataDir = "/host/var/config/openstack/2018-08-27"
 	ospNetworkData = ospMetaDataDir + "/network_data.json"
 	ospMetaData    = ospMetaDataDir + "/meta_data.json"
 )
@@ -93,51 +93,46 @@ type OSPNetworkData struct {
 	// Omit Services
 }
 
-func metaData(platformType PlatformType, address string) (netFilter string, macAddress string) {
-	switch platformType {
-	case VirtualOpenStack:
-		metaData, networkData := readOpenstackMetaData()
-		netFilter, macAddress = parseOpenstackMetaData(address, metaData, networkData)
-
-	default:
-		glog.V(2).Infof("Unknown PlatformType: %v", platformType)
+// ReadOpenstackMetaData reads the meta data from the openstack metadata file
+func ReadOpenstackMetaData() (metaData *OSPMetaData, err error) {
+	glog.Infof("ReadOpenstackMetaData(): read OpenStack meta_data")
+	var f *os.File
+	f, err = os.Open(ospMetaData)
+	if err != nil {
+		err = fmt.Errorf("error opening file %s: %w", ospMetaData, err)
 	}
-
-	return
+	defer func() {
+		if e := f.Close(); err == nil && e != nil {
+			err = fmt.Errorf("error closing file %s: %w", ospMetaData, e)
+		}
+	}()
+	if err = json.NewDecoder(f).Decode(&metaData); err != nil {
+		err = fmt.Errorf("error unmarshalling metadata from file %s: %w", ospMetaData, err)
+	}
+	return metaData, err
 }
 
-func readOpenstackMetaData() (metaData *OSPMetaData, networkData *OSPNetworkData) {
-	networkData = &OSPNetworkData{}
-
-	rawBytes, err := ioutil.ReadFile(ospNetworkData)
+// ReadOpenstackNetworkData reads the network data from the openstack metadata file
+func ReadOpenstackNetworkData() (networkData *OSPNetworkData, err error) {
+	glog.Infof("ReadOpenstackNetworkData(): read OpenStack network_data")
+	var f *os.File
+	f, err = os.Open(ospNetworkData)
 	if err != nil {
-		glog.Errorf("error reading file %s, %v", ospNetworkData, err)
+		err = fmt.Errorf("error opening file %s: %w", ospNetworkData, err)
 		return
 	}
-
-	if err = json.Unmarshal(rawBytes, networkData); err != nil {
-		glog.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkData)
-		return
+	defer func() {
+		if e := f.Close(); err == nil && e != nil {
+			err = fmt.Errorf("error closing file %s: %w", ospNetworkData, e)
+		}
+	}()
+	if err = json.NewDecoder(f).Decode(&networkData); err != nil {
+		err = fmt.Errorf("error unmarshalling metadata from file %s: %w", ospNetworkData, err)
 	}
-
-	metaData = &OSPMetaData{}
-
-	rawBytes, err = ioutil.ReadFile(ospMetaData)
-	if err != nil {
-		glog.Errorf("error reading file %s, %v", ospMetaData, err)
-		return
-	}
-
-	if err = json.Unmarshal(rawBytes, metaData); err != nil {
-		glog.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkData)
-		return
-	}
-
-	return
+	return networkData, err
 }
 
 func parseOpenstackMetaData(pciAddr string, metaData *OSPMetaData, networkData *OSPNetworkData) (networkID string, macAddress string) {
-
 	if metaData == nil || networkData == nil {
 		return
 	}
@@ -161,7 +156,7 @@ func parseOpenstackMetaData(pciAddr string, metaData *OSPMetaData, networkData *
 }
 
 // DiscoverSriovDevicesVirtual discovers VFs on a virtual platform
-func DiscoverSriovDevicesVirtual(platformType PlatformType) ([]sriovnetworkv1.InterfaceExt, error) {
+func DiscoverSriovDevicesVirtual(platformType PlatformType, metaData *OSPMetaData, networkData *OSPNetworkData) ([]sriovnetworkv1.InterfaceExt, error) {
 	glog.V(2).Info("DiscoverSriovDevicesVirtual")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
@@ -186,7 +181,7 @@ func DiscoverSriovDevicesVirtual(platformType PlatformType) ([]sriovnetworkv1.In
 			continue
 		}
 
-		netFilter, metaMac := metaData(platformType, device.Address)
+		netFilter, metaMac := parseOpenstackMetaData(device.Address, metaData, networkData)
 
 		driver, err := dputils.GetDriverName(device.Address)
 		if err != nil {
