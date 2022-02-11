@@ -71,3 +71,29 @@ Identify controller-runtime version referenced by kubebuilder
 Check controller-runtime's go.mod file
 
 As a result, we can determine the versions of the k8s dependencies in the operator's go.mod.
+
+## Build an custom image
+
+To build the SR-IOV network operator container image:
+
+    ```bash
+    make image
+
+If you want to build another image (e.g. webhook or config-daemon), you'll need to do
+the following:
+
+    ```bash
+    export DOCKERFILE=Dockerfile.sriov-network-config-daemon
+    export APP_NAME=sriov-network-config-daemon
+    make image
+
+    export DOCKERFILE=Dockerfile.webhook
+    export APP_NAME=sriov-network-webhook
+    make image
+
+Then you'll need to push the image to a registry using e.g. `buildah push`.
+Before deploying the Operator, you want to export these variables to use that custom image:
+
+    ```bash
+    export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE=<path to custom image>
+    (...)
