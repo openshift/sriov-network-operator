@@ -103,6 +103,7 @@ func IsSupportedModel(vendorId, deviceId string) bool {
 			return true
 		}
 	}
+	log.Info("IsSupportedModel():", "Unsupported model:", "vendorId:", vendorId, "deviceId:", deviceId)
 	return false
 }
 
@@ -113,6 +114,7 @@ func IsVfSupportedModel(vendorId, deviceId string) bool {
 			return true
 		}
 	}
+	log.Info("IsVfSupportedModel():", "Unsupported VF model:", "vendorId:", vendorId, "deviceId:", deviceId)
 	return false
 }
 
