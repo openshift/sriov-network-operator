@@ -1,9 +1,9 @@
-FROM golang:1.16 AS builder
+FROM golang:1.17 AS builder
 WORKDIR /go/src/github.com/k8snetworkplumbingwg/sriov-network-operator
 COPY . .
 RUN make _build-webhook BIN_PATH=build/_output/cmd
 
-FROM centos:7
+FROM quay.io/centos/centos:stream8
 LABEL io.k8s.display-name="sriov-network-webhook" \
       io.k8s.description="This is an admission controller webhook that mutates and validates customer resources of sriov network operator."
 COPY --from=builder /go/src/github.com/k8snetworkplumbingwg/sriov-network-operator/build/_output/cmd/webhook /usr/bin/webhook
