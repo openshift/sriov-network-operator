@@ -106,7 +106,7 @@ metadata:
     olm.skipRange: '>=4.3.0-0 <4.10.0'
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
     operators.openshift.io/infrastructure-features: '["disconnected", "cni"]'
-    operators.operatorframework.io/builder: operator-sdk-v1.9.0+git
+    operators.operatorframework.io/builder: operator-sdk-v1.16.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
@@ -285,6 +285,14 @@ spec:
           - '*'
           verbs:
           - '*'
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - infrastructures
+          verbs:
+          - get
+          - list
+          - watch
         serviceAccountName: sriov-network-operator
       deployments:
       - name: sriov-network-operator
@@ -481,6 +489,12 @@ spec:
           - serviceaccounts
           - roles
           - rolebindings
+          verbs:
+          - '*'
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
           verbs:
           - '*'
         serviceAccountName: sriov-network-operator
