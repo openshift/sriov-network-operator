@@ -63,6 +63,8 @@ spec:
               value: $RESOURCE_PREFIX
             - name: ENABLE_ADMISSION_CONTROLLER
               value: "$ENABLE_ADMISSION_CONTROLLER"
+            - name: DEV_MODE
+              value: "$DEV_MODE"
             - name: NAMESPACE
               valueFrom:
                 fieldRef:
