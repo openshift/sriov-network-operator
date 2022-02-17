@@ -299,7 +299,10 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(np *sriovne
 				// Merging only for policies with the same priority (ppp == p.Spec.Priority)
 				// This boolean flag controls merging of PF configuration (e.g. mtu, numvfs etc)
 				// when VF partition is configured.
-				p.Apply(newVersion, bool(ppp == p.Spec.Priority))
+				err = p.Apply(newVersion, ppp == p.Spec.Priority)
+				if err != nil {
+					return err
+				}
 				// record the evaluated policy priority for next loop
 				ppp = p.Spec.Priority
 			}
