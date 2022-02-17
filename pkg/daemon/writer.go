@@ -23,20 +23,22 @@ const (
 )
 
 type NodeStateStatusWriter struct {
-	client             snclientset.Interface
-	node               string
-	status             sriovnetworkv1.SriovNetworkNodeStateStatus
-	OnHeartbeatFailure func()
-	metaData           *utils.OSPMetaData
-	networkData        *utils.OSPNetworkData
+	client                 snclientset.Interface
+	node                   string
+	status                 sriovnetworkv1.SriovNetworkNodeStateStatus
+	OnHeartbeatFailure     func()
+	metaData               *utils.OSPMetaData
+	networkData            *utils.OSPNetworkData
+	withUnsupportedDevices bool
 }
 
 // NewNodeStateStatusWriter Create a new NodeStateStatusWriter
-func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func()) *NodeStateStatusWriter {
+func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func(), devMode bool) *NodeStateStatusWriter {
 	return &NodeStateStatusWriter{
-		client:             c,
-		node:               n,
-		OnHeartbeatFailure: f,
+		client:                 c,
+		node:                   n,
+		OnHeartbeatFailure:     f,
+		withUnsupportedDevices: devMode,
 	}
 }
 
@@ -100,7 +102,7 @@ func (writer *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformTy
 	if platformType == utils.VirtualOpenStack {
 		iface, err = utils.DiscoverSriovDevicesVirtual(platformType, writer.metaData, writer.networkData)
 	} else {
-		iface, err = utils.DiscoverSriovDevices()
+		iface, err = utils.DiscoverSriovDevices(writer.withUnsupportedDevices)
 	}
 	if err != nil {
 		return err

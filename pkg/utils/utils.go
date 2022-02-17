@@ -48,7 +48,7 @@ func init() {
 	ClusterType = os.Getenv("CLUSTER_TYPE")
 }
 
-func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
+func DiscoverSriovDevices(withUnsupported bool) ([]sriovnetworkv1.InterfaceExt, error) {
 	glog.V(2).Info("DiscoverSriovDevices")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
@@ -94,6 +94,13 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 		if len(deviceNames) == 0 {
 			// no network devices found, skipping device
 			continue
+		}
+
+		if !withUnsupported {
+			if !sriovnetworkv1.IsSupportedModel(device.Vendor.ID, device.Product.ID) {
+				glog.Infof("DiscoverSriovDevices(): unsupported device %+v", device)
+				continue
+			}
 		}
 
 		iface := sriovnetworkv1.InterfaceExt{
