@@ -88,7 +88,7 @@ func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkN
 func (p *GenericPlugin) Apply() error {
 	glog.Infof("generic-plugin Apply(): desiredState=%v", p.DesireState.Spec)
 	if p.LoadVfioDriver == loading {
-		if err := utils.LoadKernelModule("vfio_pci"); err != nil {
+		if err := utils.LoadKernelModule("vfio_pci", ""); err != nil {
 			glog.Errorf("generic-plugin Apply(): fail to load vfio_pci kmod: %v", err)
 			return err
 		}

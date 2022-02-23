@@ -968,7 +968,7 @@ func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
 }
 
 func tryEnableTun() {
-	if err := utils.LoadKernelModule("tun"); err != nil {
+	if err := utils.LoadKernelModule("tun", ""); err != nil {
 		glog.Errorf("tryEnableTun(): TUN kernel module not loaded: %v", err)
 	}
 }

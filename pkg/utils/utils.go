@@ -534,12 +534,12 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualF
 	return vf
 }
 
-func LoadKernelModule(name string) error {
-	glog.Infof("LoadKernelModule(): try to load kernel module %s", name)
-	cmd := exec.Command("/bin/sh", scriptsPath, name)
+func LoadKernelModule(name string, args string) error {
+	glog.Infof("LoadKernelModule(): try to load kernel module %s with arguments %s", name, args)
+	cmd := exec.Command("/bin/sh", scriptsPath, name, args)
 	err := cmd.Run()
 	if err != nil {
-		glog.Errorf("LoadKernelModule(): fail to load kernel module %s: %v", name, err)
+		glog.Errorf("LoadKernelModule(): fail to load kernel module %s with arguments %s: %v", name, args, err)
 		return err
 	}
 	return nil
