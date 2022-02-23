@@ -13,7 +13,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
-// PlatformType ...
+// foo PlatformType ...
 type PlatformType int
 
 const (
