@@ -84,6 +84,16 @@ func (p *VirtualPlugin) Apply() error {
 	glog.Infof("virtual-plugin Apply(): desiredState=%v", p.DesireState.Spec)
 
 	if p.LoadVfioDriver == loading {
+		// In virtual deployments of Kubernetes where the underlying virtualization platform does not support a virtualized iommu
+		// the VFIO PCI driver needs to be loaded with a special flag.
+		// This is the case for OpenStack deployments where the underlying virtualization platform is KVM.
+		// NOTE: if VFIO was already loaded for some reason, we will not try to load it again with the new options.
+		kernelArgs := "enable_unsafe_noiommu_mode=1"
+		if err := utils.LoadKernelModule("vfio", kernelArgs); err != nil {
+			glog.Errorf("virtual-plugin Apply(): fail to load vfio kmod: %v", err)
+			return err
+		}
+
 		if err := utils.LoadKernelModule("vfio_pci"); err != nil {
 			glog.Errorf("virtual-plugin Apply(): fail to load vfio_pci kmod: %v", err)
 			return err
