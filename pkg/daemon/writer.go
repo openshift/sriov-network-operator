@@ -49,13 +49,13 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 	var err error
 
 	if platformType == utils.VirtualOpenStack {
-		writer.metaData, err = utils.ReadOpenstackMetaData()
+		writer.metaData, writer.networkData, err = utils.ReadOpenstackDataFiles()
 		if err != nil {
-			glog.Errorf("Run(): failed to read OpenStack meta_data: %v", err)
-		}
-		writer.networkData, err = utils.ReadOpenstackNetworkData()
-		if err != nil {
-			glog.Errorf("Run(): failed to read OpenStack network_data: %v", err)
+			glog.Errorf("Run(): failed to read OpenStack data files: %v", err)
+			writer.metaData, writer.networkData, err = utils.FetchOpenstackData()
+			if err != nil {
+				glog.Errorf("Run(): failed to fetch OpenStack data: %v", err)
+			}
 		}
 	}
 
