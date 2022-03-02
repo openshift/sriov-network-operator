@@ -135,7 +135,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	destdir := os.Getenv("DEST_DIR")
 	if destdir == "" {
-		destdir = "/host/etc"
+		destdir = "/host/tmp"
 	}
 
 	platformType := utils.Baremetal
@@ -153,8 +153,12 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	glog.V(0).Infof("Running on platform: %s", platformType.String())
 
 	// block the deamon process until nodeWriter finish first its run
-	nodeWriter.Run(stopCh, refreshCh, syncCh, destdir, true, platformType)
-	go nodeWriter.Run(stopCh, refreshCh, syncCh, "", false, platformType)
+	err = nodeWriter.RunOnce(destdir, platformType)
+	if err != nil {
+		glog.Errorf("failed to run writer: %v", err)
+		panic(err.Error())
+	}
+	go nodeWriter.Run(stopCh, refreshCh, syncCh, platformType)
 
 	glog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(

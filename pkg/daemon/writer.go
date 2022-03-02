@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
+
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 const (
@@ -23,12 +24,11 @@ const (
 )
 
 type NodeStateStatusWriter struct {
-	client             snclientset.Interface
-	node               string
-	status             sriovnetworkv1.SriovNetworkNodeStateStatus
-	OnHeartbeatFailure func()
-	metaData           *utils.OSPMetaData
-	networkData        *utils.OSPNetworkData
+	client               snclientset.Interface
+	node                 string
+	status               sriovnetworkv1.SriovNetworkNodeStateStatus
+	OnHeartbeatFailure   func()
+	openStackDevicesInfo utils.OSPDevicesInfo
 }
 
 // NewNodeStateStatusWriter Create a new NodeStateStatusWriter
@@ -40,35 +40,56 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func()) *Node
 	}
 }
 
+// RunOnce initial the interface status for both baremetal and virtual environments
+func (writer *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.PlatformType) error {
+	glog.V(0).Infof("RunOnce(): start writer")
+	msg := Message{}
+
+	if platformType == utils.VirtualOpenStack {
+		ns, err := writer.getCheckPointNodeState(destDir)
+		if err != nil {
+			return err
+		}
+
+		metaData, networkData, err := utils.GetOpenstackData()
+		if err != nil {
+			glog.Errorf("RunOnce(): failed to read OpenStack data: %v", err)
+		}
+
+		if ns == nil {
+			writer.openStackDevicesInfo, err = utils.CreateOpenstackDevicesInfo(metaData, networkData)
+			if err != nil {
+				return err
+			}
+		} else {
+			devicesInfo := make(utils.OSPDevicesInfo)
+			for _, iface := range ns.Status.Interfaces {
+				devicesInfo[iface.PciAddress] = &utils.OSPDeviceInfo{MacAddress: iface.Mac, NetworkID: iface.NetFilter}
+			}
+			writer.openStackDevicesInfo = devicesInfo
+		}
+	}
+
+	glog.V(0).Info("RunOnce(): once")
+	if err := writer.pollNicStatus(platformType); err != nil {
+		glog.Errorf("RunOnce(): first poll failed: %v", err)
+	}
+
+	ns, _ := writer.setNodeStateStatus(msg)
+	return writer.writeCheckpointFile(ns, destDir)
+}
+
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
-func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, destDir string, runonce bool, platformType utils.PlatformType) {
+func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, platformType utils.PlatformType) error {
 	glog.V(0).Infof("Run(): start writer")
 	msg := Message{}
 
-	var err error
-
-	if platformType == utils.VirtualOpenStack {
-		writer.metaData, writer.networkData, err = utils.GetOpenstackData()
-		if err != nil {
-			glog.Errorf("Run(): failed to get OpenStack data: %v", err)
-		}
-	}
-
-	if runonce {
-		glog.V(0).Info("Run(): once")
-		if err := writer.pollNicStatus(platformType); err != nil {
-			glog.Errorf("Run(): first poll failed: %v", err)
-		}
-		ns, _ := writer.setNodeStateStatus(msg)
-		writer.writeCheckpointFile(ns, destDir)
-		return
-	}
 	for {
 		select {
 		case <-stop:
 			glog.V(0).Info("Run(): stop writer")
-			return
+			return nil
 		case msg = <-refresh:
 			glog.V(0).Info("Run(): refresh trigger")
 			if err := writer.pollNicStatus(platformType); err != nil {
@@ -94,7 +115,7 @@ func (writer *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformTy
 	var err error
 
 	if platformType == utils.VirtualOpenStack {
-		iface, err = utils.DiscoverSriovDevicesVirtual(platformType, writer.metaData, writer.networkData)
+		iface, err = utils.DiscoverSriovDevicesVirtual(writer.openStackDevicesInfo)
 	} else {
 		iface, err = utils.DiscoverSriovDevices()
 	}
@@ -195,4 +216,22 @@ func (w *NodeStateStatusWriter) writeCheckpointFile(ns *sriovnetworkv1.SriovNetw
 		utils.InitialState = *ns
 	}
 	return nil
+}
+
+func (w *NodeStateStatusWriter) getCheckPointNodeState(destDir string) (*sriovnetworkv1.SriovNetworkNodeState, error) {
+	glog.Infof("getCheckPointNodeState()")
+	configdir := filepath.Join(destDir, CheckpointFileName)
+	file, err := os.OpenFile(configdir, os.O_RDONLY, 0644)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+	if err = json.NewDecoder(file).Decode(&utils.InitialState); err != nil {
+		return nil, err
+	}
+
+	return &utils.InitialState, nil
 }
