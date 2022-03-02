@@ -1,0 +1,17 @@
+contents: |
+  [Unit]
+  Description=Remove the initial SR-IOV state file
+  # Removal of this file signals firstboot completion
+  ConditionPathExists=!/etc/ignition-machine-config-encapsulated.json
+  Before=kubelet.service
+
+  [Service]
+  Type=oneshot
+  ExecStart=rm -f /etc/sno-initial-node-state.json | true
+  StandardOutput=journal+console
+  StandardError=journal+console
+
+  [Install]
+  WantedBy=default.target
+enabled: true
+name: sriov-operator-initial-configuration-reset.service

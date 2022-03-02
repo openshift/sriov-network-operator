@@ -153,7 +153,11 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	glog.V(0).Infof("Running on platform: %s", platformType.String())
 
 	// block the deamon process until nodeWriter finish first its run
-	nodeWriter.Run(stopCh, refreshCh, syncCh, destdir, true, platformType)
+	err = nodeWriter.Run(stopCh, refreshCh, syncCh, destdir, true, platformType)
+	if err != nil {
+		glog.Errorf("failed to run writer: %v", err)
+		panic(err.Error())
+	}
 	go nodeWriter.Run(stopCh, refreshCh, syncCh, "", false, platformType)
 
 	glog.V(0).Info("Starting SriovNetworkConfigDaemon")
