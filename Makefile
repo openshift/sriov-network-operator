@@ -157,12 +157,12 @@ skopeo:
 .PHONY: bundle
 bundle: manifests
 	rm -f bundle/manifests/*
-	rm -f manifests/4.10/*.yaml
+	rm -f manifests/stable/*.yaml
 	operator-sdk generate kustomize manifests --interactive=false -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) --extra-service-accounts sriov-network-config-daemon
 	operator-sdk bundle validate ./bundle
-	cp bundle/manifests/* manifests/4.10
+	cp bundle/manifests/* manifests/stable
 
 # Build the bundle image.
 .PHONY: bundle-build
