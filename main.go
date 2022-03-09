@@ -78,6 +78,7 @@ func main() {
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	restConfig := ctrl.GetConfigOrDie()
 	kubeClient, err := client.New(restConfig, client.Options{Scheme: scheme})
@@ -88,7 +89,6 @@ func main() {
 
 	le := leaderelection.GetLeaderElectionConfig(kubeClient, enableLeaderElection)
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	namespace := os.Getenv("NAMESPACE")
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
