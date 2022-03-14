@@ -17,7 +17,7 @@
 | Mellanox MT28908 Family [ConnectX-6] | 15b3 | 101b |
 | Mellanox MT28908 Family [ConnectX-6 Dx] | 15b3 | 101d |
 | Mellanox MT42822 BlueField-2 integrated ConnectX-6 Dx | 15b3 | a2d6 |
-
+| Qlogic QL45000 Series 50GbE Controller | 1077 | 1654 |
 
 2. Kubernetes or Openshift cluster running on bare metal nodes.
 3. Multus-cni is deployed as default CNI plugin, and there is a default CNI plugin (flannel, openshift-sdn etc.) available for Multus-cni.
