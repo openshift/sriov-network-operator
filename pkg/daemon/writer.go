@@ -43,6 +43,16 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func()) *Node
 func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, destDir string, runonce bool, platformType utils.PlatformType) {
 	glog.V(0).Infof("Run(): start writer")
 	msg := Message{}
+
+	var err error
+
+	if platformType == utils.VirtualOpenStack {
+		writer.metaData, writer.networkData, err = utils.GetOpenstackData()
+		if err != nil {
+			glog.Errorf("Run(): failed to get OpenStack data: %v", err)
+		}
+	}
+
 	if runonce {
 		glog.V(0).Info("Run(): once")
 		if err := writer.pollNicStatus(platformType); err != nil {
