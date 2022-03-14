@@ -1,5 +1,5 @@
 updates:
-  - file: "{MAJOR}.{MINOR}/sriov-network-operator.clusterserviceversion.yaml" # relative to this file
+  - file: "stable/sriov-network-operator.clusterserviceversion.yaml" # relative to this file
     update_list:
     # replace metadata.name value
     - search: "sriov-network-operator.v{MAJOR}.{MINOR}.0"
