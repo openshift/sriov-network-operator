@@ -173,14 +173,14 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 	return nil
 }
 
-// skip config VF for switchdev mode or BF-2 NICs
+// SkipConfigVf Use systemd service to configure switchdev mode or BF-2 NICs in OpenShift
 func SkipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.InterfaceExt) bool {
 	if ifSpec.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
 		glog.V(2).Infof("SkipConfigVf(): skip config VF for switchdev device")
 		return true
 	}
-	// Nvidia_mlx5_MT42822_BlueField-2_integrated_ConnectX-6_Dx
-	if ifStatus.Vendor == VendorMellanox && ifStatus.DeviceID == DeviceBF2 {
+	// Nvidia_mlx5_MT42822_BlueField-2_integrated_ConnectX-6_Dx in OpenShift
+	if ClusterType == ClusterTypeOpenshift && ifStatus.Vendor == VendorMellanox && ifStatus.DeviceID == DeviceBF2 {
 		glog.V(2).Infof("SkipConfigVf(): skip config VF for BF2 device")
 		return true
 	}
@@ -534,12 +534,13 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualF
 	return vf
 }
 
-func LoadKernelModule(name string) error {
-	glog.Infof("LoadKernelModule(): try to load kernel module %s", name)
-	cmd := exec.Command("/bin/sh", scriptsPath, name)
+func LoadKernelModule(name string, args ...string) error {
+	glog.Infof("LoadKernelModule(): try to load kernel module %s with arguments '%s'", name, args)
+	cmdArgs := strings.Join(args, " ")
+	cmd := exec.Command("/bin/sh", scriptsPath, name, cmdArgs)
 	err := cmd.Run()
 	if err != nil {
-		glog.Errorf("LoadKernelModule(): fail to load kernel module %s: %v", name, err)
+		glog.Errorf("LoadKernelModule(): fail to load kernel module %s with arguments '%s': %v", name, args, err)
 		return err
 	}
 	return nil

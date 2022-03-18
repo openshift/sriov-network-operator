@@ -103,6 +103,7 @@ func IsSupportedModel(vendorId, deviceId string) bool {
 			return true
 		}
 	}
+	log.Info("IsSupportedModel():", "Unsupported model:", "vendorId:", vendorId, "deviceId:", deviceId)
 	return false
 }
 
@@ -113,6 +114,7 @@ func IsVfSupportedModel(vendorId, deviceId string) bool {
 			return true
 		}
 	}
+	log.Info("IsVfSupportedModel():", "Unsupported VF model:", "vendorId:", vendorId, "deviceId:", deviceId)
 	return false
 }
 
@@ -252,12 +254,12 @@ func UniqueAppend(inSlice []string, strings ...string) []string {
 }
 
 // Apply policy to SriovNetworkNodeState CR
-func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, merge bool) {
+func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, equalPriority bool) error {
 	s := p.Spec.NicSelector
 	if s.Vendor == "" && s.DeviceID == "" && len(s.RootDevices) == 0 && len(s.PfNames) == 0 &&
 		len(s.NetFilter) == 0 {
 		// Empty NicSelector match none
-		return
+		return nil
 	}
 	for _, iface := range state.Status.Interfaces {
 		if s.Selected(&iface) {
@@ -268,55 +270,76 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, merge bool)
 				Name:        iface.Name,
 				LinkType:    p.Spec.LinkType,
 				EswitchMode: p.Spec.EswitchMode,
+				NumVfs:      p.Spec.NumVfs,
 			}
-			var group *VfGroup
 			if p.Spec.NumVfs > 0 {
-				result.NumVfs = p.Spec.NumVfs
-				group, _ = p.generateVfGroup(&iface)
+				group, err := p.generateVfGroup(&iface)
+				if err != nil {
+					return err
+				}
+				result.VfGroups = []VfGroup{*group}
 				found := false
 				for i := range state.Spec.Interfaces {
 					if state.Spec.Interfaces[i].PciAddress == result.PciAddress {
 						found = true
-						// merge PF configurations when:
-						// 1. SR-IOV partition is configured
-						// 2. SR-IOV partition policies have the same priority
-						result = state.Spec.Interfaces[i].mergePfConfigs(result, merge)
-						result.VfGroups = state.Spec.Interfaces[i].mergeVfGroups(group)
+						state.Spec.Interfaces[i].mergeConfigs(&result, equalPriority)
 						state.Spec.Interfaces[i] = result
 						break
 					}
 				}
 				if !found {
-					result.VfGroups = []VfGroup{*group}
 					state.Spec.Interfaces = append(state.Spec.Interfaces, result)
 				}
 			}
 		}
 	}
+	return nil
 }
 
-func (iface Interface) mergePfConfigs(input Interface, merge bool) Interface {
-	if merge {
-		if input.Mtu < iface.Mtu {
-			input.Mtu = iface.Mtu
+// mergeConfigs merges configs from multiple polices where the last one has the
+// highest priority. This merge is dependent on: 1. SR-IOV partition is
+// configured with the #-notation in pfName, 2. The VF groups are
+// non-overlapping or SR-IOV policies have the same priority.
+func (iface Interface) mergeConfigs(input *Interface, equalPriority bool) {
+	m := false
+	// merge VF groups (input.VfGroups already contains the highest priority):
+	// - skip group with same ResourceName,
+	// - skip overlapping groups (use only highest priority)
+	for _, gr := range iface.VfGroups {
+		if gr.ResourceName == input.VfGroups[0].ResourceName || gr.isVFRangeOverlapping(input.VfGroups[0]) {
+			continue
 		}
-		if input.NumVfs < iface.NumVfs {
-			input.NumVfs = iface.NumVfs
-		}
+		m = true
+		input.VfGroups = append(input.VfGroups, gr)
 	}
-	return input
+
+	if !equalPriority && !m {
+		return
+	}
+
+	// mtu configuration we take the highest value
+	if input.Mtu < iface.Mtu {
+		input.Mtu = iface.Mtu
+	}
+	if input.NumVfs < iface.NumVfs {
+		input.NumVfs = iface.NumVfs
+	}
 }
 
-func (iface Interface) mergeVfGroups(input *VfGroup) []VfGroup {
-	groups := iface.VfGroups
-	for i := range groups {
-		if groups[i].ResourceName == input.ResourceName {
-			groups[i] = *input
-			return groups
-		}
+func (gr VfGroup) isVFRangeOverlapping(group VfGroup) bool {
+	rngSt, rngEnd, err := parseRange(gr.VfRange)
+	if err != nil {
+		return false
 	}
-	groups = append(groups, *input)
-	return groups
+	rngSt2, rngEnd2, err := parseRange(group.VfRange)
+	if err != nil {
+		return false
+	}
+	// compare minimal range has overlap
+	if rngSt < rngSt2 {
+		return IndexInRange(rngSt2, gr.VfRange) || IndexInRange(rngEnd2, gr.VfRange)
+	}
+	return IndexInRange(rngSt, group.VfRange) || IndexInRange(rngEnd, group.VfRange)
 }
 
 func (p *SriovNetworkNodePolicy) generateVfGroup(iface *InterfaceExt) (*VfGroup, error) {
@@ -327,6 +350,7 @@ func (p *SriovNetworkNodePolicy) generateVfGroup(iface *InterfaceExt) (*VfGroup,
 	for _, selector := range p.Spec.NicSelector.PfNames {
 		pfName, rngStart, rngEnd, err = ParsePFName(selector)
 		if err != nil {
+			log.Error(err, "Unable to parse PF Name.")
 			return nil, err
 		}
 		if pfName == iface.Name {

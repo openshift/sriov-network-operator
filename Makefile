@@ -15,7 +15,7 @@ DOCKERFILE?=Dockerfile
 
 CRD_BASES=./config/crd/bases
 
-export APP_NAME=sriov-network-operator
+export APP_NAME?=sriov-network-operator
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 IMAGE_TAG?=ghcr.io/k8snetworkplumbingwg/$(APP_NAME):latest
 MAIN_PKG=cmd/manager/main.go
