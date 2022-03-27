@@ -87,6 +87,7 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 }
 
 func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
+	glog.V(2).Infof("staticValidateSriovNetworkNodePolicy NicSelector: %v", cr.Spec.NicSelector)
 	var validString = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	if !validString.MatchString(cr.Spec.ResourceName) {
 		return false, fmt.Errorf("resource name \"%s\" contains invalid characters, the accepted syntax of the regular expressions is: \"^[a-zA-Z0-9_]+$\"", cr.Spec.ResourceName)
@@ -153,6 +154,7 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 }
 
 func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
+	glog.V(2).Infof("dynamicValidateSriovNetworkNodePolicy: %s", cr.GetName())
 	nodesSelected = false
 	interfaceSelected = false
 
@@ -188,6 +190,8 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 		}
 	}
 
+	glog.V(2).Infof("dynamicValidateSriovNetworkNodePolicy nodesSelected  %t", nodesSelected)
+	glog.V(2).Infof("dynamicValidateSriovNetworkNodePolicy interfaceSelected  %t", interfaceSelected)
 	if !nodesSelected {
 		return false, fmt.Errorf("no matched node is selected by the nodeSelector in CR %s", cr.GetName())
 	}
@@ -200,8 +204,10 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 
 func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) (bool, error) {
 	glog.V(2).Infof("validatePolicyForNodeState(): validate policy %s for node %s.", policy.GetName(), state.GetName())
+	glog.V(2).Infof("validatePolicyForNodeState: %v", state)
 	for _, iface := range state.Status.Interfaces {
 		if validateNicModel(&policy.Spec.NicSelector, &iface, node) {
+			glog.V(2).Infof("validatePolicyForNodeState(): interfaceSelected %s", "true")
 			interfaceSelected = true
 			if policy.GetName() != "default" && policy.Spec.NumVfs == 0 {
 				return false, fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
@@ -260,6 +266,7 @@ func keys(m map[string]([]string)) []string {
 }
 
 func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt, node *corev1.Node) bool {
+	glog.V(2).Infof("validateNicModel(): validate NIC %v", iface)
 	if selector.Vendor != "" && selector.Vendor != iface.Vendor {
 		return false
 	}

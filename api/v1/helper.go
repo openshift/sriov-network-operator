@@ -111,6 +111,7 @@ func IsVfSupportedModel(vendorId, deviceId string) bool {
 	for _, n := range NicIdMap {
 		ids := strings.Split(n, " ")
 		if vendorId == ids[0] && deviceId == ids[2] {
+			log.Info("IsVfSupportedModel():", "supported VF model:", "vendorId:", ids[0], "deviceId:", ids[2])
 			return true
 		}
 	}
