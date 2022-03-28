@@ -59,6 +59,8 @@ spec:
                         properties:
                           deviceType:
                             type: string
+                          isRdma:
+                            type: boolean
                           mtu:
                             type: integer
                           policyName:
