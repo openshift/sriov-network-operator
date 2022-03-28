@@ -130,8 +130,16 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	config.Timeout = 5 * time.Second
 	writerclient := snclientset.NewForConfigOrDie(config)
+
+	mode := os.Getenv("DEV_MODE")
+	devMode := false
+	if mode == "TRUE" {
+		devMode = true
+		glog.V(0).Info("dev mode enabled")
+	}
+
 	glog.V(0).Info("starting node writer")
-	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient, startOpts.nodeName, closeAllConns)
+	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient, startOpts.nodeName, closeAllConns, devMode)
 
 	destdir := os.Getenv("DEST_DIR")
 	if destdir == "" {

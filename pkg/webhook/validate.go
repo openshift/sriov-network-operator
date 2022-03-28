@@ -96,18 +96,26 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 		return false, fmt.Errorf("at least one of these parameters (vendor, deviceID, pfNames, rootDevices or netFilter) has to be defined in nicSelector in CR %s", cr.GetName())
 	}
 
-	if cr.Spec.NicSelector.Vendor != "" {
-		if !sriovnetworkv1.IsSupportedVendor(cr.Spec.NicSelector.Vendor) {
-			return false, fmt.Errorf("vendor %s is not supported", cr.Spec.NicSelector.Vendor)
-		}
-		if cr.Spec.NicSelector.DeviceID != "" {
-			if !sriovnetworkv1.IsSupportedModel(cr.Spec.NicSelector.Vendor, cr.Spec.NicSelector.DeviceID) {
-				return false, fmt.Errorf("vendor/device %s/%s is not supported", cr.Spec.NicSelector.Vendor, cr.Spec.NicSelector.DeviceID)
+	devMode := false
+	if os.Getenv("DEV_MODE") == "TRUE" {
+		devMode = true
+		glog.V(0).Info("dev mode enabled - Admitting not supported NICs")
+	}
+
+	if !devMode {
+		if cr.Spec.NicSelector.Vendor != "" {
+			if !sriovnetworkv1.IsSupportedVendor(cr.Spec.NicSelector.Vendor) {
+				return false, fmt.Errorf("vendor %s is not supported", cr.Spec.NicSelector.Vendor)
 			}
-		}
-	} else if cr.Spec.NicSelector.DeviceID != "" {
-		if !sriovnetworkv1.IsSupportedDevice(cr.Spec.NicSelector.DeviceID) {
-			return false, fmt.Errorf("device %s is not supported", cr.Spec.NicSelector.DeviceID)
+			if cr.Spec.NicSelector.DeviceID != "" {
+				if !sriovnetworkv1.IsSupportedModel(cr.Spec.NicSelector.Vendor, cr.Spec.NicSelector.DeviceID) {
+					return false, fmt.Errorf("vendor/device %s/%s is not supported", cr.Spec.NicSelector.Vendor, cr.Spec.NicSelector.DeviceID)
+				}
+			}
+		} else if cr.Spec.NicSelector.DeviceID != "" {
+			if !sriovnetworkv1.IsSupportedDevice(cr.Spec.NicSelector.DeviceID) {
+				return false, fmt.Errorf("device %s is not supported", cr.Spec.NicSelector.DeviceID)
+			}
 		}
 	}
 
