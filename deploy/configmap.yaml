@@ -20,3 +20,4 @@ data:
   Nvidia_mlx5_MT42822_BlueField-2_integrated_ConnectX-6_Dx: "15b3 a2d6 101e"
   Broadcom_bnxt_BCM57414_2x25G: "14e4 16d7 16dc"
   Broadcom_bnxt_BCM75508_2x100G: "14e4 1750 1806"
+  Red_Hat_Virtio_network_device: "1af4 1000 1000"
