@@ -214,10 +214,13 @@ func (dn *Daemon) tryCreateUdevRuleWrapper() error {
 		}
 	}
 
-	// update udev rule and if update succeeds
-	err := tryCreateNMUdevRule()
-	if err != nil {
-		return err
+	// update udev rule only if we are on a BM environment
+	// for virtual environments we don't disable the vfs as they may be used by the platform/host
+	if dn.platform != utils.VirtualOpenStack {
+		err := tryCreateNMUdevRule()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
