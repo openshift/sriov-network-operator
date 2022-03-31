@@ -465,7 +465,7 @@ func getNetdevMTU(pciAddr string) int {
 }
 
 func getNetDevMac(ifaceName string) string {
-	glog.Infof("getNetDevMac(): get Mac for device %s", ifaceName)
+	glog.V(2).Infof("getNetDevMac(): get Mac for device %s", ifaceName)
 	macFilePath := filepath.Join(sysClassNet, ifaceName, "address")
 	data, err := ioutil.ReadFile(macFilePath)
 	if err != nil {
