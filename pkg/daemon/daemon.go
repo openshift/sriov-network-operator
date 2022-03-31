@@ -316,10 +316,11 @@ func (dn *Daemon) enqueueNodeState(obj interface{}) {
 func (dn *Daemon) processNextWorkItem() bool {
 	glog.V(2).Infof("worker queue size: %d", dn.workqueue.Len())
 	obj, shutdown := dn.workqueue.Get()
-	glog.V(2).Infof("get item: %d", obj.(int64))
 	if shutdown {
 		return false
 	}
+
+	glog.V(2).Infof("get item: %d", obj.(int64))
 
 	// We wrap this block in a func so we can defer c.workqueue.Done.
 	err := func(obj interface{}) error {
@@ -336,7 +337,7 @@ func (dn *Daemon) processNextWorkItem() bool {
 			return nil
 		}
 
-		err := dn.nodeStateSyncHandler(key)
+		err := dn.nodeStateSyncHandler()
 		if err != nil {
 			// Ereport error message, and put the item back to work queue for retry.
 			dn.refreshCh <- Message{
@@ -403,9 +404,8 @@ func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 	}
 }
 
-func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
+func (dn *Daemon) nodeStateSyncHandler() error {
 	var err error
-	glog.V(0).Infof("nodeStateSyncHandler(): new generation is %d", generation)
 	// Get the latest NodeState
 	var latestState *sriovnetworkv1.SriovNetworkNodeState
 	latestState, err = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), dn.name, metav1.GetOptions{})
@@ -414,6 +414,8 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		return err
 	}
 	latest := latestState.GetGeneration()
+	glog.V(0).Infof("nodeStateSyncHandler(): new generation is %d", latest)
+
 	if dn.nodeState.GetGeneration() == latest {
 		glog.V(0).Infof("nodeStateSyncHandler(): Interface not changed")
 		if latestState.Status.LastSyncError != "" ||

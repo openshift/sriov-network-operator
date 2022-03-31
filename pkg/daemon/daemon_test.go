@@ -16,12 +16,15 @@ import (
 
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
+	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/fake"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/generic"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 var FakeSupportedNicIDs corev1.ConfigMap = corev1.ConfigMap{
 	ObjectMeta: metav1.ObjectMeta{
-		Name:      sriovnetworkv1.SUPPORTED_NIC_ID_CONFIGMAP,
+		Name:      sriovnetworkv1.SupportedNicIDConfigmap,
 		Namespace: namespace,
 	},
 	Data: map[string]string{},
@@ -105,7 +108,11 @@ var _ = Describe("Config Daemon", func() {
 			utils.Baremetal,
 		)
 
-		sut.LoadedPlugins = map[string]VendorPlugin{GenericPlugin: &fakePlugin{}}
+		sut.enabledPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{}}
+
+		go func() {
+			sut.Run(stopCh, exitCh)
+		}()
 	})
 
 	AfterEach(func() {
@@ -120,9 +127,6 @@ var _ = Describe("Config Daemon", func() {
 	Context("Should", func() {
 
 		It("restart sriov-device-plugin pod", func() {
-			go func() {
-				Expect(sut.Run(stopCh, exitCh)).To(BeNil())
-			}()
 
 			_, err := sut.kubeClient.CoreV1().Nodes().
 				Create(context.Background(), &corev1.Node{
@@ -179,6 +183,45 @@ var _ = Describe("Config Daemon", func() {
 			}, "10s").Should(BeZero())
 
 		})
+
+		It("ignore non latest SriovNetworkNodeState generations", func() {
+
+			_, err := sut.kubeClient.CoreV1().Nodes().Create(context.Background(), &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-node",
+				},
+			}, metav1.CreateOptions{})
+			Expect(err).To(BeNil())
+
+			nodeState1 := &sriovnetworkv1.SriovNetworkNodeState{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-node",
+					Generation: 123,
+				},
+			}
+			Expect(
+				createSriovNetworkNodeState(sut.client, nodeState1)).
+				To(BeNil())
+
+			nodeState2 := &sriovnetworkv1.SriovNetworkNodeState{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-node",
+					Generation: 777,
+				},
+			}
+			Expect(
+				updateSriovNetworkNodeState(sut.client, nodeState2)).
+				To(BeNil())
+
+			var msg Message
+			Eventually(refreshCh, "10s").Should(Receive(&msg))
+			Expect(msg.syncStatus).To(Equal("InProgress"))
+
+			Eventually(refreshCh, "10s").Should(Receive(&msg))
+			Expect(msg.syncStatus).To(Equal("Succeeded"))
+
+			Expect(sut.nodeState.GetGeneration()).To(BeNumerically("==", 777))
+		})
 	})
 })
 
@@ -189,24 +232,9 @@ func createSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetwor
 	return err
 }
 
-type fakePlugin struct{}
-
-func (f *fakePlugin) Name() string {
-	return "fake_plugin"
-}
-
-func (f *fakePlugin) Spec() string {
-	return "1.0"
-}
-
-func (f *fakePlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error) {
-	return false, false, nil
-}
-
-func (f *fakePlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error) {
-	return false, false, nil
-}
-
-func (f *fakePlugin) Apply() error {
-	return nil
+func updateSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+	_, err := c.SriovnetworkV1().
+		SriovNetworkNodeStates(namespace).
+		Update(context.Background(), nodeState, metav1.UpdateOptions{})
+	return err
 }
