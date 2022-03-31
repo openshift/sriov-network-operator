@@ -20,9 +20,9 @@ type FakeSriovOperatorConfigs struct {
 	ns   string
 }
 
-var sriovoperatorconfigsResource = schema.GroupVersionResource{Group: "sriovnetwork", Version: "v1", Resource: "sriovoperatorconfigs"}
+var sriovoperatorconfigsResource = schema.GroupVersionResource{Group: "sriovnetwork.openshift.io", Version: "v1", Resource: "sriovoperatorconfigs"}
 
-var sriovoperatorconfigsKind = schema.GroupVersionKind{Group: "sriovnetwork", Version: "v1", Kind: "SriovOperatorConfig"}
+var sriovoperatorconfigsKind = schema.GroupVersionKind{Group: "sriovnetwork.openshift.io", Version: "v1", Kind: "SriovOperatorConfig"}
 
 // Get takes name of the sriovOperatorConfig, and returns the corresponding sriovOperatorConfig object, and an error if there is any.
 func (c *FakeSriovOperatorConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *sriovnetworkv1.SriovOperatorConfig, err error) {
