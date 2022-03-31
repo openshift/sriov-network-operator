@@ -42,7 +42,7 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func()) *Node
 
 // RunOnce initial the interface status for both baremetal and virtual environments
 func (writer *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.PlatformType) error {
-	glog.V(0).Infof("RunOnce(): start writer")
+	glog.V(0).Infof("RunOnce()")
 	msg := Message{}
 
 	if platformType == utils.VirtualOpenStack {
@@ -51,26 +51,22 @@ func (writer *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.
 			return err
 		}
 
-		metaData, networkData, err := utils.GetOpenstackData()
-		if err != nil {
-			glog.Errorf("RunOnce(): failed to read OpenStack data: %v", err)
-		}
-
 		if ns == nil {
+			metaData, networkData, err := utils.GetOpenstackData()
+			if err != nil {
+				glog.Errorf("RunOnce(): failed to read OpenStack data: %v", err)
+			}
+
 			writer.openStackDevicesInfo, err = utils.CreateOpenstackDevicesInfo(metaData, networkData)
 			if err != nil {
 				return err
 			}
 		} else {
-			devicesInfo := make(utils.OSPDevicesInfo)
-			for _, iface := range ns.Status.Interfaces {
-				devicesInfo[iface.PciAddress] = &utils.OSPDeviceInfo{MacAddress: iface.Mac, NetworkID: iface.NetFilter}
-			}
-			writer.openStackDevicesInfo = devicesInfo
+			writer.openStackDevicesInfo = utils.CreateOpenstackDevicesInfoFromNodeStatus(ns)
 		}
 	}
 
-	glog.V(0).Info("RunOnce(): once")
+	glog.V(0).Info("RunOnce(): first poll for nic status")
 	if err := writer.pollNicStatus(platformType); err != nil {
 		glog.Errorf("RunOnce(): first poll failed: %v", err)
 	}

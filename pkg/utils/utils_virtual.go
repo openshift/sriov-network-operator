@@ -345,6 +345,15 @@ func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.I
 	return pfList, nil
 }
 
+func CreateOpenstackDevicesInfoFromNodeStatus(networkState *sriovnetworkv1.SriovNetworkNodeState) OSPDevicesInfo {
+	devicesInfo := make(OSPDevicesInfo)
+	for _, iface := range networkState.Status.Interfaces {
+		devicesInfo[iface.PciAddress] = &OSPDeviceInfo{MacAddress: iface.Mac, NetworkID: iface.NetFilter}
+	}
+
+	return devicesInfo
+}
+
 // tryToGetVirtualInterfaceName get the interface name of a virtio interface
 func tryToGetVirtualInterfaceName(pciAddr string) string {
 	glog.Infof("tryToGetVirtualInterfaceName() get interface name for device %s", pciAddr)
