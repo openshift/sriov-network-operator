@@ -299,7 +299,13 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			// for userspace drivers like vfio we configure the vf mac using the kernel nic mac address
 			// before we switch to the userspace driver
 			if yes, d := hasDriver(addr); yes && !sriovnetworkv1.StringInArray(d, DpdkDrivers) {
-				if strings.EqualFold(iface.LinkType, "IB") {
+				// LinkType is an optional field. Let's fallback to current link type
+				// if nothing is specified in the SriovNodePolicy
+				linkType := iface.LinkType
+				if linkType == "" {
+					linkType = ifaceStatus.LinkType
+				}
+				if strings.EqualFold(linkType, "IB") {
 					if err = setVfGuid(addr, pfLink); err != nil {
 						return err
 					}
