@@ -157,13 +157,14 @@ skopeo:
 .PHONY: bundle
 bundle: manifests
 	rm -f bundle/manifests/*
-	rm -f manifests/stable/*.yaml
+	MANIFEST_YAML=$$(ls manifests/stable/*.yaml | grep -v supported-nic-ids_v1_configmap.yaml) ; \
+	rm -f $$MANIFEST_YAML
 	operator-sdk generate kustomize manifests --interactive=false -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) --extra-service-accounts sriov-network-config-daemon
 	operator-sdk bundle validate ./bundle
-	cp bundle/manifests/* manifests/stable
-
+	BUNDLE_MANIFEST_YAML=$$(ls bundle/manifests/* | grep -v supported-nic-ids_v1_configmap.yaml); \
+	cp $$BUNDLE_MANIFEST_YAML manifests/stable
 # Build the bundle image.
 .PHONY: bundle-build
 bundle-build:
