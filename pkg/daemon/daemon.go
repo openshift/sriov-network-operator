@@ -233,10 +233,6 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	tryEnableRdma()
 	tryEnableTun()
 
-	if err := sriovnetworkv1.InitNicIdMap(dn.kubeClient, namespace); err != nil {
-		return err
-	}
-
 	if err := dn.tryCreateUdevRuleWrapper(); err != nil {
 		return err
 	}
