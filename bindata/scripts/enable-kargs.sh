@@ -1,12 +1,11 @@
 #!/bin/bash
 set -x
 
-REDHAT_RELEASE_FILE="/host/etc/redhat-release"
-
 declare -a kargs=( "$@" )
 ret=0
 args=$(chroot /host/ cat /proc/cmdline)
-if grep --quiet CoreOS "$REDHAT_RELEASE_FILE"; then
+
+if chroot /host/ test -f /run/ostree-booted ; then
     for t in "${kargs[@]}";do
         if [[ $args != *${t}* ]];then
             if chroot /host/ rpm-ostree kargs | grep -vq ${t}; then
@@ -30,4 +29,5 @@ else
         fi
     done
 fi
+
 echo $ret
