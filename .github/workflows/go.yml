@@ -42,3 +42,5 @@ jobs:
     - name: test controllers on opensfhit
       run: CLUSTER_TYPE=openshift make test-controllers
 
+    - name: test bindata/scripts
+      run: make test-bindata-scripts
