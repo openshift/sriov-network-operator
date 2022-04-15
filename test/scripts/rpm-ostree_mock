@@ -1,0 +1,12 @@
+#!/usr/bin/sh -x
+
+# This script is meant to be a mock for `rpm-ostree`
+
+# Write invocation with arguments to a file to allow making assertion.
+echo "$*" >> /rpm-ostree_calls
+
+if [ "$*" != *"--append"* ]
+then
+    # Caller is trying to read kernel arguments.
+    cat /proc/cmdline
+fi
