@@ -48,7 +48,7 @@ func init() {
 	ClusterType = os.Getenv("CLUSTER_TYPE")
 }
 
-func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
+func DiscoverSriovDevices(withUnsupported bool) ([]sriovnetworkv1.InterfaceExt, error) {
 	glog.V(2).Info("DiscoverSriovDevices")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
@@ -94,6 +94,13 @@ func DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 		if len(deviceNames) == 0 {
 			// no network devices found, skipping device
 			continue
+		}
+
+		if !withUnsupported {
+			if !sriovnetworkv1.IsSupportedModel(device.Vendor.ID, device.Product.ID) {
+				glog.Infof("DiscoverSriovDevices(): unsupported device %+v", device)
+				continue
+			}
 		}
 
 		iface := sriovnetworkv1.InterfaceExt{
@@ -292,7 +299,13 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			// for userspace drivers like vfio we configure the vf mac using the kernel nic mac address
 			// before we switch to the userspace driver
 			if yes, d := hasDriver(addr); yes && !sriovnetworkv1.StringInArray(d, DpdkDrivers) {
-				if strings.EqualFold(iface.LinkType, "IB") {
+				// LinkType is an optional field. Let's fallback to current link type
+				// if nothing is specified in the SriovNodePolicy
+				linkType := iface.LinkType
+				if linkType == "" {
+					linkType = ifaceStatus.LinkType
+				}
+				if strings.EqualFold(linkType, "IB") {
 					if err = setVfGuid(addr, pfLink); err != nil {
 						return err
 					}

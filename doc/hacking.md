@@ -97,3 +97,14 @@ Before deploying the Operator, you want to export these variables to use that cu
     ```bash
     export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE=<path to custom image>
     (...)
+
+## Enable Unsupported NICs
+
+By default, unsupported NICs are not reported in `SriovNetworkNodeState` and
+are not allowed in `SriovNetworkNodePolicy` by the webhook.
+
+If you want to allow unsupported NICs, set the `DEV_MODE` env var to `TRUE`.
+
+```bash
+export DEV_MODE=TRUE
+```

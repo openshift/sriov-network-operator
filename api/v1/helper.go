@@ -35,7 +35,6 @@ const invalidVfIndex = -1
 
 var MANIFESTS_PATH = "./bindata/manifests/cni-config"
 var log = logf.Log.WithName("sriovnetwork")
-var VfIds = []string{}
 
 // NicIdMap contains supported mapping of IDs with each in the format of:
 // Vendor ID, Physical Function Device ID, Virtual Function Device ID
@@ -681,7 +680,6 @@ func NetFilterMatch(netFilter string, netValue string) (isMatch bool) {
 
 	if netFilterResult == nil {
 		logger.Info("Invalid NetFilter spec...", "netFilter", netFilter)
-
 		return false
 	}
 
@@ -689,7 +687,6 @@ func NetFilterMatch(netFilter string, netValue string) (isMatch bool) {
 
 	if netValueResult == nil {
 		logger.Info("Invalid netValue...", "netValue", netValue)
-
 		return false
 	}
 

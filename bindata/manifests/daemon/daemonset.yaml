@@ -76,6 +76,8 @@ spec:
                 fieldPath: metadata.namespace
           - name: CLUSTER_TYPE
             value: "{{.ClusterType}}"
+          - name: DEV_MODE
+            value: "{{.DevMode}}"
         resources:
           requests:
             cpu: 100m
