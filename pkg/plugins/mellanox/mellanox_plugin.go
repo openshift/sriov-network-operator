@@ -371,7 +371,7 @@ func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.
 
 	// Remove policy then re-apply it
 	if !needReboot && fwNext.totalVfs != totalVfs {
-		glog.V(2).Infof("Changing TotalVfs %d to 0, doesn't require rebooting", fwCurrent.totalVfs)
+		glog.V(2).Infof("Changing TotalVfs %d to same as Next Boot value, doesn't require rebooting", fwCurrent.totalVfs)
 		attrs.totalVfs = totalVfs
 		changeWithoutReboot = true
 	}
