@@ -297,8 +297,11 @@ func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *s
 		return true
 	}
 
+	// Check the vendor and device ID of the VF only if we are on a virtual environment
 	for key := range utils.PlatformMap {
-		if strings.Contains(strings.ToLower(node.Spec.ProviderID), strings.ToLower(key)) && sriovnetworkv1.IsVfSupportedModel(iface.Vendor, iface.DeviceID) {
+		if strings.Contains(strings.ToLower(node.Spec.ProviderID), strings.ToLower(key)) &&
+			selector.NetFilter != "" && selector.NetFilter == iface.NetFilter &&
+			sriovnetworkv1.IsVfSupportedModel(iface.Vendor, iface.DeviceID) {
 			return true
 		}
 	}
