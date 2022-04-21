@@ -13,6 +13,7 @@ require (
 	github.com/go-logr/logr v0.4.0 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/google/go-cmp v0.5.2
+	github.com/hashicorp/go-retryablehttp v0.7.1
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/intel/sriov-network-device-plugin v0.0.0-20200924101303-b7f6d3e06797
 	github.com/jaypipes/ghw v0.6.1
