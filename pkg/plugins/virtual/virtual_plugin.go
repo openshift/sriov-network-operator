@@ -1,9 +1,7 @@
 package main
 
 import (
-	"os/exec"
 	"reflect"
-	"syscall"
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -128,15 +126,6 @@ func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
 			if iface.VfGroups[i].DeviceType == "vfio-pci" {
 				return true
 			}
-		}
-	}
-	return false
-}
-
-func isCommandNotFound(err error) bool {
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 127 {
-			return true
 		}
 	}
 	return false
