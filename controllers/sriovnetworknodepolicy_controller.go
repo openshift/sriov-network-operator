@@ -278,6 +278,12 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(np *sriovne
 			return fmt.Errorf("failed to get SriovNetworkNodeState: %v", err)
 		}
 	} else {
+		if len(found.Status.Interfaces) == 0 {
+			logger.Info("SriovNetworkNodeState Status Interfaces are empty. Skip update of policies in spec",
+				"namespace", ns.Namespace, "name", ns.Name)
+			return nil
+		}
+
 		logger.Info("SriovNetworkNodeState already exists, updating")
 		newVersion := found.DeepCopy()
 		newVersion.Spec = ns.Spec
