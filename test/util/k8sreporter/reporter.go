@@ -149,26 +149,6 @@ func (r *KubernetesReporter) logNetworkPolicies() {
 	}
 	fmt.Fprintln(r.dumpOutput, string(j))
 }
-func (r *KubernetesReporter) logNetworks() {
-	fmt.Fprintf(r.dumpOutput, "Logging networks")
-
-	networks := sriovv1.SriovNetworkList{}
-	err := r.clients.List(context.Background(),
-		&networks,
-		runtimeclient.InNamespace("openshift-sriov-network-operator"))
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to fetch network policies: %v\n", err)
-		return
-	}
-
-	j, err := json.MarshalIndent(networks, "", "    ")
-	if err != nil {
-		fmt.Println("Failed to marshal networks")
-		return
-	}
-	fmt.Fprintln(r.dumpOutput, string(j))
-}
 
 func (r *KubernetesReporter) logSriovNodeState() {
 	fmt.Fprintf(r.dumpOutput, "Logging node states")

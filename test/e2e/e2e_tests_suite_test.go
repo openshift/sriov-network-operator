@@ -23,7 +23,6 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	// +kubebuilder:scaffold:imports
 
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/netns"
 )
 
@@ -56,7 +55,6 @@ func TestSriovTests(t *testing.T) {
 		[]Reporter{printer.NewlineReporter{}})
 }
 
-var sriovInfos *cluster.EnabledNodes
 var sriovIface *sriovnetworkv1.InterfaceExt
 
 var _ = BeforeSuite(func(done Done) {

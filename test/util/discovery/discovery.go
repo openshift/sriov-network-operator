@@ -70,12 +70,3 @@ func getSriovNodes(clients *client.ClientSet, sriovNodeNames []string) ([]corev1
 	}
 	return nodes, nil
 }
-
-func containsNode(name string, sriovNodes []string) bool {
-	for _, node := range sriovNodes {
-		if node == name {
-			return true
-		}
-	}
-	return false
-}

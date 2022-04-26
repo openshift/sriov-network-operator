@@ -257,16 +257,6 @@ func validatePolicyForNodePolicy(
 	return true, nil
 }
 
-func keys(m map[string]([]string)) []string {
-	keys := make([]string, len(m))
-	i := 0
-	for k := range m {
-		keys[i] = k
-		i++
-	}
-	return keys
-}
-
 func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt, node *corev1.Node) bool {
 	if selector.Vendor != "" && selector.Vendor != iface.Vendor {
 		return false
