@@ -20,10 +20,6 @@ import (
 )
 
 var (
-	machineConfigPoolNodeSelector string
-)
-
-var (
 	clients           *testclient.ClientSet
 	operatorNamespace string
 )
@@ -54,8 +50,6 @@ func init() {
 	if roleWorkerCNF == "" {
 		roleWorkerCNF = "worker-cnf"
 	}
-
-	machineConfigPoolNodeSelector = fmt.Sprintf("node-role.kubernetes.io/%s", roleWorkerCNF)
 }
 
 var _ = Describe("validation", func() {

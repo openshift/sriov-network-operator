@@ -48,9 +48,6 @@ type SriovOperatorConfigReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-var injectorServiceCaCmVersion = ""
-var webhookServiceCaCmVersion = ""
-
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs/finalizers,verbs=update
