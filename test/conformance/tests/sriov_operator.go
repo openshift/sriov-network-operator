@@ -840,6 +840,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				By("Create first Pod which consumes all available VFs")
 				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
+				Expect(err).ToNot(HaveOccurred())
 				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
 				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
@@ -1209,7 +1210,7 @@ var _ = Describe("[sriov] operator", func() {
 				BeforeEach(func() {
 					var node string
 					resourceName := "mturesource"
-					numVfs := 5
+					var numVfs int
 					var intf *sriovv1.InterfaceExt
 					var err error
 
@@ -1934,6 +1935,7 @@ func daemonsScheduledOnNodes(selector string) bool {
 	nn, err := clients.Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: selector,
 	})
+	Expect(err).ToNot(HaveOccurred())
 	nodes := nn.Items
 
 	daemons, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=sriov-network-config-daemon"})
