@@ -51,7 +51,6 @@ func (r *KubernetesReporter) SpecDidComplete(specSummary *types.SpecSummary) {
 	fmt.Fprintln(r.dumpOutput, "Starting dump for failed spec", specSummary.ComponentTexts)
 	r.Dump()
 	fmt.Fprintln(r.dumpOutput, "Finished dump for failed spec")
-
 }
 
 func (r *KubernetesReporter) Dump() {
