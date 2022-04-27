@@ -74,5 +74,8 @@ func New(kubeconfig string) *ClientSet {
 	clientSet.Client, err = runtimeclient.New(config, client.Options{
 		Scheme: crScheme,
 	})
+	if err != nil {
+		return nil
+	}
 	return clientSet
 }

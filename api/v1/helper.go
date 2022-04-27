@@ -465,8 +465,6 @@ func (s *SriovNetworkNodeState) GetDriverByPciAddress(addr string) string {
 func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	logger := log.WithName("renderNetAttDef")
 	logger.Info("Start to render IB SRIOV CNI NetworkAttachementDefinition")
-	var err error
-	objs := []*uns.Unstructured{}
 
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
@@ -511,7 +509,7 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
 	}
 
-	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
+	objs, err := render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {
 		return nil, err
 	}
@@ -548,8 +546,6 @@ func (cr *SriovIBNetwork) DeleteNetAttDef(c client.Client) error {
 func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	logger := log.WithName("renderNetAttDef")
 	logger.Info("Start to render SRIOV CNI NetworkAttachementDefinition")
-	var err error
-	objs := []*uns.Unstructured{}
 
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
@@ -637,7 +633,7 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
 	}
 
-	objs, err = render.RenderDir(MANIFESTS_PATH, &data)
+	objs, err := render.RenderDir(MANIFESTS_PATH, &data)
 	if err != nil {
 		return nil, err
 	}

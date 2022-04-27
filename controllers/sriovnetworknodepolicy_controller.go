@@ -110,7 +110,10 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	}
 	// Fetch the Nodes
 	nodeList := &corev1.NodeList{}
-	lo := &client.MatchingLabels{}
+	lo := &client.MatchingLabels{
+		"node-role.kubernetes.io/worker": "",
+		"beta.kubernetes.io/os":          "linux",
+	}
 	defaultOpConf := &sriovnetworkv1.SriovOperatorConfig{}
 	if err := r.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: constants.DEFAULT_CONFIG_NAME}, defaultOpConf); err != nil {
 		return reconcile.Result{}, err
@@ -118,11 +121,6 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	if len(defaultOpConf.Spec.ConfigDaemonNodeSelector) > 0 {
 		labels := client.MatchingLabels(defaultOpConf.Spec.ConfigDaemonNodeSelector)
 		lo = &labels
-	} else {
-		lo = &client.MatchingLabels{
-			"node-role.kubernetes.io/worker": "",
-			"beta.kubernetes.io/os":          "linux",
-		}
 	}
 	err = r.List(context.TODO(), nodeList, lo)
 	if err != nil {
@@ -530,7 +528,6 @@ func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1
 func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePolicy) []corev1.NodeSelectorTerm {
 	terms := []corev1.NodeSelectorTerm{}
 	for _, p := range policies {
-		nodeSelector := corev1.NodeSelectorTerm{}
 		if len(p.Spec.NodeSelector) == 0 {
 			continue
 		}
@@ -548,7 +545,7 @@ func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePo
 		sort.Slice(expressions, func(i, j int) bool {
 			return expressions[i].Key < expressions[j].Key
 		})
-		nodeSelector = corev1.NodeSelectorTerm{
+		nodeSelector := corev1.NodeSelectorTerm{
 			MatchExpressions: expressions,
 		}
 		terms = append(terms, nodeSelector)
@@ -561,10 +558,8 @@ func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePo
 func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, error) {
 	logger := log.Log.WithName("renderDsForCR")
 	logger.Info("Start to render objects")
-	var err error
-	objs := []*uns.Unstructured{}
 
-	objs, err = render.RenderDir(path, data)
+	objs, err := render.RenderDir(path, data)
 	if err != nil {
 		return nil, errs.Wrap(err, "failed to render OpenShiftSRIOV Network manifests")
 	}
