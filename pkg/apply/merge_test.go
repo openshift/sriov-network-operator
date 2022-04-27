@@ -256,6 +256,7 @@ metadata:
 	g.Expect(err).NotTo(HaveOccurred())
 
 	s, ok, err := uns.NestedSlice(upd.Object, "secrets")
+	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(BeTrue())
 	g.Expect(s).To(ConsistOf("foo"))
 }

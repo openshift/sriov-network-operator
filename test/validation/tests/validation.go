@@ -45,13 +45,6 @@ const (
 	sriovOperatorConfigs = "sriovoperatorconfigs.sriovnetwork.openshift.io"
 )
 
-func init() {
-	roleWorkerCNF := os.Getenv("ROLE_WORKER_CNF")
-	if roleWorkerCNF == "" {
-		roleWorkerCNF = "worker-cnf"
-	}
-}
-
 var _ = Describe("validation", func() {
 
 	Context("sriov", func() {

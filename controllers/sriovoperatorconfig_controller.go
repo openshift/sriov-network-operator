@@ -166,8 +166,6 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.S
 func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
 	logger := log.Log.WithName("syncConfigDaemonset")
 	logger.Info("Start to sync config daemonset")
-	// var err error
-	objs := []*uns.Unstructured{}
 
 	data := render.MakeRenderData()
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")

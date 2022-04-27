@@ -51,8 +51,6 @@ func ValidateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
 
 	if ar.Request.Operation == "DELETE" {
 		raw = ar.Request.OldObject.Raw
-	} else {
-		raw = ar.Request.Object.Raw
 	}
 
 	switch ar.Request.Kind.Kind {
