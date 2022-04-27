@@ -201,7 +201,7 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() int64 {
 					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
-					resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 					allocatable, _ := resNum.AsInt64()
 					return allocatable
 				}, 10*time.Minute, time.Second).Should(Equal(int64(numVfs)))
@@ -392,10 +392,7 @@ var _ = Describe("[sriov] operator", func() {
 				}, (10+snoTimeoutMultiplier*110)*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 				checkFunc := func(line string) bool {
-					if strings.Contains(line, validationString) {
-						return true
-					}
-					return false
+					return strings.Contains(line, validationString)
 				}
 
 				validationFunction([]string{sriovNetwork.Name}, checkFunc)
@@ -405,7 +402,7 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() int64 {
 					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
-					resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 					allocatable, _ := resNum.AsInt64()
 					return allocatable
 				}, 3*time.Minute, time.Second).Should(Equal(int64(numVfs)))
@@ -956,7 +953,7 @@ var _ = Describe("[sriov] operator", func() {
 					Eventually(func() int64 {
 						testedNode, err := clients.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
-						resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+						resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 						allocatable, _ := resNum.AsInt64()
 						return allocatable
 					}, 10*time.Minute, time.Second).Should(Equal(int64(5)))
@@ -1002,7 +999,7 @@ var _ = Describe("[sriov] operator", func() {
 					Eventually(func() int64 {
 						testedNode, err := clients.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
-						resNum, _ := testedNode.Status.Allocatable["openshift.io/testresource"]
+						resNum := testedNode.Status.Allocatable["openshift.io/testresource"]
 						capacity, _ := resNum.AsInt64()
 						return capacity
 					}, 3*time.Minute, time.Second).Should(Equal(int64(3)))
@@ -1050,11 +1047,11 @@ var _ = Describe("[sriov] operator", func() {
 					Eventually(func() map[string]int64 {
 						testedNode, err := clients.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
-						resNum, _ := testedNode.Status.Allocatable["openshift.io/testresource"]
+						resNum := testedNode.Status.Allocatable["openshift.io/testresource"]
 						capacity, _ := resNum.AsInt64()
 						res := make(map[string]int64)
 						res["openshift.io/testresource"] = capacity
-						resNum, _ = testedNode.Status.Allocatable["openshift.io/testresource1"]
+						resNum = testedNode.Status.Allocatable["openshift.io/testresource1"]
 						capacity, _ = resNum.AsInt64()
 						res["openshift.io/testresource1"] = capacity
 						return res
@@ -1290,7 +1287,7 @@ var _ = Describe("[sriov] operator", func() {
 						Eventually(func() int64 {
 							testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 							Expect(err).ToNot(HaveOccurred())
-							resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+							resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 							allocatable, _ := resNum.AsInt64()
 							return allocatable
 						}, 10*time.Minute, time.Second).Should(Equal(int64(5)))
@@ -1441,7 +1438,7 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() int64 {
 					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
-					resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 					allocatable, _ := resNum.AsInt64()
 					return allocatable
 				}, 10*time.Minute, time.Second).Should(Equal(int64(numVfs)))
@@ -1505,10 +1502,7 @@ var _ = Describe("[sriov] operator", func() {
 						podsList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
 							LabelSelector: fmt.Sprintf("app=%s", resourceName)})
 						Expect(err).ToNot(HaveOccurred())
-						if len(podsList.Items) > 0 {
-							return false
-						}
-						return true
+						return len(podsList.Items) <= 0
 
 					}, 2*time.Minute, 10*time.Second).Should(BeTrue())
 
@@ -1643,7 +1637,7 @@ var _ = Describe("[sriov] operator", func() {
 					Eventually(func() int64 {
 						testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
-						resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+						resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 						allocatable, _ := resNum.AsInt64()
 						return allocatable
 					}, 10*time.Minute, time.Second).Should(Equal(int64(5)))
@@ -1970,7 +1964,7 @@ func createSriovPolicy(sriovDevice string, testNode string, numVfs int, resource
 	Eventually(func() int64 {
 		testedNode, err := clients.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
-		resNum, _ := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+		resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 		capacity, _ := resNum.AsInt64()
 		return capacity
 	}, 10*time.Minute, time.Second).Should(Equal(int64(numVfs)))
@@ -1991,7 +1985,7 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool, podCa
 		)
 	}
 
-	if podCapabilities != nil && len(podCapabilities) != 0 {
+	if len(podCapabilities) != 0 {
 		if podDefinition.Spec.Containers[0].SecurityContext == nil {
 			podDefinition.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{}
 		}
@@ -2109,10 +2103,7 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 }
 
 func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {
-	if policy.Spec.DeviceType != "netdevice" {
-		return false
-	}
-	return true
+	return policy.Spec.DeviceType == "netdevice"
 }
 
 func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
