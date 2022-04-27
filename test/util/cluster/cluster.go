@@ -98,7 +98,6 @@ func (n *EnabledNodes) FindOneSriovDevice(node string) (*sriovv1.InterfaceExt, e
 	}
 	for _, itf := range s.Status.Interfaces {
 		if IsPFDriverSupported(itf.Driver) && sriovv1.IsSupportedDevice(itf.DeviceID) {
-
 			// Skip mlx interfaces if secure boot is enabled
 			// TODO: remove this when mlx support secure boot/lockdown mode
 			if itf.Vendor == mlxVendorID && n.IsSecureBootEnabled[node] {

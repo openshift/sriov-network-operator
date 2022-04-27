@@ -18,5 +18,4 @@ func init() {
 	}
 
 	clients = testclient.New("")
-
 }

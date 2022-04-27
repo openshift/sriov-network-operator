@@ -204,5 +204,4 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 			glog.Infof("watcher error: %v", err)
 		}
 	}
-
 }
