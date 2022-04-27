@@ -506,7 +506,6 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 				done := make(chan bool)
 				go dn.getDrainLock(ctx, done)
 				<-done
-
 			}
 
 			if utils.ClusterType == utils.ClusterTypeOpenshift {

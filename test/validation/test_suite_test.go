@@ -46,7 +46,6 @@ func TestTest(t *testing.T) {
 		}
 		defer f.Close()
 		rr = append(rr, k8sreporter.New(clients, f))
-
 	} else if *dumpOutput {
 		rr = append(rr, k8sreporter.New(clients, os.Stdout))
 	}

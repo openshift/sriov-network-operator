@@ -58,7 +58,6 @@ func WaitForSriovNetworkNodeStateReady(nodeState *sriovnetworkv1.SriovNetworkNod
 }
 
 func WaitForDaemonSetReady(ds *appsv1.DaemonSet, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
-
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
 		defer cancel()
@@ -84,7 +83,6 @@ func WaitForDaemonSetReady(ds *appsv1.DaemonSet, client client.Client, namespace
 }
 
 func WaitForNamespacedObject(obj client.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
-
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
 		defer cancel()
@@ -106,7 +104,6 @@ func WaitForNamespacedObject(obj client.Object, client client.Client, namespace,
 }
 
 func WaitForNamespacedObjectDeleted(obj client.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
-
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
 		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
 		defer cancel()

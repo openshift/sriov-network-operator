@@ -1787,7 +1787,6 @@ func findSuitableResourceForMain(mainIntf *sriovv1.InterfaceExt, networkState *s
 	}
 
 	return "", false
-
 }
 
 func resourceOnlyForInterface(networkState *sriovv1.SriovNetworkNodeState, resourceName, interfaceName string) bool {
@@ -1961,7 +1960,6 @@ func daemonsScheduledOnNodes(selector string) bool {
 		}
 	}
 	return true
-
 }
 
 func createSriovPolicy(sriovDevice string, testNode string, numVfs int, resourceName string) {
@@ -2186,6 +2184,5 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 
 			return true
 		}, 1*time.Minute, 10*time.Second).Should(BeTrue())
-
 	}
 }
