@@ -445,8 +445,7 @@ func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	var testEnv *envtest.Environment
-	testEnv = &envtest.Environment{}
+	var testEnv = &envtest.Environment{}
 
 	cfg, err := testEnv.Start()
 	g.Expect(err).ToNot(HaveOccurred())

@@ -163,7 +163,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 				return fmt.Errorf("Couldn't delete MachineConfig: %v", err)
 			}
 		} else {
-			if bytes.Compare(foundMC.Spec.Config.Raw, mc.Spec.Config.Raw) == 0 {
+			if bytes.Equal(foundMC.Spec.Config.Raw, mc.Spec.Config.Raw) {
 				logger.Info("MachineConfig already exists, updating")
 				err = r.Update(context.TODO(), foundMC)
 				if err != nil {

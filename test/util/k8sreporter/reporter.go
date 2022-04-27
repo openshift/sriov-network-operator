@@ -58,10 +58,7 @@ func (r *KubernetesReporter) Dump() {
 	r.logPods("openshift-sriov-network-operator")
 	r.logPods(namespaces.Test)
 	r.logLogs(func(p *corev1.Pod) bool {
-		if !strings.HasPrefix(p.Name, "sriov-") {
-			return true
-		}
-		return false
+		return !strings.HasPrefix(p.Name, "sriov-")
 	})
 	r.logSriovNodeState()
 	r.logNetworkPolicies()
