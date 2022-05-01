@@ -27,9 +27,6 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
 	corev1 "k8s.io/api/core/v1"
-	k8sv1 "k8s.io/api/core/v1"
-	v1core "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	admission "k8s.io/api/admissionregistration/v1"
@@ -245,7 +242,7 @@ var _ = Describe("[sriov] operator", func() {
 				var runningPod *corev1.Pod
 				Eventually(func() corev1.PodPhase {
 					runningPod, err = clients.Pods(namespaces.Test).Get(context.Background(), created.Name, metav1.GetOptions{})
-					if errors.IsNotFound(err) {
+					if k8serrors.IsNotFound(err) {
 						return corev1.PodUnknown
 					}
 					Expect(err).ToNot(HaveOccurred())
@@ -308,7 +305,7 @@ var _ = Describe("[sriov] operator", func() {
 				var runningPod *corev1.Pod
 				Eventually(func() corev1.PodPhase {
 					runningPod, err = clients.Pods(namespaces.Test).Get(context.Background(), created.Name, metav1.GetOptions{})
-					if errors.IsNotFound(err) {
+					if k8serrors.IsNotFound(err) {
 						return corev1.PodUnknown
 					}
 					Expect(err).ToNot(HaveOccurred())
@@ -746,7 +743,7 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() bool {
 					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Name: sriovNetworkName, Namespace: namespaces.Test}, netAttDef)
-					if errors.IsNotFound(err) {
+					if k8serrors.IsNotFound(err) {
 						return false
 					}
 					return strings.Contains(netAttDef.Spec.Config, "10.11.11.1")
@@ -856,11 +853,11 @@ var _ = Describe("[sriov] operator", func() {
 				runningPodA, err := clients.Pods(testPodA.Namespace).Create(context.Background(), testPodA, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodA.Name))
 				By("Checking that first Pod is in Running state")
-				Eventually(func() v1core.PodPhase {
+				Eventually(func() corev1.PodPhase {
 					runningPodA, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodA.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodA.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
+				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
 				By("Create second Pod which consumes one more VF")
 
 				testPodB := pod.RedefineWithNodeSelector(
@@ -870,11 +867,11 @@ var _ = Describe("[sriov] operator", func() {
 				runningPodB, err := clients.Pods(testPodB.Namespace).Create(context.Background(), testPodB, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodB.Name))
 				By("Checking second that pod is in Pending state")
-				Eventually(func() v1core.PodPhase {
+				Eventually(func() corev1.PodPhase {
 					runningPodB, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodB.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodB.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodPending))
+				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodPending))
 
 				By("Checking that relevant error event was originated")
 				Eventually(func() string {
@@ -895,11 +892,11 @@ var _ = Describe("[sriov] operator", func() {
 				})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to delete pod %s", runningPodA.Name))
 				By("Checking that second pod is able to use released VF")
-				Eventually(func() v1core.PodPhase {
+				Eventually(func() corev1.PodPhase {
 					runningPodB, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodB.Name, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodB.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodRunning))
+				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
 			})
 		})
 	})
@@ -1341,7 +1338,7 @@ var _ = Describe("[sriov] operator", func() {
 						}
 
 						if err != nil {
-							return fmt.Errorf("Failed to show net1")
+							return fmt.Errorf("failed to show net1")
 						}
 
 						return nil
@@ -1731,16 +1728,16 @@ func changeNodeInterfaceState(testNode string, ifcName string, enable bool) {
 				pod.DefineWithHostNetwork(testNode),
 				[]string{"ip", "link", "set", "dev", ifcName, state}, []string{},
 			),
-			k8sv1.RestartPolicyNever,
+			corev1.RestartPolicyNever,
 		),
 	)
 	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
-	Eventually(func() k8sv1.PodPhase {
+	Eventually(func() corev1.PodPhase {
 		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
-	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodSucceeded))
+	}, 3*time.Minute, 1*time.Second).Should(Equal(corev1.PodSucceeded))
 }
 
 func discoverResourceForMainSriov(nodes *cluster.EnabledNodes) (*sriovv1.InterfaceExt, string, string, bool) {
@@ -1842,7 +1839,7 @@ func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceEx
 		filteredDevices = append(filteredDevices, device)
 	}
 	if len(filteredDevices) == 0 {
-		return nil, fmt.Errorf("Unused sriov devices not found")
+		return nil, fmt.Errorf("unused sriov devices not found")
 	}
 	return filteredDevices, nil
 }
@@ -1868,7 +1865,7 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 		}
 
 		if err != nil {
-			return fmt.Errorf("Failed to find %s interface address %v - %s", interfaceName, err, stderr)
+			return fmt.Errorf("failed to find %s interface address %v - %s", interfaceName, err, stderr)
 		}
 
 		return nil
@@ -1879,7 +1876,7 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 	segNum := len(pathSegments)
 
 	if !strings.HasPrefix(pathSegments[segNum-1], "net1") { // not checking equality because of rubbish like new line
-		return 0, fmt.Errorf("Expecting net1 as last segment of %s", stdout)
+		return 0, fmt.Errorf("expecting net1 as last segment of %s", stdout)
 	}
 
 	podVFAddr := pathSegments[segNum-3] // 0000:19:00.5
@@ -1895,7 +1892,7 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 		}
 
 		if err != nil {
-			return fmt.Errorf("Failed to find %s siblings %v - %s", devicePath, err, stderr)
+			return fmt.Errorf("failed to find %s siblings %v - %s", devicePath, err, stderr)
 		}
 
 		// lines of the format of
@@ -1910,7 +1907,7 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 			columns := strings.Fields(line)
 
 			if len(columns) != 9 {
-				return fmt.Errorf("Expecting 9 columns in %s, found %d", line, len(columns))
+				return fmt.Errorf("expecting 9 columns in %s, found %d", line, len(columns))
 			}
 
 			vfAddr := strings.TrimPrefix(columns[8], "../") // ../0000:19:00.2
@@ -1920,12 +1917,12 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 				vfNumber := strings.TrimPrefix(vfName, "virtfn")
 				res, err = strconv.Atoi(vfNumber)
 				if err != nil {
-					return fmt.Errorf("Could not get vf number from vfname %s", vfName)
+					return fmt.Errorf("could not get vf number from vfname %s", vfName)
 				}
 				return nil
 			}
 		}
-		return fmt.Errorf("Could not find %s index in %s", podVFAddr, stdout)
+		return fmt.Errorf("could not find %s index in %s", podVFAddr, stdout)
 	}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
 
 	return res, nil
@@ -1972,11 +1969,11 @@ func createSriovPolicy(sriovDevice string, testNode string, numVfs int, resource
 	}, 10*time.Minute, time.Second).Should(Equal(int64(numVfs)))
 }
 
-func createTestPod(node string, networks []string) *k8sv1.Pod {
+func createTestPod(node string, networks []string) *corev1.Pod {
 	return createCustomTestPod(node, networks, false, nil)
 }
 
-func createCustomTestPod(node string, networks []string, hostNetwork bool, podCapabilities []corev1.Capability) *k8sv1.Pod {
+func createCustomTestPod(node string, networks []string, hostNetwork bool, podCapabilities []corev1.Capability) *corev1.Pod {
 	var podDefinition *corev1.Pod
 	if hostNetwork {
 		podDefinition = pod.DefineWithHostNetwork(node)
@@ -2000,11 +1997,11 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool, podCa
 	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
-	Eventually(func() k8sv1.PodPhase {
+	Eventually(func() corev1.PodPhase {
 		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
-	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodRunning))
+	}, 3*time.Minute, 1*time.Second).Should(Equal(corev1.PodRunning))
 	pod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred())
 	return pod
@@ -2021,18 +2018,18 @@ func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
 				pod.DefineWithNetworks([]string{sriovNetworkAttachment}),
 				[]string{"sh", "-c", fmt.Sprintf("ping -%s -c 3 %s", ipProtocolVersion, ip)}, []string{},
 			),
-			k8sv1.RestartPolicyNever,
+			corev1.RestartPolicyNever,
 		),
 		nodeSelector,
 	)
 	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
-	Eventually(func() k8sv1.PodPhase {
+	Eventually(func() corev1.PodPhase {
 		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
-	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodSucceeded))
+	}, 3*time.Minute, 1*time.Second).Should(Equal(corev1.PodSucceeded))
 }
 
 func WaitForSRIOVStable() {
@@ -2140,7 +2137,7 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 			}
 
 			for _, pod := range podsList.Items {
-				if pod.Status.Phase != v1core.PodRunning {
+				if pod.Status.Phase != corev1.PodRunning {
 					return false
 				}
 			}

@@ -30,10 +30,10 @@ func MatchingOptionalSelectorState(clients *client.ClientSet, toFilter []sriovv1
 		LabelSelector: NodesSelector,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("Error in getting nodes matching %s, %v", NodesSelector, err)
+		return nil, fmt.Errorf("error in getting nodes matching %s, %v", NodesSelector, err)
 	}
 	if len(toMatch.Items) == 0 {
-		return nil, fmt.Errorf("Failed to get nodes matching %s, %v", NodesSelector, err)
+		return nil, fmt.Errorf("failed to get nodes matching %s, %v", NodesSelector, err)
 	}
 
 	res := make([]sriovv1.SriovNetworkNodeState, 0)
@@ -45,7 +45,7 @@ func MatchingOptionalSelectorState(clients *client.ClientSet, toFilter []sriovv1
 		}
 	}
 	if len(res) == 0 {
-		return nil, fmt.Errorf("Failed to find matching nodes with %s", NodesSelector)
+		return nil, fmt.Errorf("failed to find matching nodes with %s", NodesSelector)
 	}
 	return res, nil
 }
@@ -62,10 +62,10 @@ func MatchingOptionalSelector(clients *client.ClientSet, toFilter []corev1.Node)
 		LabelSelector: NodesSelector,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("Error in getting nodes matching the %s label selector, %v", NodesSelector, err)
+		return nil, fmt.Errorf("error in getting nodes matching the %s label selector, %v", NodesSelector, err)
 	}
 	if len(toMatch.Items) == 0 {
-		return nil, fmt.Errorf("Failed to get nodes matching %s label selector", NodesSelector)
+		return nil, fmt.Errorf("failed to get nodes matching %s label selector", NodesSelector)
 	}
 
 	res := make([]corev1.Node, 0)
@@ -78,7 +78,7 @@ func MatchingOptionalSelector(clients *client.ClientSet, toFilter []corev1.Node)
 		}
 	}
 	if len(res) == 0 {
-		return nil, fmt.Errorf("Failed to find matching nodes with %s label selector", NodesSelector)
+		return nil, fmt.Errorf("failed to find matching nodes with %s label selector", NodesSelector)
 	}
 	return res, nil
 }

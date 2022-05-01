@@ -978,11 +978,11 @@ func tryEnableRdma() (bool, error) {
 
 func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	glog.V(2).Infof("tryCreateSwitchdevUdevRule()")
-	var new_content string
+	var newContent string
 	filePath := "/host/etc/udev/rules.d/20-switchdev.rules"
 
 	for _, ifaceStatus := range nodeState.Status.Interfaces {
-		if ifaceStatus.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
+		if ifaceStatus.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
 			switchID, err := utils.GetPhysSwitchID(ifaceStatus.Name)
 			if err != nil {
 				return err
@@ -991,24 +991,24 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 			if err != nil {
 				return err
 			}
-			new_content = new_content + fmt.Sprintf("SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}==\"%s\", ATTR{phys_port_name}==\"pf%svf*\", IMPORT{program}=\"/etc/udev/switchdev-vf-link-name.sh $attr{phys_port_name}\", NAME=\"%s_$env{NUMBER}\"\n", switchID, strings.TrimPrefix(portName, "p"), ifaceStatus.Name)
+			newContent = newContent + fmt.Sprintf("SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}==\"%s\", ATTR{phys_port_name}==\"pf%svf*\", IMPORT{program}=\"/etc/udev/switchdev-vf-link-name.sh $attr{phys_port_name}\", NAME=\"%s_$env{NUMBER}\"\n", switchID, strings.TrimPrefix(portName, "p"), ifaceStatus.Name)
 		}
 	}
 
-	old_content, err := ioutil.ReadFile(filePath)
-	// if old_content = new_content, don't do anything
-	if err == nil && new_content == string(old_content) {
+	oldContent, err := ioutil.ReadFile(filePath)
+	// if oldContent = newContent, don't do anything
+	if err == nil && newContent == string(oldContent) {
 		return nil
 	}
 
 	glog.V(2).Infof("Old udev content '%v' and new content '%v' differ. Writing to file %v.",
-		strings.TrimSuffix(string(old_content), "\n"),
-		strings.TrimSuffix(new_content, "\n"),
+		strings.TrimSuffix(string(oldContent), "\n"),
+		strings.TrimSuffix(newContent, "\n"),
 		filePath)
 
-	// if the file does not exist or if old_content != new_content
+	// if the file does not exist or if oldContent != newContent
 	// write to file and create it if it doesn't exist
-	err = ioutil.WriteFile(filePath, []byte(new_content), 0664)
+	err = ioutil.WriteFile(filePath, []byte(newContent), 0664)
 	if err != nil {
 		glog.Errorf("tryCreateSwitchdevUdevRule(): fail to write file: %v", err)
 		return err
@@ -1039,20 +1039,20 @@ func tryCreateNMUdevRule() error {
 	dirPath := "/host/etc/udev/rules.d/"
 	filePath := dirPath + "10-nm-unmanaged.rules"
 
-	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetSupportedVfIds(), "|"))
+	newContent := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetSupportedVfIds(), "|"))
 
 	// add NM udev rules for renaming VF rep
-	new_content = new_content + "SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n"
+	newContent = newContent + "SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n"
 
-	old_content, err := ioutil.ReadFile(filePath)
-	// if old_content = new_content, don't do anything
-	if err == nil && new_content == string(old_content) {
+	oldContent, err := ioutil.ReadFile(filePath)
+	// if oldContent = newContent, don't do anything
+	if err == nil && newContent == string(oldContent) {
 		return nil
 	}
 
 	glog.V(2).Infof("Old udev content '%v' and new content '%v' differ. Writing to file %v.",
-		strings.TrimSuffix(string(old_content), "\n"),
-		strings.TrimSuffix(new_content, "\n"),
+		strings.TrimSuffix(string(oldContent), "\n"),
+		strings.TrimSuffix(newContent, "\n"),
 		filePath)
 
 	err = os.MkdirAll(dirPath, os.ModePerm)
@@ -1061,9 +1061,9 @@ func tryCreateNMUdevRule() error {
 		return err
 	}
 
-	// if the file does not exist or if old_content != new_content
+	// if the file does not exist or if oldContent != newContent
 	// write to file and create it if it doesn't exist
-	err = ioutil.WriteFile(filePath, []byte(new_content), 0666)
+	err = ioutil.WriteFile(filePath, []byte(newContent), 0666)
 	if err != nil {
 		glog.Errorf("tryCreateNMUdevRule(): fail to write file: %v", err)
 		return err
