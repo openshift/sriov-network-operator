@@ -57,7 +57,6 @@ const (
 	testNamespace = "openshift-sriov-network-operator"
 
 	timeout  = time.Second * 10
-	duration = time.Second * 100
 	interval = time.Millisecond * 250
 )
 

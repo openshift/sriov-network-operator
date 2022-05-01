@@ -10,7 +10,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
-	"k8s.io/api/admission/v1"
+	v1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/webhook"
