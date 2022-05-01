@@ -82,14 +82,14 @@ func RedefineWithMount(pod *corev1.Pod, volume corev1.Volume, mount corev1.Volum
 	return pod
 }
 
-// RedefineWithCommand updates the pod defintion with a different command
+// RedefineWithCommand updates the pod definition with a different command
 func RedefineWithCommand(pod *corev1.Pod, command []string, args []string) *corev1.Pod {
 	pod.Spec.Containers[0].Command = command
 	pod.Spec.Containers[0].Args = args
 	return pod
 }
 
-// RedefineWithRestartPolicy updates the pod defintion with a restart policy
+// RedefineWithRestartPolicy updates the pod definition with a restart policy
 func RedefineWithRestartPolicy(pod *corev1.Pod, restartPolicy corev1.RestartPolicy) *corev1.Pod {
 	pod.Spec.RestartPolicy = restartPolicy
 	return pod
