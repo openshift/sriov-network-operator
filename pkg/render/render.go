@@ -40,7 +40,6 @@ const (
 	filesDir          = "files"
 	ovsUnitsDir       = "ovs-units"
 	switchdevUnitsDir = "switchdev-units"
-	platformBase      = "bindata/manifests/machine-config"
 )
 
 func MakeRenderData() RenderData {
