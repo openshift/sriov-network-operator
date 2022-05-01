@@ -48,11 +48,11 @@ var (
 
 const (
 	ospMetaDataDir     = "/host/var/config/openstack/2018-08-27"
-	ospMetaDataBaseUrl = "http://169.254.169.254/openstack/2018-08-27"
+	ospMetaDataBaseURL = "http://169.254.169.254/openstack/2018-08-27"
 	ospNetworkDataFile = ospMetaDataDir + "/network_data.json"
 	ospMetaDataFile    = ospMetaDataDir + "/meta_data.json"
-	ospNetworkDataUrl  = ospMetaDataBaseUrl + "/network_data.json"
-	ospMetaDataUrl     = ospMetaDataBaseUrl + "/meta_data.json"
+	ospNetworkDataURL  = ospMetaDataBaseURL + "/network_data.json"
+	ospMetaDataURL     = ospMetaDataBaseURL + "/meta_data.json"
 )
 
 // OSPMetaDataDevice -- Device structure within meta_data.json
@@ -153,7 +153,7 @@ func getOpenstackDataFromConfigDrive() (metaData *OSPMetaData, networkData *OSPN
 	return metaData, networkData, err
 }
 
-func getBodyFromUrl(url string) ([]byte, error) {
+func getBodyFromURL(url string) ([]byte, error) {
 	glog.V(2).Infof("Getting body from %s", url)
 	resp, err := retryablehttp.Get(url)
 	if err != nil {
@@ -172,23 +172,23 @@ func getOpenstackDataFromMetadataService() (metaData *OSPMetaData, networkData *
 	metaData = &OSPMetaData{}
 	networkData = &OSPNetworkData{}
 	glog.Infof("getting OpenStack meta_data from metadata server")
-	metaDataRawBytes, err := getBodyFromUrl(ospMetaDataUrl)
+	metaDataRawBytes, err := getBodyFromURL(ospMetaDataURL)
 	if err != nil {
-		return metaData, networkData, fmt.Errorf("error getting OpenStack meta_data from %s: %v", ospMetaDataUrl, err)
+		return metaData, networkData, fmt.Errorf("error getting OpenStack meta_data from %s: %v", ospMetaDataURL, err)
 	}
 	err = json.Unmarshal(metaDataRawBytes, metaData)
 	if err != nil {
-		return metaData, networkData, fmt.Errorf("error unmarshalling raw bytes %v from %s", err, ospMetaDataUrl)
+		return metaData, networkData, fmt.Errorf("error unmarshalling raw bytes %v from %s", err, ospMetaDataURL)
 	}
 
 	glog.Infof("getting OpenStack network_data from metadata server")
-	networkDataRawBytes, err := getBodyFromUrl(ospNetworkDataUrl)
+	networkDataRawBytes, err := getBodyFromURL(ospNetworkDataURL)
 	if err != nil {
-		return metaData, networkData, fmt.Errorf("error getting OpenStack network_data from %s: %v", ospNetworkDataUrl, err)
+		return metaData, networkData, fmt.Errorf("error getting OpenStack network_data from %s: %v", ospNetworkDataURL, err)
 	}
 	err = json.Unmarshal(networkDataRawBytes, networkData)
 	if err != nil {
-		return metaData, networkData, fmt.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkDataUrl)
+		return metaData, networkData, fmt.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkDataURL)
 	}
 	return metaData, networkData, nil
 }

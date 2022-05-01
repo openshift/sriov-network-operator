@@ -8,7 +8,6 @@ import (
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	k8sv1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -25,7 +24,7 @@ const Test = "sriov-conformance-testing"
 func WaitForDeletion(cs *testclient.ClientSet, nsName string, timeout time.Duration) error {
 	return wait.PollImmediate(time.Second, timeout, func() (bool, error) {
 		_, err := cs.Namespaces().Get(context.Background(), nsName, metav1.GetOptions{})
-		if errors.IsNotFound(err) {
+		if k8serrors.IsNotFound(err) {
 			return true, nil
 		}
 		return false, nil
@@ -70,7 +69,7 @@ func CleanPods(namespace string, cs *testclient.ClientSet) error {
 		GracePeriodSeconds: pointer.Int64Ptr(0),
 	}, metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("Failed to delete pods %v", err)
+		return fmt.Errorf("failed to delete pods %v", err)
 	}
 	return err
 }
@@ -89,7 +88,7 @@ func CleanPolicies(operatorNamespace string, cs *testclient.ClientSet) error {
 		if p.Name != "default" && strings.HasPrefix(p.Name, "test-") {
 			err := cs.Delete(context.Background(), &p)
 			if err != nil {
-				return fmt.Errorf("Failed to delete policy %v", err)
+				return fmt.Errorf("failed to delete policy %v", err)
 			}
 		}
 	}
@@ -109,7 +108,7 @@ func CleanNetworks(operatorNamespace string, cs *testclient.ClientSet) error {
 		if strings.HasPrefix(n.Name, "test-") {
 			err := cs.Delete(context.Background(), &n)
 			if err != nil {
-				return fmt.Errorf("Failed to delete network %v", err)
+				return fmt.Errorf("failed to delete network %v", err)
 			}
 		}
 	}

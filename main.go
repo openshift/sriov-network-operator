@@ -115,7 +115,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := initNicIdMap(); err != nil {
+	if err := initNicIDMap(); err != nil {
 		setupLog.Error(err, "unable to init NicIdMap")
 		os.Exit(1)
 	}
@@ -198,10 +198,10 @@ func main() {
 	}
 }
 
-func initNicIdMap() error {
+func initNicIDMap() error {
 	namespace := os.Getenv("NAMESPACE")
 	kubeclient := kubernetes.NewForConfigOrDie(ctrl.GetConfigOrDie())
-	if err := sriovnetworkv1.InitNicIdMap(kubeclient, namespace); err != nil {
+	if err := sriovnetworkv1.InitNicIDMap(kubeclient, namespace); err != nil {
 		return err
 	}
 
@@ -240,7 +240,7 @@ func createDefaultOperatorConfig(c client.Client) error {
 	logger := setupLog.WithName("createDefaultOperatorConfig")
 	singleNode, err := utils.IsSingleNodeCluster(c)
 	if err != nil {
-		return fmt.Errorf("Couldn't get cluster single node status: %s", err)
+		return fmt.Errorf("couldn't get cluster single node status: %s", err)
 	}
 
 	enableAdmissionController := os.Getenv("ENABLE_ADMISSION_CONTROLLER") == "true"

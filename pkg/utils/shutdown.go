@@ -68,7 +68,7 @@ func updateWebhooks() {
 
 func updateValidatingWebhook(c *kubernetes.Clientset) {
 	validatingWebhookClient := c.AdmissionregistrationV1().ValidatingWebhookConfigurations()
-	webhook, err := validatingWebhookClient.Get(context.TODO(), OPERATOR_WEBHOOK_NAME, metav1.GetOptions{})
+	webhook, err := validatingWebhookClient.Get(context.TODO(), OperatorWebHookName, metav1.GetOptions{})
 	if err != nil {
 		shutdownLog.Error(err, "Error getting webhook")
 	}
@@ -81,7 +81,7 @@ func updateValidatingWebhook(c *kubernetes.Clientset) {
 
 func updateMutatingWebhooks(c *kubernetes.Clientset) {
 	mutatingWebhookClient := c.AdmissionregistrationV1().MutatingWebhookConfigurations()
-	for _, name := range []string{OPERATOR_WEBHOOK_NAME, INJECTOR_WEBHOOK_NAME} {
+	for _, name := range []string{OperatorWebHookName, InjectorWebHookName} {
 		mutatingWebhook, err := mutatingWebhookClient.Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			shutdownLog.Error(err, "Error getting webhook")

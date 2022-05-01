@@ -15,8 +15,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
@@ -98,7 +97,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 		return reconcile.Result{}, err
 	}
 
-	return reconcile.Result{RequeueAfter: constants.ResyncPeriod}, nil
+	return reconcile.Result{RequeueAfter: utils.ResyncPeriod}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -112,7 +111,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 	logger := log.Log.WithName("syncOvsHardwareOffloadMachineConfigs")
 
 	mcpName := nc.Spec.OvsHardwareOffloadConfig.Name
-	mcName := "00-" + mcpName + "-" + constants.OVS_HWOL_MACHINE_CONFIG_NAME_SUFFIX
+	mcName := "00-" + mcpName + "-" + utils.OVSHWOLMachineConfigNameSuffix
 
 	foundMC := &mcfgv1.MachineConfig{}
 	mcp := &mcfgv1.MachineConfigPool{}
@@ -130,7 +129,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 	err := r.Get(context.TODO(), types.NamespacedName{Name: mcpName}, mcp)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return fmt.Errorf("MachineConfigPool %s doesn't exist: %v", mcpName, err)
+			return fmt.Errorf("machineConfigPool %s doesn't exist: %v", mcpName, err)
 		}
 	}
 
@@ -148,26 +147,26 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 			} else {
 				err = r.Create(context.TODO(), mc)
 				if err != nil {
-					return fmt.Errorf("Couldn't create MachineConfig: %v", err)
+					return fmt.Errorf("couldn't create MachineConfig: %v", err)
 				}
 				logger.Info("Created MachineConfig CR in MachineConfigPool", mcName, mcpName)
 			}
 		} else {
-			return fmt.Errorf("Failed to get MachineConfig: %v", err)
+			return fmt.Errorf("failed to get MachineConfig: %v", err)
 		}
 	} else {
 		if deletion {
 			logger.Info("offload disabled, delete MachineConfig")
 			err = r.Delete(context.TODO(), foundMC)
 			if err != nil {
-				return fmt.Errorf("Couldn't delete MachineConfig: %v", err)
+				return fmt.Errorf("couldn't delete MachineConfig: %v", err)
 			}
 		} else {
 			if bytes.Equal(foundMC.Spec.Config.Raw, mc.Spec.Config.Raw) {
 				logger.Info("MachineConfig already exists, updating")
 				err = r.Update(context.TODO(), foundMC)
 				if err != nil {
-					return fmt.Errorf("Couldn't update MachineConfig: %v", err)
+					return fmt.Errorf("couldn't update MachineConfig: %v", err)
 				}
 			} else {
 				logger.Info("No content change, skip updating MC")
