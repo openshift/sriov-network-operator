@@ -113,7 +113,7 @@ var _ = Describe("[sriov] operator", func() {
 					return daemonsScheduledOnNodes("node-role.kubernetes.io/worker=")
 				}, 3*time.Minute, 1*time.Second).Should(Equal(true))
 
-				By("Labelling one worker node with the label needed for the daemon")
+				By("Labeling one worker node with the label needed for the daemon")
 				allNodes, err := clients.Nodes().List(context.Background(), metav1.ListOptions{
 					LabelSelector: "node-role.kubernetes.io/worker",
 				})
@@ -1810,7 +1810,7 @@ func findMainSriovDevice(executorPod *corev1.Pod, sriovDevices []*sriovv1.Interf
 
 	for _, device := range sriovDevices {
 		if isDefaultRouteInterface(device.Name, routes) {
-			fmt.Println("Choosen ", device.Name, " as it is the default gw")
+			fmt.Println("Chosen ", device.Name, " as it is the default gw")
 			return device
 		}
 		stdout, _, err = pod.ExecCommand(clients, executorPod, "ip", "link", "show", device.Name)
@@ -1820,7 +1820,7 @@ func findMainSriovDevice(executorPod *corev1.Pod, sriovDevices []*sriovv1.Interf
 			continue // The interface is not active
 		}
 		if strings.Contains(stdout, "master ovs-system") {
-			fmt.Println("Choosen ", device.Name, " as it is used by ovs")
+			fmt.Println("Chosen ", device.Name, " as it is used by ovs")
 			return device
 		}
 	}
