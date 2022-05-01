@@ -60,7 +60,7 @@ func BindDpdkDriver(pciAddr, driver string) error {
 		_, err := os.Readlink(filepath.Join(sysBusPciDevices, pciAddr, "iommu_group"))
 		if err != nil {
 			glog.Errorf("Could not read IOMMU group for device %s: %s", pciAddr, err)
-			return fmt.Errorf("Cannot bind driver %s to %s, make sure IOMMU is enabled in BIOS", driver, pciAddr)
+			return fmt.Errorf("cannot bind driver %s to %s, make sure IOMMU is enabled in BIOS", driver, pciAddr)
 		}
 		return err
 	}

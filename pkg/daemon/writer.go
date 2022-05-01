@@ -43,12 +43,12 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func(), devMo
 }
 
 // RunOnce initial the interface status for both baremetal and virtual environments
-func (writer *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.PlatformType) error {
+func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.PlatformType) error {
 	glog.V(0).Infof("RunOnce()")
 	msg := Message{}
 
 	if platformType == utils.VirtualOpenStack {
-		ns, err := writer.getCheckPointNodeState(destDir)
+		ns, err := w.getCheckPointNodeState(destDir)
 		if err != nil {
 			return err
 		}
@@ -59,27 +59,27 @@ func (writer *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.
 				glog.Errorf("RunOnce(): failed to read OpenStack data: %v", err)
 			}
 
-			writer.openStackDevicesInfo, err = utils.CreateOpenstackDevicesInfo(metaData, networkData)
+			w.openStackDevicesInfo, err = utils.CreateOpenstackDevicesInfo(metaData, networkData)
 			if err != nil {
 				return err
 			}
 		} else {
-			writer.openStackDevicesInfo = utils.CreateOpenstackDevicesInfoFromNodeStatus(ns)
+			w.openStackDevicesInfo = utils.CreateOpenstackDevicesInfoFromNodeStatus(ns)
 		}
 	}
 
 	glog.V(0).Info("RunOnce(): first poll for nic status")
-	if err := writer.pollNicStatus(platformType); err != nil {
+	if err := w.pollNicStatus(platformType); err != nil {
 		glog.Errorf("RunOnce(): first poll failed: %v", err)
 	}
 
-	ns, _ := writer.setNodeStateStatus(msg)
-	return writer.writeCheckpointFile(ns, destDir)
+	ns, _ := w.setNodeStateStatus(msg)
+	return w.writeCheckpointFile(ns, destDir)
 }
 
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
-func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, platformType utils.PlatformType) error {
+func (w *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, platformType utils.PlatformType) error {
 	glog.V(0).Infof("Run(): start writer")
 	msg := Message{}
 
@@ -90,37 +90,37 @@ func (writer *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Me
 			return nil
 		case msg = <-refresh:
 			glog.V(0).Info("Run(): refresh trigger")
-			if err := writer.pollNicStatus(platformType); err != nil {
+			if err := w.pollNicStatus(platformType); err != nil {
 				continue
 			}
-			writer.setNodeStateStatus(msg)
+			w.setNodeStateStatus(msg)
 			if msg.syncStatus == "Succeeded" || msg.syncStatus == "Failed" {
 				syncCh <- struct{}{}
 			}
 		case <-time.After(30 * time.Second):
 			glog.V(2).Info("Run(): period refresh")
-			if err := writer.pollNicStatus(platformType); err != nil {
+			if err := w.pollNicStatus(platformType); err != nil {
 				continue
 			}
-			writer.setNodeStateStatus(msg)
+			w.setNodeStateStatus(msg)
 		}
 	}
 }
 
-func (writer *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformType) error {
+func (w *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformType) error {
 	glog.V(2).Info("pollNicStatus()")
 	var iface []sriovnetworkv1.InterfaceExt
 	var err error
 
 	if platformType == utils.VirtualOpenStack {
-		iface, err = utils.DiscoverSriovDevicesVirtual(writer.openStackDevicesInfo)
+		iface, err = utils.DiscoverSriovDevicesVirtual(w.openStackDevicesInfo)
 	} else {
-		iface, err = utils.DiscoverSriovDevices(writer.withUnsupportedDevices)
+		iface, err = utils.DiscoverSriovDevices(w.withUnsupportedDevices)
 	}
 	if err != nil {
 		return err
 	}
-	writer.status.Interfaces = iface
+	w.status.Interfaces = iface
 
 	return nil
 }
@@ -145,7 +145,7 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 	})
 	if err != nil {
 		// may be conflict if max retries were hit
-		return nil, fmt.Errorf("Unable to update node %v: %v", nodeState, err)
+		return nil, fmt.Errorf("unable to update node %v: %v", nodeState, err)
 	}
 
 	return nodeState, nil
