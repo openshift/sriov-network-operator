@@ -8,7 +8,7 @@
 
 ## Installation
 
-Mase sure to have installed the Operator-SDK, as shown in its [install documentation](https://sdk.operatorframework.io/docs/installation/install-operator-sdk/), and that the binaries are available in your \$PATH.
+Make sure to have installed the Operator-SDK, as shown in its [install documentation](https://sdk.operatorframework.io/docs/installation/), and that the binaries are available in your \$PATH.
 
 Clone this GitHub repository.
 
