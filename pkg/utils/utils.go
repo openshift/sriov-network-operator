@@ -272,7 +272,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		}
 		pfLink, err := netlink.LinkByName(iface.Name)
 		if err != nil {
-			glog.Errorf("setVfGuid(): unable to get PF link for device %+v %q", iface, err)
+			glog.Errorf("configSriovDevice(): unable to get PF link for device %+v %q", iface, err)
 			return err
 		}
 
