@@ -165,7 +165,10 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 					break
 				}
 				if err = configSriovDevice(&iface, &ifaceStatus); err != nil {
-					glog.Errorf("SyncNodeState(): fail to config sriov interface %s: %v", iface.PciAddress, err)
+					glog.Errorf("SyncNodeState(): fail to configure sriov interface %s: %v. resetting interface.", iface.PciAddress, err)
+					if resetErr := resetSriovDevice(ifaceStatus); resetErr != nil {
+						glog.Errorf("SyncNodeState(): fail to reset on error SR-IOV interface: %s", resetErr)
+					}
 					return err
 				}
 				break
