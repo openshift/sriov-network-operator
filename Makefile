@@ -153,6 +153,9 @@ endef
 skopeo:
 	if ! which skopeo; then if [ -z ${SKIP_VAR_SET} ]; then if [ -f /etc/redhat-release ]; then dnf -y install skopeo; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install skopeo; fi; fi; fi
 
+fakechroot:
+	if ! which fakechroot; then if [ -f /etc/redhat-release ]; then dnf -y install fakechroot; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install fakechroot; fi; fi
+
 # Generate bundle manifests and metadata, then validate generated files.
 .PHONY: bundle
 bundle: manifests
@@ -194,6 +197,9 @@ test-e2e: generate vet manifests skopeo
 
 test-e2e-k8s: export NAMESPACE=sriov-network-operator
 test-e2e-k8s: test-e2e
+
+test-bindata-scripts: fakechroot
+	fakechroot ./test/scripts/enable-kargs_test.sh
 
 test-%: generate vet manifests
 	mkdir -p ${ENVTEST_ASSETS_DIR}
