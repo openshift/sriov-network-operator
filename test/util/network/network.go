@@ -98,10 +98,16 @@ func GetNicsByPrefix(pod *k8sv1.Pod, ifcPrefix string) ([]string, error) {
 // GetSriovNicIPs returns the list of ip addresses related to the given
 // interface name for the given pod.
 func GetSriovNicIPs(pod *k8sv1.Pod, ifcName string) ([]string, error) {
+
+	networksStatus, ok := pod.ObjectMeta.Annotations["k8s.v1.cni.cncf.io/networks-status"]
+	if !ok {
+		return nil, fmt.Errorf("pod [%s] has no annotation `k8s.v1.cni.cncf.io/networks-status`", pod.Name)
+	}
+
 	var nets []Network
-	err := json.Unmarshal([]byte(pod.ObjectMeta.Annotations["k8s.v1.cni.cncf.io/networks-status"]), &nets)
+	err := json.Unmarshal([]byte(networksStatus), &nets)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("can't unmarshal annotation `k8s.v1.cni.cncf.io/networks-status`: %w", err)
 	}
 	for _, net := range nets {
 		if net.Interface != ifcName {
@@ -109,7 +115,8 @@ func GetSriovNicIPs(pod *k8sv1.Pod, ifcName string) ([]string, error) {
 		}
 		return net.Ips, nil
 	}
-	return nil, nil
+
+	return nil, fmt.Errorf("interface [%s] not found in pod annotation", ifcName)
 }
 
 // Return a definition of a macvlan NetworkAttachmentDefinition
