@@ -847,8 +847,7 @@ func (dn *Daemon) pauseMCP() error {
 			return
 		}
 		// Always get the latest object
-		newMcp := &mcfgv1.MachineConfigPool{}
-		newMcp, err = dn.mcClient.MachineconfigurationV1().MachineConfigPools().Get(ctx, dn.mcpName, metav1.GetOptions{})
+		newMcp, err := dn.mcClient.MachineconfigurationV1().MachineConfigPools().Get(ctx, dn.mcpName, metav1.GetOptions{})
 		if err != nil {
 			glog.V(2).Infof("pauseMCP(): Failed to get MCP %s: %v", dn.mcpName, err)
 			return
