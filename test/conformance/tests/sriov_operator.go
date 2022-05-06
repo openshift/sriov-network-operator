@@ -879,18 +879,17 @@ var _ = Describe("[sriov] operator", func() {
 				}, 3*time.Minute, time.Second).Should(Equal(v1core.PodPending))
 
 				By("Checking that relevant error event was originated")
-				Eventually(func() string {
+				Eventually(func() bool {
 					events, err := clients.Events(namespaces.Test).List(context.Background(), metav1.ListOptions{})
 					Expect(err).ToNot(HaveOccurred())
 
 					for _, val := range events.Items {
-						if val.InvolvedObject.Name == runningPodB.Name {
-							return val.Message
+						if val.InvolvedObject.Name == runningPodB.Name && strings.Contains(val.Message, fmt.Sprintf("Insufficient openshift.io/%s", resourceName)) {
+							return true
 						}
 					}
-					return ""
-				}, 2*time.Minute, 10*time.Second).Should(ContainSubstring("Insufficient openshift.io/%s", resourceName),
-					"Error to detect Required Event")
+					return false
+				}, 2*time.Minute, 10*time.Second).Should(BeTrue(), "Error to detect Required Event")
 				By("Delete first pod and release all VFs")
 				err = clients.Pods(namespaces.Test).Delete(context.Background(), runningPodA.Name, metav1.DeleteOptions{
 					GracePeriodSeconds: pointer.Int64Ptr(0),
