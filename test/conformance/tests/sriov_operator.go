@@ -1978,36 +1978,6 @@ func createSriovPolicy(sriovDevice string, testNode string, numVfs int, resource
 	}, 10*time.Minute, time.Second).Should(Equal(int64(numVfs)))
 }
 
-func createUnschedulableTestPod(node string, networks []string, resourceName string) {
-	podDefinition := pod.RedefineWithNodeSelector(
-		pod.DefineWithNetworks(networks),
-		node,
-	)
-	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
-	Consistently(func() k8sv1.PodPhase {
-		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
-		Expect(err).ToNot(HaveOccurred())
-		return runningPod.Status.Phase
-	}, 3*time.Minute, 1*time.Second).Should(Equal(k8sv1.PodPending))
-	pod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
-	Expect(err).ToNot(HaveOccurred())
-	for _, condition := range pod.Status.Conditions {
-		if condition.Reason == "Unschedulable" && strings.Contains(condition.Message, "Insufficient openshift.io/"+resourceName) {
-			return
-		}
-	}
-	Fail("Pod should be Unschedulable due to: Insufficient openshift.io/" + resourceName)
-}
-
-func isPodConditionUnschedulable(pod *k8sv1.Pod, resourceName string) bool {
-	for _, condition := range pod.Status.Conditions {
-		if condition.Reason == "Unschedulable" && strings.Index(condition.Message, "Insufficient openshift.io/"+resourceName) != -1 {
-			return true
-		}
-	}
-	return false
-}
-
 func createTestPod(node string, networks []string) *k8sv1.Pod {
 	return createCustomTestPod(node, networks, false, nil)
 }
