@@ -96,7 +96,7 @@ func BindDefaultDriver(pciAddr string) error {
 	}
 	err = ioutil.WriteFile(sysBusPciDriversProbe, []byte(pciAddr), os.ModeAppend)
 	if err != nil {
-		glog.Errorf("BindDpdkDriver(): fail to bind driver for device %s: %s", pciAddr, err)
+		glog.Errorf("BindDefaultDriver(): fail to bind driver for device %s: %s", pciAddr, err)
 		return err
 	}
 
