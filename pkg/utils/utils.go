@@ -247,7 +247,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 	glog.V(2).Infof("configSriovDevice(): config interface %s with %v", iface.PciAddress, iface)
 	var err error
 	if iface.NumVfs > ifaceStatus.TotalVfs {
-		err := fmt.Errorf("cannot config SRIOV device: NumVfs is larger than TotalVfs")
+		err := fmt.Errorf("cannot config SRIOV device: NumVfs (%d) is larger than TotalVfs (%d)", iface.NumVfs, ifaceStatus.TotalVfs)
 		glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s: %v", iface.PciAddress, err)
 		return err
 	}
