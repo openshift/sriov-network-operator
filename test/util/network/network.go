@@ -49,7 +49,7 @@ func CreateSriovNetwork(clientSet *testclient.ClientSet, intf *sriovv1.Interface
 	return err
 }
 
-func defineSriovPolicy(generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string) *sriovv1.SriovNetworkNodePolicy {
+func defineSriovPolicy(generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string, options ...func(*sriovv1.SriovNetworkNodePolicy)) *sriovv1.SriovNetworkNodePolicy {
 	nodePolicy := &sriovv1.SriovNetworkNodePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: generatedName,
@@ -68,12 +68,15 @@ func defineSriovPolicy(generatedName string, operatorNamespace string, sriovDevi
 			DeviceType: deviceType,
 		},
 	}
+	for _, o := range options {
+		o(nodePolicy)
+	}
 	return nodePolicy
 }
 
 // CreateSriovPolicy creates a SriovNetworkNodePolicy and returns it
-func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string) (*sriovv1.SriovNetworkNodePolicy, error) {
-	nodePolicy := defineSriovPolicy(generatedName, operatorNamespace, sriovDevice, testNode, numVfs, resourceName, deviceType)
+func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string, options ...func(*sriovv1.SriovNetworkNodePolicy)) (*sriovv1.SriovNetworkNodePolicy, error) {
+	nodePolicy := defineSriovPolicy(generatedName, operatorNamespace, sriovDevice, testNode, numVfs, resourceName, deviceType, options...)
 	err := clientSet.Create(context.Background(), nodePolicy)
 	return nodePolicy, err
 }
