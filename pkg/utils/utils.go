@@ -328,7 +328,6 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 							glog.Errorf("configSriovDevice(): VF link is not ready for device %s %q", addr, err)
 							return err
 						}
-
 					}
 					if err = setVfAdminMac(addr, pfLink, vfLink); err != nil {
 						glog.Errorf("configSriovDevice(): fail to configure VF admin mac address for device %s %q", addr, err)

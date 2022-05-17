@@ -74,13 +74,11 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 	admit, err := staticValidateSriovNetworkNodePolicy(cr)
 	if err != nil {
 		return admit, warnings, err
-
 	}
 
 	admit, err = dynamicValidateSriovNetworkNodePolicy(cr)
 	if err != nil {
 		return admit, warnings, err
-
 	}
 
 	return admit, warnings, nil

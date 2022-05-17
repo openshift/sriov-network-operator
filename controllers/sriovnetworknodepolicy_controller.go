@@ -118,7 +118,6 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	if len(defaultOpConf.Spec.ConfigDaemonNodeSelector) > 0 {
 		labels := client.MatchingLabels(defaultOpConf.Spec.ConfigDaemonNodeSelector)
 		lo = &labels
-
 	} else {
 		lo = &client.MatchingLabels{
 			"node-role.kubernetes.io/worker": "",

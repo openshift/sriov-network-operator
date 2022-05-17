@@ -351,7 +351,6 @@ func getOtherPortSpec(pciAddress string) *sriovnetworkv1.Interface {
 // handleTotalVfs return required total VFs or max (required VFs for dual port NIC) and needReboot if totalVfs will change
 func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.Interface, isDualPort bool) (
 	totalVfs int, needReboot, changeWithoutReboot bool) {
-
 	totalVfs = ifaceSpec.NumVfs
 	// Check if the other port is changing the number of VF
 	if isDualPort {
