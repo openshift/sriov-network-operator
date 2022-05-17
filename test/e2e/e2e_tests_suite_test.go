@@ -39,7 +39,6 @@ var doneNetNsSet chan error
 // Define utility constants for object names and testing timeouts/durations and intervals.
 const (
 	timeout         = time.Second * 30
-	duration        = time.Second * 300
 	interval        = time.Second * 1
 	devPollInterval = time.Millisecond * 400
 )

@@ -6,7 +6,6 @@ import (
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -16,12 +15,6 @@ import (
 )
 
 var shutdownLog = ctrl.Log.WithName("shutdown")
-
-var sriovnetworksGVR = schema.GroupVersionResource{
-	Group:    "sriovnetwork.openshift.io",
-	Version:  "v1",
-	Resource: "sriovnetworks",
-}
 
 var failurePolicyIgnore = admv1.Ignore
 
