@@ -327,9 +327,8 @@ func (dn *Daemon) processNextWorkItem() bool {
 			utilruntime.HandleError(fmt.Errorf("expected workItem in workqueue but got %#v", obj))
 			return nil
 		}
-		var err error
 
-		err = dn.nodeStateSyncHandler(key)
+		err := dn.nodeStateSyncHandler(key)
 		if err != nil {
 			// Ereport error message, and put the item back to work queue for retry.
 			dn.refreshCh <- Message{
@@ -680,7 +679,7 @@ func rebootNode() {
 	// if kubelet failed to shutdown - that way the machine will still eventually reboot
 	// as systemd will time out the stop invocation.
 	cmd := exec.Command("systemd-run", "--unit", "sriov-network-config-daemon-reboot",
-		"--description", fmt.Sprintf("sriov-network-config-daemon reboot node"), "/bin/sh", "-c", "systemctl stop kubelet.service; reboot")
+		"--description", "sriov-network-config-daemon reboot node", "/bin/sh", "-c", "systemctl stop kubelet.service; reboot")
 
 	if err := cmd.Run(); err != nil {
 		glog.Errorf("failed to reboot node: %v", err)
@@ -1043,7 +1042,7 @@ func tryCreateNMUdevRule() error {
 	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetSupportedVfIds(), "|"))
 
 	// add NM udev rules for renaming VF rep
-	new_content = new_content + fmt.Sprintf("SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n")
+	new_content = new_content + "SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n"
 
 	old_content, err := ioutil.ReadFile(filePath)
 	// if old_content = new_content, don't do anything

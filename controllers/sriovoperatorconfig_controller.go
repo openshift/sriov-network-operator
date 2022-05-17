@@ -237,7 +237,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		}
 
 		// Delete injector webhook
-		if *dc.Spec.EnableInjector != true && path == constants.INJECTOR_WEBHOOK_PATH {
+		if !*dc.Spec.EnableInjector && path == constants.INJECTOR_WEBHOOK_PATH {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(obj)
 				if err != nil {
@@ -250,7 +250,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 			continue
 		}
 		// Delete operator webhook
-		if *dc.Spec.EnableOperatorWebhook != true && path == constants.OPERATOR_WEBHOOK_PATH {
+		if !*dc.Spec.EnableOperatorWebhook && path == constants.OPERATOR_WEBHOOK_PATH {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(obj)
 				if err != nil {

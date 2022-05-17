@@ -3,7 +3,6 @@ package network
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -125,7 +124,7 @@ func CreateMacvlanNetworkAttachmentDefinition(name string, namespace string) net
 			Namespace: namespace,
 		},
 		Spec: netattdefv1.NetworkAttachmentDefinitionSpec{
-			Config: fmt.Sprintf(`{
+			Config: `{
 				"cniVersion": "0.3.0",
 				"type": "macvlan",
 				"mode": "bridge",
@@ -139,7 +138,7 @@ func CreateMacvlanNetworkAttachmentDefinition(name string, namespace string) net
 				  ],
 				  "gateway": "10.1.1.1"
 				}
-			  }`),
+			  }`,
 		},
 	}
 }

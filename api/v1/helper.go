@@ -436,7 +436,7 @@ func (selector *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool {
 			return false
 		}
 	}
-	if selector.NetFilter != "" && NetFilterMatch(selector.NetFilter, iface.NetFilter) == false {
+	if selector.NetFilter != "" && !NetFilterMatch(selector.NetFilter, iface.NetFilter) {
 		return false
 	}
 

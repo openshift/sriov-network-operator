@@ -146,7 +146,7 @@ func TestRendering(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed reading .golden: %s", err)
 			}
-			t.Log(string(b.Bytes()))
+			t.Log(b.String())
 			if !bytes.Equal(b.Bytes(), g) {
 				t.Errorf("bytes do not match .golden file")
 			}
@@ -193,7 +193,7 @@ func TestIBRendering(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed reading .golden: %s", err)
 			}
-			t.Log(string(b.Bytes()))
+			t.Log(b.String())
 			if !bytes.Equal(b.Bytes(), g) {
 				t.Errorf("bytes do not match .golden file")
 			}

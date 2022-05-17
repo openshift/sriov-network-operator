@@ -78,7 +78,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 	processedNics := map[string]bool{}
 
 	// Read mellanox NIC status once
-	if mellanoxNicsStatus == nil || len(mellanoxNicsStatus) == 0 {
+	if len(mellanoxNicsStatus) == 0 {
 		for _, iface := range new.Status.Interfaces {
 			if iface.Vendor != MellanoxVendorId {
 				continue
