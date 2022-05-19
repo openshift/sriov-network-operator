@@ -4,12 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/golang/glog"
-	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/jaypipes/ghw"
+
+	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
@@ -42,9 +47,12 @@ var (
 )
 
 const (
-	ospMetaDataDir = "/host/var/config/openstack/latest/"
-	ospNetworkData = ospMetaDataDir + "/network_data.json"
-	ospMetaData    = ospMetaDataDir + "/meta_data.json"
+	ospMetaDataDir     = "/host/var/config/openstack/2018-08-27"
+	ospMetaDataBaseUrl = "http://169.254.169.254/openstack/2018-08-27"
+	ospNetworkDataFile = ospMetaDataDir + "/network_data.json"
+	ospMetaDataFile    = ospMetaDataDir + "/meta_data.json"
+	ospNetworkDataUrl  = ospMetaDataBaseUrl + "/network_data.json"
+	ospMetaDataUrl     = ospMetaDataBaseUrl + "/meta_data.json"
 )
 
 // OSPMetaDataDevice -- Device structure within meta_data.json
@@ -93,76 +101,176 @@ type OSPNetworkData struct {
 	// Omit Services
 }
 
-func metaData(platformType PlatformType, address string) (netFilter string, macAddress string) {
-	switch platformType {
-	case VirtualOpenStack:
-		metaData, networkData := readOpenstackMetaData()
-		netFilter, macAddress = parseOpenstackMetaData(address, metaData, networkData)
+type OSPDevicesInfo map[string]*OSPDeviceInfo
 
-	default:
-		glog.V(2).Infof("Unknown PlatformType: %v", platformType)
-	}
-
-	return
+type OSPDeviceInfo struct {
+	MacAddress string
+	NetworkID  string
 }
 
-func readOpenstackMetaData() (metaData *OSPMetaData, networkData *OSPNetworkData) {
-	networkData = &OSPNetworkData{}
-
-	rawBytes, err := ioutil.ReadFile(ospNetworkData)
+// GetOpenstackData gets the metadata and network_data
+func GetOpenstackData() (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
+	metaData, networkData, err = getOpenstackDataFromConfigDrive()
 	if err != nil {
-		glog.Errorf("error reading file %s, %v", ospNetworkData, err)
-		return
+		metaData, networkData, err = getOpenstackDataFromMetadataService()
 	}
+	return metaData, networkData, err
+}
 
-	if err = json.Unmarshal(rawBytes, networkData); err != nil {
-		glog.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkData)
-		return
-	}
-
+// getOpenstackDataFromConfigDrive reads the meta_data and network_data files
+func getOpenstackDataFromConfigDrive() (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
 	metaData = &OSPMetaData{}
-
-	rawBytes, err = ioutil.ReadFile(ospMetaData)
+	networkData = &OSPNetworkData{}
+	glog.Infof("reading OpenStack meta_data from config-drive")
+	var metadataf *os.File
+	metadataf, err = os.Open(ospMetaDataFile)
 	if err != nil {
-		glog.Errorf("error reading file %s, %v", ospMetaData, err)
-		return
+		return metaData, networkData, fmt.Errorf("error opening file %s: %w", ospMetaDataFile, err)
+	}
+	defer func() {
+		if e := metadataf.Close(); err == nil && e != nil {
+			err = fmt.Errorf("error closing file %s: %w", ospMetaDataFile, e)
+		}
+	}()
+	if err = json.NewDecoder(metadataf).Decode(&metaData); err != nil {
+		return metaData, networkData, fmt.Errorf("error unmarshalling metadata from file %s: %w", ospMetaDataFile, err)
 	}
 
-	if err = json.Unmarshal(rawBytes, metaData); err != nil {
-		glog.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkData)
-		return
+	glog.Infof("reading OpenStack network_data from config-drive")
+	var networkDataf *os.File
+	networkDataf, err = os.Open(ospNetworkDataFile)
+	if err != nil {
+		return metaData, networkData, fmt.Errorf("error opening file %s: %w", ospNetworkDataFile, err)
 	}
-
-	return
+	defer func() {
+		if e := networkDataf.Close(); err == nil && e != nil {
+			err = fmt.Errorf("error closing file %s: %w", ospNetworkDataFile, e)
+		}
+	}()
+	if err = json.NewDecoder(networkDataf).Decode(&networkData); err != nil {
+		return metaData, networkData, fmt.Errorf("error unmarshalling metadata from file %s: %w", ospNetworkDataFile, err)
+	}
+	return metaData, networkData, err
 }
 
-func parseOpenstackMetaData(pciAddr string, metaData *OSPMetaData, networkData *OSPNetworkData) (networkID string, macAddress string) {
+func getBodyFromUrl(url string) ([]byte, error) {
+	glog.V(2).Infof("Getting body from %s", url)
+	resp, err := retryablehttp.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	rawBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return rawBytes, nil
+}
 
-	if metaData == nil || networkData == nil {
-		return
+// getOpenstackDataFromMetadataService fetchs the metadata and network_data from the metadata service
+func getOpenstackDataFromMetadataService() (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
+	metaData = &OSPMetaData{}
+	networkData = &OSPNetworkData{}
+	glog.Infof("getting OpenStack meta_data from metadata server")
+	metaDataRawBytes, err := getBodyFromUrl(ospMetaDataUrl)
+	if err != nil {
+		return metaData, networkData, fmt.Errorf("error getting OpenStack meta_data from %s: %v", ospMetaDataUrl, err)
+	}
+	err = json.Unmarshal(metaDataRawBytes, metaData)
+	if err != nil {
+		return metaData, networkData, fmt.Errorf("error unmarshalling raw bytes %v from %s", err, ospMetaDataUrl)
 	}
 
+	glog.Infof("getting OpenStack network_data from metadata server")
+	networkDataRawBytes, err := getBodyFromUrl(ospNetworkDataUrl)
+	if err != nil {
+		return metaData, networkData, fmt.Errorf("error getting OpenStack network_data from %s: %v", ospNetworkDataUrl, err)
+	}
+	err = json.Unmarshal(networkDataRawBytes, networkData)
+	if err != nil {
+		return metaData, networkData, fmt.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkDataUrl)
+	}
+	return metaData, networkData, nil
+}
+
+// CreateOpenstackDevicesInfo create the openstack device info map
+func CreateOpenstackDevicesInfo(metaData *OSPMetaData, networkData *OSPNetworkData) (OSPDevicesInfo, error) {
+	glog.Infof("CreateOpenstackDevicesInfo()")
+	devicesInfo := make(OSPDevicesInfo)
+	if metaData == nil || networkData == nil {
+		return nil, nil
+	}
+
+	// use this for hw pass throw interfaces
 	for _, device := range metaData.Devices {
-		if pciAddr == device.Address {
-			for _, link := range networkData.Links {
-				if device.Mac == link.EthernetMac {
-					for _, network := range networkData.Networks {
-						if network.Link == link.ID {
-							networkID = sriovnetworkv1.OpenstackNetworkID.String() + ":" + network.NetworkID
-							macAddress = device.Mac
-						}
+		for _, link := range networkData.Links {
+			if device.Mac == link.EthernetMac {
+				for _, network := range networkData.Networks {
+					if network.Link == link.ID {
+						networkID := sriovnetworkv1.OpenstackNetworkID.String() + ":" + network.NetworkID
+						devicesInfo[device.Address] = &OSPDeviceInfo{MacAddress: device.Mac, NetworkID: networkID}
 					}
 				}
 			}
 		}
 	}
 
-	return
+	// for vhostuser interface type we check the interfaces on the node
+	pci, err := ghw.PCI()
+	if err != nil {
+		return nil, fmt.Errorf("CreateOpenstackDevicesInfo(): error getting PCI info: %v", err)
+	}
+
+	devices := pci.ListDevices()
+	if len(devices) == 0 {
+		return nil, fmt.Errorf("CreateOpenstackDevicesInfo(): could not retrieve PCI devices")
+	}
+
+	for _, device := range devices {
+		if _, exist := devicesInfo[device.Address]; exist {
+			//we already discover the device via openstack metadata
+			continue
+		}
+
+		devClass, err := strconv.ParseInt(device.Class.ID, 16, 64)
+		if err != nil {
+			glog.Warningf("CreateOpenstackDevicesInfo(): unable to parse device class for device %+v %q", device, err)
+			continue
+		}
+		if devClass != netClass {
+			// Not network device
+			continue
+		}
+
+		macAddress := ""
+		if name := tryToGetVirtualInterfaceName(device.Address); name != "" {
+			if mac := getNetDevMac(name); mac != "" {
+				macAddress = mac
+			}
+		}
+		if macAddress == "" {
+			// we didn't manage to find a mac address for the nic skipping
+			continue
+		}
+
+		for _, link := range networkData.Links {
+			if macAddress == link.EthernetMac {
+				for _, network := range networkData.Networks {
+					if network.Link == link.ID {
+						networkID := sriovnetworkv1.OpenstackNetworkID.String() + ":" + network.NetworkID
+						devicesInfo[device.Address] = &OSPDeviceInfo{MacAddress: macAddress, NetworkID: networkID}
+					}
+				}
+			}
+		}
+	}
+
+	return devicesInfo, err
 }
 
 // DiscoverSriovDevicesVirtual discovers VFs on a virtual platform
-func DiscoverSriovDevicesVirtual(platformType PlatformType) ([]sriovnetworkv1.InterfaceExt, error) {
-	glog.V(2).Info("DiscoverSriovDevicesVirtual")
+func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.InterfaceExt, error) {
+	glog.V(2).Info("DiscoverSriovDevicesVirtual()")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
 	pci, err := ghw.PCI()
@@ -186,7 +294,13 @@ func DiscoverSriovDevicesVirtual(platformType PlatformType) ([]sriovnetworkv1.In
 			continue
 		}
 
-		netFilter, metaMac := metaData(platformType, device.Address)
+		deviceInfo, exist := devicesInfo[device.Address]
+		if !exist {
+			glog.Warningf("DiscoverSriovDevicesVirtual(): unable to find device in devicesInfo list for pci %s", device.Address)
+			continue
+		}
+		netFilter := deviceInfo.NetworkID
+		metaMac := deviceInfo.MacAddress
 
 		driver, err := dputils.GetDriverName(device.Address)
 		if err != nil {
@@ -203,7 +317,7 @@ func DiscoverSriovDevicesVirtual(platformType PlatformType) ([]sriovnetworkv1.In
 		if mtu := getNetdevMTU(device.Address); mtu > 0 {
 			iface.Mtu = mtu
 		}
-		if name := tryGetInterfaceName(device.Address); name != "" {
+		if name := tryToGetVirtualInterfaceName(device.Address); name != "" {
 			iface.Name = name
 			if iface.Mac = getNetDevMac(name); iface.Mac == "" {
 				iface.Mac = metaMac
@@ -229,6 +343,48 @@ func DiscoverSriovDevicesVirtual(platformType PlatformType) ([]sriovnetworkv1.In
 		pfList = append(pfList, iface)
 	}
 	return pfList, nil
+}
+
+func CreateOpenstackDevicesInfoFromNodeStatus(networkState *sriovnetworkv1.SriovNetworkNodeState) OSPDevicesInfo {
+	devicesInfo := make(OSPDevicesInfo)
+	for _, iface := range networkState.Status.Interfaces {
+		devicesInfo[iface.PciAddress] = &OSPDeviceInfo{MacAddress: iface.Mac, NetworkID: iface.NetFilter}
+	}
+
+	return devicesInfo
+}
+
+// tryToGetVirtualInterfaceName get the interface name of a virtio interface
+func tryToGetVirtualInterfaceName(pciAddr string) string {
+	glog.Infof("tryToGetVirtualInterfaceName() get interface name for device %s", pciAddr)
+
+	// To support different driver that is not virtio-pci like mlx
+	name := tryGetInterfaceName(pciAddr)
+	if name != "" {
+		return name
+	}
+
+	netDir, err := filepath.Glob(filepath.Join(sysBusPciDevices, pciAddr, "virtio*", "net"))
+	if err != nil || len(netDir) < 1 {
+		return ""
+	}
+
+	fInfos, err := ioutil.ReadDir(netDir[0])
+	if err != nil {
+		glog.Warningf("tryToGetVirtualInterfaceName(): failed to read net directory %s: %q", netDir, err)
+		return ""
+	}
+
+	names := make([]string, 0)
+	for _, f := range fInfos {
+		names = append(names, f.Name())
+	}
+
+	if len(names) < 1 {
+		return ""
+	}
+
+	return names[0]
 }
 
 // SyncNodeStateVirtual attempt to update the node state to match the desired state
