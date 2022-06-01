@@ -21,7 +21,7 @@ type config struct {
 
 func IsSwitchdevModeSpec(spec sriovnetworkv1.SriovNetworkNodeStateSpec) bool {
 	for _, iface := range spec.Interfaces {
-		if iface.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
+		if iface.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
 			return true
 		}
 	}
@@ -47,7 +47,7 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 					NumVfs:     iface.NumVfs,
 				}
 
-				if iface.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
+				if iface.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
 					i.EswitchMode = iface.EswitchMode
 				}
 				cfg.Interfaces = append(cfg.Interfaces, i)

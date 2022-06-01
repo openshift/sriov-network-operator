@@ -49,12 +49,12 @@ func loadPlugin(path string) (VendorPlugin, error) {
 	// Cast the loaded symbol to the VendorPlugin
 	p, ok := symbol.(VendorPlugin)
 	if !ok {
-		return nil, fmt.Errorf("Unable to load plugin")
+		return nil, fmt.Errorf("unable to load plugin")
 	}
 
 	// Check the spec to ensure we are supported version
 	if p.Spec() != SpecVersion {
-		return nil, fmt.Errorf("Spec mismatch")
+		return nil, fmt.Errorf("spec mismatch")
 	}
 
 	return p, nil

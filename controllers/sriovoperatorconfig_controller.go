@@ -23,7 +23,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,7 +37,6 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	apply "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
@@ -72,17 +70,17 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
 	err := r.Get(context.TODO(), types.NamespacedName{
-		Name: constants.DEFAULT_CONFIG_NAME, Namespace: namespace}, defaultConfig)
+		Name: constants.DefaultConfigName, Namespace: namespace}, defaultConfig)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			singleNode, err := utils.IsSingleNodeCluster(r.Client)
+		if apierrors.IsNotFound(err) {
+			singleNode, err := constants.IsSingleNodeCluster(r.Client)
 			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("Couldn't get cluster single node status: %s", err)
+				return reconcile.Result{}, fmt.Errorf("couldn't get cluster single node status: %s", err)
 			}
 
 			// Default Config object not found, create it.
 			defaultConfig.SetNamespace(namespace)
-			defaultConfig.SetName(constants.DEFAULT_CONFIG_NAME)
+			defaultConfig.SetName(constants.DefaultConfigName)
 			defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 				EnableInjector:           func() *bool { b := enableAdmissionController; return &b }(),
 				EnableOperatorWebhook:    func() *bool { b := enableAdmissionController; return &b }(),
@@ -94,7 +92,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 			err = r.Create(context.TODO(), defaultConfig)
 			if err != nil {
 				logger.Error(err, "Failed to create default Operator Config", "Namespace",
-					namespace, "Name", constants.DEFAULT_CONFIG_NAME)
+					namespace, "Name", constants.DefaultConfigName)
 				return reconcile.Result{}, err
 			}
 			return reconcile.Result{}, nil
@@ -173,7 +171,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
 	data.Data["SRIOVInfiniBandCNIImage"] = os.Getenv("SRIOV_INFINIBAND_CNI_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	data.Data["ClusterType"] = utils.ClusterType
+	data.Data["ClusterType"] = constants.ClusterType
 	data.Data["DevMode"] = os.Getenv("DEV_MODE")
 	envCniBinPath := os.Getenv("SRIOV_CNI_BIN_PATH")
 	if envCniBinPath == "" {
@@ -182,7 +180,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 		logger.Info("New cni bin found", "CNIBinPath", envCniBinPath)
 		data.Data["CNIBinPath"] = envCniBinPath
 	}
-	objs, err := render.RenderDir(constants.CONFIG_DAEMON_PATH, &data)
+	objs, err := render.RenderDir(constants.ConfigDaemonPath, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render config daemon manifests")
 		return err
@@ -225,7 +223,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		data.Data["NetworkResourcesInjectorImage"] = os.Getenv("NETWORK_RESOURCES_INJECTOR_IMAGE")
 		data.Data["SriovNetworkWebhookImage"] = os.Getenv("SRIOV_NETWORK_WEBHOOK_IMAGE")
 		data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-		data.Data["ClusterType"] = utils.ClusterType
+		data.Data["ClusterType"] = constants.ClusterType
 		data.Data["CaBundle"] = os.Getenv("WEBHOOK_CA_BUNDLE")
 		data.Data["DevMode"] = os.Getenv("DEV_MODE")
 		objs, err := render.RenderDir(path, &data)
@@ -235,7 +233,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		}
 
 		// Delete injector webhook
-		if !*dc.Spec.EnableInjector && path == constants.INJECTOR_WEBHOOK_PATH {
+		if !*dc.Spec.EnableInjector && path == constants.InjectorWebHookPath {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(obj)
 				if err != nil {
@@ -248,7 +246,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 			continue
 		}
 		// Delete operator webhook
-		if !*dc.Spec.EnableOperatorWebhook && path == constants.OPERATOR_WEBHOOK_PATH {
+		if !*dc.Spec.EnableOperatorWebhook && path == constants.OperatorWebHookPath {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(obj)
 				if err != nil {

@@ -26,7 +26,7 @@ import (
 
 var (
 	RetryInterval        = time.Second * 1
-	ApiTimeout           = time.Second * 10
+	APITimeout           = time.Second * 10
 	Timeout              = time.Second * 60
 	CleanupRetryInterval = time.Second * 1
 	CleanupTimeout       = time.Second * 5
@@ -35,7 +35,7 @@ var (
 func WaitForSriovNetworkNodeStateReady(nodeState *sriovnetworkv1.SriovNetworkNodeState, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 	time.Sleep(30 * time.Second)
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
-		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
+		ctx, cancel := goctx.WithTimeout(goctx.Background(), APITimeout)
 		defer cancel()
 		err = client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, nodeState)
 		if err != nil {
@@ -59,7 +59,7 @@ func WaitForSriovNetworkNodeStateReady(nodeState *sriovnetworkv1.SriovNetworkNod
 
 func WaitForDaemonSetReady(ds *appsv1.DaemonSet, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
-		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
+		ctx, cancel := goctx.WithTimeout(goctx.Background(), APITimeout)
 		defer cancel()
 		err = client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, ds)
 		if err != nil {
@@ -84,7 +84,7 @@ func WaitForDaemonSetReady(ds *appsv1.DaemonSet, client client.Client, namespace
 
 func WaitForNamespacedObject(obj client.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
-		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
+		ctx, cancel := goctx.WithTimeout(goctx.Background(), APITimeout)
 		defer cancel()
 		err = client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, obj)
 		if err != nil {
@@ -105,7 +105,7 @@ func WaitForNamespacedObject(obj client.Object, client client.Client, namespace,
 
 func WaitForNamespacedObjectDeleted(obj client.Object, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
-		ctx, cancel := goctx.WithTimeout(goctx.Background(), ApiTimeout)
+		ctx, cancel := goctx.WithTimeout(goctx.Background(), APITimeout)
 		defer cancel()
 		err = client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, obj)
 		if err != nil {

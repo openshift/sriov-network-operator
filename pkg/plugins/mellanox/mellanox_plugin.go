@@ -32,7 +32,7 @@ const (
 	EnableSriov           = "SRIOV_EN"
 	LinkTypeP1            = "LINK_TYPE_P1"
 	LinkTypeP2            = "LINK_TYPE_P2"
-	MellanoxVendorId      = "15b3"
+	MellanoxVendorID      = "15b3"
 )
 
 var Plugin MellanoxPlugin
@@ -80,7 +80,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 	// Read mellanox NIC status once
 	if len(mellanoxNicsStatus) == 0 {
 		for _, iface := range new.Status.Interfaces {
-			if iface.Vendor != MellanoxVendorId {
+			if iface.Vendor != MellanoxVendorID {
 				continue
 			}
 
@@ -105,7 +105,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 	if utils.IsKernelLockdownMode(false) {
 		if len(mellanoxNicsSpec) > 0 {
 			glog.Info("Lockdown mode detected, failing on interface update for mellanox devices")
-			return false, false, fmt.Errorf("Mellanox device detected when in lockdown mode")
+			return false, false, fmt.Errorf("mellanox device detected when in lockdown mode")
 		}
 		glog.Info("Lockdown mode detected, skpping mellanox nic processing")
 		return
@@ -156,7 +156,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 		pciAddress := pciPrefix + "0"
 
 		// Skip unsupported devices
-		if id := sriovnetworkv1.GetVfDeviceId(portsMap[pciAddress].DeviceID); id == "" {
+		if id := sriovnetworkv1.GetVfDeviceID(portsMap[pciAddress].DeviceID); id == "" {
 			continue
 		}
 
