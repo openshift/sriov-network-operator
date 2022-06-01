@@ -1,4 +1,4 @@
-package main
+package mellanox
 
 import (
 	"fmt"
@@ -8,8 +8,11 @@ import (
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
+
+var PluginName = "mellanox_plugin"
 
 type MellanoxPlugin struct {
 	PluginName  string
@@ -35,18 +38,18 @@ const (
 	MellanoxVendorID      = "15b3"
 )
 
-var Plugin MellanoxPlugin
 var attributesToChange map[string]mlnxNic
 var mellanoxNicsStatus map[string]map[string]sriovnetworkv1.InterfaceExt
 var mellanoxNicsSpec map[string]sriovnetworkv1.Interface
 
 // Initialize our plugin and set up initial values
-func init() {
-	Plugin = MellanoxPlugin{
-		PluginName:  "mellanox_plugin",
-		SpecVersion: "1.0",
-	}
+func NewMellanoxPlugin() (plugin.VendorPlugin, error) {
 	mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}
+
+	return &MellanoxPlugin{
+		PluginName:  PluginName,
+		SpecVersion: "1.0",
+	}, nil
 }
 
 // Name returns the name of the plugin
