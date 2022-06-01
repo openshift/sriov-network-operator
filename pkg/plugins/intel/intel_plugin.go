@@ -1,9 +1,13 @@
-package main
+package intel
 
 import (
 	"github.com/golang/glog"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 )
+
+var PluginName = "intel_plugin"
 
 type IntelPlugin struct {
 	PluginName  string
@@ -12,14 +16,11 @@ type IntelPlugin struct {
 	LastState   *sriovnetworkv1.SriovNetworkNodeState
 }
 
-var Plugin IntelPlugin
-
-// Initialize our plugin and set up initial values
-func init() {
-	Plugin = IntelPlugin{
-		PluginName:  "intel_plugin",
+func NewIntelPlugin() (plugin.VendorPlugin, error) {
+	return &IntelPlugin{
+		PluginName:  PluginName,
 		SpecVersion: "1.0",
-	}
+	}, nil
 }
 
 // Name returns the name of the plugin
