@@ -53,6 +53,13 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+GOLANGCI_LINT = $(GOBIN)/golangci-lint
+# golangci-lint version should be updated periodically
+# we keep it fixed to avoid it from unexpectedly failing on the project
+# in case of a version bump
+GOLANGCI_LINT_VER = v1.46.1
+
+
 .PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests update-codegen
 
 all: generate vet build plugins
@@ -235,3 +242,14 @@ undeploy-k8s: undeploy
 deps-update:
 	go mod tidy && \
 	go mod vendor
+
+$(GOLANGCI_LINT): $(info  building golangci-lint...)
+	$Q curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) $(GOLANGCI_LINT_VER)
+
+.PHONY: lint
+lint: | $(GOLANGCI_LINT) ; $(info  running golangci-lint...) @ ## Run golangci-lint
+	mkdir -p $(CURPATH)/test-lint
+	cd $(CURPATH) && ret=0 && \
+		test -z "$$($(GOLANGCI_LINT) run | tee $(CURPATH)/test-lint/lint.out)" || ret=1 ; \
+		cat $(CURPATH)/test-lint/lint.out ; rm -rf $(CURPATH)/test-lint ; \
+	exit $$ret
