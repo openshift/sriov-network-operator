@@ -55,17 +55,12 @@ endif
 
 .PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests update-codegen
 
-all: generate vet build plugins
+all: generate vet build
 
 build: manager _build-sriov-network-config-daemon _build-webhook
 
 _build-%:
 	WHAT=$* hack/build-go.sh
-
-_plugin-%: vet
-	@hack/build-plugins.sh $*
-
-plugins: _plugin-intel _plugin-mellanox _plugin-generic _plugin-virtual _plugin-k8s
 
 clean:
 	@rm -rf $(TARGET_DIR)

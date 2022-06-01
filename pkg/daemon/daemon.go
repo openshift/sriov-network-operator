@@ -10,8 +10,6 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +41,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	sninformer "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions"
+	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
@@ -74,7 +73,7 @@ type Daemon struct {
 
 	nodeState *sriovnetworkv1.SriovNetworkNodeState
 
-	LoadedPlugins map[string]VendorPlugin
+	enabledPlugins map[string]plugin.VendorPlugin
 
 	// channel used by callbacks to signal Run() of an error
 	exitCh chan<- error
@@ -113,7 +112,6 @@ const (
 )
 
 var namespace = os.Getenv("NAMESPACE")
-var pluginsPath = os.Getenv("PLUGINSPATH")
 
 // writer implements io.Writer interface as a pass-through for glog.
 type writer struct {
@@ -426,17 +424,17 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	}
 
 	// load plugins if has not loaded
-	if len(dn.LoadedPlugins) == 0 {
-		err = dn.loadVendorPlugins(latestState)
+	if len(dn.enabledPlugins) == 0 {
+		dn.enabledPlugins, err = enablePlugins(dn.platform, latestState)
 		if err != nil {
-			glog.Errorf("nodeStateSyncHandler(): failed to load vendor plugin: %v", err)
+			glog.Errorf("nodeStateSyncHandler(): failed to enable vendor plugins error: %v", err)
 			return err
 		}
 	}
 
 	reqReboot := false
 	reqDrain := false
-	for k, p := range dn.LoadedPlugins {
+	for k, p := range dn.enabledPlugins {
 		d, r := false, false
 		if dn.nodeState.GetName() == "" {
 			d, r, err = p.OnNodeStateAdd(latestState)
@@ -453,8 +451,8 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	}
 	glog.V(0).Infof("nodeStateSyncHandler(): reqDrain %v, reqReboot %v disableDrain %v", reqDrain, reqReboot, dn.disableDrain)
 
-	for k, p := range dn.LoadedPlugins {
-		if k != GenericPlugin {
+	for k, p := range dn.enabledPlugins {
+		if k != GenericPluginName {
 			err := p.Apply()
 			if err != nil {
 				glog.Errorf("nodeStateSyncHandler(): plugin %s fail to apply: %v", k, err)
@@ -495,10 +493,10 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	}
 
 	if !reqReboot {
-		plugin, ok := dn.LoadedPlugins[GenericPlugin]
+		selectedPlugin, ok := dn.enabledPlugins[GenericPluginName]
 		if ok {
 			// Apply generic_plugin last
-			err = plugin.Apply()
+			err = selectedPlugin.Apply()
 			if err != nil {
 				glog.Errorf("nodeStateSyncHandler(): generic_plugin fail to apply: %v", err)
 				return err
@@ -634,34 +632,6 @@ func (dn *Daemon) restartDevicePluginPod() error {
 		return err
 	}
 
-	return nil
-}
-
-func (dn *Daemon) loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) error {
-	var pl []string
-
-	if dn.platform == utils.VirtualOpenStack {
-		pl = append(pl, VirtualPlugin)
-	} else {
-		pl = registerPlugins(ns)
-		if utils.ClusterType != utils.ClusterTypeOpenshift {
-			pl = append(pl, K8sPlugin)
-		}
-		pl = append(pl, GenericPlugin)
-	}
-
-	dn.LoadedPlugins = make(map[string]VendorPlugin)
-
-	for _, pn := range pl {
-		filePath := filepath.Join(pluginsPath, pn+".so")
-		glog.Infof("loadVendorPlugins(): try to load plugin %s", pn)
-		p, err := loadPlugin(filePath)
-		if err != nil {
-			glog.Errorf("loadVendorPlugins(): fail to load plugin %s: %v", filePath, err)
-			return err
-		}
-		dn.LoadedPlugins[p.Name()] = p
-	}
 	return nil
 }
 
@@ -927,22 +897,6 @@ func (dn *Daemon) drainNode() error {
 	}
 	glog.Info("drainNode(): drain complete")
 	return nil
-}
-
-func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
-	pluginNames := make(map[string]bool)
-	for _, iface := range ns.Status.Interfaces {
-		if val, ok := pluginMap[iface.Vendor]; ok {
-			pluginNames[val] = true
-		}
-	}
-	rawList := reflect.ValueOf(pluginNames).MapKeys()
-	glog.Infof("registerPlugins(): %v", rawList)
-	nameList := make([]string, len(rawList))
-	for i := 0; i < len(rawList); i++ {
-		nameList[i] = rawList[i].String()
-	}
-	return nameList
 }
 
 func tryEnableTun() {
