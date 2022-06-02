@@ -815,7 +815,7 @@ var _ = Describe("[sriov] operator", func() {
 			It("Should be able to configure a metaplugin", func() {
 				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
 				config := func(network *sriovv1.SriovNetwork) {
-					network.Spec.MetaPluginsConfig = `{ "type": "tuning", "sysctl": { "net.core.somaxconn": "500"}}`
+					network.Spec.MetaPluginsConfig = `{ "type": "tuning", "sysctl": { "net.ipv4.conf.IFNAME.accept_redirects": "1"}}`
 				}
 				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam, []network.SriovNetworkOptions{config}...)
 				Expect(err).ToNot(HaveOccurred())
@@ -825,10 +825,10 @@ var _ = Describe("[sriov] operator", func() {
 				}, (10+snoTimeoutMultiplier*110)*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 
 				testPod := createTestPod(node, []string{sriovNetworkName})
-				stdout, _, err := pod.ExecCommand(clients, testPod, "more", "/proc/sys/net/core/somaxconn")
+				stdout, _, err := pod.ExecCommand(clients, testPod, "more", "/proc/sys/net/ipv4/conf/net1/accept_redirects")
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(strings.TrimSpace(stdout)).To(Equal("500"))
+				Expect(strings.TrimSpace(stdout)).To(Equal("1"))
 			})
 		})
 
