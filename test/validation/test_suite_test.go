@@ -13,7 +13,6 @@ import (
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/k8sreporter"
-	_ "github.com/k8snetworkplumbingwg/sriov-network-operator/test/validation/tests"
 )
 
 var (
