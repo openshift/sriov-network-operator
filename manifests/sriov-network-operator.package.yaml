@@ -1,4 +1,0 @@
-packageName: sriov-network-operator
-channels:
-- name: "4.7"
-  currentCSV: sriov-network-operator.v4.7.0
