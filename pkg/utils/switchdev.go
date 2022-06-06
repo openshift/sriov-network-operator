@@ -90,7 +90,7 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 	}
 	update = true
 	glog.V(2).Infof("WriteSwitchdevConfFile(): write '%s' to switchdev.conf", newContent)
-	err = ioutil.WriteFile(switchDevConfPath, []byte(newContent), 0644)
+	err = ioutil.WriteFile(switchDevConfPath, newContent, 0644)
 	if err != nil {
 		glog.Errorf("WriteSwitchdevConfFile(): fail to write file: %v", err)
 		return
