@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -100,7 +101,6 @@ func GetNicsByPrefix(pod *k8sv1.Pod, ifcPrefix string) ([]string, error) {
 // GetSriovNicIPs returns the list of ip addresses related to the given
 // interface name for the given pod.
 func GetSriovNicIPs(pod *k8sv1.Pod, ifcName string) ([]string, error) {
-
 	networksStatus, ok := pod.ObjectMeta.Annotations["k8s.v1.cni.cncf.io/networks-status"]
 	if !ok {
 		return nil, fmt.Errorf("pod [%s] has no annotation `k8s.v1.cni.cncf.io/networks-status`", pod.Name)
