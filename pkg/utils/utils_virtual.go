@@ -17,6 +17,7 @@ import (
 	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 
 // PlatformType ...
@@ -419,7 +420,7 @@ func needUpdateVirtual(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			for _, group := range iface.VfGroups {
 				if sriovnetworkv1.IndexInRange(vf.VfID, group.VfRange) {
 					ingroup = true
-					if group.DeviceType != "netdevice" {
+					if group.DeviceType != constants.DeviceTypeNetDevice {
 						if group.DeviceType != vf.Driver {
 							glog.V(2).Infof("needUpdateVirtual(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
 							return true

@@ -29,6 +29,13 @@ const (
 	POOLCONFIGFINALIZERNAME = "poolconfig.finalizers.sriovnetwork.openshift.io"
 	ESwithModeLegacy        = "legacy"
 	ESwithModeSwitchDev     = "switchdev"
+
+	SriovCniStateEnable  = "enable"
+	SriovCniStateDisable = "disable"
+	SriovCniStateAuto    = "auto"
+	SriovCniStateOff     = "off"
+	SriovCniStateOn      = "on"
+	SriovCniIpamEmpty    = "\"ipam\":{}"
 )
 
 const invalidVfIndex = -1
@@ -479,12 +486,12 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 
 	data.Data["StateConfigured"] = true
 	switch cr.Spec.LinkState {
-	case "enable":
-		data.Data["SriovCniState"] = "enable"
-	case "disable":
-		data.Data["SriovCniState"] = "disable"
-	case "auto":
-		data.Data["SriovCniState"] = "auto"
+	case SriovCniStateEnable:
+		data.Data["SriovCniState"] = SriovCniStateEnable
+	case SriovCniStateDisable:
+		data.Data["SriovCniState"] = SriovCniStateDisable
+	case SriovCniStateAuto:
+		data.Data["SriovCniState"] = SriovCniStateAuto
 	default:
 		data.Data["StateConfigured"] = false
 	}
@@ -499,7 +506,7 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	if cr.Spec.IPAM != "" {
 		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 	} else {
-		data.Data["SriovCniIpam"] = "\"ipam\":{}"
+		data.Data["SriovCniIpam"] = SriovCniIpamEmpty
 	}
 
 	// metaplugins for the infiniband cni
@@ -575,32 +582,32 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 
 	data.Data["SpoofChkConfigured"] = true
 	switch cr.Spec.SpoofChk {
-	case "off":
-		data.Data["SriovCniSpoofChk"] = "off"
-	case "on":
-		data.Data["SriovCniSpoofChk"] = "on"
+	case SriovCniStateOff:
+		data.Data["SriovCniSpoofChk"] = SriovCniStateOff
+	case SriovCniStateOn:
+		data.Data["SriovCniSpoofChk"] = SriovCniStateOn
 	default:
 		data.Data["SpoofChkConfigured"] = false
 	}
 
 	data.Data["TrustConfigured"] = true
 	switch cr.Spec.Trust {
-	case "on":
-		data.Data["SriovCniTrust"] = "on"
-	case "off":
-		data.Data["SriovCniTrust"] = "off"
+	case SriovCniStateOn:
+		data.Data["SriovCniTrust"] = SriovCniStateOn
+	case SriovCniStateOff:
+		data.Data["SriovCniTrust"] = SriovCniStateOff
 	default:
 		data.Data["TrustConfigured"] = false
 	}
 
 	data.Data["StateConfigured"] = true
 	switch cr.Spec.LinkState {
-	case "enable":
-		data.Data["SriovCniState"] = "enable"
-	case "disable":
-		data.Data["SriovCniState"] = "disable"
-	case "auto":
-		data.Data["SriovCniState"] = "auto"
+	case SriovCniStateEnable:
+		data.Data["SriovCniState"] = SriovCniStateEnable
+	case SriovCniStateDisable:
+		data.Data["SriovCniState"] = SriovCniStateDisable
+	case SriovCniStateAuto:
+		data.Data["SriovCniState"] = SriovCniStateAuto
 	default:
 		data.Data["StateConfigured"] = false
 	}
@@ -624,7 +631,7 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	if cr.Spec.IPAM != "" {
 		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 	} else {
-		data.Data["SriovCniIpam"] = "\"ipam\":{}"
+		data.Data["SriovCniIpam"] = SriovCniIpamEmpty
 	}
 
 	data.Data["MetaPluginsConfigured"] = false

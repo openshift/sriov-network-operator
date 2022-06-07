@@ -36,8 +36,9 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	apply "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 // SriovOperatorConfigReconciler reconciles a SriovOperatorConfig object
@@ -73,7 +74,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		Name: constants.DefaultConfigName, Namespace: namespace}, defaultConfig)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			singleNode, err := constants.IsSingleNodeCluster(r.Client)
+			singleNode, err := utils.IsSingleNodeCluster(r.Client)
 			if err != nil {
 				return reconcile.Result{}, fmt.Errorf("couldn't get cluster single node status: %s", err)
 			}
@@ -171,7 +172,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
 	data.Data["SRIOVInfiniBandCNIImage"] = os.Getenv("SRIOV_INFINIBAND_CNI_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	data.Data["ClusterType"] = constants.ClusterType
+	data.Data["ClusterType"] = utils.ClusterType
 	data.Data["DevMode"] = os.Getenv("DEV_MODE")
 	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
 	envCniBinPath := os.Getenv("SRIOV_CNI_BIN_PATH")
@@ -224,7 +225,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		data.Data["NetworkResourcesInjectorImage"] = os.Getenv("NETWORK_RESOURCES_INJECTOR_IMAGE")
 		data.Data["SriovNetworkWebhookImage"] = os.Getenv("SRIOV_NETWORK_WEBHOOK_IMAGE")
 		data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-		data.Data["ClusterType"] = constants.ClusterType
+		data.Data["ClusterType"] = utils.ClusterType
 		data.Data["CaBundle"] = os.Getenv("WEBHOOK_CA_BUNDLE")
 		data.Data["DevMode"] = os.Getenv("DEV_MODE")
 		data.Data["ImagePullSecrets"] = GetImagePullSecrets()

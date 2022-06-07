@@ -24,6 +24,7 @@ import (
 	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 
 const (
@@ -217,7 +218,7 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 			for _, group := range iface.VfGroups {
 				if sriovnetworkv1.IndexInRange(vf.VfID, group.VfRange) {
 					ingroup = true
-					if group.DeviceType != "netdevice" {
+					if group.DeviceType != constants.DeviceTypeNetDevice {
 						if group.DeviceType != vf.Driver {
 							glog.V(2).Infof("needUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
 							return true
@@ -309,7 +310,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 				if linkType == "" {
 					linkType = ifaceStatus.LinkType
 				}
-				if strings.EqualFold(linkType, "IB") {
+				if strings.EqualFold(linkType, constants.LinkTypeIB) {
 					if err = setVfGUID(addr, pfLink); err != nil {
 						return err
 					}
@@ -496,7 +497,7 @@ func resetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error {
 	if err := setSriovNumVfs(ifaceStatus.PciAddress, 0); err != nil {
 		return err
 	}
-	if ifaceStatus.LinkType == "ETH" {
+	if ifaceStatus.LinkType == constants.LinkTypeETH {
 		var mtu int
 		is := InitialState.GetInterfaceStateByPciAddress(ifaceStatus.PciAddress)
 		if is != nil {
@@ -508,7 +509,7 @@ func resetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error {
 		if err := setNetdevMTU(ifaceStatus.PciAddress, mtu); err != nil {
 			return err
 		}
-	} else if ifaceStatus.LinkType == "IB" {
+	} else if ifaceStatus.LinkType == constants.LinkTypeIB {
 		if err := setNetdevMTU(ifaceStatus.PciAddress, 2048); err != nil {
 			return err
 		}
@@ -636,9 +637,9 @@ func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
 		}
 		linkType := link.Attrs().EncapType
 		if linkType == "ether" {
-			return "ETH"
+			return constants.LinkTypeETH
 		} else if linkType == "infiniband" {
-			return "IB"
+			return constants.LinkTypeIB
 		}
 	}
 
