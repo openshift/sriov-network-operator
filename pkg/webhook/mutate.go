@@ -6,6 +6,8 @@ import (
 
 	"github.com/golang/glog"
 	v1 "k8s.io/api/admission/v1"
+
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 
 var (
@@ -21,7 +23,7 @@ func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1.AdmissionRespo
 	reviewResponse.Allowed = true
 
 	name := cr["metadata"].(map[string]interface{})["name"]
-	if name == "default" {
+	if name == constants.DefaultPolicyName {
 		// skip the default policy
 		return &reviewResponse, nil
 	}
@@ -41,7 +43,7 @@ func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1.AdmissionRespo
 		patchs = append(patchs, defaultIsRdmaPatch)
 	}
 	// Device with InfiniBand link type requires isRdma to be true
-	if str, ok := spec.(map[string]interface{})["linkType"].(string); ok && strings.ToLower(str) == "ib" {
+	if str, ok := spec.(map[string]interface{})["linkType"].(string); ok && strings.EqualFold(str, constants.LinkTypeIB) {
 		glog.V(2).Infof("mutateSriovNetworkNodePolicy(): set isRdma to true for %v since ib link type is detected", name)
 		patchs = append(patchs, InfiniBandIsRdmaPatch)
 	}

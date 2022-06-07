@@ -84,7 +84,7 @@ linters:
     - exhaustive
     # TODO fix issues- funlen
       #- gochecknoinits
-    # TODO fix issues- goconst
+    - goconst
     # TODO fix issues- gocritic
     # TODO fix issues- gocyclo
     - gofmt

@@ -8,6 +8,7 @@ import (
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
@@ -27,8 +28,6 @@ type mlnxNic struct {
 }
 
 const (
-	EthLinkType           = "ETH"
-	InfinibandLinkType    = "IB"
 	PreconfiguredLinkType = "Preconfigured"
 	UknownLinkType        = "Uknown"
 	TotalVfs              = "NUM_OF_VFS"
@@ -297,10 +296,10 @@ func isDualPort(pciAddress string) bool {
 
 func getLinkType(linkType string) string {
 	glog.Infof("mellanox-plugin getLinkType(): linkType %s", linkType)
-	if strings.Contains(linkType, EthLinkType) {
-		return EthLinkType
-	} else if strings.Contains(linkType, InfinibandLinkType) {
-		return InfinibandLinkType
+	if strings.Contains(linkType, constants.LinkTypeETH) {
+		return constants.LinkTypeETH
+	} else if strings.Contains(linkType, constants.LinkTypeIB) {
+		return constants.LinkTypeIB
 	} else if len(linkType) > 0 {
 		glog.Warningf("mellanox-plugin getLinkType(): link type %s is not one of [ETH, IB]", linkType)
 		return UknownLinkType
@@ -313,7 +312,7 @@ func getLinkType(linkType string) string {
 func isLinkTypeRequireChange(iface sriovnetworkv1.Interface, ifaceStatus sriovnetworkv1.InterfaceExt, fwLinkType string) (bool, error) {
 	glog.Infof("mellanox-plugin isLinkTypeRequireChange(): device %s", iface.PciAddress)
 	if iface.LinkType != "" && !strings.EqualFold(ifaceStatus.LinkType, iface.LinkType) {
-		if !strings.EqualFold(iface.LinkType, EthLinkType) && !strings.EqualFold(iface.LinkType, InfinibandLinkType) {
+		if !strings.EqualFold(iface.LinkType, constants.LinkTypeETH) && !strings.EqualFold(iface.LinkType, constants.LinkTypeIB) {
 			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Not supported link type: %s,"+
 				" supported link types: [eth, ETH, ib, and IB]", iface.LinkType)
 		}
