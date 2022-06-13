@@ -99,7 +99,7 @@ linters:
     - structcheck
     # TODO fix issues- stylecheck
     - typecheck
-    # TODO fix issues- unconvert
+    - unconvert
     # TODO fix issues- unparam
     - unused
     - varcheck
