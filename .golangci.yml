@@ -97,7 +97,7 @@ linters:
       #- scopelint
     # TODO fix issues- staticcheck
     - structcheck
-    # TODO fix issues- stylecheck
+    - stylecheck
     - typecheck
     - unconvert
     # TODO fix issues- unparam
