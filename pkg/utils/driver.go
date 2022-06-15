@@ -8,7 +8,8 @@ import (
 
 	"github.com/golang/glog"
 
-	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
+	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 

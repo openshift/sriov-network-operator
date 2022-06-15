@@ -33,8 +33,8 @@ const (
 	daemonSetWarning    = "ignoring DaemonSet-managed Pods"
 	localStorageFatal   = "Pods with local storage (use --delete-emptydir-data to override)"
 	localStorageWarning = "deleting Pods with local storage"
-	unmanagedFatal      = "Pods not managed by ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet (use --force to override)"
-	unmanagedWarning    = "deleting Pods not managed by ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet"
+	unmanagedFatal      = "Pods declare no controller (use --force to override)"
+	unmanagedWarning    = "deleting Pods that declare no controller"
 )
 
 // PodDelete informs filtering logic whether a pod should be deleted or not
@@ -86,7 +86,7 @@ func (l *PodDeleteList) errors() []error {
 			failedPods[msg] = append(failedPods[msg], fmt.Sprintf("%s/%s", i.Pod.Namespace, i.Pod.Name))
 		}
 	}
-	errs := make([]error, 0)
+	errs := make([]error, 0, len(failedPods))
 	for msg, pods := range failedPods {
 		errs = append(errs, fmt.Errorf("cannot delete %s: %s", msg, strings.Join(pods, ", ")))
 	}
