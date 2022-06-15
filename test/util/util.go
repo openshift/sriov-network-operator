@@ -10,7 +10,7 @@ import (
 	// "testing"
 	"time"
 
-	dptypes "github.com/intel/sriov-network-device-plugin/pkg/types"
+	dptypes "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/types"
 	// "github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	appsv1 "k8s.io/api/apps/v1"
 	// corev1 "k8s.io/api/core/v1"
