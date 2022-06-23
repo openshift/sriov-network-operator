@@ -330,7 +330,6 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 							return err
 						}
 					}
-
 					if err = setVfAdminMac(addr, pfLink, vfLink); err != nil {
 						glog.Errorf("configSriovDevice(): fail to configure VF admin mac address for device %s %q", addr, err)
 						return err
@@ -374,17 +373,6 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		}
 	}
 	return nil
-}
-
-func generateRandomMacAddressVfs() ([]byte, error) {
-	buf := make([]byte, 6)
-	_, err := rand.Read(buf)
-	if err != nil {
-		return buf, err
-	}
-	// Set the local bit
-	buf[0] = (buf[0] & 0xfe) | 2
-	return buf, nil
 }
 
 func setSriovNumVfs(pciAddr string, numVfs int) error {
@@ -612,35 +600,6 @@ func vfIsReady(pciAddr string) (netlink.Link, error) {
 	return vfLink, nil
 }
 
-func isValidAddress(address []byte) bool {
-	invalidAddresses := [][]byte{
-		{0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-		{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
-	}
-	for _, invalidAddress := range invalidAddresses {
-		if bytes.Equal(address, invalidAddress) {
-			return false
-		}
-	}
-	return true
-}
-
-func getEffectiveMacAddress(hwAddr net.HardwareAddr) (net.HardwareAddr, error) {
-	newAddr := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	zeroAddr := net.HardwareAddr(newAddr[:])
-	if bytes.Equal(hwAddr, zeroAddr) {
-		for !isValidAddress(newAddr) {
-			newAddr2, err := generateRandomMacAddressVfs()
-			newAddr = newAddr2
-			if err != nil {
-				return nil, err
-			}
-		}
-		return net.HardwareAddr(newAddr[:]), nil
-	}
-	return hwAddr, nil
-}
-
 func setVfAdminMac(vfAddr string, pfLink, vfLink netlink.Link) error {
 	glog.Infof("setVfAdminMac(): VF %s", vfAddr)
 
@@ -649,12 +608,8 @@ func setVfAdminMac(vfAddr string, pfLink, vfLink netlink.Link) error {
 		glog.Errorf("setVfAdminMac(): unable to get VF id %+v %q", vfAddr, err)
 		return err
 	}
-	hwAddr, err := getEffectiveMacAddress(vfLink.Attrs().HardwareAddr)
-	if err != nil {
-		return err
-	}
 
-	if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, hwAddr); err != nil {
+	if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
 		return err
 	}
 
