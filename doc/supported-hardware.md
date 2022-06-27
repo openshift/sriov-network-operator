@@ -5,6 +5,7 @@ The following SR-IOV capable hardware is supported with sriov-network-operator:
 | Model                    | Vendor ID | Device ID |
 | ------------------------ | --------- | --------- |
 | Intel XXV710 Family |  8086 | 158b |
+| Intel E810 Family | 8086  | 1591 |
 | Intel E810-CQDA2/2CQDA2 Family | 8086  | 1592 |
 | Intel E810-XXVDA4 Family | 8086  | 1593 |
 | Intel E810-XXVDA2 Family | 8086  | 159b |
@@ -31,6 +32,7 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Model                    | SR-IOV Kernel | SR-IOV DPDK | SR-IOV Hardware Offload (switchdev) |
 | ------------------------ | ------------- | ----------- |------------------------------------ |
 | Intel XXV710 Family | V | V | X |
+| Intel E810 Family | V | V | X |
 | Intel E810-CQDA2/2CQDA2 Family | V | V | X |
 | Intel E810-XXVDA4 Family | V | V | X |
 | Intel E810-XXVDA2 Family | V | V | X |
