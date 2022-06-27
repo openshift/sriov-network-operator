@@ -1,12 +1,15 @@
-package main
+package virtual
 
 import (
 	"reflect"
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
+
+var PluginName = "virtual_plugin"
 
 // VirtualPlugin Plugin type to use on a virtual platform
 type VirtualPlugin struct {
@@ -23,16 +26,13 @@ const (
 	loaded
 )
 
-// Plugin VirtualPlugin type
-var Plugin VirtualPlugin
-
 // Initialize our plugin and set up initial values
-func init() {
-	Plugin = VirtualPlugin{
-		PluginName:     "virtual_plugin",
+func NewVirtualPlugin() (plugin.VendorPlugin, error) {
+	return &VirtualPlugin{
+		PluginName:     PluginName,
 		SpecVersion:    "1.0",
 		LoadVfioDriver: unloaded,
-	}
+	}, nil
 }
 
 // Name returns the name of the plugin

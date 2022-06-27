@@ -1,4 +1,4 @@
-package main
+package generic
 
 import (
 	"bytes"
@@ -9,9 +9,13 @@ import (
 	"syscall"
 
 	"github.com/golang/glog"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
+
+var PluginName = "generic_plugin"
 
 type GenericPlugin struct {
 	PluginName     string
@@ -29,15 +33,13 @@ const (
 	loaded
 )
 
-var Plugin GenericPlugin
-
 // Initialize our plugin and set up initial values
-func init() {
-	Plugin = GenericPlugin{
-		PluginName:     "generic_plugin",
+func NewGenericPlugin() (plugin.VendorPlugin, error) {
+	return &GenericPlugin{
+		PluginName:     PluginName,
 		SpecVersion:    "1.0",
 		LoadVfioDriver: unloaded,
-	}
+	}, nil
 }
 
 // Name returns the name of the plugin
