@@ -63,7 +63,7 @@ should follow the following procedure:
 * Add information of what was tested to the issue opened
 * Add contact point information to [vendor-support.md](https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/doc/vendor-support.md), so we know who to reach out if issues arise when running sriov-network-operator against the specified hardware.
 * Submit PR to add your device to this file as well as to supported-nic-ids configMap [here](https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/deployment/sriov-network-operator/templates/configmap.yaml) and [here](https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/deploy/configmap.yaml).
-  * The tables above should be updated according to what was tested 
+  * The tables above should be updated according to what was tested
 
 ## Continuous support
 To ensure sriov-network-operator continues to operate as expected on supported hardware it is recommended that hardware vendors (or another party)
