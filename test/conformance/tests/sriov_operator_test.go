@@ -26,6 +26,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/network"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -1481,85 +1482,56 @@ var _ = Describe("[sriov] operator", func() {
 				}
 			})
 
-			DescribeTable("SR-IOV Operator Config, disable",
-				func(resourceName string) {
-					var err error
-					setSriovOperatorSpecFlag(resourceName, false)
+			It("SR-IOV Operator Config, disable Resource Injector", func() {
 
-					Eventually(func() bool {
-						_, err := clients.DaemonSets(operatorNamespace).Get(context.Background(), resourceName, metav1.GetOptions{})
-						if k8serrors.IsNotFound(err) {
-							return true
-						}
-						Expect(err).ToNot(HaveOccurred())
-						return false
-					}, 2*time.Minute, 5*time.Second).Should(BeTrue())
+				setSriovOperatorSpecFlag(operatorNetworkInjectorFlag, false)
 
-					Eventually(func() bool {
-						podsList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
-							LabelSelector: fmt.Sprintf("app=%s", resourceName)})
-						Expect(err).ToNot(HaveOccurred())
-						return len(podsList.Items) <= 0
+				assertObjectIsNotFound("network-resources-injector", &appsv1.DaemonSet{})
 
-					}, 2*time.Minute, 10*time.Second).Should(BeTrue())
+				Eventually(func() int {
+					podsList, err := clients.Pods(operatorNamespace).
+						List(context.Background(),
+							metav1.ListOptions{LabelSelector: "app=network-resources-injector"})
+					Expect(err).ToNot(HaveOccurred())
+					return len(podsList.Items)
+				}, 2*time.Minute, 10*time.Second).Should(BeZero())
 
-					Eventually(func() bool {
-						serviceList, err := clients.Services(operatorNamespace).List(context.Background(), metav1.ListOptions{})
-						Expect(err).ToNot(HaveOccurred())
-						for _, svc := range serviceList.Items {
-							if strings.Contains(svc.ObjectMeta.Name, resourceName) {
-								return false
-							}
-						}
-						return true
-					}, 2*time.Minute, 10*time.Second).Should(BeTrue())
+				assertObjectIsNotFound("network-resources-injector-service", &corev1.Service{})
+				assertObjectIsNotFound("network-resources-injector", &rbacv1.ClusterRole{})
+				assertObjectIsNotFound("network-resources-injector-role-binding", &rbacv1.ClusterRoleBinding{})
+				assertObjectIsNotFound("network-resources-injector-config", &admission.MutatingWebhookConfiguration{})
+				assertObjectIsNotFound("nri-control-switches", &corev1.ConfigMap{})
+			})
 
-					Eventually(func() bool {
-						crs := rbacv1.ClusterRoleList{}
-						err = clients.List(context.Background(), &crs, runtimeclient.InNamespace("openshift-sriov-network-operator"))
-						Expect(err).ToNot(HaveOccurred())
-						for _, cr := range crs.Items {
-							if strings.Contains(cr.ObjectMeta.Name, resourceName) {
-								return false
-							}
-						}
-						return true
-					}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+			It("SR-IOV Operator Config, disable Operator Webhook", func() {
 
-					Eventually(func() bool {
-						crbs := rbacv1.ClusterRoleBindingList{}
-						err = clients.List(context.Background(), &crbs, runtimeclient.InNamespace("openshift-sriov-network-operator"))
-						Expect(err).ToNot(HaveOccurred())
-						for _, crb := range crbs.Items {
-							if strings.Contains(crb.ObjectMeta.Name, resourceName) {
-								return false
-							}
-						}
-						return true
-					}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+				setSriovOperatorSpecFlag(operatorWebhookFlag, false)
 
-					Eventually(func() bool {
-						mwc := &admission.MutatingWebhookConfiguration{}
-						err = clients.Get(context.Background(), runtimeclient.ObjectKey{Name: fmt.Sprintf("%s-config", resourceName), Namespace: operatorNamespace}, mwc)
-						return err != nil && k8serrors.IsNotFound(err)
-					}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+				assertObjectIsNotFound("operator-webhook", &appsv1.DaemonSet{})
 
-					Eventually(func() bool {
-						cms := corev1.ConfigMapList{}
-						err = clients.List(context.Background(), &cms, runtimeclient.InNamespace("openshift-sriov-network-operator"))
-						Expect(err).ToNot(HaveOccurred())
-						for _, cm := range cms.Items {
-							if strings.Contains(cm.ObjectMeta.Name, resourceName) {
-								return false
-							}
-						}
-						return true
-					}, 1*time.Minute, 10*time.Second).Should(BeTrue())
-				},
-				//25814
-				Entry("Network resource injector", operatorNetworkInjectorFlag),
-				//25847
-				Entry("Webhook resource injector", operatorWebhookFlag))
+				Eventually(func() int {
+					podsList, err := clients.Pods(operatorNamespace).
+						List(context.Background(),
+							metav1.ListOptions{LabelSelector: "app=operator-webhook"})
+					Expect(err).ToNot(HaveOccurred())
+					return len(podsList.Items)
+				}, 2*time.Minute, 10*time.Second).Should(BeZero())
+
+				assertObjectIsNotFound("operator-webhook-service", &corev1.Service{})
+				assertObjectIsNotFound("operator-webhook", &rbacv1.ClusterRole{})
+				assertObjectIsNotFound("operator-webhook-role-binding", &rbacv1.ClusterRoleBinding{})
+				assertObjectIsNotFound("sriov-operator-webhook-config", &admission.MutatingWebhookConfiguration{})
+			})
+
+			It("SR-IOV Operator Config, disable Resource Injector and Operator Webhook", func() {
+
+				setSriovOperatorSpecFlag(operatorNetworkInjectorFlag, false)
+				setSriovOperatorSpecFlag(operatorWebhookFlag, false)
+
+				// Assert disabling both flags works, no need to check every resource as above tests.
+				assertObjectIsNotFound("operator-webhook", &appsv1.DaemonSet{})
+				assertObjectIsNotFound("network-resources-injector", &appsv1.DaemonSet{})
+			})
 
 		})
 
@@ -2127,21 +2099,23 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 	}
 
 	if flagValue {
-		Eventually(func() bool {
+		Eventually(func(g Gomega) {
 			podsList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
 				LabelSelector: fmt.Sprintf("app=%s", flagName)})
-			Expect(err).ToNot(HaveOccurred())
-			if len(podsList.Items) < 1 {
-				return false
-			}
+			g.Expect(err).ToNot(HaveOccurred())
+
+			g.Expect(len(podsList.Items)).To(BeNumerically(">", 0))
 
 			for _, pod := range podsList.Items {
-				if pod.Status.Phase != corev1.PodRunning {
-					return false
-				}
+				g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning))
 			}
-
-			return true
-		}, 1*time.Minute, 10*time.Second).Should(BeTrue())
+		}, 1*time.Minute, 10*time.Second).WithOffset(1).Should(Succeed())
 	}
+}
+
+func assertObjectIsNotFound(name string, obj runtimeclient.Object) {
+	Eventually(func() bool {
+		err := clients.Get(context.Background(), runtimeclient.ObjectKey{Name: name, Namespace: operatorNamespace}, obj)
+		return err != nil && k8serrors.IsNotFound(err)
+	}, 2*time.Minute, 10*time.Second).Should(BeTrue())
 }
