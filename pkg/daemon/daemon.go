@@ -413,6 +413,8 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 				syncStatus:    "Succeeded",
 				lastSyncError: "",
 			}
+			// wait for writer to refresh the status
+			<-dn.syncCh
 		}
 
 		return nil
