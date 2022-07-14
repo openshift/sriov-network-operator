@@ -105,6 +105,7 @@ uninstall: manifests kustomize
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=$(CRD_BASES)
+	cp ./config/crd/bases/* ./deployment/sriov-network-operator/crds/
 
 # Run go fmt against code
 
