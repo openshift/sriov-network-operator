@@ -420,6 +420,19 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		return nil
 	}
 
+	if latestState.GetGeneration() == 1 && len(latestState.Spec.Interfaces) == 0 {
+		glog.V(0).Infof("nodeStateSyncHandler(): Name: %s, Interface policy spec not yet set by controller", latestState.Name)
+		if latestState.Status.SyncStatus != "Succeeded" {
+			dn.refreshCh <- Message{
+				syncStatus:    "Succeeded",
+				lastSyncError: "",
+			}
+			// wait for writer to refresh status
+			<-dn.syncCh
+		}
+		return nil
+	}
+
 	dn.refreshCh <- Message{
 		syncStatus:    "InProgress",
 		lastSyncError: "",
