@@ -453,10 +453,11 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	for k, p := range dn.enabledPlugins {
 		d, r := false, false
 		if dn.nodeState.GetName() == "" {
-			d, r, err = p.OnNodeStateAdd(latestState)
+			glog.V(0).Infof("nodeStateSyncHandler(): calling OnNodeStateChange for a new node state")
 		} else {
-			d, r, err = p.OnNodeStateChange(dn.nodeState, latestState)
+			glog.V(0).Infof("nodeStateSyncHandler(): calling OnNodeStateChange for an updated node state")
 		}
+		d, r, err = p.OnNodeStateChange(latestState)
 		if err != nil {
 			glog.Errorf("nodeStateSyncHandler(): plugin %s error: %v", k, err)
 			return err

@@ -52,24 +52,7 @@ func (p *GenericPlugin) Spec() string {
 	return p.SpecVersion
 }
 
-// OnNodeStateAdd Invoked when SriovNetworkNodeState CR is created, return if need dain and/or reboot node
-func (p *GenericPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	glog.Info("generic-plugin OnNodeStateAdd()")
-	needDrain = false
-	needReboot = false
-	err = nil
-	p.DesireState = state
-
-	needDrain = needDrainNode(state.Spec.Interfaces, state.Status.Interfaces)
-	needReboot = needRebootNode(state, &p.LoadVfioDriver)
-
-	if needReboot {
-		needDrain = true
-	}
-	return
-}
-
-// OnNodeStateChange Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
+// OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *GenericPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("generic-plugin OnNodeStateChange()")
 	needDrain = false
