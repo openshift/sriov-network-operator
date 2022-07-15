@@ -46,7 +46,7 @@ func (p *VirtualPlugin) Spec() string {
 }
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
-func (p *VirtualPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
+func (p *VirtualPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("virtual-plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
