@@ -111,13 +111,7 @@ func (p *K8sPlugin) Spec() string {
 	return p.SpecVersion
 }
 
-// OnNodeStateAdd Invoked when SriovNetworkNodeState CR is created, return if need dain and/or reboot node
-func (p *K8sPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	glog.Info("k8s-plugin OnNodeStateAdd()")
-	return p.OnNodeStateChange(nil, state)
-}
-
-// OnNodeStateChange Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
+// OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *K8sPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("k8s-plugin OnNodeStateChange()")
 	needDrain = false
