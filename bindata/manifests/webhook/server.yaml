@@ -37,15 +37,16 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: Exists
+            - matchExpressions:
               - key: node-role.kubernetes.io/master
                 operator: Exists
       tolerations:
-      - key: "node-role.kubernetes.io/master"
-        operator: Exists
+      - operator: Exists
         effect: NoSchedule
-      - key: "node.kubernetes.io/not-ready"
-        operator: Exists
-        effect: NoSchedule
+      - operator: Exists
+        effect: NoExecute
       containers:
       - name: webhook-server
         image: {{.NetworkResourcesInjectorImage}}
