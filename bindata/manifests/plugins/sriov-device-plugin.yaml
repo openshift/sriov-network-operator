@@ -34,6 +34,12 @@ spec:
       - operator: Exists
       serviceAccountName: sriov-device-plugin
       priorityClassName: "system-node-critical"
+      {{- if .ImagePullSecrets }}
+      imagePullSecrets:
+      {{- range .ImagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
       containers:
       - name: sriov-device-plugin
         image: {{.SRIOVDevicePluginImage}}
