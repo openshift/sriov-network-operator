@@ -49,10 +49,10 @@ jobs:
     name: Golangci-lint
     runs-on: ubuntu-latest
     steps:
-    - name: Set up Go 1.17
+    - name: Set up Go 1.18
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17.8
+        go-version: 1.18.2
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
     - name: golangci-lint
@@ -60,3 +60,31 @@ jobs:
       with:
         # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
         version: v1.46
+
+  test-coverage:
+    name: test-coverage
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.18
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.18.2
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: test pkg
+      run: make test-pkg
+
+    - name: test controllers on opensfhit
+      run: CLUSTER_TYPE=openshift make test-controllers
+
+    - name: merge test coverage
+      run: make merge-test-coverage
+
+    - name: Coveralls
+      uses: coverallsapp/github-action@1.1.3
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path-to-lcov: lcov.out
