@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"os"
+	"strings"
 
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
@@ -28,3 +29,12 @@ var webhooks = map[string](string){
 }
 
 var namespace = os.Getenv("NAMESPACE")
+
+func GetImagePullSecrets() []string {
+	imagePullSecrets := os.Getenv("IMAGE_PULL_SECRETS")
+	if imagePullSecrets != "" {
+		return strings.Split(imagePullSecrets, ",")
+	} else {
+		return []string{}
+	}
+}

@@ -328,6 +328,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
+	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
 
 	objs, err := renderDsForCR(constants.PluginPath, &data)
 	if err != nil {
