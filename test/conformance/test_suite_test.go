@@ -14,7 +14,9 @@ import (
 
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 
+	// Test files in this package must not end with `_test.go` suffix, as they are imported as go package
 	_ "github.com/k8snetworkplumbingwg/sriov-network-operator/test/conformance/tests"
+
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/k8sreporter"
 )
 
