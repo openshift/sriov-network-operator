@@ -235,6 +235,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 
 	tryEnableRdma()
 	tryEnableTun()
+	tryEnableVhostNet()
 
 	if err := sriovnetworkv1.InitNicIdMap(dn.kubeClient, namespace); err != nil {
 		return err
@@ -973,6 +974,12 @@ func registerPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) []string {
 func tryEnableTun() {
 	if err := utils.LoadKernelModule("tun"); err != nil {
 		glog.Errorf("tryEnableTun(): TUN kernel module not loaded: %v", err)
+	}
+}
+
+func tryEnableVhostNet() {
+	if err := utils.LoadKernelModule("vhost_net"); err != nil {
+		glog.Errorf("tryEnableVhostNet(): VHOST_NET kernel module not loaded: %v", err)
 	}
 }
 
