@@ -47,6 +47,12 @@ spec:
       - key: "node.kubernetes.io/not-ready"
         operator: Exists
         effect: NoSchedule
+      {{- if .ImagePullSecrets }}
+      imagePullSecrets:
+      {{- range .ImagePullSecrets }}
+      - name: {{ . }}
+      {{- end }}
+      {{- end }}
       containers:
       - name: webhook-server
         image: {{.SriovNetworkWebhookImage}}

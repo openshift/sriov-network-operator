@@ -31,6 +31,12 @@ spec:
       - operator: Exists
       serviceAccountName: sriov-network-config-daemon
       priorityClassName: "system-node-critical"
+      {{- if .ImagePullSecrets }}
+      imagePullSecrets:
+      {{- range .ImagePullSecrets }}
+      - name: {{ . }}
+      {{- end }}
+      {{- end }}
       containers:
       - name: sriov-cni
         image: {{.SRIOVCNIImage}}
