@@ -62,6 +62,12 @@ linters-settings:
     simple: true
     range-loops: true # Report preallocation suggestions on range loops, true by default
     for-loops: false # Report preallocation suggestions on for loops, false by default
+  stylecheck:
+    dot-import-whitelist: 
+      - github.com/onsi/ginkgo
+      - github.com/onsi/ginkgo/extensions/table
+      - github.com/onsi/gomega
+      - github.com/onsi/gomega/gstruct
 
 linters:
   # please, do not use `enable-all`: it's deprecated and will be removed soon.
