@@ -15,7 +15,6 @@ import (
 	"github.com/onsi/ginkgo/config"
 	"github.com/onsi/ginkgo/types"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -51,7 +50,6 @@ func (r *KubernetesReporter) SpecDidComplete(specSummary *types.SpecSummary) {
 	fmt.Fprintln(r.dumpOutput, "Starting dump for failed spec", specSummary.ComponentTexts)
 	r.Dump()
 	fmt.Fprintln(r.dumpOutput, "Finished dump for failed spec")
-
 }
 
 func (r *KubernetesReporter) Dump() {
@@ -59,10 +57,7 @@ func (r *KubernetesReporter) Dump() {
 	r.logPods("openshift-sriov-network-operator")
 	r.logPods(namespaces.Test)
 	r.logLogs(func(p *corev1.Pod) bool {
-		if !strings.HasPrefix(p.Name, "sriov-") {
-			return true
-		}
-		return false
+		return !strings.HasPrefix(p.Name, "sriov-")
 	})
 	r.logSriovNodeState()
 	r.logNetworkPolicies()
@@ -109,7 +104,7 @@ func (r *KubernetesReporter) logNodes() {
 func (r *KubernetesReporter) logLogs(filterPods func(*corev1.Pod) bool) {
 	fmt.Fprintf(r.dumpOutput, "Logging pods logs")
 
-	pods, err := r.clients.Pods(v1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
+	pods, err := r.clients.Pods(corev1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to fetch pods: %v\n", err)
 		return
@@ -120,7 +115,7 @@ func (r *KubernetesReporter) logLogs(filterPods func(*corev1.Pod) bool) {
 			continue
 		}
 		for _, container := range pod.Spec.Containers {
-			logs, err := r.clients.Pods(pod.Namespace).GetLogs(pod.Name, &v1.PodLogOptions{Container: container.Name}).DoRaw(context.Background())
+			logs, err := r.clients.Pods(pod.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{Container: container.Name}).DoRaw(context.Background())
 			if err == nil {
 				fmt.Fprintf(r.dumpOutput, "Dumping logs for pod %s-%s-%s", pod.Namespace, pod.Name, container.Name)
 				fmt.Fprintln(r.dumpOutput, string(logs))
@@ -145,26 +140,6 @@ func (r *KubernetesReporter) logNetworkPolicies() {
 	j, err := json.MarshalIndent(policies, "", "    ")
 	if err != nil {
 		fmt.Println("Failed to marshal policies")
-		return
-	}
-	fmt.Fprintln(r.dumpOutput, string(j))
-}
-func (r *KubernetesReporter) logNetworks() {
-	fmt.Fprintf(r.dumpOutput, "Logging networks")
-
-	networks := sriovv1.SriovNetworkList{}
-	err := r.clients.List(context.Background(),
-		&networks,
-		runtimeclient.InNamespace("openshift-sriov-network-operator"))
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to fetch network policies: %v\n", err)
-		return
-	}
-
-	j, err := json.MarshalIndent(networks, "", "    ")
-	if err != nil {
-		fmt.Println("Failed to marshal networks")
 		return
 	}
 	fmt.Fprintln(r.dumpOutput, string(j))

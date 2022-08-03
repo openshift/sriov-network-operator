@@ -1,4 +1,4 @@
-package main
+package mellanox
 
 import (
 	"fmt"
@@ -8,8 +8,11 @@ import (
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
+
+var PluginName = "mellanox_plugin"
 
 type MellanoxPlugin struct {
 	PluginName  string
@@ -32,21 +35,21 @@ const (
 	EnableSriov           = "SRIOV_EN"
 	LinkTypeP1            = "LINK_TYPE_P1"
 	LinkTypeP2            = "LINK_TYPE_P2"
-	MellanoxVendorId      = "15b3"
+	MellanoxVendorID      = "15b3"
 )
 
-var Plugin MellanoxPlugin
 var attributesToChange map[string]mlnxNic
 var mellanoxNicsStatus map[string]map[string]sriovnetworkv1.InterfaceExt
 var mellanoxNicsSpec map[string]sriovnetworkv1.Interface
 
 // Initialize our plugin and set up initial values
-func init() {
-	Plugin = MellanoxPlugin{
-		PluginName:  "mellanox_plugin",
-		SpecVersion: "1.0",
-	}
+func NewMellanoxPlugin() (plugin.VendorPlugin, error) {
 	mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}
+
+	return &MellanoxPlugin{
+		PluginName:  PluginName,
+		SpecVersion: "1.0",
+	}, nil
 }
 
 // Name returns the name of the plugin
@@ -78,9 +81,9 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 	processedNics := map[string]bool{}
 
 	// Read mellanox NIC status once
-	if mellanoxNicsStatus == nil || len(mellanoxNicsStatus) == 0 {
+	if len(mellanoxNicsStatus) == 0 {
 		for _, iface := range new.Status.Interfaces {
-			if iface.Vendor != MellanoxVendorId {
+			if iface.Vendor != MellanoxVendorID {
 				continue
 			}
 
@@ -105,7 +108,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 	if utils.IsKernelLockdownMode(false) {
 		if len(mellanoxNicsSpec) > 0 {
 			glog.Info("Lockdown mode detected, failing on interface update for mellanox devices")
-			return false, false, fmt.Errorf("Mellanox device detected when in lockdown mode")
+			return false, false, fmt.Errorf("mellanox device detected when in lockdown mode")
 		}
 		glog.Info("Lockdown mode detected, skpping mellanox nic processing")
 		return
@@ -156,7 +159,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetwork
 		pciAddress := pciPrefix + "0"
 
 		// Skip unsupported devices
-		if id := sriovnetworkv1.GetVfDeviceId(portsMap[pciAddress].DeviceID); id == "" {
+		if id := sriovnetworkv1.GetVfDeviceID(portsMap[pciAddress].DeviceID); id == "" {
 			continue
 		}
 
@@ -351,7 +354,6 @@ func getOtherPortSpec(pciAddress string) *sriovnetworkv1.Interface {
 // handleTotalVfs return required total VFs or max (required VFs for dual port NIC) and needReboot if totalVfs will change
 func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.Interface, isDualPort bool) (
 	totalVfs int, needReboot, changeWithoutReboot bool) {
-
 	totalVfs = ifaceSpec.NumVfs
 	// Check if the other port is changing the number of VF
 	if isDualPort {
@@ -371,7 +373,7 @@ func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.
 
 	// Remove policy then re-apply it
 	if !needReboot && fwNext.totalVfs != totalVfs {
-		glog.V(2).Infof("Changing TotalVfs %d to 0, doesn't require rebooting", fwCurrent.totalVfs)
+		glog.V(2).Infof("Changing TotalVfs %d to same as Next Boot value, doesn't require rebooting", fwCurrent.totalVfs)
 		attrs.totalVfs = totalVfs
 		changeWithoutReboot = true
 	}

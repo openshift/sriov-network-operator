@@ -19,7 +19,6 @@ import (
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -71,8 +70,11 @@ func New(kubeconfig string) *ClientSet {
 	sriovv1.AddToScheme(crScheme)
 	apiext.AddToScheme(crScheme)
 
-	clientSet.Client, err = runtimeclient.New(config, client.Options{
+	clientSet.Client, err = runtimeclient.New(config, runtimeclient.Options{
 		Scheme: crScheme,
 	})
+	if err != nil {
+		return nil
+	}
 	return clientSet
 }

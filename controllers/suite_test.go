@@ -32,7 +32,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -48,16 +47,19 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
+var (
+	k8sClient client.Client
+	testEnv   *envtest.Environment
+
+	ctx    context.Context
+	cancel context.CancelFunc
+)
 
 // Define utility constants for object names and testing timeouts/durations and intervals.
 const (
 	testNamespace = "openshift-sriov-network-operator"
 
 	timeout  = time.Second * 10
-	duration = time.Second * 100
 	interval = time.Millisecond * 250
 )
 
@@ -133,9 +135,11 @@ var _ = BeforeSuite(func(done Done) {
 	os.Setenv("RELEASE_VERSION", "4.7.0")
 	os.Setenv("OPERATOR_NAME", "sriov-network-operator")
 
+	ctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())
+
 	go func() {
 		defer GinkgoRecover()
-		err = k8sManager.Start(ctrl.SetupSignalHandler())
+		err = k8sManager.Start(ctx)
 		Expect(err).ToNot(HaveOccurred())
 	}()
 
@@ -152,7 +156,7 @@ var _ = BeforeSuite(func(done Done) {
 
 	config := &sriovnetworkv1.SriovOperatorConfig{}
 	config.SetNamespace(testNamespace)
-	config.SetName(constants.DEFAULT_CONFIG_NAME)
+	config.SetName(constants.DefaultConfigName)
 	config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 		EnableInjector:           func() *bool { b := true; return &b }(),
 		EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
@@ -163,7 +167,7 @@ var _ = BeforeSuite(func(done Done) {
 
 	poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
 	poolConfig.SetNamespace(testNamespace)
-	poolConfig.SetName(constants.DEFAULT_CONFIG_NAME)
+	poolConfig.SetName(constants.DefaultConfigName)
 	poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{}
 	Expect(k8sClient.Create(context.TODO(), poolConfig)).Should(Succeed())
 	close(done)
@@ -171,8 +175,10 @@ var _ = BeforeSuite(func(done Done) {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	cancel()
+	Eventually(func() error {
+		return testEnv.Stop()
+	}, timeout, time.Second).ShouldNot(HaveOccurred())
 })
 
 func TestAPIs(t *testing.T) {

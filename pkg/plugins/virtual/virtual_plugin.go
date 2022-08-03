@@ -1,14 +1,15 @@
-package main
+package virtual
 
 import (
-	"os/exec"
 	"reflect"
-	"syscall"
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
+
+var PluginName = "virtual_plugin"
 
 // VirtualPlugin Plugin type to use on a virtual platform
 type VirtualPlugin struct {
@@ -25,16 +26,13 @@ const (
 	loaded
 )
 
-// Plugin VirtualPlugin type
-var Plugin VirtualPlugin
-
 // Initialize our plugin and set up initial values
-func init() {
-	Plugin = VirtualPlugin{
-		PluginName:     "virtual_plugin",
+func NewVirtualPlugin() (plugin.VendorPlugin, error) {
+	return &VirtualPlugin{
+		PluginName:     PluginName,
 		SpecVersion:    "1.0",
 		LoadVfioDriver: unloaded,
-	}
+	}, nil
 }
 
 // Name returns the name of the plugin
@@ -128,15 +126,6 @@ func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
 			if iface.VfGroups[i].DeviceType == "vfio-pci" {
 				return true
 			}
-		}
-	}
-	return false
-}
-
-func isCommandNotFound(err error) bool {
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 127 {
-			return true
 		}
 	}
 	return false

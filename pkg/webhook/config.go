@@ -40,7 +40,7 @@ func (keyPair *tlsKeypairReloader) GetCertificateFunc() func(*tls.ClientHelloInf
 	}
 }
 
-func NewTlsKeypairReloader(certPath, keyPath string) (*tlsKeypairReloader, error) {
+func NewTLSKeypairReloader(certPath, keyPath string) (*tlsKeypairReloader, error) {
 	result := &tlsKeypairReloader{
 		certPath: certPath,
 		keyPath:  keyPath,

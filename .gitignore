@@ -5,6 +5,7 @@ bin/
 testbin/
 env
 .env
+.cache
 # Created by https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 ### Emacs ###
 # -*- mode: gitignore; -*-

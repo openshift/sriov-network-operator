@@ -17,10 +17,11 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/golang/glog"
-	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
 	"github.com/jaypipes/ghw"
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
@@ -165,7 +166,10 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 					break
 				}
 				if err = configSriovDevice(&iface, &ifaceStatus); err != nil {
-					glog.Errorf("SyncNodeState(): fail to config sriov interface %s: %v", iface.PciAddress, err)
+					glog.Errorf("SyncNodeState(): fail to configure sriov interface %s: %v. resetting interface.", iface.PciAddress, err)
+					if resetErr := resetSriovDevice(ifaceStatus); resetErr != nil {
+						glog.Errorf("SyncNodeState(): fail to reset on error SR-IOV interface: %s", resetErr)
+					}
 					return err
 				}
 				break
@@ -182,7 +186,7 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 
 // SkipConfigVf Use systemd service to configure switchdev mode or BF-2 NICs in OpenShift
 func SkipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.InterfaceExt) bool {
-	if ifSpec.EswitchMode == sriovnetworkv1.ESWITCHMODE_SWITCHDEV {
+	if ifSpec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
 		glog.V(2).Infof("SkipConfigVf(): skip config VF for switchdev device")
 		return true
 	}
@@ -272,7 +276,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		}
 		pfLink, err := netlink.LinkByName(iface.Name)
 		if err != nil {
-			glog.Errorf("setVfGuid(): unable to get PF link for device %+v %q", iface, err)
+			glog.Errorf("configSriovDevice(): unable to get PF link for device %+v %q", iface, err)
 			return err
 		}
 
@@ -306,7 +310,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 					linkType = ifaceStatus.LinkType
 				}
 				if strings.EqualFold(linkType, "IB") {
-					if err = setVfGuid(addr, pfLink); err != nil {
+					if err = setVfGUID(addr, pfLink); err != nil {
 						return err
 					}
 				} else {
@@ -325,7 +329,6 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 							glog.Errorf("configSriovDevice(): VF link is not ready for device %s %q", addr, err)
 							return err
 						}
-
 					}
 					if err = setVfAdminMac(addr, pfLink, vfLink); err != nil {
 						glog.Errorf("configSriovDevice(): fail to configure VF admin mac address for device %s %q", addr, err)
@@ -642,14 +645,14 @@ func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
 	return ""
 }
 
-func setVfGuid(vfAddr string, pfLink netlink.Link) error {
+func setVfGUID(vfAddr string, pfLink netlink.Link) error {
 	glog.Infof("setVfGuid(): VF %s", vfAddr)
 	vfID, err := dputils.GetVFID(vfAddr)
 	if err != nil {
 		glog.Errorf("setVfGuid(): unable to get VF id %+v %q", vfAddr, err)
 		return err
 	}
-	guid := generateRandomGuid()
+	guid := generateRandomGUID()
 	if err := netlink.LinkSetVfNodeGUID(pfLink, vfID, guid); err != nil {
 		return err
 	}
@@ -663,7 +666,7 @@ func setVfGuid(vfAddr string, pfLink netlink.Link) error {
 	return nil
 }
 
-func generateRandomGuid() net.HardwareAddr {
+func generateRandomGUID() net.HardwareAddr {
 	guid := make(net.HardwareAddr, 8)
 
 	// First field is 0x01 - xfe to avoid all zero and all F invalid guids
