@@ -785,10 +785,33 @@ func (dn *Daemon) getDrainLock(ctx context.Context, done chan bool) {
 	})
 }
 
+// isMachineConfigPoolResourceRegistered checks to see if the MachineConfigPool API Resource
+// is registed in the Openshift cluster
+func isMachineConfigPoolResourceRegistered(c *mcclientset.Clientset) (bool, error) {
+	machineConfigPoolResourceName := "machineconfigpool"
+	availableAPIs, err := c.ServerResourcesForGroupVersion(mcfgv1.GroupVersion.String())
+	if err != nil && !errors.IsNotFound(err) {
+		return false, err
+	}
+	if availableAPIs != nil {
+		for _, api := range availableAPIs.APIResources {
+			if api.SingularName == machineConfigPoolResourceName {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 func (dn *Daemon) pauseMCP() error {
 	glog.Info("pauseMCP(): pausing MCP")
 	var err error
-
+	isRegistered, err := isMachineConfigPoolResourceRegistered(dn.mcClient)
+	// In hypershift: there are no machineConfigPool resources
+	// if the MachineConfigPool resource is not registered in API there is no need to pause it
+	if err != nil || !isRegistered {
+		return err
+	}
 	mcpInformerFactory := mcfginformers.NewSharedInformerFactory(dn.mcClient,
 		time.Second*30,
 	)
