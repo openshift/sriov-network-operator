@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
+	openshiftconfigv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -84,6 +85,8 @@ var _ = BeforeSuite(func(done Done) {
 	err = netattdefv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = mcfgv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = openshiftconfigv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme
@@ -164,6 +167,17 @@ var _ = BeforeSuite(func(done Done) {
 		LogLevel:                 2,
 	}
 	Expect(k8sClient.Create(context.TODO(), config)).Should(Succeed())
+
+	infra := &openshiftconfigv1.Infrastructure{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+		Spec: openshiftconfigv1.InfrastructureSpec{},
+		Status: openshiftconfigv1.InfrastructureStatus{
+			ControlPlaneTopology: openshiftconfigv1.HighlyAvailableTopologyMode,
+		},
+	}
+	Expect(k8sClient.Create(context.TODO(), infra)).Should(Succeed())
 
 	poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
 	poolConfig.SetNamespace(testNamespace)

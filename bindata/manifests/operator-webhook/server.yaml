@@ -30,6 +30,7 @@ spec:
       nodeSelector:
         beta.kubernetes.io/os: linux
       affinity:
+        {{ if not .ExternalControlPlane }}
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
@@ -39,7 +40,9 @@ spec:
             - matchExpressions:
                 - key: node-role.kubernetes.io/control-plane
                   operator: Exists
+        {{ end }}
       tolerations:
+      {{ if not .ExternalControlPlane }}
       - key: "node-role.kubernetes.io/master"
         operator: Exists
         effect: NoSchedule
@@ -49,6 +52,7 @@ spec:
       - key: "node.kubernetes.io/not-ready"
         operator: Exists
         effect: NoSchedule
+      {{ end }}
       {{- if .ImagePullSecrets }}
       imagePullSecrets:
       {{- range .ImagePullSecrets }}
