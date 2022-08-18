@@ -1,6 +1,6 @@
 # Tested with golangci-lint ver. 1.37
 run:
-  timeout: 3m
+  timeout: 10m
   skip-dirs:
     - vendor/
     - .github/
