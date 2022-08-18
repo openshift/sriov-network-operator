@@ -229,6 +229,12 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		data.Data["CaBundle"] = os.Getenv("WEBHOOK_CA_BUNDLE")
 		data.Data["DevMode"] = os.Getenv("DEV_MODE")
 		data.Data["ImagePullSecrets"] = GetImagePullSecrets()
+		external, err := utils.IsExternalControlPlaneCluster(r.Client)
+		if err != nil {
+			logger.Error(err, "Fail to get control plane topology")
+			return err
+		}
+		data.Data["ExternalControlPlane"] = external
 		objs, err := render.RenderDir(path, &data)
 		if err != nil {
 			logger.Error(err, "Fail to render webhook manifests")
