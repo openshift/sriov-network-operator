@@ -45,23 +45,8 @@ func (p *VirtualPlugin) Spec() string {
 	return p.SpecVersion
 }
 
-// OnNodeStateAdd Invoked when SriovNetworkNodeState CR is created, return if need dain and/or reboot node
-func (p *VirtualPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	glog.Info("virtual-plugin OnNodeStateAdd()")
-	needReboot = false
-	err = nil
-	p.DesireState = state
-
-	if p.LoadVfioDriver != loaded {
-		if needVfioDriver(state) {
-			p.LoadVfioDriver = loading
-		}
-	}
-	return
-}
-
-// OnNodeStateChange Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
-func (p *VirtualPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
+// OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
+func (p *VirtualPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("virtual-plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
