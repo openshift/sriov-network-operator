@@ -5,6 +5,7 @@ data:
   Intel_i40e_X710_10G: 8086 1572 154c
   Intel_i40e_XL710_40G: 8086 1583 154c
   Intel_i40e_XXV710: 8086 158a 154c
+  Intel_i40e_X710_X557_AT_10G: 8086 1589 154c
   Intel_i40e_XXV710_25G: 8086 158b 154c
   Intel_i40e_XXV710_N3000: 8086 0d58 154c
   Intel_ice_E810: 8086 1591 1889
@@ -23,9 +24,12 @@ data:
   Nvidia_mlx5_ConnectX-5_Ex: 15b3 1019 101a
   Nvidia_mlx5_ConnectX-6: 15b3 101b 101c
   Nvidia_mlx5_ConnectX-6_Dx: 15b3 101d 101e
+  Nvidia_mlx5_ConnectX-6_Lx: 15b3 101f 101e
+  Pensando_ionic_DSC: 1dd8 1002 1003
   Qlogic_qede_QL41000: 1077 8070 8090
   Qlogic_qede_QL45000_25G: 1077 1656 1664
   Qlogic_qede_QL45000_50G: 1077 1654 1664
+  Red_Hat_Virtio_network_device: "1af4 1000 1000"
 kind: ConfigMap
 metadata:
   name: supported-nic-ids
