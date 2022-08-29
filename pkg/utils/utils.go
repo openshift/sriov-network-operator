@@ -162,7 +162,7 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 					glog.V(2).Infof("syncNodeState(): skip config VF in config daemon for %s, it shall be done by switchdev-configuration.service", iface.PciAddress)
 					break
 				}
-				if !needUpdate(&iface, &ifaceStatus) {
+				if !NeedUpdate(&iface, &ifaceStatus) {
 					glog.V(2).Infof("syncNodeState(): no need update interface %s", iface.PciAddress)
 					break
 				}
@@ -199,17 +199,17 @@ func SkipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.Inter
 	return false
 }
 
-func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
+func NeedUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
 	if iface.Mtu > 0 {
 		mtu := iface.Mtu
 		if mtu != ifaceStatus.Mtu {
-			glog.V(2).Infof("needUpdate(): MTU needs update, desired=%d, current=%d", mtu, ifaceStatus.Mtu)
+			glog.V(2).Infof("NeedUpdate(): MTU needs update, desired=%d, current=%d", mtu, ifaceStatus.Mtu)
 			return true
 		}
 	}
 
 	if iface.NumVfs != ifaceStatus.NumVfs {
-		glog.V(2).Infof("needUpdate(): NumVfs needs update desired=%d, current=%d", iface.NumVfs, ifaceStatus.NumVfs)
+		glog.V(2).Infof("NeedUpdate(): NumVfs needs update desired=%d, current=%d", iface.NumVfs, ifaceStatus.NumVfs)
 		return true
 	}
 	if iface.NumVfs > 0 {
@@ -220,16 +220,16 @@ func needUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 					ingroup = true
 					if group.DeviceType != constants.DeviceTypeNetDevice {
 						if group.DeviceType != vf.Driver {
-							glog.V(2).Infof("needUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
+							glog.V(2).Infof("NeedUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
 							return true
 						}
 					} else {
 						if sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
-							glog.V(2).Infof("needUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
+							glog.V(2).Infof("NeedUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
 							return true
 						}
-						if vf.Mtu != 0 && vf.Mtu != group.Mtu {
-							glog.V(2).Infof("needUpdate(): VF %d MTU needs update, desired=%d", vf.VfID, group.Mtu)
+						if vf.Mtu != 0 && group.Mtu != 0 && vf.Mtu != group.Mtu {
+							glog.V(2).Infof("NeedUpdate(): VF %d MTU needs update, desired=%d, current=%d", vf.VfID, group.Mtu, vf.Mtu)
 							return true
 						}
 					}
