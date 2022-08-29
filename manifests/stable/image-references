@@ -6,28 +6,28 @@ spec:
   - name: sriov-network-operator
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-network-operator:4.11
+      name: quay.io/openshift/origin-sriov-network-operator:4.12
   - name: sriov-network-config-daemon
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-network-config-daemon:4.11
+      name: quay.io/openshift/origin-sriov-network-config-daemon:4.12
   - name: sriov-cni
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-cni:4.11
+      name: quay.io/openshift/origin-sriov-cni:4.12
   - name: sriov-network-device-plugin
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-network-device-plugin:4.11
+      name: quay.io/openshift/origin-sriov-network-device-plugin:4.12
   - name: sriov-dp-admission-controller
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-dp-admission-controller:4.11
+      name: quay.io/openshift/origin-sriov-dp-admission-controller:4.12
   - name: sriov-network-webhook
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-network-webhook:4.11
+      name: quay.io/openshift/origin-sriov-network-webhook:4.12
   - name: sriov-infiniband-cni
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-infiniband-cni:4.11
+      name: quay.io/openshift/origin-sriov-infiniband-cni:4.12
