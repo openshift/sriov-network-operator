@@ -18,13 +18,23 @@ package controllers
 
 import (
 	"os"
+	"strings"
 
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 var webhooks = map[string](string){
-	constants.INJECTOR_WEBHOOK_NAME: constants.INJECTOR_WEBHOOK_PATH,
-	constants.OPERATOR_WEBHOOK_NAME: constants.OPERATOR_WEBHOOK_PATH,
+	constants.InjectorWebHookName: constants.InjectorWebHookPath,
+	constants.OperatorWebHookName: constants.OperatorWebHookPath,
 }
 
 var namespace = os.Getenv("NAMESPACE")
+
+func GetImagePullSecrets() []string {
+	imagePullSecrets := os.Getenv("IMAGE_PULL_SECRETS")
+	if imagePullSecrets != "" {
+		return strings.Split(imagePullSecrets, ",")
+	} else {
+		return []string{}
+	}
+}

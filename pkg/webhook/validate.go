@@ -74,13 +74,11 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 	admit, err := staticValidateSriovNetworkNodePolicy(cr)
 	if err != nil {
 		return admit, warnings, err
-
 	}
 
 	admit, err = dynamicValidateSriovNetworkNodePolicy(cr)
 	if err != nil {
 		return admit, warnings, err
-
 	}
 
 	return admit, warnings, nil
@@ -167,6 +165,9 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	nodeList, err := kubeclient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: labels.Set(cr.Spec.NodeSelector).String(),
 	})
+	if err != nil {
+		return false, err
+	}
 	nsList, err := snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return false, err
@@ -255,16 +256,6 @@ func validatePolicyForNodePolicy(
 		}
 	}
 	return true, nil
-}
-
-func keys(m map[string]([]string)) []string {
-	keys := make([]string, len(m))
-	i := 0
-	for k := range m {
-		keys[i] = k
-		i++
-	}
-	return keys
 }
 
 func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt, node *corev1.Node) bool {

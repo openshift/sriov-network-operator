@@ -1,4 +1,4 @@
-package main
+package k8s
 
 import (
 	"fmt"
@@ -11,9 +11,12 @@ import (
 	"github.com/golang/glog"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	plugins "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/service"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
+
+var PluginName = "k8s_plugin"
 
 type K8sPlugin struct {
 	PluginName                 string
@@ -86,23 +89,16 @@ const (
 	chroot = "/host"
 )
 
-var (
-	Plugin K8sPlugin
-)
-
 // Initialize our plugin and set up initial values
-func init() {
-	Plugin = K8sPlugin{
-		PluginName:     "k8s_plugin",
+func NewK8sPlugin() (plugins.VendorPlugin, error) {
+	k8sPluging := &K8sPlugin{
+		PluginName:     PluginName,
 		SpecVersion:    "1.0",
 		serviceManager: service.NewServiceManager(chroot),
 		updateTarget:   &k8sUpdateTarget{},
 	}
 
-	// Read manifest files for plugin
-	if err := Plugin.readManifestFiles(); err != nil {
-		panic(err)
-	}
+	return k8sPluging, k8sPluging.readManifestFiles()
 }
 
 // Name returns the name of the plugin
@@ -115,14 +111,8 @@ func (p *K8sPlugin) Spec() string {
 	return p.SpecVersion
 }
 
-// OnNodeStateAdd Invoked when SriovNetworkNodeState CR is created, return if need dain and/or reboot node
-func (p *K8sPlugin) OnNodeStateAdd(state *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	glog.Info("k8s-plugin OnNodeStateAdd()")
-	return p.OnNodeStateChange(nil, state)
-}
-
-// OnNodeStateChange Invoked when SriovNetworkNodeState CR is updated, return if need dain and/or reboot node
-func (p *K8sPlugin) OnNodeStateChange(old, new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
+// OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
+func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("k8s-plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false

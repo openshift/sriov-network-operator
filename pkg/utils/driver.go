@@ -8,7 +8,8 @@ import (
 
 	"github.com/golang/glog"
 
-	dputils "github.com/intel/sriov-network-device-plugin/pkg/utils"
+	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
@@ -60,7 +61,7 @@ func BindDpdkDriver(pciAddr, driver string) error {
 		_, err := os.Readlink(filepath.Join(sysBusPciDevices, pciAddr, "iommu_group"))
 		if err != nil {
 			glog.Errorf("Could not read IOMMU group for device %s: %s", pciAddr, err)
-			return fmt.Errorf("Cannot bind driver %s to %s, make sure IOMMU is enabled in BIOS", driver, pciAddr)
+			return fmt.Errorf("cannot bind driver %s to %s, make sure IOMMU is enabled in BIOS", driver, pciAddr)
 		}
 		return err
 	}
@@ -96,7 +97,7 @@ func BindDefaultDriver(pciAddr string) error {
 	}
 	err = ioutil.WriteFile(sysBusPciDriversProbe, []byte(pciAddr), os.ModeAppend)
 	if err != nil {
-		glog.Errorf("BindDpdkDriver(): fail to bind driver for device %s: %s", pciAddr, err)
+		glog.Errorf("BindDefaultDriver(): fail to bind driver for device %s: %s", pciAddr, err)
 		return err
 	}
 

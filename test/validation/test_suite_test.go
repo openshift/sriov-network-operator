@@ -13,6 +13,8 @@ import (
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/k8sreporter"
+
+	// Test files in this package must not end with `_test.go` suffix, as they are imported as go package
 	_ "github.com/k8snetworkplumbingwg/sriov-network-operator/test/validation/tests"
 )
 
@@ -46,7 +48,6 @@ func TestTest(t *testing.T) {
 		}
 		defer f.Close()
 		rr = append(rr, k8sreporter.New(clients, f))
-
 	} else if *dumpOutput {
 		rr = append(rr, k8sreporter.New(clients, os.Stdout))
 	}

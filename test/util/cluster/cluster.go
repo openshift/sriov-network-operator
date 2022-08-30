@@ -38,7 +38,7 @@ var (
 func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*EnabledNodes, error) {
 	nodeStates, err := clients.SriovNetworkNodeStates(operatorNamespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("Failed to retrieve note states %v", err)
+		return nil, fmt.Errorf("failed to retrieve note states %v", err)
 	}
 
 	res := &EnabledNodes{}
@@ -48,12 +48,12 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 
 	ss, err := nodes.MatchingOptionalSelectorState(clients, nodeStates.Items)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to find matching node states %v", err)
+		return nil, fmt.Errorf("failed to find matching node states %v", err)
 	}
 
-	err = sriovv1.InitNicIdMap(kubernetes.NewForConfigOrDie(clients.Config), operatorNamespace)
+	err = sriovv1.InitNicIDMap(kubernetes.NewForConfigOrDie(clients.Config), operatorNamespace)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to InitNicIdMap %v", err)
+		return nil, fmt.Errorf("failed to InitNicIdMap %v", err)
 	}
 
 	for _, state := range ss {
@@ -62,7 +62,7 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 			return nil, err
 		}
 		if !isStable {
-			return nil, fmt.Errorf("Sync status still in progress")
+			return nil, fmt.Errorf("sync status still in progress")
 		}
 
 		node := state.Name
@@ -85,7 +85,7 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 	}
 
 	if len(res.Nodes) == 0 {
-		return nil, fmt.Errorf("No sriov enabled node found")
+		return nil, fmt.Errorf("no sriov enabled node found")
 	}
 	return res, nil
 }
@@ -94,11 +94,10 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 func (n *EnabledNodes) FindOneSriovDevice(node string) (*sriovv1.InterfaceExt, error) {
 	s, ok := n.States[node]
 	if !ok {
-		return nil, fmt.Errorf("Node %s not found", node)
+		return nil, fmt.Errorf("node %s not found", node)
 	}
 	for _, itf := range s.Status.Interfaces {
 		if IsPFDriverSupported(itf.Driver) && sriovv1.IsSupportedDevice(itf.DeviceID) {
-
 			// Skip mlx interfaces if secure boot is enabled
 			// TODO: remove this when mlx support secure boot/lockdown mode
 			if itf.Vendor == mlxVendorID && n.IsSecureBootEnabled[node] {
@@ -108,7 +107,7 @@ func (n *EnabledNodes) FindOneSriovDevice(node string) (*sriovv1.InterfaceExt, e
 			return &itf, nil
 		}
 	}
-	return nil, fmt.Errorf("Unable to find sriov devices in node %s", node)
+	return nil, fmt.Errorf("unable to find sriov devices in node %s", node)
 }
 
 // FindSriovDevices retrieves all valid sriov devices for the given node.
@@ -116,7 +115,7 @@ func (n *EnabledNodes) FindSriovDevices(node string) ([]*sriovv1.InterfaceExt, e
 	devices := []*sriovv1.InterfaceExt{}
 	s, ok := n.States[node]
 	if !ok {
-		return nil, fmt.Errorf("Node %s not found", node)
+		return nil, fmt.Errorf("node %s not found", node)
 	}
 
 	for i, itf := range s.Status.Interfaces {
@@ -149,13 +148,13 @@ func (n *EnabledNodes) FindOneVfioSriovDevice() (string, sriovv1.InterfaceExt) {
 func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.InterfaceExt, error) {
 	s, ok := n.States[node]
 	if !ok {
-		return nil, fmt.Errorf("Node %s not found", node)
+		return nil, fmt.Errorf("node %s not found", node)
 	}
 
 	// return error here as mlx interfaces are not supported when secure boot is enabled
 	// TODO: remove this when mlx support secure boot/lockdown mode
 	if n.IsSecureBootEnabled[node] {
-		return nil, fmt.Errorf("Secure boot is enabled on the node mellanox cards are not supported")
+		return nil, fmt.Errorf("secure boot is enabled on the node mellanox cards are not supported")
 	}
 
 	for _, itf := range s.Status.Interfaces {
@@ -164,7 +163,7 @@ func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.Interfa
 		}
 	}
 
-	return nil, fmt.Errorf("Unable to find a mellanox sriov devices in node %s", node)
+	return nil, fmt.Errorf("unable to find a mellanox sriov devices in node %s", node)
 }
 
 // SriovStable tells if all the node states are in sync (and the cluster is ready for another round of tests)
@@ -176,7 +175,7 @@ func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool,
 	case nil:
 		break
 	default:
-		return false, fmt.Errorf("Failed to fetch nodes state %v", err)
+		return false, fmt.Errorf("failed to fetch nodes state %v", err)
 	}
 
 	if len(nodeStates.Items) == 0 {

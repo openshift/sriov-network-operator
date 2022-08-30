@@ -15,12 +15,13 @@
 package types
 
 import (
-	"path/filepath"
+	"path"
 	"strings"
 
 	"github.com/coreos/ignition/v2/config/shared/errors"
+	"github.com/coreos/ignition/v2/config/util"
 
-	"github.com/coreos/vcontext/path"
+	vpath "github.com/coreos/vcontext/path"
 	"github.com/coreos/vcontext/report"
 )
 
@@ -32,7 +33,7 @@ func (s Storage) MergedKeys() map[string]string {
 	}
 }
 
-func (s Storage) Validate(c path.ContextPath) (r report.Report) {
+func (s Storage) Validate(c vpath.ContextPath) (r report.Report) {
 	for i, d := range s.Directories {
 		for _, l := range s.Links {
 			if strings.HasPrefix(d.Path, l.Path+"/") {
@@ -53,12 +54,12 @@ func (s Storage) Validate(c path.ContextPath) (r report.Report) {
 				r.AddOnError(c.Append("links", i), errors.ErrLinkUsedSymlink)
 			}
 		}
-		if l1.Hard == nil || !*l1.Hard {
+		if !util.IsTrue(l1.Hard) {
 			continue
 		}
-		target := filepath.Clean(l1.Target)
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(l1.Path, l1.Target)
+		target := path.Clean(l1.Target)
+		if !path.IsAbs(target) {
+			target = path.Join(l1.Path, l1.Target)
 		}
 		for _, d := range s.Directories {
 			if target == d.Path {

@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/golang/glog"
-	"k8s.io/api/admission/v1"
+	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -14,7 +14,7 @@ import (
 var namespace = os.Getenv("NAMESPACE")
 
 func RetriveSupportedNics() error {
-	if err := sriovnetworkv1.InitNicIdMap(kubeclient, namespace); err != nil {
+	if err := sriovnetworkv1.InitNicIDMap(kubeclient, namespace); err != nil {
 		return err
 	}
 	return nil
@@ -51,8 +51,6 @@ func ValidateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
 
 	if ar.Request.Operation == "DELETE" {
 		raw = ar.Request.OldObject.Raw
-	} else {
-		raw = ar.Request.Object.Raw
 	}
 
 	switch ar.Request.Kind.Kind {

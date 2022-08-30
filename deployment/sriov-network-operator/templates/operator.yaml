@@ -22,12 +22,22 @@ spec:
       nodeSelector:
       {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.operator.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8}}
+      {{- end }}
       {{- with .Values.operator.tolerations }}
       tolerations:
       {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "sriov-network-operator.fullname" . }}
       priorityClassName: "system-node-critical"
+      {{- if .ImagePullSecrets }}
+      imagePullSecrets:
+      {{- range .ImagePullSecrets }}
+      - name: {{ . }}
+      {{- end }}
+      {{- end }}
       containers:
         - name: {{ include "sriov-network-operator.fullname" . }}
           image: {{ .Values.images.operator }}
@@ -61,6 +71,8 @@ spec:
               value: {{ .Values.operator.resourcePrefix }}
             - name: ENABLE_ADMISSION_CONTROLLER
               value: {{ .Values.operator.enableAdmissionController | quote }}
+            - name: IMAGE_PULL_SECRETS
+              value: {{ join "," .Values.imagePullSecrets }}
             - name: NAMESPACE
               valueFrom:
                 fieldRef:

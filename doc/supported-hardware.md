@@ -5,6 +5,8 @@ The following SR-IOV capable hardware is supported with sriov-network-operator:
 | Model                    | Vendor ID | Device ID |
 | ------------------------ | --------- | --------- |
 | Intel XXV710 Family |  8086 | 158b |
+| Intel X557 Family |  8086 | 1589 |
+| Intel E810 Family | 8086  | 1591 |
 | Intel E810-CQDA2/2CQDA2 Family | 8086  | 1592 |
 | Intel E810-XXVDA4 Family | 8086  | 1593 |
 | Intel E810-XXVDA2 Family | 8086  | 159b |
@@ -31,6 +33,8 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Model                    | SR-IOV Kernel | SR-IOV DPDK | SR-IOV Hardware Offload (switchdev) |
 | ------------------------ | ------------- | ----------- |------------------------------------ |
 | Intel XXV710 Family | V | V | X |
+| Intel X557 Family | V | V | X |
+| Intel E810 Family | V | V | X |
 | Intel E810-CQDA2/2CQDA2 Family | V | V | X |
 | Intel E810-XXVDA4 Family | V | V | X |
 | Intel E810-XXVDA2 Family | V | V | X |
@@ -61,7 +65,7 @@ should follow the following procedure:
 * Add information of what was tested to the issue opened
 * Add contact point information to [vendor-support.md](https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/doc/vendor-support.md), so we know who to reach out if issues arise when running sriov-network-operator against the specified hardware.
 * Submit PR to add your device to this file as well as to supported-nic-ids configMap [here](https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/deployment/sriov-network-operator/templates/configmap.yaml) and [here](https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/deploy/configmap.yaml).
-  * The tables above should be updated according to what was tested 
+  * The tables above should be updated according to what was tested
 
 ## Continuous support
 To ensure sriov-network-operator continues to operate as expected on supported hardware it is recommended that hardware vendors (or another party)

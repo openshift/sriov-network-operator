@@ -23,7 +23,7 @@ func All() error {
 	if RestoreNodeDrainState {
 		err := cluster.SetDisableNodeDrainState(clients, operatorNamespace, false)
 		if err != nil {
-			return fmt.Errorf("Failed to restore node drain state %v", err)
+			return fmt.Errorf("failed to restore node drain state %v", err)
 		}
 	}
 	if !namespaces.Exists(namespaces.Test, clients) {
@@ -31,12 +31,12 @@ func All() error {
 	}
 	err := namespaces.DeleteAndWait(clients, namespaces.Test, 5*time.Minute)
 	if err != nil {
-		return fmt.Errorf("Failed to delete sriov tests namespace %v", err)
+		return fmt.Errorf("failed to delete sriov tests namespace %v", err)
 	}
 
 	err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, false)
 	if err != nil {
-		return fmt.Errorf("Failed to clean sriov resources %v", err)
+		return fmt.Errorf("failed to clean sriov resources %v", err)
 	}
 
 	return nil

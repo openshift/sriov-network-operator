@@ -23,7 +23,7 @@ var _ = Describe("Operator", func() {
 			config.SetName("ovs-hw-offload-config")
 			mcpName := "worker"
 			mc := &mcfgv1.MachineConfig{}
-			mcName := "00-" + mcpName + "-" + constants.OVS_HWOL_MACHINE_CONFIG_NAME_SUFFIX
+			mcName := "00-" + mcpName + "-" + constants.OVSHWOLMachineConfigNameSuffix
 			err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcName, Namespace: testNamespace}, mc)
 			Expect(errors.IsNotFound(err)).Should(BeTrue())
 

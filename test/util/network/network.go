@@ -49,7 +49,7 @@ func CreateSriovNetwork(clientSet *testclient.ClientSet, intf *sriovv1.Interface
 	return err
 }
 
-func defineSriovPolicy(generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string) *sriovv1.SriovNetworkNodePolicy {
+func defineSriovPolicy(generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string, options ...func(*sriovv1.SriovNetworkNodePolicy)) *sriovv1.SriovNetworkNodePolicy {
 	nodePolicy := &sriovv1.SriovNetworkNodePolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: generatedName,
@@ -68,12 +68,15 @@ func defineSriovPolicy(generatedName string, operatorNamespace string, sriovDevi
 			DeviceType: deviceType,
 		},
 	}
+	for _, o := range options {
+		o(nodePolicy)
+	}
 	return nodePolicy
 }
 
 // CreateSriovPolicy creates a SriovNetworkNodePolicy and returns it
-func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string) (*sriovv1.SriovNetworkNodePolicy, error) {
-	nodePolicy := defineSriovPolicy(generatedName, operatorNamespace, sriovDevice, testNode, numVfs, resourceName, deviceType)
+func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, operatorNamespace string, sriovDevice string, testNode string, numVfs int, resourceName string, deviceType string, options ...func(*sriovv1.SriovNetworkNodePolicy)) (*sriovv1.SriovNetworkNodePolicy, error) {
+	nodePolicy := defineSriovPolicy(generatedName, operatorNamespace, sriovDevice, testNode, numVfs, resourceName, deviceType, options...)
 	err := clientSet.Create(context.Background(), nodePolicy)
 	return nodePolicy, err
 }
@@ -98,10 +101,15 @@ func GetNicsByPrefix(pod *k8sv1.Pod, ifcPrefix string) ([]string, error) {
 // GetSriovNicIPs returns the list of ip addresses related to the given
 // interface name for the given pod.
 func GetSriovNicIPs(pod *k8sv1.Pod, ifcName string) ([]string, error) {
+	networksStatus, ok := pod.ObjectMeta.Annotations["k8s.v1.cni.cncf.io/networks-status"]
+	if !ok {
+		return nil, fmt.Errorf("pod [%s] has no annotation `k8s.v1.cni.cncf.io/networks-status`", pod.Name)
+	}
+
 	var nets []Network
-	err := json.Unmarshal([]byte(pod.ObjectMeta.Annotations["k8s.v1.cni.cncf.io/networks-status"]), &nets)
+	err := json.Unmarshal([]byte(networksStatus), &nets)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("can't unmarshal annotation `k8s.v1.cni.cncf.io/networks-status`: %w", err)
 	}
 	for _, net := range nets {
 		if net.Interface != ifcName {
@@ -109,7 +117,8 @@ func GetSriovNicIPs(pod *k8sv1.Pod, ifcName string) ([]string, error) {
 		}
 		return net.Ips, nil
 	}
-	return nil, nil
+
+	return nil, fmt.Errorf("interface [%s] not found in pod annotation", ifcName)
 }
 
 // Return a definition of a macvlan NetworkAttachmentDefinition
@@ -122,7 +131,7 @@ func CreateMacvlanNetworkAttachmentDefinition(name string, namespace string) net
 			Namespace: namespace,
 		},
 		Spec: netattdefv1.NetworkAttachmentDefinitionSpec{
-			Config: fmt.Sprintf(`{
+			Config: `{
 				"cniVersion": "0.3.0",
 				"type": "macvlan",
 				"mode": "bridge",
@@ -136,7 +145,7 @@ func CreateMacvlanNetworkAttachmentDefinition(name string, namespace string) net
 				  ],
 				  "gateway": "10.1.1.1"
 				}
-			  }`),
+			  }`,
 		},
 	}
 }

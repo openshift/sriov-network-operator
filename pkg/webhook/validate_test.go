@@ -15,12 +15,13 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	NicIdMap = []string{
+	NicIDMap = []string{
 		"8086 158a 154c", // I40e XXV710
 		"8086 158b 154c", // I40e 25G SFP28
 		"8086 1572 154c", // I40e 10G X710 SFP+
 		"8086 0d58 154c", // I40e XXV710 N3000
 		"8086 1583 154c", // I40e 40G XL710 QSFP+
+		"8086 1591 1889", // Columbiaville E810
 		"8086 1592 1889", // Columbiaville E810-CQDA2/2CQDA2
 		"8086 1593 1889", // Columbiaville E810-XXVDA4
 		"8086 159b 1889", // Columbiaville E810-XXVDA2
@@ -444,8 +445,7 @@ func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	var testEnv *envtest.Environment
-	testEnv = &envtest.Environment{}
+	var testEnv = &envtest.Environment{}
 
 	cfg, err := testEnv.Start()
 	g.Expect(err).ToNot(HaveOccurred())
