@@ -12,4 +12,4 @@ as `active-in-project` in the table below.
 | Nvidia(Mellanox) | active-in-project |
 | Intel | active-in-project |
 | HPE(Marvell Qlogic) | BSN_dev_support@hpe.com |
-
+| Marvell | navadiaev@marvell.com |
