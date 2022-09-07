@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 
 	"github.com/golang/glog"
@@ -34,8 +35,8 @@ func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operati
 	glog.V(2).Infof("validateSriovOperatorConfig: %v", cr)
 	var warnings []string
 
-	if cr.GetName() == "default" {
-		if operation == "DELETE" {
+	if cr.GetName() == constants.DefaultConfigName {
+		if operation == v1.Delete {
 			return false, warnings, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
 		}
 
@@ -51,8 +52,8 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 	glog.V(2).Infof("validateSriovNetworkNodePolicy: %v", cr)
 	var warnings []string
 
-	if cr.GetName() == "default" && cr.GetNamespace() == os.Getenv("NAMESPACE") {
-		if operation == "DELETE" {
+	if cr.GetName() == constants.DefaultPolicyName && cr.GetNamespace() == os.Getenv("NAMESPACE") {
+		if operation == v1.Delete {
 			// reject deletion of default policy
 			return false, warnings, fmt.Errorf("default SriovNetworkNodePolicy shouldn't be deleted")
 		} else {
@@ -67,7 +68,7 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 	}
 
 	// DELETE should always succeed unless it's for the default object
-	if operation == "DELETE" {
+	if operation == v1.Delete {
 		return true, warnings, nil
 	}
 
@@ -152,7 +153,7 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	if cr.Spec.DeviceType == "vfio-pci" && cr.Spec.IsRdma {
 		return false, fmt.Errorf("'deviceType: vfio-pci' conflicts with 'isRdma: true'; Set 'deviceType' to (string)'netdevice' Or Set 'isRdma' to (bool)'false'")
 	}
-	if strings.ToLower(cr.Spec.LinkType) == "ib" && !cr.Spec.IsRdma {
+	if strings.EqualFold(cr.Spec.LinkType, constants.LinkTypeIB) && !cr.Spec.IsRdma {
 		return false, fmt.Errorf("'linkType: ib or IB' requires 'isRdma: true'; Set 'isRdma' to (bool)'true'")
 	}
 	return true, nil
@@ -212,7 +213,7 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 	for _, iface := range state.Status.Interfaces {
 		if validateNicModel(&policy.Spec.NicSelector, &iface, node) {
 			interfaceSelected = true
-			if policy.GetName() != "default" && policy.Spec.NumVfs == 0 {
+			if policy.GetName() != constants.DefaultPolicyName && policy.Spec.NumVfs == 0 {
 				return false, fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
 			}
 			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID {

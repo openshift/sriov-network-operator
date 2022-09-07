@@ -40,7 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	//+kubebuilder:scaffold:imports
 )
 

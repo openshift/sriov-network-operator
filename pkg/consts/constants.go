@@ -1,4 +1,4 @@
-package utils
+package consts
 
 import "time"
 
@@ -16,9 +16,17 @@ const (
 	DaemonPath                     = "./bindata/manifests/daemon"
 	DefaultPolicyName              = "default"
 	ConfigMapName                  = "device-plugin-config"
+	DaemonSet                      = "DaemonSet"
+	ServiceAccount                 = "ServiceAccount"
 	DPConfigFileName               = "config.json"
 	OVSHWOLMachineConfigNameSuffix = "ovs-hw-offload"
 
 	LinkTypeEthernet   = "ether"
 	LinkTypeInfiniband = "infiniband"
+
+	LinkTypeIB  = "IB"
+	LinkTypeETH = "ETH"
+
+	DeviceTypeVfioPci   = "vfio-pci"
+	DeviceTypeNetDevice = "netdevice"
 )

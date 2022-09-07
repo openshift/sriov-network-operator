@@ -21,6 +21,8 @@ import (
 	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
+const on = "on"
+
 var _ = Describe("SriovNetwork Controller", func() {
 
 	Context("with SriovNetwork", func() {
@@ -38,12 +40,12 @@ var _ = Describe("SriovNetwork Controller", func() {
 			"test-2": {
 				ResourceName: "resource_1",
 				IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
-				SpoofChk:     "on",
+				SpoofChk:     on,
 			},
 			"test-3": {
 				ResourceName: "resource_1",
 				IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
-				Trust:        "on",
+				Trust:        on,
 			},
 			"test-4": {
 				ResourceName: "resource_1",
@@ -102,12 +104,12 @@ var _ = Describe("SriovNetwork Controller", func() {
 			"new-2": {
 				ResourceName: "resource_1",
 				IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
-				SpoofChk:     "on",
+				SpoofChk:     on,
 			},
 			"new-3": {
 				ResourceName: "resource_1",
 				IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
-				Trust:        "on",
+				Trust:        on,
 			},
 		}
 		newsriovnets := util.GenerateSriovNetworkCRs(testNamespace, newSpecs)

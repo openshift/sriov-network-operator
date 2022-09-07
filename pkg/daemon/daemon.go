@@ -103,12 +103,14 @@ type Daemon struct {
 }
 
 const (
-	rdmaScriptsPath = "/bindata/scripts/enable-rdma.sh"
-	udevScriptsPath = "/bindata/scripts/load-udev.sh"
-	annoKey         = "sriovnetwork.openshift.io/state"
-	annoIdle        = "Idle"
-	annoDraining    = "Draining"
-	annoMcpPaused   = "Draining_MCP_Paused"
+	rdmaScriptsPath     = "/bindata/scripts/enable-rdma.sh"
+	udevScriptsPath     = "/bindata/scripts/load-udev.sh"
+	annoKey             = "sriovnetwork.openshift.io/state"
+	annoIdle            = "Idle"
+	annoDraining        = "Draining"
+	annoMcpPaused       = "Draining_MCP_Paused"
+	syncStatusSucceeded = "Succeeded"
+	syncStatusFailed    = "Failed"
 )
 
 var namespace = os.Getenv("NAMESPACE")
@@ -276,7 +278,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 		case err := <-exitCh:
 			glog.Warningf("Got an error: %v", err)
 			dn.refreshCh <- Message{
-				syncStatus:    "Failed",
+				syncStatus:    syncStatusFailed,
 				lastSyncError: err.Error(),
 			}
 			return err
@@ -332,7 +334,7 @@ func (dn *Daemon) processNextWorkItem() bool {
 		if err != nil {
 			// Ereport error message, and put the item back to work queue for retry.
 			dn.refreshCh <- Message{
-				syncStatus:    "Failed",
+				syncStatus:    syncStatusFailed,
 				lastSyncError: err.Error(),
 			}
 			<-dn.syncCh
@@ -409,9 +411,9 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	if dn.nodeState.GetGeneration() == latest {
 		glog.V(0).Infof("nodeStateSyncHandler(): Interface not changed")
 		if latestState.Status.LastSyncError != "" ||
-			latestState.Status.SyncStatus != "Succeeded" {
+			latestState.Status.SyncStatus != syncStatusSucceeded {
 			dn.refreshCh <- Message{
-				syncStatus:    "Succeeded",
+				syncStatus:    syncStatusSucceeded,
 				lastSyncError: "",
 			}
 			// wait for writer to refresh the status
@@ -549,7 +551,7 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	glog.Info("nodeStateSyncHandler(): sync succeeded")
 	dn.nodeState = latestState.DeepCopy()
 	dn.refreshCh <- Message{
-		syncStatus:    "Succeeded",
+		syncStatus:    syncStatusSucceeded,
 		lastSyncError: "",
 	}
 	// wait for writer to refresh the status

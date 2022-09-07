@@ -94,7 +94,7 @@ func (w *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message
 				continue
 			}
 			w.setNodeStateStatus(msg)
-			if msg.syncStatus == "Succeeded" || msg.syncStatus == "Failed" {
+			if msg.syncStatus == syncStatusSucceeded || msg.syncStatus == syncStatusFailed {
 				syncCh <- struct{}{}
 			}
 		case <-time.After(30 * time.Second):
@@ -154,7 +154,7 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 func (w *NodeStateStatusWriter) setNodeStateStatus(msg Message) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	nodeState, err := w.updateNodeStateStatusRetry(func(nodeState *sriovnetworkv1.SriovNetworkNodeState) {
 		nodeState.Status.Interfaces = w.status.Interfaces
-		if msg.lastSyncError != "" || msg.syncStatus == "Succeeded" {
+		if msg.lastSyncError != "" || msg.syncStatus == syncStatusSucceeded {
 			// clear lastSyncError when sync Succeeded
 			nodeState.Status.LastSyncError = msg.lastSyncError
 		}

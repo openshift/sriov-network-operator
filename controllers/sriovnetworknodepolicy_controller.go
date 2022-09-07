@@ -45,8 +45,8 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 // SriovNetworkNodePolicyReconciler reconciles a SriovNetworkNodePolicy object
@@ -295,7 +295,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(np *sriovne
 		// it should not matter since the flag used in p.Apply() will only be applied when VF partition is detected.
 		ppp := 100
 		for _, p := range npl.Items {
-			if p.Name == "default" {
+			if p.Name == constants.DefaultPolicyName {
 				continue
 			}
 			if p.Selected(node) {
@@ -361,7 +361,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(dp *sriovnetwork
 
 	// Sync DaemonSets
 	for _, obj := range objs {
-		if obj.GetKind() == "DaemonSet" && len(defaultConfig.Spec.ConfigDaemonNodeSelector) > 0 {
+		if obj.GetKind() == constants.DaemonSet && len(defaultConfig.Spec.ConfigDaemonNodeSelector) > 0 {
 			scheme := kscheme.Scheme
 			ds := &appsv1.DaemonSet{}
 			err = scheme.Convert(obj, ds, nil)
@@ -457,7 +457,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDsObject(dp *sriovnetworkv1.Sriov
 			logger.Error(err, "Fail to sync", "Kind", kind)
 			return err
 		}
-	case "DaemonSet":
+	case constants.DaemonSet:
 		ds := &appsv1.DaemonSet{}
 		err := r.Scheme.Convert(obj, ds, nil)
 		r.syncDaemonSet(dp, pl, ds)
@@ -579,7 +579,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 	logger.Info("Start to render device plugin config data")
 	rcl := dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
-		if p.Name == "default" {
+		if p.Name == constants.DefaultPolicyName {
 			continue
 		}
 
@@ -614,10 +614,10 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 				netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
 			// vfio-pci device link type is not detectable
-			if p.Spec.DeviceType != "vfio-pci" {
+			if p.Spec.DeviceType != constants.DeviceTypeVfioPci {
 				if p.Spec.LinkType != "" {
 					linkType := constants.LinkTypeEthernet
-					if strings.ToLower(p.Spec.LinkType) == "ib" {
+					if strings.EqualFold(p.Spec.LinkType, constants.LinkTypeIB) {
 						linkType = constants.LinkTypeInfiniband
 					}
 					if !sriovnetworkv1.StringInArray(linkType, netDeviceSelectors.LinkTypes) {
@@ -629,7 +629,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 				netDeviceSelectors.RootDevices = sriovnetworkv1.UniqueAppend(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
 			}
 			// Removed driver constraint for "netdevice" DeviceType
-			if p.Spec.DeviceType == "vfio-pci" {
+			if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
 				netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, p.Spec.DeviceType)
 			}
 			// Enable the selection of devices using NetFilter
@@ -680,10 +680,10 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 				netDeviceSelectors.PfNames = append(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
 			}
 			// vfio-pci device link type is not detectable
-			if p.Spec.DeviceType != "vfio-pci" {
+			if p.Spec.DeviceType != constants.DeviceTypeVfioPci {
 				if p.Spec.LinkType != "" {
 					linkType := constants.LinkTypeEthernet
-					if strings.ToLower(p.Spec.LinkType) == "ib" {
+					if strings.EqualFold(p.Spec.LinkType, constants.LinkTypeIB) {
 						linkType = constants.LinkTypeInfiniband
 					}
 					netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
@@ -693,7 +693,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(pl *srio
 				netDeviceSelectors.RootDevices = append(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
 			}
 			// Removed driver constraint for "netdevice" DeviceType
-			if p.Spec.DeviceType == "vfio-pci" {
+			if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
 				netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, p.Spec.DeviceType)
 			}
 			// Enable the selection of devices using NetFilter

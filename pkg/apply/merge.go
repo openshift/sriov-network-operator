@@ -4,6 +4,8 @@ import (
 	"github.com/pkg/errors"
 
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 
 // MergeMetadataForUpdate merges the read-only fields of metadata.
@@ -93,7 +95,7 @@ func MergeServiceForUpdate(current, updated *uns.Unstructured) error {
 // any secrets ourselves.
 func MergeServiceAccountForUpdate(current, updated *uns.Unstructured) error {
 	gvk := updated.GroupVersionKind()
-	if gvk.Group == "" && gvk.Kind == "ServiceAccount" {
+	if gvk.Group == "" && gvk.Kind == constants.ServiceAccount {
 		curSecrets, ok, err := uns.NestedSlice(current.Object, "secrets")
 		if err != nil {
 			return err

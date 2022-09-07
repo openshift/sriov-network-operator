@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
@@ -97,7 +98,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 		return reconcile.Result{}, err
 	}
 
-	return reconcile.Result{RequeueAfter: utils.ResyncPeriod}, nil
+	return reconcile.Result{RequeueAfter: constants.ResyncPeriod}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -111,7 +112,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 	logger := log.Log.WithName("syncOvsHardwareOffloadMachineConfigs")
 
 	mcpName := nc.Spec.OvsHardwareOffloadConfig.Name
-	mcName := "00-" + mcpName + "-" + utils.OVSHWOLMachineConfigNameSuffix
+	mcName := "00-" + mcpName + "-" + constants.OVSHWOLMachineConfigNameSuffix
 
 	foundMC := &mcfgv1.MachineConfig{}
 	mcp := &mcfgv1.MachineConfigPool{}
