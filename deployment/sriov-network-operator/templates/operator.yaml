@@ -81,6 +81,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: RELEASE_VERSION
               value: {{ .Release.AppVersion }}
             - name: SRIOV_CNI_BIN_PATH
