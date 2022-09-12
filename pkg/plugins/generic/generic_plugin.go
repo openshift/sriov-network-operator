@@ -88,12 +88,21 @@ func (p *GenericPlugin) Apply() error {
 			return nil
 		}
 	}
+
+	// Create a map with all the PFs we will need to configure
+	// we need to create it here before we access the host file system using the chroot function
+	// because the skipConfigVf needs the mstconfig package that exist only inside the sriov-config-daemon file system
+	pfsToSkip, err := utils.GetPfsToSkip(p.DesireState)
+	if err != nil {
+		return err
+	}
+
 	exit, err := utils.Chroot("/host")
 	if err != nil {
 		return err
 	}
 	defer exit()
-	if err := utils.SyncNodeState(p.DesireState); err != nil {
+	if err := utils.SyncNodeState(p.DesireState, pfsToSkip); err != nil {
 		return err
 	}
 	p.LastState = &sriovnetworkv1.SriovNetworkNodeState{}

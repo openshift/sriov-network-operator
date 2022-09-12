@@ -147,7 +147,7 @@ func DiscoverSriovDevices(withUnsupported bool) ([]sriovnetworkv1.InterfaceExt, 
 
 // SyncNodeState Attempt to update the node state to match the desired state
 //
-func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
+func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToConfig map[string]bool) error {
 	if IsKernelLockdownMode(true) && hasMellanoxInterfacesInSpec(newState) {
 		glog.Warningf("cannot use mellanox devices when in kernel lockdown mode")
 		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
@@ -158,10 +158,11 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 		for _, iface := range newState.Spec.Interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
-				if SkipConfigVf(iface, ifaceStatus) {
-					glog.V(2).Infof("syncNodeState(): skip config VF in config daemon for %s, it shall be done by switchdev-configuration.service", iface.PciAddress)
+
+				if skip := pfsToConfig[iface.PciAddress]; skip {
 					break
 				}
+
 				if !NeedUpdate(&iface, &ifaceStatus) {
 					glog.V(2).Infof("syncNodeState(): no need update interface %s", iface.PciAddress)
 					break
@@ -176,7 +177,11 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 				break
 			}
 		}
-		if !configured && ifaceStatus.NumVfs > 0 && !SkipConfigVf(sriovnetworkv1.Interface{}, ifaceStatus) {
+		if !configured && ifaceStatus.NumVfs > 0 {
+			if skip := pfsToConfig[ifaceStatus.PciAddress]; skip {
+				continue
+			}
+
 			if err = resetSriovDevice(ifaceStatus); err != nil {
 				return err
 			}
@@ -185,18 +190,51 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 	return nil
 }
 
-// SkipConfigVf Use systemd service to configure switchdev mode or BF-2 NICs in OpenShift
-func SkipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.InterfaceExt) bool {
+// skipConfigVf Use systemd service to configure switchdev mode or BF-2 NICs in OpenShift
+func skipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.InterfaceExt) (bool, error) {
 	if ifSpec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-		glog.V(2).Infof("SkipConfigVf(): skip config VF for switchdev device")
-		return true
+		glog.V(2).Infof("skipConfigVf(): skip config VF for switchdev device")
+		return true, nil
 	}
+
 	// Nvidia_mlx5_MT42822_BlueField-2_integrated_ConnectX-6_Dx in OpenShift
 	if ClusterType == ClusterTypeOpenshift && ifStatus.Vendor == VendorMellanox && ifStatus.DeviceID == DeviceBF2 {
-		glog.V(2).Infof("SkipConfigVf(): skip config VF for BF2 device")
-		return true
+		// TODO: remove this when switch to the systemd configuration support.
+		mode, err := mellanoxBlueFieldMode(ifStatus.PciAddress)
+		if err != nil {
+			return false, fmt.Errorf("failed to read Mellanox Bluefield card mode for %s,%v", ifStatus.PciAddress, err)
+		}
+
+		if mode == bluefieldConnectXMode {
+			return false, nil
+		}
+
+		glog.V(2).Infof("skipConfigVf(): skip config VF for Bluefiled card on DPU mode")
+		return true, nil
 	}
-	return false
+
+	return false, nil
+}
+
+// GetPfsToSkip return a map of devices pci addresses to should be configured via systemd instead if the legacy mode
+// we skip devices in switchdev mode and Bluefield card in ConnectX mode
+func GetPfsToSkip(ns *sriovnetworkv1.SriovNetworkNodeState) (map[string]bool, error) {
+	pfsToSkip := map[string]bool{}
+	for _, ifaceStatus := range ns.Status.Interfaces {
+		for _, iface := range ns.Spec.Interfaces {
+			if iface.PciAddress == ifaceStatus.PciAddress {
+				skip, err := skipConfigVf(iface, ifaceStatus)
+				if err != nil {
+					glog.Errorf("GetPfsToSkip(): fail to check for skip VFs %s: %v.", iface.PciAddress, err)
+					return pfsToSkip, err
+				}
+				pfsToSkip[iface.PciAddress] = skip
+				break
+			}
+		}
+	}
+
+	return pfsToSkip, nil
 }
 
 func NeedUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
