@@ -2,7 +2,6 @@ package mellanox
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -215,24 +214,17 @@ func configFW() error {
 	return nil
 }
 
-func mstConfigReadData(pciAddress string) (string, error) {
-	glog.Infof("mellanox-plugin mstConfigReadData(): device %s", pciAddress)
-	args := []string{"-e", "-d", pciAddress, "q"}
-	out, err := utils.RunCommand("mstconfig", args...)
-	return out, err
-}
-
 func getMlnxNicFwData(pciAddress string) (current, next *mlnxNic, err error) {
 	glog.Infof("mellanox-plugin getMlnxNicFwData(): device %s", pciAddress)
 	err = nil
 	attrs := []string{TotalVfs, EnableSriov, LinkTypeP1, LinkTypeP2}
 
-	out, err := mstConfigReadData(pciAddress)
+	out, err := utils.MstConfigReadData(pciAddress)
 	if err != nil {
 		glog.Errorf("mellanox-plugin getMlnxNicFwData(): failed %v", err)
 		return
 	}
-	mstCurrentData, mstNextData := parseMstconfigOutput(out, attrs)
+	mstCurrentData, mstNextData := utils.ParseMstconfigOutput(out, attrs)
 	current, err = mlnxNicFromMap(mstCurrentData)
 	if err != nil {
 		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
@@ -263,25 +255,6 @@ func mlnxNicFromMap(mstData map[string]string) (*mlnxNic, error) {
 	}
 
 	return fwData, nil
-}
-
-func parseMstconfigOutput(mstOutput string, attributes []string) (fwCurrent, fwNext map[string]string) {
-	glog.Infof("mellanox-plugin parseMstconfigOutput(): Attributes %v", attributes)
-	fwCurrent = map[string]string{}
-	fwNext = map[string]string{}
-	formatRegex := regexp.MustCompile(`(?P<Attribute>\w+)\s+(?P<Default>\S+)\s+(?P<Current>\S+)\s+(?P<Next>\S+)`)
-	mstOutputLines := strings.Split(mstOutput, "\n")
-	for _, attr := range attributes {
-		for _, line := range mstOutputLines {
-			if strings.Contains(line, attr) {
-				regexResult := formatRegex.FindStringSubmatch(line)
-				fwCurrent[attr] = regexResult[3]
-				fwNext[attr] = regexResult[4]
-				break
-			}
-		}
-	}
-	return
 }
 
 func getPciAddressPrefix(pciAddress string) string {
