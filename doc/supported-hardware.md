@@ -16,6 +16,7 @@ The following SR-IOV capable hardware is supported with sriov-network-operator:
 | Mellanox MT28800 Family [ConnectX-5 Ex] | 15b3 | 1019 |
 | Mellanox MT28908 Family [ConnectX-6] | 15b3 | 101b |
 | Mellanox MT28908 Family [ConnectX-6 Dx] | 15b3 | 101d |
+| Mellanox MT28908 Family [ConnectX-6 Lx] | 15b3 | 101f |
 | Mellanox MT42822 BlueField-2 integrated ConnectX-6 Dx | 15b3 | a2d6 |
 | Qlogic QL45000 Series 50GbE Controller | 1077 | 1654 |
 
@@ -44,6 +45,7 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Mellanox MT28800 Family [ConnectX-5 Ex] | V | V | V |
 | Mellanox MT28908 Family [ConnectX-6] | V | V | V |
 | Mellanox MT28908 Family [ConnectX-6 Dx] | V | V | V |
+| Mellanox MT28908 Family [ConnectX-6 Lx] | V | V | V |
 | Mellanox MT42822 BlueField-2 integrated ConnectX-6 Dx | V | V | V |
 | Qlogic QL45000 Series 50GbE Controller | V | X | X |
 
