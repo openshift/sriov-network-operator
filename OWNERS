@@ -7,7 +7,7 @@ reviewers:
   - SchSeba
   - bn222
   - Billy99
-  - fabrizio8
+  - wizhaoredhat
 approvers:
   - pliurh
   - zshi-redhat
@@ -18,6 +18,6 @@ approvers:
   - SchSeba
   - bn222
   - Billy99
-  - fabrizio8
+  - wizhaoredhat
 component: "Networking"
 subcomponent: "SR-IOV"
