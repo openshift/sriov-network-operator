@@ -54,3 +54,6 @@ rules:
 - apiGroups: ["machineconfiguration.openshift.io"]
   resources: ["*"]
   verbs: ["*"]
+- apiGroups: [ "config.openshift.io" ]
+  resources: [ "infrastructures" ]
+  verbs: [ "get", "list", "watch" ]

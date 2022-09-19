@@ -390,7 +390,7 @@ func tryToGetVirtualInterfaceName(pciAddr string) string {
 }
 
 // SyncNodeStateVirtual attempt to update the node state to match the desired state
-//  in virtual platforms
+// in virtual platforms
 func SyncNodeStateVirtual(newState *sriovnetworkv1.SriovNetworkNodeState) error {
 	var err error
 	for _, ifaceStatus := range newState.Status.Interfaces {
