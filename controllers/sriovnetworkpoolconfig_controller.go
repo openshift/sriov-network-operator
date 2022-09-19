@@ -41,6 +41,14 @@ type SriovNetworkPoolConfigReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.6.4/pkg/reconcile
 func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("sriovnetworkpoolconfig", req.NamespacedName)
+	isHypershift := false
+	if utils.ClusterType == utils.ClusterTypeOpenshift {
+		var err error
+		if isHypershift, err = utils.IsExternalControlPlaneCluster(r.Client); err != nil {
+			return reconcile.Result{}, err
+		}
+		logger = logger.WithValues("isHypershift", isHypershift)
+	}
 	logger.Info("Reconciling")
 
 	// // Fetch SriovNetworkPoolConfig
@@ -70,8 +78,12 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 			}
 		}
 		if utils.ClusterType == utils.ClusterTypeOpenshift {
-			if err = r.syncOvsHardwareOffloadMachineConfigs(instance, false); err != nil {
-				return reconcile.Result{}, err
+			if !isHypershift {
+				if err = r.syncOvsHardwareOffloadMachineConfigs(instance, false); err != nil {
+					return reconcile.Result{}, err
+				}
+			} else {
+				logger.Info("Ignoring request to enable HWOL (running on Hypershift)")
 			}
 		}
 	} else {
@@ -79,7 +91,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 		if sriovnetworkv1.StringInArray(sriovnetworkv1.POOLCONFIGFINALIZERNAME, instance.ObjectMeta.Finalizers) {
 			// our finalizer is present, so lets handle any external dependency
 			logger.Info("delete SriovNetworkPoolConfig CR", "Namespace", instance.Namespace, "Name", instance.Name)
-			if utils.ClusterType == utils.ClusterTypeOpenshift {
+			if utils.ClusterType == utils.ClusterTypeOpenshift && !isHypershift {
 				if err = r.syncOvsHardwareOffloadMachineConfigs(instance, true); err != nil {
 					// if fail to delete the external dependency here, return with error
 					// so that it can be retried
