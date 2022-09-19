@@ -100,7 +100,10 @@ var _ = Describe("Config Daemon", func() {
 		sut = New("test-node",
 			client,
 			kubeClient,
-			mcClient,
+			utils.OpenshiftContext{
+				McClient:        mcClient,
+				OpenshiftFlavor: utils.OpenshiftFlavorDefault,
+			},
 			exitCh,
 			stopCh,
 			syncCh,
