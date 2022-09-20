@@ -20,9 +20,9 @@ type FakeSriovNetworkNodePolicies struct {
 	ns   string
 }
 
-var sriovnetworknodepoliciesResource = schema.GroupVersionResource{Group: "sriovnetwork", Version: "v1", Resource: "sriovnetworknodepolicies"}
+var sriovnetworknodepoliciesResource = schema.GroupVersionResource{Group: "sriovnetwork.openshift.io", Version: "v1", Resource: "sriovnetworknodepolicies"}
 
-var sriovnetworknodepoliciesKind = schema.GroupVersionKind{Group: "sriovnetwork", Version: "v1", Kind: "SriovNetworkNodePolicy"}
+var sriovnetworknodepoliciesKind = schema.GroupVersionKind{Group: "sriovnetwork.openshift.io", Version: "v1", Kind: "SriovNetworkNodePolicy"}
 
 // Get takes name of the sriovNetworkNodePolicy, and returns the corresponding sriovNetworkNodePolicy object, and an error if there is any.
 func (c *FakeSriovNetworkNodePolicies) Get(ctx context.Context, name string, options v1.GetOptions) (result *sriovnetworkv1.SriovNetworkNodePolicy, err error) {

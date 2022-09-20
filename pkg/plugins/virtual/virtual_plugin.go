@@ -5,6 +5,7 @@ import (
 
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
@@ -108,7 +109,7 @@ func (p *VirtualPlugin) Apply() error {
 func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
 	for _, iface := range state.Spec.Interfaces {
 		for i := range iface.VfGroups {
-			if iface.VfGroups[i].DeviceType == "vfio-pci" {
+			if iface.VfGroups[i].DeviceType == constants.DeviceTypeVfioPci {
 				return true
 			}
 		}

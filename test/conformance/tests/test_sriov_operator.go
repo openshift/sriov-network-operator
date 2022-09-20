@@ -45,6 +45,13 @@ var snoTimeoutMultiplier time.Duration = 0
 const (
 	operatorNetworkInjectorFlag = "network-resources-injector"
 	operatorWebhookFlag         = "operator-webhook"
+	on                          = "on"
+	off                         = "off"
+	testResourceName            = "testresource"
+	testIpv6NetworkName         = "test-ipv6network"
+	volumePodNetInfo            = "podnetinfo"
+	ipamIpv6                    = `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+	ipamIpv4                    = `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
 )
 
 type patchBody struct {
@@ -166,7 +173,7 @@ var _ = Describe("[sriov] operator", func() {
 
 	Describe("Generic SriovNetworkNodePolicy", func() {
 		numVfs := 5
-		resourceName := "testresource"
+		resourceName := testResourceName
 		var node string
 		var sriovDevice *sriovv1.InterfaceExt
 		var discoveryFailed bool
@@ -253,7 +260,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				var downwardVolume *corev1.Volume
 				for _, v := range runningPod.Spec.Volumes {
-					if v.Name == "podnetinfo" {
+					if v.Name == volumePodNetInfo {
 						downwardVolume = v.DeepCopy()
 						break
 					}
@@ -316,7 +323,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				var downwardVolume *corev1.Volume
 				for _, v := range runningPod.Spec.Volumes {
-					if v.Name == "podnetinfo" {
+					if v.Name == volumePodNetInfo {
 						downwardVolume = v.DeepCopy()
 						break
 					}
@@ -432,7 +439,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				By("configuring spoofChk on")
 				copyObj := sriovNetwork.DeepCopy()
-				copyObj.Spec.SpoofChk = "on"
+				copyObj.Spec.SpoofChk = on
 				spoofChkStatusValidation := "spoof checking on"
 				err := clients.Create(context.Background(), copyObj)
 				Expect(err).ToNot(HaveOccurred())
@@ -452,7 +459,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				By("configuring spoofChk off")
 				copyObj = sriovNetwork.DeepCopy()
-				copyObj.Spec.SpoofChk = "off"
+				copyObj.Spec.SpoofChk = off
 				spoofChkStatusValidation = "spoof checking off"
 				err = clients.Create(context.Background(), copyObj)
 				Expect(err).ToNot(HaveOccurred())
@@ -477,7 +484,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				By("configuring trust on")
 				copyObj := sriovNetwork.DeepCopy()
-				copyObj.Spec.Trust = "on"
+				copyObj.Spec.Trust = on
 				trustChkStatusValidation := "trust on"
 				err := clients.Create(context.Background(), copyObj)
 				Expect(err).ToNot(HaveOccurred())
@@ -496,7 +503,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				By("configuring trust off")
 				copyObj = sriovNetwork.DeepCopy()
-				copyObj.Spec.Trust = "off"
+				copyObj.Spec.Trust = off
 				trustChkStatusValidation = "trust off"
 				err = clients.Create(context.Background(), copyObj)
 				Expect(err).ToNot(HaveOccurred())
@@ -653,7 +660,7 @@ var _ = Describe("[sriov] operator", func() {
 		Context("Multiple sriov device and attachment", func() {
 			// 25834
 			It("Should configure multiple network attachments", func() {
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				ipam := ipamIpv4
 				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() error {
@@ -671,8 +678,8 @@ var _ = Describe("[sriov] operator", func() {
 		Context("IPv6 configured secondary interfaces on pods", func() {
 			// 25874
 			It("should be able to ping each other", func() {
-				ipv6NetworkName := "test-ipv6network"
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				ipv6NetworkName := testIpv6NetworkName
+				ipam := ipamIpv6
 				err := network.CreateSriovNetwork(clients, sriovDevice, ipv6NetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() error {
@@ -703,7 +710,7 @@ var _ = Describe("[sriov] operator", func() {
 				err = namespaces.Create(ns2, clients)
 				Expect(err).ToNot(HaveOccurred())
 
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				ipam := ipamIpv4
 				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, ns1, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() error {
@@ -768,7 +775,7 @@ var _ = Describe("[sriov] operator", func() {
 		Context("SRIOV and macvlan", func() {
 			// 25834
 			It("Should be able to create a pod with both sriov and macvlan interfaces", func() {
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				ipam := ipamIpv4
 				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() error {
@@ -808,7 +815,7 @@ var _ = Describe("[sriov] operator", func() {
 
 		Context("Meta Plugin Configuration", func() {
 			It("Should be able to configure a metaplugin", func() {
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				ipam := ipamIpv4
 				config := func(network *sriovv1.SriovNetwork) {
 					network.Spec.MetaPluginsConfig = `{ "type": "tuning", "sysctl": { "net.ipv4.conf.IFNAME.accept_redirects": "1"}}`
 				}
@@ -839,7 +846,7 @@ var _ = Describe("[sriov] operator", func() {
 				By("Create first Pod which consumes all available VFs")
 				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
 				Expect(err).ToNot(HaveOccurred())
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				ipam := ipamIpv6
 				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() error {
@@ -970,7 +977,7 @@ var _ = Describe("[sriov] operator", func() {
 				})
 
 				It("Should be possible to partition the pf's vfs", func() {
-					_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name+"#2-4", vfioNode, 5, "testresource", "netdevice")
+					_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name+"#2-4", vfioNode, 5, testResourceName, "netdevice")
 					Expect(err).ToNot(HaveOccurred())
 
 					Eventually(func() sriovv1.Interfaces {
@@ -986,7 +993,7 @@ var _ = Describe("[sriov] operator", func() {
 								MatchFields(
 									IgnoreExtras,
 									Fields{
-										"ResourceName": Equal("testresource"),
+										"ResourceName": Equal(testResourceName),
 										"DeviceType":   Equal("netdevice"),
 										"VfRange":      Equal("2-4"),
 									})),
@@ -1019,7 +1026,7 @@ var _ = Describe("[sriov] operator", func() {
 									MatchFields(
 										IgnoreExtras,
 										Fields{
-											"ResourceName": Equal("testresource"),
+											"ResourceName": Equal(testResourceName),
 											"DeviceType":   Equal("netdevice"),
 											"VfRange":      Equal("2-4"),
 										})),
@@ -1076,7 +1083,7 @@ var _ = Describe("[sriov] operator", func() {
 								"kubernetes.io/hostname": node,
 							},
 							NumVfs:       5,
-							ResourceName: "testresource",
+							ResourceName: testResourceName,
 							Priority:     99,
 							NicSelector: sriovv1.SriovNetworkNicSelector{
 								PfNames: []string{intf.Name + "#1-4"},
@@ -1097,7 +1104,7 @@ var _ = Describe("[sriov] operator", func() {
 						Fields{
 							"Name":     Equal(intf.Name),
 							"NumVfs":   Equal(5),
-							"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: "testresource", DeviceType: "netdevice", VfRange: "1-4", PolicyName: firstConfig.Name}),
+							"VfGroups": ContainElement(sriovv1.VfGroup{ResourceName: testResourceName, DeviceType: "netdevice", VfRange: "1-4", PolicyName: firstConfig.Name}),
 						})))
 
 					secondConfig := &sriovv1.SriovNetworkNodePolicy{
@@ -1143,7 +1150,7 @@ var _ = Describe("[sriov] operator", func() {
 					if !ok {
 						Skip("Could not find a policy configured to use the main pf")
 					}
-					ipam := `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+					ipam := ipamIpv4
 					err := network.CreateSriovNetwork(clients, mainDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 					Expect(err).ToNot(HaveOccurred())
 					Eventually(func() error {
@@ -1156,7 +1163,7 @@ var _ = Describe("[sriov] operator", func() {
 			Context("PF shutdown", func() {
 				// 29398
 				It("Should be able to create pods successfully if PF is down.Pods are able to communicate with each other on the same node", func() {
-					resourceName := "testresource"
+					resourceName := testResourceName
 					var testNode string
 					var unusedSriovDevice *sriovv1.InterfaceExt
 
@@ -1305,7 +1312,7 @@ var _ = Describe("[sriov] operator", func() {
 
 					// We need this to be able to run the connectivity checks on Mellanox cards
 					if intf.DeviceID == "1015" {
-						sriovNetwork.Spec.SpoofChk = "off"
+						sriovNetwork.Spec.SpoofChk = off
 					}
 
 					err = clients.Create(context.Background(), sriovNetwork)
@@ -1367,7 +1374,7 @@ var _ = Describe("[sriov] operator", func() {
 
 		Context("Nic Validation", func() {
 			numVfs := 5
-			resourceName := "testresource"
+			resourceName := testResourceName
 
 			BeforeEach(func() {
 				if discovery.Enabled() {
@@ -1442,8 +1449,8 @@ var _ = Describe("[sriov] operator", func() {
 				}, 10*time.Minute, time.Second).Should(Equal(int64(numVfs)))
 
 				By("creating a network object")
-				ipv6NetworkName := "test-ipv6network"
-				ipam := `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
+				ipv6NetworkName := testIpv6NetworkName
+				ipam := ipamIpv4
 				err = network.CreateSriovNetwork(clients, &nic, ipv6NetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() error {
@@ -1626,7 +1633,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				// We need this to be able to run the connectivity checks on Mellanox cards
 				if intf.DeviceID == "1015" {
-					sriovNetwork.Spec.SpoofChk = "off"
+					sriovNetwork.Spec.SpoofChk = off
 				}
 
 				err = clients.Create(context.Background(), sriovNetwork)

@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,9 +68,9 @@ type Daemon struct {
 
 	client snclientset.Interface
 	// kubeClient allows interaction with Kubernetes, including the node we are running on.
-	kubeClient *kubernetes.Clientset
+	kubeClient kubernetes.Interface
 
-	mcClient *mcclientset.Clientset
+	mcClient mcclientset.Interface
 
 	nodeState *sriovnetworkv1.SriovNetworkNodeState
 
@@ -103,15 +104,20 @@ type Daemon struct {
 }
 
 const (
-	rdmaScriptsPath = "/bindata/scripts/enable-rdma.sh"
-	udevScriptsPath = "/bindata/scripts/load-udev.sh"
-	annoKey         = "sriovnetwork.openshift.io/state"
-	annoIdle        = "Idle"
-	annoDraining    = "Draining"
-	annoMcpPaused   = "Draining_MCP_Paused"
+	rdmaScriptsPath     = "/bindata/scripts/enable-rdma.sh"
+	udevScriptsPath     = "/bindata/scripts/load-udev.sh"
+	annoKey             = "sriovnetwork.openshift.io/state"
+	annoIdle            = "Idle"
+	annoDraining        = "Draining"
+	annoMcpPaused       = "Draining_MCP_Paused"
+	syncStatusSucceeded = "Succeeded"
+	syncStatusFailed    = "Failed"
 )
 
 var namespace = os.Getenv("NAMESPACE")
+
+// used by test to mock interactions with filesystem
+var filesystemRoot string = ""
 
 // writer implements io.Writer interface as a pass-through for glog.
 type writer struct {
@@ -127,8 +133,8 @@ func (w writer) Write(p []byte) (n int, err error) {
 func New(
 	nodeName string,
 	client snclientset.Interface,
-	kubeClient *kubernetes.Clientset,
-	mcClient *mcclientset.Clientset,
+	kubeClient kubernetes.Interface,
+	mcClient mcclientset.Interface,
 	exitCh chan<- error,
 	stopCh <-chan struct{},
 	syncCh <-chan struct{},
@@ -273,11 +279,13 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 		case <-stopCh:
 			glog.V(0).Info("Run(): stop daemon")
 			return nil
-		case err := <-exitCh:
+		case err, more := <-exitCh:
 			glog.Warningf("Got an error: %v", err)
-			dn.refreshCh <- Message{
-				syncStatus:    "Failed",
-				lastSyncError: err.Error(),
+			if more {
+				dn.refreshCh <- Message{
+					syncStatus:    syncStatusFailed,
+					lastSyncError: err.Error(),
+				}
 			}
 			return err
 		case <-time.After(30 * time.Second):
@@ -308,10 +316,11 @@ func (dn *Daemon) enqueueNodeState(obj interface{}) {
 func (dn *Daemon) processNextWorkItem() bool {
 	glog.V(2).Infof("worker queue size: %d", dn.workqueue.Len())
 	obj, shutdown := dn.workqueue.Get()
-	glog.V(2).Infof("get item: %d", obj.(int64))
 	if shutdown {
 		return false
 	}
+
+	glog.V(2).Infof("get item: %d", obj.(int64))
 
 	// We wrap this block in a func so we can defer c.workqueue.Done.
 	err := func(obj interface{}) error {
@@ -328,11 +337,11 @@ func (dn *Daemon) processNextWorkItem() bool {
 			return nil
 		}
 
-		err := dn.nodeStateSyncHandler(key)
+		err := dn.nodeStateSyncHandler()
 		if err != nil {
 			// Ereport error message, and put the item back to work queue for retry.
 			dn.refreshCh <- Message{
-				syncStatus:    "Failed",
+				syncStatus:    syncStatusFailed,
 				lastSyncError: err.Error(),
 			}
 			<-dn.syncCh
@@ -395,9 +404,8 @@ func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 	}
 }
 
-func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
+func (dn *Daemon) nodeStateSyncHandler() error {
 	var err error
-	glog.V(0).Infof("nodeStateSyncHandler(): new generation is %d", generation)
 	// Get the latest NodeState
 	var latestState *sriovnetworkv1.SriovNetworkNodeState
 	latestState, err = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), dn.name, metav1.GetOptions{})
@@ -406,12 +414,14 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 		return err
 	}
 	latest := latestState.GetGeneration()
+	glog.V(0).Infof("nodeStateSyncHandler(): new generation is %d", latest)
+
 	if dn.nodeState.GetGeneration() == latest {
 		glog.V(0).Infof("nodeStateSyncHandler(): Interface not changed")
 		if latestState.Status.LastSyncError != "" ||
-			latestState.Status.SyncStatus != "Succeeded" {
+			latestState.Status.SyncStatus != syncStatusSucceeded {
 			dn.refreshCh <- Message{
-				syncStatus:    "Succeeded",
+				syncStatus:    syncStatusSucceeded,
 				lastSyncError: "",
 			}
 			// wait for writer to refresh the status
@@ -549,7 +559,7 @@ func (dn *Daemon) nodeStateSyncHandler(generation int64) error {
 	glog.Info("nodeStateSyncHandler(): sync succeeded")
 	dn.nodeState = latestState.DeepCopy()
 	dn.refreshCh <- Message{
-		syncStatus:    "Succeeded",
+		syncStatus:    syncStatusSucceeded,
 		lastSyncError: "",
 	}
 	// wait for writer to refresh the status
@@ -932,7 +942,7 @@ func tryEnableRdma() (bool, error) {
 	glog.V(2).Infof("tryEnableRdma()")
 	var stdout, stderr bytes.Buffer
 
-	cmd := exec.Command("/bin/bash", rdmaScriptsPath)
+	cmd := exec.Command("/bin/bash", path.Join(filesystemRoot, rdmaScriptsPath))
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -957,7 +967,7 @@ func tryEnableRdma() (bool, error) {
 func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	glog.V(2).Infof("tryCreateSwitchdevUdevRule()")
 	var newContent string
-	filePath := "/host/etc/udev/rules.d/20-switchdev.rules"
+	filePath := path.Join(filesystemRoot, "/host/etc/udev/rules.d/20-switchdev.rules")
 
 	for _, ifaceStatus := range nodeState.Status.Interfaces {
 		if ifaceStatus.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
@@ -993,7 +1003,7 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 	}
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command("/bin/bash", udevScriptsPath)
+	cmd := exec.Command("/bin/bash", path.Join(filesystemRoot, udevScriptsPath))
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -1014,7 +1024,7 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 
 func tryCreateNMUdevRule() error {
 	glog.V(2).Infof("tryCreateNMUdevRule()")
-	dirPath := "/host/etc/udev/rules.d/"
+	dirPath := path.Join(filesystemRoot, "/host/etc/udev/rules.d/")
 	filePath := dirPath + "10-nm-unmanaged.rules"
 
 	newContent := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetSupportedVfIds(), "|"))

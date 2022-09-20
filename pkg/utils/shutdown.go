@@ -12,6 +12,7 @@ import (
 	conf "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 
 var shutdownLog = ctrl.Log.WithName("shutdown")
@@ -68,7 +69,7 @@ func updateWebhooks() {
 
 func updateValidatingWebhook(c *kubernetes.Clientset) {
 	validatingWebhookClient := c.AdmissionregistrationV1().ValidatingWebhookConfigurations()
-	webhook, err := validatingWebhookClient.Get(context.TODO(), OperatorWebHookName, metav1.GetOptions{})
+	webhook, err := validatingWebhookClient.Get(context.TODO(), constants.OperatorWebHookName, metav1.GetOptions{})
 	if err != nil {
 		shutdownLog.Error(err, "Error getting webhook")
 	}
@@ -81,7 +82,7 @@ func updateValidatingWebhook(c *kubernetes.Clientset) {
 
 func updateMutatingWebhooks(c *kubernetes.Clientset) {
 	mutatingWebhookClient := c.AdmissionregistrationV1().MutatingWebhookConfigurations()
-	for _, name := range []string{OperatorWebHookName, InjectorWebHookName} {
+	for _, name := range []string{constants.OperatorWebHookName, constants.InjectorWebHookName} {
 		mutatingWebhook, err := mutatingWebhookClient.Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			shutdownLog.Error(err, "Error getting webhook")

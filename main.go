@@ -44,6 +44,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/leaderelection"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
@@ -217,14 +218,13 @@ func createDefaultPolicy(c client.Client) error {
 			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
 		},
 	}
-	name := "default"
 	namespace := os.Getenv("NAMESPACE")
-	err := c.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, policy)
+	err := c.Get(context.TODO(), types.NamespacedName{Name: constants.DefaultPolicyName, Namespace: namespace}, policy)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("Create a default SriovNetworkNodePolicy")
 			policy.Namespace = namespace
-			policy.Name = name
+			policy.Name = constants.DefaultPolicyName
 			err = c.Create(context.TODO(), policy)
 			if err != nil {
 				return err
@@ -253,14 +253,13 @@ func createDefaultOperatorConfig(c client.Client) error {
 			DisableDrain:             singleNode,
 		},
 	}
-	name := "default"
 	namespace := os.Getenv("NAMESPACE")
-	err = c.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, config)
+	err = c.Get(context.TODO(), types.NamespacedName{Name: constants.DefaultConfigName, Namespace: namespace}, config)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("Create default SriovOperatorConfig")
 			config.Namespace = namespace
-			config.Name = name
+			config.Name = constants.DefaultConfigName
 			err = c.Create(context.TODO(), config)
 			if err != nil {
 				return err
