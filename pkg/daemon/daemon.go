@@ -19,7 +19,6 @@ import (
 	"github.com/golang/glog"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	daemonconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
-	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
 	mcfginformers "github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions"
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
@@ -70,7 +69,7 @@ type Daemon struct {
 	// kubeClient allows interaction with Kubernetes, including the node we are running on.
 	kubeClient kubernetes.Interface
 
-	mcClient mcclientset.Interface
+	openshiftContext utils.OpenshiftContext
 
 	nodeState *sriovnetworkv1.SriovNetworkNodeState
 
@@ -134,7 +133,7 @@ func New(
 	nodeName string,
 	client snclientset.Interface,
 	kubeClient kubernetes.Interface,
-	mcClient mcclientset.Interface,
+	openshiftContext utils.OpenshiftContext,
 	exitCh chan<- error,
 	stopCh <-chan struct{},
 	syncCh <-chan struct{},
@@ -142,16 +141,16 @@ func New(
 	platformType utils.PlatformType,
 ) *Daemon {
 	return &Daemon{
-		name:       nodeName,
-		platform:   platformType,
-		client:     client,
-		kubeClient: kubeClient,
-		mcClient:   mcClient,
-		exitCh:     exitCh,
-		stopCh:     stopCh,
-		syncCh:     syncCh,
-		refreshCh:  refreshCh,
-		nodeState:  &sriovnetworkv1.SriovNetworkNodeState{},
+		name:             nodeName,
+		platform:         platformType,
+		client:           client,
+		kubeClient:       kubeClient,
+		openshiftContext: openshiftContext,
+		exitCh:           exitCh,
+		stopCh:           stopCh,
+		syncCh:           syncCh,
+		refreshCh:        refreshCh,
+		nodeState:        &sriovnetworkv1.SriovNetworkNodeState{},
 		drainer: &drain.Helper{
 			Client:              kubeClient,
 			Force:               true,
@@ -205,7 +204,11 @@ func (dn *Daemon) tryCreateUdevRuleWrapper() error {
 
 // Run the config daemon
 func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
-	glog.V(0).Info("Run(): start daemon")
+	if utils.ClusterType == utils.ClusterTypeOpenshift {
+		glog.V(0).Infof("Run(): start daemon. openshiftFlavor: %s", dn.openshiftContext.OpenshiftFlavor)
+	} else {
+		glog.V(0).Infof("Run(): start daemon.")
+	}
 	// Only watch own SriovNetworkNodeState CR
 	defer utilruntime.HandleCrash()
 	defer dn.workqueue.ShutDown()
@@ -487,12 +490,11 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 			}
 		}
 	}
-	if utils.ClusterType == utils.ClusterTypeOpenshift {
+	if utils.ClusterType == utils.ClusterTypeOpenshift && !dn.openshiftContext.IsHypershift() {
 		if err = dn.getNodeMachinePool(); err != nil {
 			return err
 		}
 	}
-
 	if reqDrain {
 		if !dn.isNodeDraining() {
 			if !dn.disableDrain {
@@ -505,7 +507,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 				<-done
 			}
 
-			if utils.ClusterType == utils.ClusterTypeOpenshift {
+			if utils.ClusterType == utils.ClusterTypeOpenshift && !dn.openshiftContext.IsHypershift() {
 				glog.Infof("nodeStateSyncHandler(): pause MCP")
 				if err := dn.pauseMCP(); err != nil {
 					return err
@@ -589,10 +591,10 @@ func (dn *Daemon) completeDrain() error {
 		}
 	}
 
-	if utils.ClusterType == utils.ClusterTypeOpenshift {
+	if utils.ClusterType == utils.ClusterTypeOpenshift && !dn.openshiftContext.IsHypershift() {
 		glog.Infof("completeDrain(): resume MCP %s", dn.mcpName)
 		pausePatch := []byte("{\"spec\":{\"paused\":false}}")
-		if _, err := dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{}); err != nil {
+		if _, err := dn.openshiftContext.McClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{}); err != nil {
 			glog.Errorf("completeDrain(): failed to resume MCP %s: %v", dn.mcpName, err)
 			return err
 		}
@@ -730,7 +732,7 @@ func (dn *Daemon) getNodeMachinePool() error {
 		glog.Errorf("getNodeMachinePool(): Failed to find the the desiredConfig Annotation")
 		return fmt.Errorf("getNodeMachinePool(): Failed to find the the desiredConfig Annotation")
 	}
-	mc, err := dn.mcClient.MachineconfigurationV1().MachineConfigs().Get(context.TODO(), desiredConfig, metav1.GetOptions{})
+	mc, err := dn.openshiftContext.McClient.MachineconfigurationV1().MachineConfigs().Get(context.TODO(), desiredConfig, metav1.GetOptions{})
 	if err != nil {
 		glog.Errorf("getNodeMachinePool(): Failed to get the desired Machine Config: %v", err)
 		return err
@@ -800,7 +802,7 @@ func (dn *Daemon) pauseMCP() error {
 	glog.Info("pauseMCP(): pausing MCP")
 	var err error
 
-	mcpInformerFactory := mcfginformers.NewSharedInformerFactory(dn.mcClient,
+	mcpInformerFactory := mcfginformers.NewSharedInformerFactory(dn.openshiftContext.McClient,
 		time.Second*30,
 	)
 	mcpInformer := mcpInformerFactory.Machineconfiguration().V1().MachineConfigPools().Informer()
@@ -815,7 +817,7 @@ func (dn *Daemon) pauseMCP() error {
 			return
 		}
 		// Always get the latest object
-		newMcp, err := dn.mcClient.MachineconfigurationV1().MachineConfigPools().Get(ctx, dn.mcpName, metav1.GetOptions{})
+		newMcp, err := dn.openshiftContext.McClient.MachineconfigurationV1().MachineConfigPools().Get(ctx, dn.mcpName, metav1.GetOptions{})
 		if err != nil {
 			glog.V(2).Infof("pauseMCP(): Failed to get MCP %s: %v", dn.mcpName, err)
 			return
@@ -835,7 +837,7 @@ func (dn *Daemon) pauseMCP() error {
 			}
 			glog.Infof("pauseMCP(): pause MCP %s", dn.mcpName)
 			pausePatch := []byte("{\"spec\":{\"paused\":true}}")
-			_, err = dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
+			_, err = dn.openshiftContext.McClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
 			if err != nil {
 				glog.V(2).Infof("pauseMCP(): Failed to pause MCP %s: %v", dn.mcpName, err)
 				return
@@ -851,7 +853,7 @@ func (dn *Daemon) pauseMCP() error {
 		if paused {
 			glog.Infof("pauseMCP(): MCP is processing, resume MCP %s", dn.mcpName)
 			pausePatch := []byte("{\"spec\":{\"paused\":false}}")
-			_, err = dn.mcClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
+			_, err = dn.openshiftContext.McClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{})
 			if err != nil {
 				glog.V(2).Infof("pauseMCP(): fail to resume MCP %s: %v", dn.mcpName, err)
 				return

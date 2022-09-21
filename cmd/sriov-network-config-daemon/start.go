@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	configv1 "github.com/openshift/api/config/v1"
+
 	"github.com/golang/glog"
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
@@ -26,6 +28,8 @@ import (
 
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
@@ -123,10 +127,27 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	sriovnetworkv1.AddToScheme(scheme.Scheme)
 	mcfgv1.AddToScheme(scheme.Scheme)
+	configv1.Install(scheme.Scheme)
 
 	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
 	mcclient := mcclientset.NewForConfigOrDie(config)
+	openshiftFlavor := utils.OpenshiftFlavorDefault
+	if utils.ClusterType == utils.ClusterTypeOpenshift {
+		infraClient, err := client.New(config, client.Options{
+			Scheme: scheme.Scheme,
+		})
+		if err != nil {
+			panic(err)
+		}
+		isHypershift, err := utils.IsExternalControlPlaneCluster(infraClient)
+		if err != nil {
+			panic(err)
+		}
+		if isHypershift {
+			openshiftFlavor = utils.OpenshiftFlavorHypershift
+		}
+	}
 
 	config.Timeout = 5 * time.Second
 	writerclient := snclientset.NewForConfigOrDie(config)
@@ -178,7 +199,10 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		startOpts.nodeName,
 		snclient,
 		kubeclient,
-		mcclient,
+		utils.OpenshiftContext{
+			McClient:        mcclient,
+			OpenshiftFlavor: openshiftFlavor,
+		},
 		exitCh,
 		stopCh,
 		syncCh,
