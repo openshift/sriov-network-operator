@@ -26,6 +26,7 @@ data:
   Qlogic_qede_QL41000: 1077 8070 8090
   Qlogic_qede_QL45000_25G: 1077 1656 1664
   Qlogic_qede_QL45000_50G: 1077 1654 1664
+  Red_Hat_Virtio_network_device: 1af4 1000 1000
 kind: ConfigMap
 metadata:
   name: supported-nic-ids
