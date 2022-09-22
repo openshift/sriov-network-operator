@@ -10,7 +10,7 @@ metadata:
     createdAt: 2019/04/30
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
-    olm.skipRange: '>=4.3.0-0 <1.0'
+    olm.skipRange: '>=4.3.0-0 <4.11.0'
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
     operators.openshift.io/infrastructure-features: '["disconnected", "cni"]'
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
