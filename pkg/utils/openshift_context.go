@@ -1,7 +1,5 @@
 package utils
 
-import mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
-
 // OpenshiftFlavor holds metadata about the type of Openshift environment the operator is in.
 type OpenshiftFlavor string
 
@@ -14,8 +12,6 @@ const (
 
 // OpenshiftContext contains metadata and structs utilized to interact with Openshift clusters
 type OpenshiftContext struct {
-	// McClient is a client for MachineConfigs in an Openshift environment
-	McClient mcclientset.Interface
 	// OpenshiftFlavor holds metadata about the type of Openshift environment the operator is in.
 	OpenshiftFlavor OpenshiftFlavor
 }
