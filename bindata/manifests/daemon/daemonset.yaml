@@ -93,6 +93,7 @@ spec:
           preStop:
             exec:
               command: ["/bindata/scripts/clean-k8s-services.sh"]
+      terminationGracePeriodSeconds: 900
       volumes:
       - name: host
         hostPath:
