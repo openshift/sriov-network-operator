@@ -102,8 +102,12 @@ type Daemon struct {
 
 	workqueue workqueue.RateLimitingInterface
 
+	// updatingFlag signals when the daemon is doing a plugin apply and must not be interrupted.
 	updatingFlagMutex sync.Mutex
 	updatingFlag      bool
+	// sigTermReceived signals whether a SIGTERM was received while doing a plugin apply.
+	sigTermReceivedMutex sync.Mutex
+	sigTermReceived      bool
 }
 
 const (
@@ -454,6 +458,17 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 			<-dn.syncCh
 		}
 		return nil
+	}
+
+	// If a SIGTERM was received previously while updating then a shutdown is going
+	// to happen. Dont try to reconcile anything else and wait for termination.
+	if dn.wasSigTermReceived() && !dn.getUpdatingFlag() {
+		err := fmt.Errorf("SIGTERM received previously, wait until restart")
+		dn.refreshCh <- Message{
+			syncStatus:    syncStatusFailed,
+			lastSyncError: err.Error(),
+		}
+		return err
 	}
 
 	dn.refreshCh <- Message{
@@ -828,6 +843,18 @@ func (dn *Daemon) disableUpdatingFlag() {
 	dn.updatingFlag = false
 }
 
+func (dn *Daemon) setSigTermReceived() {
+	dn.sigTermReceivedMutex.Lock()
+	defer dn.sigTermReceivedMutex.Unlock()
+	dn.sigTermReceived = true
+}
+
+func (dn *Daemon) wasSigTermReceived() bool {
+	dn.sigTermReceivedMutex.Lock()
+	defer dn.sigTermReceivedMutex.Unlock()
+	return dn.sigTermReceived
+}
+
 func (dn *Daemon) installSignalHandler(signalStopCh chan struct{}) {
 	termChan := make(chan os.Signal, 2048)
 	signal.Notify(termChan, syscall.SIGTERM)
@@ -842,6 +869,7 @@ func (dn *Daemon) installSignalHandler(signalStopCh chan struct{}) {
 				updateActive := dn.getUpdatingFlag()
 				if updateActive {
 					glog.Info("Got SIGTERM, but actively updating")
+					dn.setSigTermReceived()
 				} else {
 					glog.Info("Got SIGTERM, shutting down")
 					close(signalStopCh)
