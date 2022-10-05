@@ -26,3 +26,8 @@ data:
   Broadcom_bnxt_BCM75508_2x100G: "14e4 1750 1806"
   Qlogic_qede_QL45000_50G: "1077 1654 1664"
   Red_Hat_Virtio_network_device: "1af4 1000 1000"
+  Marvell_OCTEON_TX2_CN96XX: "177d b200 b203"
+  Marvell_OCTEON_TX2_CN98XX: "177d b100 b103"
+  Marvell_OCTEON_Fusion_CNF95XX: "177d b600 b603"
+  Marvell_OCTEON10_CN10XXX: "177d b900 b903"
+  Marvell_OCTEON_Fusion_CNF105XX: "177d ba00 ba03"

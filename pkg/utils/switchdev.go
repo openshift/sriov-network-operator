@@ -29,15 +29,23 @@ func IsSwitchdevModeSpec(spec sriovnetworkv1.SriovNetworkNodeStateSpec) bool {
 }
 
 func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (update bool, err error) {
+	// Create a map with all the PFs we will need to SKIP for systemd configuration
+	pfsToSkip, err := GetPfsToSkip(newState)
+	if err != nil {
+		return false, err
+	}
+
 	cfg := config{}
 	for _, iface := range newState.Spec.Interfaces {
 		for _, ifaceStatus := range newState.Status.Interfaces {
 			if iface.PciAddress != ifaceStatus.PciAddress {
 				continue
 			}
-			if !SkipConfigVf(iface, ifaceStatus) {
+
+			if skip := pfsToSkip[iface.PciAddress]; !skip {
 				continue
 			}
+
 			i := sriovnetworkv1.Interface{}
 			if iface.NumVfs > 0 {
 				i = sriovnetworkv1.Interface{
@@ -58,6 +66,7 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 	if err != nil {
 		if os.IsNotExist(err) {
 			if len(cfg.Interfaces) == 0 {
+				err = nil
 				return
 			}
 			glog.V(2).Infof("WriteSwitchdevConfFile(): file not existed, create it")

@@ -19,6 +19,11 @@ The following SR-IOV capable hardware is supported with sriov-network-operator:
 | Mellanox MT28908 Family [ConnectX-6 Lx] | 15b3 | 101f |
 | Mellanox MT42822 BlueField-2 integrated ConnectX-6 Dx | 15b3 | a2d6 |
 | Qlogic QL45000 Series 50GbE Controller | 1077 | 1654 |
+| Marvell OCTEON TX2 CN96XX | 177d | b200 |
+| Marvell OCTEON TX2 CN98XX | 177d | b100 |
+| Marvell OCTEON Fusion CNF95XX | 177d | b600 |
+| Marvell OCTEON 10 CN10XXX | 177d | b900 |
+| Marvell OCTEON Fusion CNF105XX | 177d | ba00 |
 
 > **Note:** sriov-network-operator maintains a list of supported NICs which it supports.
 > These are stored in supported-nic-ids [configMap](https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/deployment/sriov-network-operator/templates/configmap.yaml).
@@ -48,6 +53,11 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Mellanox MT28908 Family [ConnectX-6 Lx] | V | V | V |
 | Mellanox MT42822 BlueField-2 integrated ConnectX-6 Dx | V | V | V |
 | Qlogic QL45000 Series 50GbE Controller | V | X | X |
+| Marvell OCTEON TX2 CN96XX | V | V | X |
+| Marvell OCTEON TX2 CN98XX | V | V | X |
+| Marvell OCTEON Fusion CNF95XX | V | V | X |
+| Marvell OCTEON 10 CN10XXX | V | V | X |
+| Marvell OCTEON Fusion CNF105XX | V | V | X |
 
 # Adding new Hardware
 
