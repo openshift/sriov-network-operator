@@ -20,6 +20,13 @@ import (
 // Test is the namespace to be use for testing
 const Test = "sriov-conformance-testing"
 
+var inhibitSecurityAdmissionLabels = map[string]string{
+	"pod-security.kubernetes.io/audit":               "privileged",
+	"pod-security.kubernetes.io/enforce":             "privileged",
+	"pod-security.kubernetes.io/warn":                "privileged",
+	"security.openshift.io/scc.podSecurityLabelSync": "false",
+}
+
 // WaitForDeletion waits until the namespace will be removed from the cluster
 func WaitForDeletion(cs *testclient.ClientSet, nsName string, timeout time.Duration) error {
 	return wait.PollImmediate(time.Second, timeout, func() (bool, error) {
@@ -36,7 +43,8 @@ func WaitForDeletion(cs *testclient.ClientSet, nsName string, timeout time.Durat
 func Create(namespace string, cs *testclient.ClientSet) error {
 	_, err := cs.Namespaces().Create(context.Background(), &k8sv1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
+			Name:   namespace,
+			Labels: inhibitSecurityAdmissionLabels,
 		}}, metav1.CreateOptions{})
 
 	if k8serrors.IsAlreadyExists(err) {
