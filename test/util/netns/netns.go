@@ -19,13 +19,13 @@ const (
 	sriovNumVfsFile = "sriov_numvfs"
 )
 
-//SetPfVfLinkNetNs requires physical function (PF) PCI address and a string to a network namespace in which to add
-//any associated virtual functions (VF). VFs must be attached to kernel driver to provide links. Attaching VFs to
-//vfio-pci driver is not supported. PF is set to target network namespace.
-//Polling interval is required and this period will determine how often the VFs Links are checked to ensure they are in
-//the target network namespace. Two channels are required - one for informing the func to end and one to inform
-//the caller of an error or if the function has ended. It is this func responsibility to cleanup the done channel and
-//callers responsibility to cleanup quit channel.
+// SetPfVfLinkNetNs requires physical function (PF) PCI address and a string to a network namespace in which to add
+// any associated virtual functions (VF). VFs must be attached to kernel driver to provide links. Attaching VFs to
+// vfio-pci driver is not supported. PF is set to target network namespace.
+// Polling interval is required and this period will determine how often the VFs Links are checked to ensure they are in
+// the target network namespace. Two channels are required - one for informing the func to end and one to inform
+// the caller of an error or if the function has ended. It is this func responsibility to cleanup the done channel and
+// callers responsibility to cleanup quit channel.
 func SetPfVfLinkNetNs(pfPciAddr, netNsPath string, pollInterval time.Duration, quitCh chan bool, doneCh chan error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -83,8 +83,8 @@ func SetPfVfLinkNetNs(pfPciAddr, netNsPath string, pollInterval time.Duration, q
 	}
 }
 
-//setVfNetNs requires physical function (PF) PCI address and a handle to a network namespace in which to add
-//any associated virtual functions (VF). If no VFs are found, no error is returned.
+// setVfNetNs requires physical function (PF) PCI address and a handle to a network namespace in which to add
+// any associated virtual functions (VF). If no VFs are found, no error is returned.
 func setVfNetNs(pfPciAddr string, targetNetNs netns.NsHandle) error {
 	var (
 		err      error
@@ -141,8 +141,8 @@ func setVfNetNs(pfPciAddr string, targetNetNs netns.NsHandle) error {
 	return nil
 }
 
-//setLinkNetNs attempts to create a link object from PCI address and change the network namespace. Arg pciAddr must have
-//an associated interface name in the current network namespace or an error is thrown.
+// setLinkNetNs attempts to create a link object from PCI address and change the network namespace. Arg pciAddr must have
+// an associated interface name in the current network namespace or an error is thrown.
 func setLinkNetNs(pciAddr string, targetNetNs netns.NsHandle) error {
 	var err error
 	netDir := filepath.Join(sysBusPci, pciAddr, "net")

@@ -16,7 +16,7 @@ require (
 	github.com/k8snetworkplumbingwg/sriov-network-device-plugin v0.0.0-20220614121156-6fff085aed91
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.17.0
-	github.com/openshift/api v0.0.0-20210325163602-e37aaed4c278
+	github.com/openshift/api v0.0.0-20220819133013-d8b9c3791a1a
 	github.com/openshift/client-go v0.0.0-20200827190008-3062137373b5
 	github.com/openshift/machine-config-operator v0.0.1-0.20201023110058-6c8bd9b2915c
 	github.com/pkg/errors v0.9.1

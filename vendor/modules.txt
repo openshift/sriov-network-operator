@@ -356,8 +356,8 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
-# github.com/openshift/api v0.0.0-20210325163602-e37aaed4c278
-## explicit; go 1.15
+# github.com/openshift/api v0.0.0-20220819133013-d8b9c3791a1a
+## explicit; go 1.18
 github.com/openshift/api/config/v1
 github.com/openshift/api/operator/v1
 github.com/openshift/api/operator/v1alpha1
