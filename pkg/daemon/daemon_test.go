@@ -3,6 +3,8 @@ package daemon
 import (
 	"context"
 	"flag"
+	"io/ioutil"
+	"path"
 	"testing"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -27,7 +29,10 @@ var FakeSupportedNicIDs corev1.ConfigMap = corev1.ConfigMap{
 		Name:      sriovnetworkv1.SupportedNicIDConfigmap,
 		Namespace: namespace,
 	},
-	Data: map[string]string{},
+	Data: map[string]string{
+		"Intel_i40e_XXV710":      "8086 158a 154c",
+		"Nvidia_mlx5_ConnectX-4": "15b3 1013 1014",
+	},
 }
 
 var SriovDevicePluginPod corev1.Pod = corev1.Pod{
@@ -96,6 +101,9 @@ var _ = Describe("Config Daemon", func() {
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
 		client := fakesnclientset.NewSimpleClientset()
 		mcClient := fakemcclientset.NewSimpleClientset()
+
+		err = sriovnetworkv1.InitNicIDMap(kubeClient, namespace)
+		Expect(err).ToNot(HaveOccurred())
 
 		sut = New("test-node",
 			client,
@@ -225,6 +233,17 @@ var _ = Describe("Config Daemon", func() {
 
 			Expect(sut.nodeState.GetGeneration()).To(BeNumerically("==", 777))
 		})
+
+		It("configure udev rules on host", func() {
+
+			networkManagerUdevRulePath := path.Join(filesystemRoot, "host/etc/udev/rules.d/10-nm-unmanaged.rules")
+
+			expectedContents := `ACTION=="add|change|move", ATTRS{device}=="0x1014|0x154c", ENV{NM_UNMANAGED}="1"
+SUBSYSTEM=="net", ACTION=="add|move", ATTRS{phys_switch_id}!="", ATTR{phys_port_name}=="pf*vf*", ENV{NM_UNMANAGED}="1"
+`
+			// No need to trigger any action on config-daemon, as it checks the file in the main loop
+			assertFileContents(networkManagerUdevRulePath, expectedContents)
+		})
 	})
 })
 
@@ -240,4 +259,11 @@ func updateSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetwor
 		SriovNetworkNodeStates(namespace).
 		Update(context.Background(), nodeState, metav1.UpdateOptions{})
 	return err
+}
+
+func assertFileContents(path, contents string) {
+	Eventually(func() (string, error) {
+		ret, err := ioutil.ReadFile(path)
+		return string(ret), err
+	}, "10s").WithOffset(1).Should(Equal(contents))
 }
