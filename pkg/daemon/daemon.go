@@ -978,8 +978,8 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 
 func tryCreateNMUdevRule() error {
 	glog.V(2).Infof("tryCreateNMUdevRule()")
-	dirPath := path.Join(filesystemRoot, "/host/etc/udev/rules.d/")
-	filePath := dirPath + "10-nm-unmanaged.rules"
+	dirPath := path.Join(filesystemRoot, "/host/etc/udev/rules.d")
+	filePath := path.Join(dirPath, "10-nm-unmanaged.rules")
 
 	newContent := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetSupportedVfIds(), "|"))
 
