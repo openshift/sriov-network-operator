@@ -222,6 +222,14 @@ spec:
           - '*'
           verbs:
           - '*'
+        - apiGroups:
+          - config.openshift.io
+          resources:
+          - infrastructures
+          verbs:
+          - get
+          - list
+          - watch
         serviceAccountName: sriov-network-config-daemon
       - rules:
         - apiGroups:
