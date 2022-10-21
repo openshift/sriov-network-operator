@@ -414,7 +414,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 }
 
 func setSriovNumVfs(pciAddr string, numVfs int) error {
-	glog.V(2).Infof("setSriovNumVfs(): set NumVfs for device %s", pciAddr)
+	glog.V(2).Infof("setSriovNumVfs(): set NumVfs for device %s to %d", pciAddr, numVfs)
 	numVfsFilePath := filepath.Join(sysBusPciDevices, pciAddr, numVfsFile)
 	bs := []byte(strconv.Itoa(numVfs))
 	err := ioutil.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
@@ -782,9 +782,8 @@ func RunCommand(command string, args ...string) (string, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	glog.V(2).Infof("RunCommand(): %s, %v", command, args)
 	err := cmd.Run()
-	glog.V(2).Infof("RunCommand(): %s, %s", stdout.String(), err)
+	glog.V(2).Infof("RunCommand(): out:(%s), err:(%v)", stdout.String(), err)
 	return stdout.String(), err
 }
 
