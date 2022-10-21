@@ -73,7 +73,10 @@ func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.Platf
 		glog.Errorf("RunOnce(): first poll failed: %v", err)
 	}
 
-	ns, _ := w.setNodeStateStatus(msg)
+	ns, err := w.setNodeStateStatus(msg)
+	if err != nil {
+		glog.Errorf("RunOnce(): first writing to node status failed: %v", err)
+	}
 	return w.writeCheckpointFile(ns, destDir)
 }
 
@@ -93,7 +96,11 @@ func (w *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message
 			if err := w.pollNicStatus(platformType); err != nil {
 				continue
 			}
-			w.setNodeStateStatus(msg)
+			_, err := w.setNodeStateStatus(msg)
+			if err != nil {
+				glog.Errorf("Run() refresh: writing to node status failed: %v", err)
+			}
+
 			if msg.syncStatus == syncStatusSucceeded || msg.syncStatus == syncStatusFailed {
 				syncCh <- struct{}{}
 			}
@@ -102,7 +109,10 @@ func (w *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message
 			if err := w.pollNicStatus(platformType); err != nil {
 				continue
 			}
-			w.setNodeStateStatus(msg)
+			_, err := w.setNodeStateStatus(msg)
+			if err != nil {
+				glog.Errorf("Run() period: writing to node status failed: %v", err)
+			}
 		}
 	}
 }
