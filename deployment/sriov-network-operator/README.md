@@ -42,6 +42,9 @@ For additional information and methods for installing Helm, refer to the officia
 # Install Operator
 $ helm install -n sriov-network-operator --create-namespace --wait sriov-network-operator ./
 
+# Add PSA label for the sriov network operator namespace
+$ kubectl label ns sriov-network-operator pod-security.kubernetes.io/enforce=privileged
+
 # View deployed resources
 $ kubectl -n sriov-network-operator get pods
 ```
