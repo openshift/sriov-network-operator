@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/util/connrotation"
 
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -130,6 +131,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
+	mcclient := mcclientset.NewForConfigOrDie(config)
 	openshiftFlavor := utils.OpenshiftFlavorDefault
 	if utils.ClusterType == utils.ClusterTypeOpenshift {
 		infraClient, err := client.New(config, client.Options{
@@ -198,6 +200,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		snclient,
 		kubeclient,
 		utils.OpenshiftContext{
+			McClient:        mcclient,
 			OpenshiftFlavor: openshiftFlavor,
 		},
 		exitCh,
