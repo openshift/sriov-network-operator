@@ -26,9 +26,7 @@ func All() error {
 			return fmt.Errorf("failed to restore node drain state %v", err)
 		}
 	}
-	if !namespaces.Exists(namespaces.Test, clients) {
-		return nil
-	}
+
 	err := namespaces.DeleteAndWait(clients, namespaces.Test, 5*time.Minute)
 	if err != nil {
 		return fmt.Errorf("failed to delete sriov tests namespace %v", err)
