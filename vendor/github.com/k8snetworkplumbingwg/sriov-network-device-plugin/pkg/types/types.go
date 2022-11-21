@@ -184,14 +184,11 @@ type PciDevice interface {
 	GetDeviceCode() string
 	GetPciAddr() string
 	GetPfPciAddr() string
-	IsSriovPF() bool
-	GetSubClass() string
 	GetDeviceSpecs() []*pluginapi.DeviceSpec
 	GetEnvVal() string
 	GetMounts() []*pluginapi.Mount
 	GetAPIDevice() *pluginapi.Device
 	GetVFID() int
-	GetNumaInfo() string
 }
 
 // PciNetDevice extends PciDevice interface
