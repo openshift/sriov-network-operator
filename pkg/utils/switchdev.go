@@ -58,6 +58,7 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 	if err != nil {
 		if os.IsNotExist(err) {
 			if len(cfg.Interfaces) == 0 {
+				err = nil
 				return
 			}
 			glog.V(2).Infof("WriteSwitchdevConfFile(): file not existed, create it")
