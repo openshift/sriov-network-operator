@@ -19,11 +19,12 @@ import (
 var PluginName = "generic_plugin"
 
 type GenericPlugin struct {
-	PluginName     string
-	SpecVersion    string
-	DesireState    *sriovnetworkv1.SriovNetworkNodeState
-	LastState      *sriovnetworkv1.SriovNetworkNodeState
-	LoadVfioDriver uint
+	PluginName           string
+	SpecVersion          string
+	DesireState          *sriovnetworkv1.SriovNetworkNodeState
+	LastState            *sriovnetworkv1.SriovNetworkNodeState
+	LoadVfioDriver       uint
+	LoadVirtioVdpaDriver uint
 }
 
 const scriptsPath = "bindata/scripts/enable-kargs.sh"
@@ -37,9 +38,10 @@ const (
 // Initialize our plugin and set up initial values
 func NewGenericPlugin() (plugin.VendorPlugin, error) {
 	return &GenericPlugin{
-		PluginName:     PluginName,
-		SpecVersion:    "1.0",
-		LoadVfioDriver: unloaded,
+		PluginName:           PluginName,
+		SpecVersion:          "1.0",
+		LoadVfioDriver:       unloaded,
+		LoadVirtioVdpaDriver: unloaded,
 	}, nil
 }
 
@@ -62,7 +64,7 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 	p.DesireState = new
 
 	needDrain = needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
-	needReboot = needRebootNode(new, &p.LoadVfioDriver)
+	needReboot = needRebootNode(new, &p.LoadVfioDriver, &p.LoadVirtioVdpaDriver)
 
 	if needReboot {
 		needDrain = true
@@ -79,6 +81,14 @@ func (p *GenericPlugin) Apply() error {
 			return err
 		}
 		p.LoadVfioDriver = loaded
+	}
+
+	if p.LoadVirtioVdpaDriver == loading {
+		if err := utils.LoadKernelModule("virtio_vdpa"); err != nil {
+			glog.Errorf("generic-plugin Apply(): fail to load virtio_vdpa kmod: %v", err)
+			return err
+		}
+		p.LoadVirtioVdpaDriver = loaded
 	}
 
 	if p.LastState != nil {
@@ -114,6 +124,17 @@ func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
 	for _, iface := range state.Spec.Interfaces {
 		for i := range iface.VfGroups {
 			if iface.VfGroups[i].DeviceType == constants.DeviceTypeVfioPci {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func needVirtioVdpaDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
+	for _, iface := range state.Spec.Interfaces {
+		for i := range iface.VfGroups {
+			if iface.VfGroups[i].VdpaType == constants.VdpaTypeVirtio {
 				return true
 			}
 		}
@@ -185,7 +206,7 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 	return
 }
 
-func needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState, loadVfioDriver *uint) (needReboot bool) {
+func needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState, loadVfioDriver *uint, loadVirtioVdpaDriver *uint) (needReboot bool) {
 	needReboot = false
 	if *loadVfioDriver != loaded {
 		if needVfioDriver(state) {
@@ -198,6 +219,12 @@ func needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState, loadVfioDriver 
 				glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for enabling iommu kernel args")
 			}
 			needReboot = needReboot || update
+		}
+	}
+
+	if *loadVirtioVdpaDriver != loaded {
+		if needVirtioVdpaDriver(state) {
+			*loadVirtioVdpaDriver = loading
 		}
 	}
 
