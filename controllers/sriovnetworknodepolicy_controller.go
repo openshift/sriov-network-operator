@@ -660,6 +660,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 			}
 			netDeviceSelectors.IsRdma = p.Spec.IsRdma
 			netDeviceSelectors.NeedVhostNet = p.Spec.NeedVhostNet
+			netDeviceSelectors.VdpaType = dptypes.VdpaType(p.Spec.VdpaType)
 
 			if p.Spec.NicSelector.Vendor != "" {
 				netDeviceSelectors.Vendors = append(netDeviceSelectors.Vendors, p.Spec.NicSelector.Vendor)

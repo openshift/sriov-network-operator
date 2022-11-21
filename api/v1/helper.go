@@ -379,6 +379,7 @@ func (p *SriovNetworkNodePolicy) generateVfGroup(iface *InterfaceExt) (*VfGroup,
 		PolicyName:   p.GetName(),
 		Mtu:          p.Spec.Mtu,
 		IsRdma:       p.Spec.IsRdma,
+		VdpaType:     p.Spec.VdpaType,
 	}, nil
 }
 
