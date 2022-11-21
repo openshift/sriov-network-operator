@@ -7,6 +7,24 @@ contents:
     set -eux
     input="/etc/sriov_config.json"
 
+    minId=-1                                                                                             
+    maxId=-1
+                                                    
+    extract_min_max_ids() {                                                                              
+      range=$(jq -c '.vfRange' -r <<< $group)
+      ids=(${range//-/ })                                                                                
+      length=${#ids[@]}                                                                                  
+      minId=-1              
+      maxId=-1               
+      if [[ length -eq 2 ]]; then
+        minId=${ids[0]}
+        maxId=${ids[1]}
+      elif [[ length -eq 1 ]]; then
+        minId=${ids[0]}
+        maxId=$minId   
+      fi
+    }
+
     if [ ! -f $input ]; then
       echo "File /etc/sriov_config.json not exist."
       exit
@@ -25,11 +43,26 @@ contents:
         echo "load VF driver for $pci_addr"
         VfDirs=$(ls /sys/bus/pci/devices/${pci_addr} | grep virtfn)
 
-        # load VF driver
+        # load VF driver and configure vdpa if needed
         for VfDir in $VfDirs
         do
           VfPciAddr=$(basename "$( readlink -f /sys/bus/pci/devices/${pci_addr}/$VfDir )")
           echo $VfPciAddr > /sys/bus/pci/drivers_probe
+
+          # extract VF id from a path like '/sys/bus/pci/devices/0000:65:00.0/virtfn1'
+          # the VF id is the 7th character after 'virtfn'
+          vfid=${VfDir:6}
+          
+          # check if vfid in VF group range
+          jq -c '.vfGroups[]' <<< "$iface" | while read group;
+          do
+            extract_min_max_ids
+            vdpaType=$(jq -c '.vdpaType' -r <<< $group)
+            if [ $vfid -le $maxId ] && [ $vfid -ge $minId ] && [ $vdpaType == "virtio" ]; then
+              vdpa_cmd="vdpa dev add name vdpa:"${VfPciAddr}" mgmtdev pci/"${VfPciAddr}
+              eval $vdpa_cmd
+            fi
+          done
         done
       fi
     done
