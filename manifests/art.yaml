@@ -3,7 +3,7 @@ updates:
     update_list:
     # replace metadata.name value
     - search: "sriov-network-operator.v{MAJOR}.{MINOR}.0"
-      replace: "sriov-network-operator.{FULL_VER}"
+      replace: "sriov-network-operator.v{FULL_VER}"
     - search: "version: {MAJOR}.{MINOR}.0"
       replace: "version: {FULL_VER}"
     - search: "olm.skipRange: '>=4.3.0-0 <{MAJOR}.{MINOR}.0'"
