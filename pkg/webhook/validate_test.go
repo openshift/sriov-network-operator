@@ -469,3 +469,27 @@ func TestStaticValidateSriovNetworkNodePolicyWithInvalidNicSelector(t *testing.T
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(ok).To(Equal(false))
 }
+
+func TestValidatePolicyForNodeStateWithValidNetFilter(t *testing.T) {
+	interfaceSelected = false
+	state := newNodeState()
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				NetFilter: "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:       63,
+			Priority:     99,
+			ResourceName: "p0",
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := validatePolicyForNodeState(policy, state)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+	g.Expect(interfaceSelected).To(Equal(true))
+}
