@@ -9,7 +9,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	fakemcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/fake"
 	corev1 "k8s.io/api/core/v1"
