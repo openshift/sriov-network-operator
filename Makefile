@@ -1,8 +1,8 @@
-# Setting SHELL to bash allows bash commands to be executed by recipes. 
-# This is a requirement for 'setup-envtest.sh' in the test target. 
-# Options are set to exit when a recipe line exits non-zero or a piped command fails. 
-SHELL = /usr/bin/env bash -o pipefail 
-.SHELLFLAGS = -ec 
+# Setting SHELL to bash allows bash commands to be executed by recipes.
+# This is a requirement for 'setup-envtest.sh' in the test target.
+# Options are set to exit when a recipe line exits non-zero or a piped command fails.
+SHELL = /usr/bin/env bash -o pipefail
+.SHELLFLAGS = -ec
 CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
 KUBECONFIG?=$(HOME)/.kube/config
@@ -29,7 +29,7 @@ PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
 # Current Operator version
-VERSION ?= 4.12.0
+VERSION ?= 4.13.0
 # Default bundle image tag
 BUNDLE_IMG ?= controller-bundle:$(VERSION)
 # Options for 'bundle-build'
@@ -185,7 +185,7 @@ test-e2e-conformance:
 	SUITE=./test/conformance ./hack/run-e2e-conformance.sh
 
 test-e2e-validation-only:
-	SUITE=./test/validation ./hack/run-e2e-conformance.sh	
+	SUITE=./test/validation ./hack/run-e2e-conformance.sh
 
 test-e2e: generate vet manifests skopeo envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
