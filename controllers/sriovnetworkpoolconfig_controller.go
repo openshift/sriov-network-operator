@@ -54,7 +54,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 
 	// // Fetch SriovNetworkPoolConfig
 	instance := &sriovnetworkv1.SriovNetworkPoolConfig{}
-	err := r.Get(context.TODO(), req.NamespacedName, instance)
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -74,13 +74,13 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 		// registering our finalizer.
 		if !sriovnetworkv1.StringInArray(sriovnetworkv1.POOLCONFIGFINALIZERNAME, instance.ObjectMeta.Finalizers) {
 			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, sriovnetworkv1.POOLCONFIGFINALIZERNAME)
-			if err := r.Update(context.Background(), instance); err != nil {
+			if err := r.Update(ctx, instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
 		if utils.ClusterType == utils.ClusterTypeOpenshift {
 			if !isHypershift {
-				if err = r.syncOvsHardwareOffloadMachineConfigs(instance, false); err != nil {
+				if err = r.syncOvsHardwareOffloadMachineConfigs(ctx, instance, false); err != nil {
 					return reconcile.Result{}, err
 				}
 			} else {
@@ -93,7 +93,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 			// our finalizer is present, so lets handle any external dependency
 			logger.Info("delete SriovNetworkPoolConfig CR", "Namespace", instance.Namespace, "Name", instance.Name)
 			if utils.ClusterType == utils.ClusterTypeOpenshift && !isHypershift {
-				if err = r.syncOvsHardwareOffloadMachineConfigs(instance, true); err != nil {
+				if err = r.syncOvsHardwareOffloadMachineConfigs(ctx, instance, true); err != nil {
 					// if fail to delete the external dependency here, return with error
 					// so that it can be retried
 					return reconcile.Result{}, err
@@ -103,7 +103,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 			var found bool
 			instance.ObjectMeta.Finalizers, found = sriovnetworkv1.RemoveString(sriovnetworkv1.POOLCONFIGFINALIZERNAME, instance.ObjectMeta.Finalizers)
 			if found {
-				if err := r.Update(context.Background(), instance); err != nil {
+				if err := r.Update(ctx, instance); err != nil {
 					return reconcile.Result{}, err
 				}
 			}
@@ -121,7 +121,7 @@ func (r *SriovNetworkPoolConfigReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Complete(r)
 }
 
-func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(nc *sriovnetworkv1.SriovNetworkPoolConfig, deletion bool) error {
+func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(ctx context.Context, nc *sriovnetworkv1.SriovNetworkPoolConfig, deletion bool) error {
 	logger := log.Log.WithName("syncOvsHardwareOffloadMachineConfigs")
 
 	mcpName := nc.Spec.OvsHardwareOffloadConfig.Name
@@ -140,7 +140,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 		return nil
 	}
 
-	err := r.Get(context.TODO(), types.NamespacedName{Name: mcpName}, mcp)
+	err := r.Get(ctx, types.NamespacedName{Name: mcpName}, mcp)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return fmt.Errorf("machineConfigPool %s doesn't exist: %v", mcpName, err)
@@ -153,13 +153,13 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 		return err
 	}
 
-	err = r.Get(context.TODO(), types.NamespacedName{Name: mcName}, foundMC)
+	err = r.Get(ctx, types.NamespacedName{Name: mcName}, foundMC)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			if deletion {
 				logger.Info("MachineConfig has already been deleted")
 			} else {
-				err = r.Create(context.TODO(), mc)
+				err = r.Create(ctx, mc)
 				if err != nil {
 					return fmt.Errorf("couldn't create MachineConfig: %v", err)
 				}
@@ -171,7 +171,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 	} else {
 		if deletion {
 			logger.Info("offload disabled, delete MachineConfig")
-			err = r.Delete(context.TODO(), foundMC)
+			err = r.Delete(ctx, foundMC)
 			if err != nil {
 				return fmt.Errorf("couldn't delete MachineConfig: %v", err)
 			}
@@ -188,7 +188,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 			if !reflect.DeepEqual(foundIgn, renderedIgn) {
 				logger.Info("MachineConfig already exists, updating")
 				mc.SetResourceVersion(foundMC.GetResourceVersion())
-				err = r.Update(context.TODO(), mc)
+				err = r.Update(ctx, mc)
 				if err != nil {
 					return fmt.Errorf("couldn't update MachineConfig: %v", err)
 				}
