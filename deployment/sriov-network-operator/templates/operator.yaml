@@ -32,9 +32,9 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "sriov-network-operator.fullname" . }}
       priorityClassName: "system-node-critical"
-      {{- if .ImagePullSecrets }}
+      {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
-      {{- range .ImagePullSecrets }}
+      {{- range .Values.imagePullSecrets }}
       - name: {{ . }}
       {{- end }}
       {{- end }}
