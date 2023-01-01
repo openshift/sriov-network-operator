@@ -1,6 +1,6 @@
 #!/bin/sh
 # chroot /host/ modprobe $1
-kmod_name=$(tr "-" "_" <<< $1)
+kmod_name=$(echo $1 | tr "-" "_")
 kmod_args="${@:2}"
 chroot /host/ lsmod | grep "^$1" >& /dev/null
 
