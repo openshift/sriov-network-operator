@@ -20,7 +20,7 @@ else
     echo Found device: "${device}"
 fi
 
-type=$(mstconfig q $device | grep "Device type:" | awk '{ print $3}')
+type=$(mstconfig -d $device q | grep "Device type:" | awk '{ print $3}')
 
 if [ "${type}" != "BlueField2" ]; then
     echo "Device is not a Bluefield2"
