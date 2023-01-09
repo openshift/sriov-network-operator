@@ -64,8 +64,7 @@ linters-settings:
     for-loops: false # Report preallocation suggestions on for loops, false by default
   stylecheck:
     dot-import-whitelist: 
-      - github.com/onsi/ginkgo
-      - github.com/onsi/ginkgo/extensions/table
+      - github.com/onsi/ginkgo/v2
       - github.com/onsi/gomega
       - github.com/onsi/gomega/gstruct
 
