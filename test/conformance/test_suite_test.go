@@ -21,24 +21,17 @@ import (
 )
 
 var (
-	junitPath      *string
 	dumpOutput     *bool
 	reporterFile   string
 	customReporter *k8sreporter.KubernetesReporter
 )
 
 func init() {
-	junitPath = flag.String("junit", "junit.xml", "the path for the junit format report")
 	dumpOutput = flag.Bool("dump", false, "dump informations for failed tests")
 }
 
 func TestTest(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	_, reporterConfig := GinkgoConfiguration()
-	if junitPath != nil {
-		reporterConfig.JUnitReport = *junitPath
-	}
 
 	reporterFile = os.Getenv("REPORTER_OUTPUT")
 
@@ -56,7 +49,7 @@ func TestTest(t *testing.T) {
 		customReporter = k8sreporter.New(clients, os.Stdout)
 	}
 
-	RunSpecs(t, "SRIOV Operator conformance tests", reporterConfig)
+	RunSpecs(t, "SRIOV Operator conformance tests")
 }
 
 var _ = ReportAfterEach(func(sr types.SpecReport) {
