@@ -70,7 +70,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		logger.Info("SR-IOV Network Resource Injector and Operator Webhook are disabled.")
 	}
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
-	err := r.Get(context.TODO(), types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Name: constants.DefaultConfigName, Namespace: namespace}, defaultConfig)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -90,7 +90,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 				DisableDrain:             singleNode,
 			}
 
-			err = r.Create(context.TODO(), defaultConfig)
+			err = r.Create(ctx, defaultConfig)
 			if err != nil {
 				logger.Error(err, "Failed to create default Operator Config", "Namespace",
 					namespace, "Name", constants.DefaultConfigName)
@@ -107,16 +107,16 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 
 	// Render and sync webhook objects
-	if err = r.syncWebhookObjs(defaultConfig); err != nil {
+	if err = r.syncWebhookObjs(ctx, defaultConfig); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// Sync SriovNetworkConfigDaemon objects
-	if err = r.syncConfigDaemonSet(defaultConfig); err != nil {
+	if err = r.syncConfigDaemonSet(ctx, defaultConfig); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	if err = r.syncPluginDaemonSet(defaultConfig); err != nil {
+	if err = r.syncPluginDaemonSet(ctx, defaultConfig); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -132,7 +132,7 @@ func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
+func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig) error {
 	logger := log.Log.WithName("syncConfigDaemonset")
 	logger.Info("Start to sync SRIOV plugin daemonsets nodeSelector")
 	ds := &appsv1.DaemonSet{}
@@ -143,7 +143,7 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.S
 		return nil
 	}
 	for _, name := range names {
-		err := r.Client.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, ds)
+		err := r.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, ds)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
@@ -152,7 +152,7 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.S
 			return err
 		}
 		ds.Spec.Template.Spec.NodeSelector = dc.Spec.ConfigDaemonNodeSelector
-		err = r.Client.Update(context.TODO(), ds)
+		err = r.Client.Update(ctx, ds)
 		if err != nil {
 			logger.Error(err, "Couldn't update daemonset", "name", name)
 			return err
@@ -162,7 +162,7 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(dc *sriovnetworkv1.S
 	return nil
 }
 
-func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.SriovOperatorConfig) error {
+func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig) error {
 	logger := log.Log.WithName("syncConfigDaemonset")
 	logger.Info("Start to sync config daemonset")
 
@@ -204,7 +204,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 				return err
 			}
 		}
-		err = r.syncK8sResource(dc, obj)
+		err = r.syncK8sResource(ctx, dc, obj)
 		if err != nil {
 			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
 			return err
@@ -213,7 +213,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(dc *sriovnetworkv1.S
 	return nil
 }
 
-func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.SriovOperatorConfig) error {
+func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig) error {
 	logger := log.Log.WithName("syncWebhookObjs")
 	logger.Info("Start to sync webhook objects")
 
@@ -244,7 +244,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		// Delete injector webhook
 		if !*dc.Spec.EnableInjector && path == constants.InjectorWebHookPath {
 			for _, obj := range objs {
-				err = r.deleteWebhookObject(obj)
+				err = r.deleteWebhookObject(ctx, obj)
 				if err != nil {
 					return err
 				}
@@ -257,7 +257,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		// Delete operator webhook
 		if !*dc.Spec.EnableOperatorWebhook && path == constants.OperatorWebHookPath {
 			for _, obj := range objs {
-				err = r.deleteWebhookObject(obj)
+				err = r.deleteWebhookObject(ctx, obj)
 				if err != nil {
 					return err
 				}
@@ -270,7 +270,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 
 		// Sync Webhook
 		for _, obj := range objs {
-			err = r.syncK8sResource(dc, obj)
+			err = r.syncK8sResource(ctx, dc, obj)
 			if err != nil {
 				logger.Error(err, "Couldn't sync webhook objects")
 				return err
@@ -281,21 +281,21 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 	return nil
 }
 
-func (r *SriovOperatorConfigReconciler) deleteWebhookObject(obj *uns.Unstructured) error {
-	if err := r.deleteK8sResource(obj); err != nil {
+func (r *SriovOperatorConfigReconciler) deleteWebhookObject(ctx context.Context, obj *uns.Unstructured) error {
+	if err := r.deleteK8sResource(ctx, obj); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *SriovOperatorConfigReconciler) deleteK8sResource(in *uns.Unstructured) error {
-	if err := apply.DeleteObject(context.TODO(), r.Client, in); err != nil {
+func (r *SriovOperatorConfigReconciler) deleteK8sResource(ctx context.Context, in *uns.Unstructured) error {
+	if err := apply.DeleteObject(ctx, r.Client, in); err != nil {
 		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
 	}
 	return nil
 }
 
-func (r *SriovOperatorConfigReconciler) syncK8sResource(cr *sriovnetworkv1.SriovOperatorConfig, in *uns.Unstructured) error {
+func (r *SriovOperatorConfigReconciler) syncK8sResource(ctx context.Context, cr *sriovnetworkv1.SriovOperatorConfig, in *uns.Unstructured) error {
 	switch in.GetKind() {
 	case "ClusterRole", "ClusterRoleBinding", "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration":
 	default:
@@ -304,7 +304,7 @@ func (r *SriovOperatorConfigReconciler) syncK8sResource(cr *sriovnetworkv1.Sriov
 			return err
 		}
 	}
-	if err := apply.ApplyObject(context.TODO(), r.Client, in); err != nil {
+	if err := apply.ApplyObject(ctx, r.Client, in); err != nil {
 		return fmt.Errorf("failed to apply object %v with err: %v", in, err)
 	}
 	return nil
