@@ -8,7 +8,7 @@ import (
 	"github.com/golang/glog"
 )
 
-//BlueField mode representation
+// BlueField mode representation
 type BlueFieldMode int
 
 const (
