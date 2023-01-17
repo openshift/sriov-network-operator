@@ -9,10 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.18
+    - name: Set up Go 1.19
       uses: actions/setup-go@v3
       with:
-        go-version: '>=1.18.2'
+        go-version: 1.19.x
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -28,10 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.18
+    - name: Set up Go 1.19
       uses: actions/setup-go@v2
       with:
-        go-version: 1.18.2
+        go-version: 1.19.x
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -44,3 +44,31 @@ jobs:
 
     - name: test bindata/scripts
       run: make test-bindata-scripts
+
+  test-coverage:
+    name: test-coverage
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.19
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.19.x
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: test pkg
+      run: make test-pkg
+
+    - name: test controllers on opensfhit
+      run: CLUSTER_TYPE=openshift make test-controllers
+
+    - name: merge test coverage
+      run: make merge-test-coverage
+
+    - name: Coveralls
+      uses: coverallsapp/github-action@1.1.3
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path-to-lcov: lcov.out
