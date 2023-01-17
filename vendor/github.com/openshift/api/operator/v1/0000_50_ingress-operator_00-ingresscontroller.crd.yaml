@@ -219,7 +219,7 @@ spec:
                     properties:
                       dnsManagementPolicy:
                         default: Managed
-                        description: 'dnsManagementPolicy indicates if the lifecyle
+                        description: 'dnsManagementPolicy indicates if the lifecycle
                           of the wildcard DNS record associated with the load balancer
                           service will be managed by the ingress operator. It defaults
                           to Managed. Valid values are: Managed and Unmanaged.'
@@ -1504,7 +1504,7 @@ spec:
                     properties:
                       dnsManagementPolicy:
                         default: Managed
-                        description: 'dnsManagementPolicy indicates if the lifecyle
+                        description: 'dnsManagementPolicy indicates if the lifecycle
                           of the wildcard DNS record associated with the load balancer
                           service will be managed by the ingress operator. It defaults
                           to Managed. Valid values are: Managed and Unmanaged.'

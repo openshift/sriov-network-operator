@@ -118,7 +118,7 @@ var _ = Describe("[sriov] operator", func() {
 				}, 3*time.Minute, 1*time.Second).Should(Equal(true))
 
 				By("Labeling one worker node with the label needed for the daemon")
-				allNodes, err := clients.Nodes().List(context.Background(), metav1.ListOptions{
+				allNodes, err := clients.CoreV1Interface.Nodes().List(context.Background(), metav1.ListOptions{
 					LabelSelector: "node-role.kubernetes.io/worker",
 				})
 				Expect(err).ToNot(HaveOccurred())
@@ -129,7 +129,7 @@ var _ = Describe("[sriov] operator", func() {
 				Expect(len(selectedNodes)).To(BeNumerically(">", 0), "There must be at least one worker")
 				candidate := selectedNodes[0]
 				candidate.Labels["sriovenabled"] = "true"
-				_, err = clients.Nodes().Update(context.Background(), &candidate, metav1.UpdateOptions{})
+				_, err = clients.CoreV1Interface.Nodes().Update(context.Background(), &candidate, metav1.UpdateOptions{})
 				Expect(err).ToNot(HaveOccurred())
 
 				By("Setting the node selector for each daemon")
@@ -203,7 +203,7 @@ var _ = Describe("[sriov] operator", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(func() int64 {
-					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 					allocatable, _ := resNum.AsInt64()
@@ -404,7 +404,7 @@ var _ = Describe("[sriov] operator", func() {
 
 			BeforeEach(func() {
 				Eventually(func() int64 {
-					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 					allocatable, _ := resNum.AsInt64()
@@ -955,7 +955,7 @@ var _ = Describe("[sriov] operator", func() {
 
 					By("waiting for the resources to be available")
 					Eventually(func() int64 {
-						testedNode, err := clients.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
+						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
 						resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 						allocatable, _ := resNum.AsInt64()
@@ -1001,7 +1001,7 @@ var _ = Describe("[sriov] operator", func() {
 					WaitForSRIOVStable()
 
 					Eventually(func() int64 {
-						testedNode, err := clients.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
+						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
 						resNum := testedNode.Status.Allocatable["openshift.io/testresource"]
 						capacity, _ := resNum.AsInt64()
@@ -1049,7 +1049,7 @@ var _ = Describe("[sriov] operator", func() {
 					}, 15*time.Minute, 5*time.Second).Should(BeTrue())
 
 					Eventually(func() map[string]int64 {
-						testedNode, err := clients.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
+						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
 						resNum := testedNode.Status.Allocatable["openshift.io/testresource"]
 						capacity, _ := resNum.AsInt64()
@@ -1289,7 +1289,7 @@ var _ = Describe("[sriov] operator", func() {
 						WaitForSRIOVStable()
 						By("waiting for the resources to be available")
 						Eventually(func() int64 {
-							testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+							testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 							Expect(err).ToNot(HaveOccurred())
 							resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 							allocatable, _ := resNum.AsInt64()
@@ -1440,7 +1440,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				By("waiting for the resources to be available")
 				Eventually(func() int64 {
-					testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
 					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 					allocatable, _ := resNum.AsInt64()
@@ -1610,7 +1610,7 @@ var _ = Describe("[sriov] operator", func() {
 					WaitForSRIOVStable()
 					By("waiting for the resources to be available")
 					Eventually(func() int64 {
-						testedNode, err := clients.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
 						resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 						allocatable, _ := resNum.AsInt64()
@@ -1906,7 +1906,7 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 }
 
 func daemonsScheduledOnNodes(selector string) bool {
-	nn, err := clients.Nodes().List(context.Background(), metav1.ListOptions{
+	nn, err := clients.CoreV1Interface.Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: selector,
 	})
 	Expect(err).ToNot(HaveOccurred())
@@ -1938,7 +1938,7 @@ func createSriovPolicy(sriovDevice string, testNode string, numVfs int, resource
 	WaitForSRIOVStable()
 
 	Eventually(func() int64 {
-		testedNode, err := clients.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})
+		testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 		capacity, _ := resNum.AsInt64()
