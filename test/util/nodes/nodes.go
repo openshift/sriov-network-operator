@@ -26,7 +26,7 @@ func MatchingOptionalSelectorState(clients *client.ClientSet, toFilter []sriovv1
 	if NodesSelector == "" {
 		return toFilter, nil
 	}
-	toMatch, err := clients.Nodes().List(context.Background(), metav1.ListOptions{
+	toMatch, err := clients.CoreV1Interface.Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: NodesSelector,
 	})
 	if err != nil {
@@ -58,7 +58,7 @@ func MatchingOptionalSelector(clients *client.ClientSet, toFilter []corev1.Node)
 	if NodesSelector == "" {
 		return toFilter, nil
 	}
-	toMatch, err := clients.Nodes().List(context.Background(), metav1.ListOptions{
+	toMatch, err := clients.CoreV1Interface.Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: NodesSelector,
 	})
 	if err != nil {

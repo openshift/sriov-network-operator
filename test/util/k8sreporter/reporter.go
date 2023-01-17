@@ -67,7 +67,7 @@ func (r *KubernetesReporter) logPods(namespace string) {
 func (r *KubernetesReporter) logNodes() {
 	fmt.Fprintf(r.dumpOutput, "Logging nodes")
 
-	nodes, err := r.clients.Nodes().List(context.Background(), metav1.ListOptions{})
+	nodes, err := r.clients.CoreV1Interface.Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to fetch nodes: %v\n", err)
 		return
