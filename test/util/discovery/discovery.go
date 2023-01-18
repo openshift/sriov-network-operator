@@ -62,7 +62,7 @@ func DiscoveredResources(clients *client.ClientSet, sriovInfos *cluster.EnabledN
 func getSriovNodes(clients *client.ClientSet, sriovNodeNames []string) ([]corev1.Node, error) {
 	var nodes []corev1.Node
 	for _, sriovNodeName := range sriovNodeNames {
-		node, err := clients.Nodes().Get(context.Background(), sriovNodeName, metav1.GetOptions{})
+		node, err := clients.CoreV1Interface.Nodes().Get(context.Background(), sriovNodeName, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
