@@ -12,8 +12,7 @@ import (
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
-	"github.com/onsi/ginkgo/config"
-	"github.com/onsi/ginkgo/types"
+	"github.com/onsi/ginkgo/v2/types"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,30 +28,15 @@ func New(clients *testclient.ClientSet, dumpDestination io.Writer) *KubernetesRe
 	return &KubernetesReporter{clients: clients, dumpOutput: dumpDestination}
 }
 
-func (r *KubernetesReporter) SpecSuiteWillBegin(config config.GinkgoConfigType, summary *types.SuiteSummary) {
-
-}
-
-func (r *KubernetesReporter) BeforeSuiteDidRun(setupSummary *types.SetupSummary) {
-	r.Cleanup()
-}
-
-func (r *KubernetesReporter) SpecWillRun(specSummary *types.SpecSummary) {
-}
-
-func (r *KubernetesReporter) SpecDidComplete(specSummary *types.SpecSummary) {
+func (r *KubernetesReporter) Report(sr types.SpecReport) {
 	r.Lock()
 	defer r.Unlock()
-
-	if !specSummary.HasFailureState() {
-		return
-	}
-	fmt.Fprintln(r.dumpOutput, "Starting dump for failed spec", specSummary.ComponentTexts)
-	r.Dump()
+	fmt.Fprintln(r.dumpOutput, "Starting dump for failed spec", sr.ContainerHierarchyTexts)
+	r.dump()
 	fmt.Fprintln(r.dumpOutput, "Finished dump for failed spec")
 }
 
-func (r *KubernetesReporter) Dump() {
+func (r *KubernetesReporter) dump() {
 	r.logNodes()
 	r.logPods("openshift-sriov-network-operator")
 	r.logPods(namespaces.Test)
@@ -61,10 +45,6 @@ func (r *KubernetesReporter) Dump() {
 	})
 	r.logSriovNodeState()
 	r.logNetworkPolicies()
-}
-
-// Cleanup cleans up the current content of the artifactsDir
-func (r *KubernetesReporter) Cleanup() {
 }
 
 func (r *KubernetesReporter) logPods(namespace string) {
@@ -87,7 +67,7 @@ func (r *KubernetesReporter) logPods(namespace string) {
 func (r *KubernetesReporter) logNodes() {
 	fmt.Fprintf(r.dumpOutput, "Logging nodes")
 
-	nodes, err := r.clients.Nodes().List(context.Background(), metav1.ListOptions{})
+	nodes, err := r.clients.CoreV1Interface.Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to fetch nodes: %v\n", err)
 		return
@@ -160,12 +140,4 @@ func (r *KubernetesReporter) logSriovNodeState() {
 		return
 	}
 	fmt.Fprintln(r.dumpOutput, string(j))
-}
-
-func (r *KubernetesReporter) AfterSuiteDidRun(setupSummary *types.SetupSummary) {
-
-}
-
-func (r *KubernetesReporter) SpecSuiteDidEnd(summary *types.SuiteSummary) {
-
 }

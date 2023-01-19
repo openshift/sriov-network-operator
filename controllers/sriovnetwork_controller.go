@@ -64,7 +64,7 @@ func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Fetch the SriovNetwork instance
 	instance := &sriovnetworkv1.SriovNetwork{}
-	err = r.Get(context.TODO(), req.NamespacedName, instance)
+	err = r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -84,7 +84,7 @@ func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// registering our finalizer.
 		if !sriovnetworkv1.StringInArray(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers) {
 			instance.ObjectMeta.Finalizers = append(instance.ObjectMeta.Finalizers, sriovnetworkv1.NETATTDEFFINALIZERNAME)
-			if err := r.Update(context.Background(), instance); err != nil {
+			if err := r.Update(ctx, instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
@@ -102,7 +102,7 @@ func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			var found bool
 			instance.ObjectMeta.Finalizers, found = sriovnetworkv1.RemoveString(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers)
 			if found {
-				if err := r.Update(context.Background(), instance); err != nil {
+				if err := r.Update(ctx, instance); err != nil {
 					return reconcile.Result{}, err
 				}
 			}
@@ -119,7 +119,7 @@ func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return reconcile.Result{}, err
 	}
 	if lnns, ok := instance.GetAnnotations()[sriovnetworkv1.LASTNETWORKNAMESPACE]; ok && netAttDef.GetNamespace() != lnns {
-		err = r.Delete(context.TODO(), &netattdefv1.NetworkAttachmentDefinition{
+		err = r.Delete(ctx, &netattdefv1.NetworkAttachmentDefinition{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      instance.GetName(),
 				Namespace: lnns,
@@ -132,18 +132,18 @@ func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 	// Check if this NetworkAttachmentDefinition already exists
 	found := &netattdefv1.NetworkAttachmentDefinition{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
+	err = r.Get(ctx, types.NamespacedName{Name: netAttDef.Name, Namespace: netAttDef.Namespace}, found)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("NetworkAttachmentDefinition CR not exist, creating")
-			err = r.Create(context.TODO(), netAttDef)
+			err = r.Create(ctx, netAttDef)
 			if err != nil {
 				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err
 			}
 			anno := map[string]string{sriovnetworkv1.LASTNETWORKNAMESPACE: netAttDef.Namespace}
 			instance.SetAnnotations(anno)
-			if err := r.Update(context.Background(), instance); err != nil {
+			if err := r.Update(ctx, instance); err != nil {
 				return reconcile.Result{}, err
 			}
 		} else {
@@ -155,7 +155,7 @@ func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if !reflect.DeepEqual(found.Spec, netAttDef.Spec) || !reflect.DeepEqual(found.GetAnnotations(), netAttDef.GetAnnotations()) {
 			reqLogger.Info("Update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 			netAttDef.SetResourceVersion(found.GetResourceVersion())
-			err = r.Update(context.TODO(), netAttDef)
+			err = r.Update(ctx, netAttDef)
 			if err != nil {
 				reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err

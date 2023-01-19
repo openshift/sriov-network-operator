@@ -17,8 +17,8 @@ while test $# -gt 0; do
 
    --netns | -n)
       input=$2
-      local_netns=$(cut -s -d ':' -f 1 <<< $input)
-      local_pfs=$(cut -s -d ':' -f 2 <<< $input)
+      local_netns=$(echo $input | cut -s -d ':' -f 1)
+      local_pfs=$(echo $input | cut -s -d ':' -f 2)
       input=""
 
       if [[ -z "$local_netns" ]];then
@@ -37,7 +37,7 @@ provide it in the form --netns <netns>:<pf1>,<pf2> !"
 
       netnses+=("$local_netns")
 
-      pfs["$local_netns"]="$(tr , " " <<< $local_pfs)"
+      pfs["$local_netns"]="$(echo $local_pfs | tr , " ")"
 
       local_netns=""
       local_pfs=""

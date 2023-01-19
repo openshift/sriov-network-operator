@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
 
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
@@ -19,24 +19,19 @@ import (
 )
 
 var (
-	junitPath  *string
-	dumpOutput *bool
+	dumpOutput     *bool
+	reporterFile   string
+	customReporter *k8sreporter.KubernetesReporter
 )
 
 func init() {
-	junitPath = flag.String("junit", "junit.xml", "the path for the junit format report")
 	dumpOutput = flag.Bool("dump", false, "dump informations for failed tests")
 }
 
 func TestTest(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	rr := []Reporter{}
-	if junitPath != nil {
-		rr = append(rr, reporters.NewJUnitReporter(*junitPath))
-	}
-
-	reporterFile := os.Getenv("REPORTER_OUTPUT")
+	reporterFile = os.Getenv("REPORTER_OUTPUT")
 
 	clients := testclient.New("")
 
@@ -47,10 +42,20 @@ func TestTest(t *testing.T) {
 			return
 		}
 		defer f.Close()
-		rr = append(rr, k8sreporter.New(clients, f))
+		customReporter = k8sreporter.New(clients, f)
 	} else if *dumpOutput {
-		rr = append(rr, k8sreporter.New(clients, os.Stdout))
+		customReporter = k8sreporter.New(clients, os.Stdout)
 	}
 
-	RunSpecsWithDefaultAndCustomReporters(t, "SRIOV Operator validation tests", rr)
+	RunSpecs(t, "SRIOV Operator validation tests")
 }
+
+var _ = ReportAfterEach(func(sr types.SpecReport) {
+	if sr.Failed() == false {
+		return
+	}
+
+	if reporterFile != "" || *dumpOutput {
+		customReporter.Report(sr)
+	}
+})
