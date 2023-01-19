@@ -49,8 +49,13 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
+var (
+	k8sClient client.Client
+	testEnv   *envtest.Environment
+
+	ctx    context.Context
+	cancel context.CancelFunc
+)
 
 // Define utility constants for object names and testing timeouts/durations and intervals.
 const (
@@ -133,9 +138,11 @@ var _ = BeforeSuite(func(done Done) {
 	os.Setenv("RELEASE_VERSION", "4.7.0")
 	os.Setenv("OPERATOR_NAME", "sriov-network-operator")
 
+	ctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())
+
 	go func() {
 		defer GinkgoRecover()
-		err = k8sManager.Start(ctrl.SetupSignalHandler())
+		err = k8sManager.Start(ctx)
 		Expect(err).ToNot(HaveOccurred())
 	}()
 
@@ -171,8 +178,10 @@ var _ = BeforeSuite(func(done Done) {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	cancel()
+	Eventually(func() error {
+		return testEnv.Stop()
+	}, timeout, time.Second).ShouldNot(HaveOccurred())
 })
 
 func TestAPIs(t *testing.T) {
