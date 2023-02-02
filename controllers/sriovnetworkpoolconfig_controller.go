@@ -1,9 +1,10 @@
 package controllers
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -163,14 +164,24 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 				return fmt.Errorf("Couldn't delete MachineConfig: %v", err)
 			}
 		} else {
-			if bytes.Compare(foundMC.Spec.Config.Raw, mc.Spec.Config.Raw) == 0 {
+			var foundIgn, renderedIgn interface{}
+			// The Raw config JSON string may have the fields reordered.
+			// For example the "path" field may come before the "contents"
+			// field in the rendered ignition JSON; while the found
+			// MachineConfig's ignition JSON would have it the other way around.
+			// Thus we need to unmarshal the JSON for both found and rendered
+			// ignition and compare.
+			json.Unmarshal(foundMC.Spec.Config.Raw, &foundIgn)
+			json.Unmarshal(mc.Spec.Config.Raw, &renderedIgn)
+			if !reflect.DeepEqual(foundIgn, renderedIgn) {
 				logger.Info("MachineConfig already exists, updating")
-				err = r.Update(context.TODO(), foundMC)
+				mc.SetResourceVersion(foundMC.GetResourceVersion())
+				err = r.Update(context.TODO(), mc)
 				if err != nil {
 					return fmt.Errorf("Couldn't update MachineConfig: %v", err)
 				}
 			} else {
-				logger.Info("No content change, skip updating MC")
+				logger.Info("No content change, skip updating MachineConfig")
 			}
 		}
 	}
