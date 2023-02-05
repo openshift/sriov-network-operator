@@ -5,6 +5,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec 
 CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
+BIN_DIR=$(CURPATH)/bin
 KUBECONFIG?=$(HOME)/.kube/config
 export OPERATOR_EXEC?=oc
 
@@ -46,14 +47,7 @@ IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:crdVersions={v1}"
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
-else
-GOBIN=$(shell go env GOBIN)
-endif
-
-GOLANGCI_LINT = $(GOBIN)/golangci-lint
+GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
 # golangci-lint version should be updated periodically
 # we keep it fixed to avoid it from unexpectedly failing on the project
 # in case of a version bump
@@ -71,6 +65,7 @@ _build-%:
 
 clean:
 	@rm -rf $(TARGET_DIR)
+	@rm -rf $(BIN_DIR)
 
 update-codegen:
 	hack/update-codegen.sh
@@ -143,29 +138,24 @@ vet:
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
-CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
+CONTROLLER_GEN = $(BIN_DIR)/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0)
+	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0)
 
-KUSTOMIZE = $(shell pwd)/bin/kustomize
+KUSTOMIZE = $(BIN_DIR)/kustomize
 kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.5)
+	$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.5)
 
-ENVTEST = $(shell pwd)/bin/setup-envtest
+ENVTEST = $(BIN_DIR)/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.
-	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
 
-# go-get-tool will 'go install' any package $2 and install it to $1.
-PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
-define go-get-tool
+# go-install-tool will 'go install' any package $2 and install it to $1.
+define go-install-tool
 @[ -f $(1) ] || { \
 set -e ;\
-TMP_DIR=$$(mktemp -d) ;\
-cd $$TMP_DIR ;\
-go mod init tmp ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go install -mod=readonly $(2) ;\
-rm -rf $$TMP_DIR ;\
+GOBIN=$(BIN_DIR) go install -mod=mod $(2) ;\
 }
 endef
 
@@ -222,15 +212,17 @@ test-%: generate vet manifests envtest
 # deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 # test-e2e-k8s: test-e2e
 
+GOCOVMERGE = $(BIN_DIR)/gocovmerge
 gocovmerge: ## Download gocovmerge locally if necessary.
-	go install -mod=readonly github.com/shabbyrobe/gocovmerge/cmd/gocovmerge@latest
+	$(call go-install-tool,$(GOCOVMERGE),github.com/shabbyrobe/gocovmerge/cmd/gocovmerge@latest)
 
+GCOV2LCOV = $(BIN_DIR)/gcov2lcov
 gcov2lcov:
-	go install -mod=readonly github.com/jandelgado/gcov2lcov@v1.0.5
+	$(call go-install-tool,$(GCOV2LCOV),github.com/jandelgado/gcov2lcov@v1.0.5)
 
 merge-test-coverage: gocovmerge gcov2lcov
-	gocovmerge cover-*.out > cover.out
-	gcov2lcov -infile cover.out -outfile lcov.out
+	$(GOCOVMERGE) cover-*.out > cover.out
+	$(GCOV2LCOV) -infile cover.out -outfile lcov.out
 
 deploy-wait:
 	hack/deploy-wait.sh
@@ -246,13 +238,9 @@ deps-update:
 	go mod tidy && \
 	go mod vendor
 
-$(GOLANGCI_LINT): $(info  building golangci-lint...)
-	$Q curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) $(GOLANGCI_LINT_VER)
+$(GOLANGCI_LINT): ; $(info installing golangci-lint...)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER))
 
 .PHONY: lint
 lint: | $(GOLANGCI_LINT) ; $(info  running golangci-lint...) @ ## Run golangci-lint
-	mkdir -p $(CURPATH)/test-lint
-	cd $(CURPATH) && ret=0 && \
-		test -z "$$($(GOLANGCI_LINT) run | tee $(CURPATH)/test-lint/lint.out)" || ret=1 ; \
-		cat $(CURPATH)/test-lint/lint.out ; rm -rf $(CURPATH)/test-lint ; \
-	exit $$ret
+	$(GOLANGCI_LINT) run --timeout=10m
