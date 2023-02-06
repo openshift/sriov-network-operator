@@ -62,8 +62,8 @@ contents:
           echo $VfPciAddr > /sys/bus/pci/drivers/mlx5_core/unbind || true
         done
         # set flow steering mode before entering switchdev mode
-        echo "Set flow steering mode to dmfs"
-        devlink dev param set pci/${pci_addr} name flow_steering_mode value dmfs cmode runtime
+        echo "Set flow steering mode to smfs"
+        devlink dev param set pci/${pci_addr} name flow_steering_mode value smfs cmode runtime
 
         # set PF to switchdev mode
         echo "Set eswitch mode to switchdev"
