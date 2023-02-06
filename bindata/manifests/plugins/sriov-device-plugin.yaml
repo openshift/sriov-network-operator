@@ -69,9 +69,6 @@ spec:
         - name: devicesock
           hostPath:
             path: /var/lib/kubelet/
-        - name: net
-          hostPath:
-            path: /sys/class/net
         - name: config-volume
           configMap: 
             name: device-plugin-config
