@@ -103,14 +103,15 @@ type Daemon struct {
 }
 
 const (
-	rdmaScriptsPath     = "/bindata/scripts/enable-rdma.sh"
-	udevScriptsPath     = "/bindata/scripts/load-udev.sh"
-	annoKey             = "sriovnetwork.openshift.io/state"
-	annoIdle            = "Idle"
-	annoDraining        = "Draining"
-	annoMcpPaused       = "Draining_MCP_Paused"
-	syncStatusSucceeded = "Succeeded"
-	syncStatusFailed    = "Failed"
+	rdmaScriptsPath      = "/bindata/scripts/enable-rdma.sh"
+	udevScriptsPath      = "/bindata/scripts/load-udev.sh"
+	annoKey              = "sriovnetwork.openshift.io/state"
+	annoIdle             = "Idle"
+	annoDraining         = "Draining"
+	annoMcpPaused        = "Draining_MCP_Paused"
+	syncStatusSucceeded  = "Succeeded"
+	syncStatusFailed     = "Failed"
+	syncStatusInProgress = "InProgress"
 )
 
 var namespace = os.Getenv("NAMESPACE")
@@ -448,7 +449,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	}
 
 	dn.refreshCh <- Message{
-		syncStatus:    "InProgress",
+		syncStatus:    syncStatusInProgress,
 		lastSyncError: "",
 	}
 

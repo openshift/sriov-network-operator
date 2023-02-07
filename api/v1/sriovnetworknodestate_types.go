@@ -91,6 +91,7 @@ type SriovNetworkNodeStateStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Sync Status",type=string,JSONPath=`.status.syncStatus`
 
 // SriovNetworkNodeState is the Schema for the sriovnetworknodestates API
 type SriovNetworkNodeState struct {
