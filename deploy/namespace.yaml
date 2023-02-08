@@ -4,3 +4,6 @@ metadata:
   name: $NAMESPACE
   labels:
     name: $NAMESPACE
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: v1.24
+    security.openshift.io/scc.podSecurityLabelSync: "false"
