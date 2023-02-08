@@ -184,6 +184,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	var namespace = os.Getenv("NAMESPACE")
 	if err := sriovnetworkv1.InitNicIDMap(kubeclient, namespace); err != nil {
 		glog.Errorf("failed to run init NicIdMap: %v", err)
+		panic(err.Error())
 	}
 
 	// block the deamon process until nodeWriter finish first its run
