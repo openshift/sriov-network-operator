@@ -1073,7 +1073,18 @@ func tryCreateNMUdevRule() error {
 	dirPath := "/host/etc/udev/rules.d/"
 	filePath := dirPath + "10-nm-unmanaged.rules"
 
-	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetSupportedVfIds(), "|"))
+	// we need to remove the Red Hat Virtio network device from the udev rule configuration
+	// if we don't remove it when running the config-daemon on a virtual node it will disconnect the node after a reboot
+	// even that the operator should not be installed on virtual environments that are not openstack
+	// we should not destroy the cluster if the operator is installed there
+	supportedVfIds := []string{}
+	for _, vfID := range sriovnetworkv1.GetSupportedVfIds() {
+		if vfID == "0x1000" {
+			continue
+		}
+		supportedVfIds = append(supportedVfIds, vfID)
+	}
+	new_content := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(supportedVfIds, "|"))
 
 	// add NM udev rules for renaming VF rep
 	new_content = new_content + fmt.Sprintf("SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n")
