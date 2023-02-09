@@ -19,6 +19,9 @@ spec:
     - jsonPath: .status.syncStatus
       name: Sync Status
       type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     name: v1
     schema:
       openAPIV3Schema:
