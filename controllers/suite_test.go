@@ -42,6 +42,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -115,14 +116,16 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&SriovOperatorConfigReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
+		Client:           k8sManager.GetClient(),
+		Scheme:           k8sManager.GetScheme(),
+		OpenshiftContext: &utils.OpenshiftContext{OpenshiftFlavor: utils.OpenshiftFlavorDefault},
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&SriovNetworkPoolConfigReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
+		Client:           k8sManager.GetClient(),
+		Scheme:           k8sManager.GetScheme(),
+		OpenshiftContext: &utils.OpenshiftContext{OpenshiftFlavor: utils.OpenshiftFlavorDefault},
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

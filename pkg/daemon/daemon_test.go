@@ -11,7 +11,6 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	fakemcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/fake"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakek8s "k8s.io/client-go/kubernetes/fake"
@@ -100,7 +99,6 @@ var _ = Describe("Config Daemon", func() {
 
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
 		client := fakesnclientset.NewSimpleClientset()
-		mcClient := fakemcclientset.NewSimpleClientset()
 
 		err = sriovnetworkv1.InitNicIDMap(kubeClient, namespace)
 		Expect(err).ToNot(HaveOccurred())
@@ -108,10 +106,7 @@ var _ = Describe("Config Daemon", func() {
 		sut = New("test-node",
 			client,
 			kubeClient,
-			utils.OpenshiftContext{
-				McClient:        mcClient,
-				OpenshiftFlavor: utils.OpenshiftFlavorDefault,
-			},
+			&utils.OpenshiftContext{IsOpenShiftCluster: false, OpenshiftFlavor: ""},
 			exitCh,
 			stopCh,
 			syncCh,

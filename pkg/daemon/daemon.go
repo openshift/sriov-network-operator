@@ -69,7 +69,7 @@ type Daemon struct {
 	// kubeClient allows interaction with Kubernetes, including the node we are running on.
 	kubeClient kubernetes.Interface
 
-	openshiftContext utils.OpenshiftContext
+	openshiftContext *utils.OpenshiftContext
 
 	nodeState *sriovnetworkv1.SriovNetworkNodeState
 
@@ -133,7 +133,7 @@ func New(
 	nodeName string,
 	client snclientset.Interface,
 	kubeClient kubernetes.Interface,
-	openshiftContext utils.OpenshiftContext,
+	openshiftContext *utils.OpenshiftContext,
 	exitCh chan<- error,
 	stopCh <-chan struct{},
 	syncCh <-chan struct{},
@@ -490,7 +490,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 			}
 		}
 	}
-	if utils.ClusterType == utils.ClusterTypeOpenshift && !dn.openshiftContext.IsHypershift() {
+	if dn.openshiftContext.IsOpenshiftCluster() && !dn.openshiftContext.IsHypershift() {
 		if err = dn.getNodeMachinePool(); err != nil {
 			return err
 		}
@@ -507,7 +507,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 				<-done
 			}
 
-			if utils.ClusterType == utils.ClusterTypeOpenshift && !dn.openshiftContext.IsHypershift() {
+			if dn.openshiftContext.IsOpenshiftCluster() && !dn.openshiftContext.IsHypershift() {
 				glog.Infof("nodeStateSyncHandler(): pause MCP")
 				if err := dn.pauseMCP(); err != nil {
 					return err
@@ -591,7 +591,7 @@ func (dn *Daemon) completeDrain() error {
 		}
 	}
 
-	if utils.ClusterType == utils.ClusterTypeOpenshift && !dn.openshiftContext.IsHypershift() {
+	if dn.openshiftContext.IsOpenshiftCluster() && !dn.openshiftContext.IsHypershift() {
 		glog.Infof("completeDrain(): resume MCP %s", dn.mcpName)
 		pausePatch := []byte("{\"spec\":{\"paused\":false}}")
 		if _, err := dn.openshiftContext.McClient.MachineconfigurationV1().MachineConfigPools().Patch(context.Background(), dn.mcpName, types.MergePatchType, pausePatch, metav1.PatchOptions{}); err != nil {
