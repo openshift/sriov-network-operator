@@ -27,9 +27,6 @@ import (
 	"k8s.io/client-go/util/connrotation"
 
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
@@ -131,22 +128,9 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
-	mcclient := mcclientset.NewForConfigOrDie(config)
-	openshiftFlavor := utils.OpenshiftFlavorDefault
-	if utils.ClusterType == utils.ClusterTypeOpenshift {
-		infraClient, err := client.New(config, client.Options{
-			Scheme: scheme.Scheme,
-		})
-		if err != nil {
-			panic(err)
-		}
-		isHypershift, err := utils.IsExternalControlPlaneCluster(infraClient)
-		if err != nil {
-			panic(err)
-		}
-		if isHypershift {
-			openshiftFlavor = utils.OpenshiftFlavorHypershift
-		}
+	openshiftContext, err := utils.NewOpenshiftContext(config, scheme.Scheme)
+	if err != nil {
+		panic(err)
 	}
 
 	config.Timeout = 5 * time.Second
@@ -199,10 +183,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		startOpts.nodeName,
 		snclient,
 		kubeclient,
-		utils.OpenshiftContext{
-			McClient:        mcclient,
-			OpenshiftFlavor: openshiftFlavor,
-		},
+		openshiftContext,
 		exitCh,
 		stopCh,
 		syncCh,
