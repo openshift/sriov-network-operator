@@ -172,6 +172,7 @@ func New(
 			},
 			Out:    writer{glog.Info},
 			ErrOut: writer{glog.Error},
+			Ctx:    context.Background(),
 		},
 		workqueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(updateDelay), 1)},
