@@ -24,7 +24,8 @@ import (
 // SriovNetworkPoolConfigReconciler reconciles a SriovNetworkPoolConfig object
 type SriovNetworkPoolConfigReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme           *runtime.Scheme
+	OpenshiftContext *utils.OpenshiftContext
 }
 
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworkpoolconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -43,10 +44,9 @@ type SriovNetworkPoolConfigReconciler struct {
 func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("sriovnetworkpoolconfig", req.NamespacedName)
 	isHypershift := false
-	if utils.ClusterType == utils.ClusterTypeOpenshift {
-		var err error
-		if isHypershift, err = utils.IsExternalControlPlaneCluster(r.Client); err != nil {
-			return reconcile.Result{}, err
+	if r.OpenshiftContext.IsOpenshiftCluster() {
+		if r.OpenshiftContext.IsHypershift() {
+			isHypershift = true
 		}
 		logger = logger.WithValues("isHypershift", isHypershift)
 	}
