@@ -202,7 +202,8 @@ func updateDialer(clientConfig *rest.Config) (func(), error) {
 	if clientConfig.Transport != nil || clientConfig.Dial != nil {
 		return nil, fmt.Errorf("there is already a transport or dialer configured")
 	}
-	d := connrotation.NewDialer((&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext)
+	f := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	d := connrotation.NewDialer(f.DialContext)
 	clientConfig.Dial = d.DialContext
 	return d.CloseAll, nil
 }
