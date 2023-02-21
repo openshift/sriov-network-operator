@@ -15,26 +15,25 @@ import (
 	. "github.com/onsi/gomega/gstruct"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/execute"
-
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/clean"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/network"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
+	admission "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-
-	admission "k8s.io/api/admissionregistration/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/clean"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/execute"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/network"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
 )
 
 var waitingTime time.Duration = 20 * time.Minute

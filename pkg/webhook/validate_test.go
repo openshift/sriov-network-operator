@@ -7,12 +7,13 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 
 func TestMain(m *testing.M) {

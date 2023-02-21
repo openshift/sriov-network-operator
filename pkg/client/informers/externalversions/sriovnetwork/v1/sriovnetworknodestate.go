@@ -6,14 +6,15 @@ import (
 	"context"
 	time "time"
 
-	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	versioned "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
-	internalinterfaces "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
-	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/listers/sriovnetwork/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
+
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	versioned "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	internalinterfaces "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions/internalinterfaces"
+	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/listers/sriovnetwork/v1"
 )
 
 // SriovNetworkNodeStateInformer provides access to a shared informer and lister for
