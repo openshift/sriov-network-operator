@@ -17,7 +17,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
 var _ = Describe("SriovIBNetwork Controller", func() {

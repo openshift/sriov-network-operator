@@ -7,6 +7,7 @@ run:
     - deployment/
     - doc/
     - bindata/
+    - pkg/client
 linters-settings:
   depguard:
     list-type: blacklist
@@ -46,7 +47,7 @@ linters-settings:
   gocyclo:
     min-complexity: 15
   goimports:
-    local-prefixes: github.com/k8snetworkplumbingwg/sriov-network-device-plugin
+    local-prefixes: github.com/k8snetworkplumbingwg/sriov-network-operator
   gomnd:
     settings:
       mnd:
