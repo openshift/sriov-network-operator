@@ -104,7 +104,7 @@ NAME                             TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(
 service/sriov-network-operator   ClusterIP   10.102.53.223   <none>        8383/TCP   9s
 
 NAME                                         DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR                                                 AGE
-daemonset.apps/sriov-network-config-daemon   1         1         1       1            1           beta.kubernetes.io/os=linux,node-role.kubernetes.io/worker=   8s
+daemonset.apps/sriov-network-config-daemon   1         1         1       1            1           kubernetes.io/os=linux,node-role.kubernetes.io/worker=   8s
 
 NAME                                     READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/sriov-network-operator   1/1     1            1           10s
