@@ -28,7 +28,7 @@ spec:
       serviceAccountName: operator-webhook-sa
       priorityClassName: "system-cluster-critical"
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       affinity:
         {{ if not .ExternalControlPlane }}
         nodeAffinity:
