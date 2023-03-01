@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -407,7 +408,7 @@ func TestStaticValidateSriovNetworkNodePolicyWithInvalidVendorDevice(t *testing.
 func TestStaticValidateSriovNetworkNodePolicyWithConflictIsRdmaAndDeviceType(t *testing.T) {
 	policy := &SriovNetworkNodePolicy{
 		Spec: SriovNetworkNodePolicySpec{
-			DeviceType: "vfio-pci",
+			DeviceType: constants.DeviceTypeVfioPci,
 			NicSelector: SriovNetworkNicSelector{
 				Vendor:   "8086",
 				DeviceID: "158b",
@@ -424,6 +425,81 @@ func TestStaticValidateSriovNetworkNodePolicyWithConflictIsRdmaAndDeviceType(t *
 	g := NewGomegaWithT(t)
 	ok, err := staticValidateSriovNetworkNodePolicy(policy)
 	g.Expect(err).To(MatchError(ContainSubstring("'deviceType: vfio-pci' conflicts with 'isRdma: true'")))
+	g.Expect(ok).To(Equal(false))
+}
+
+func TestStaticValidateSriovNetworkNodePolicyWithConflictDeviceTypeAndVdpaType(t *testing.T) {
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: constants.DeviceTypeVfioPci,
+			NicSelector: SriovNetworkNicSelector{
+				Vendor:   "15b3",
+				DeviceID: "101d",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:       1,
+			Priority:     99,
+			ResourceName: "p0",
+			VdpaType:     constants.VdpaTypeVirtio,
+			EswitchMode:  "switchdev",
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(MatchError(ContainSubstring("'deviceType: vfio-pci' conflicts with 'vdpaType: virtio'")))
+	g.Expect(ok).To(Equal(false))
+}
+
+func TestStaticValidateSriovNetworkNodePolicyVdpaMustSpecifySwitchDev(t *testing.T) {
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				Vendor:   "15b3",
+				DeviceID: "101d",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:       1,
+			Priority:     99,
+			ResourceName: "p0",
+			VdpaType:     constants.VdpaTypeVirtio,
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(MatchError(ContainSubstring("virtio/vdpa requires the device to be configured in switchdev mode")))
+	g.Expect(ok).To(Equal(false))
+}
+
+func TestValidatePolicyForNodeStateVdpaWithNotSupportedVendor(t *testing.T) {
+	state := newNodeState()
+	policy := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "p1",
+		},
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			VdpaType:   "virtio",
+			NicSelector: SriovNetworkNicSelector{
+				PfNames:     []string{"ens803f0"},
+				RootDevices: []string{"0000:86:00.0"},
+				Vendor:      "8086",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:       4,
+			Priority:     99,
+			ResourceName: "p0",
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := validatePolicyForNodeState(policy, state, NewNode())
+	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("vendor(%s) in CR %s not supported for virtio-vdpa", state.Status.Interfaces[0].Vendor, policy.Name))))
 	g.Expect(ok).To(Equal(false))
 }
 

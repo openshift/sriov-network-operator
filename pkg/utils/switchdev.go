@@ -53,6 +53,7 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 					Name:       iface.Name,
 					PciAddress: iface.PciAddress,
 					NumVfs:     iface.NumVfs,
+					VfGroups:   iface.VfGroups,
 				}
 
 				if iface.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {

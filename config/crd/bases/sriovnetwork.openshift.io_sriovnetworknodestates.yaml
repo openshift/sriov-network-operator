@@ -73,6 +73,8 @@ spec:
                             type: string
                           resourceName:
                             type: string
+                          vdpaType:
+                            type: string
                           vfRange:
                             type: string
                         type: object
