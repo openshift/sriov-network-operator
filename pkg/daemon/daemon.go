@@ -52,6 +52,9 @@ const (
 	// maxUpdateBackoff is the maximum time to react to a change as we back off
 	// in the face of errors.
 	maxUpdateBackoff = 60 * time.Second
+
+	// the presence of this file indicates that the sriov shutdown should be delayed
+	delayShutdownPath = "/host/tmp/sriov-delay-shutdown"
 )
 
 type Message struct {
@@ -604,6 +607,17 @@ func (dn *Daemon) completeDrain() error {
 		glog.Errorf("completeDrain(): failed to annotate node: %v", err)
 		return err
 	}
+
+	if _, err := os.Stat(delayShutdownPath); err == nil {
+		if err := os.Remove(delayShutdownPath); err != nil {
+			glog.Errorf("completeDrain(): failed to remove file %v: %v", delayShutdownPath, err)
+			return err
+		}
+	} else if !os.IsNotExist(err) { // error is not "not exist"
+		glog.Errorf("completeDrain(): error checking file status %v: %v", delayShutdownPath, err)
+		return err
+	}
+
 	return nil
 }
 
@@ -925,6 +939,14 @@ func (dn *Daemon) drainNode() error {
 		return err
 	}
 	glog.Info("drainNode(): drain complete")
+
+	file, err := os.Create(delayShutdownPath)
+	if err != nil {
+		glog.Errorf("drainNode(): failed to create file %v %v", delayShutdownPath, err)
+		return err
+	}
+	defer file.Close()
+
 	return nil
 }
 
