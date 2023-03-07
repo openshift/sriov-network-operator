@@ -161,7 +161,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 			}
 		}
 	} else {
-		glog.Warningf("Failed to fetch node state %s, %v!", startOpts.nodeName, err)
+		glog.Fatalf("Failed to fetch node state %s, %v!", startOpts.nodeName, err)
 	}
 	glog.V(0).Infof("Running on platform: %s", platformType.String())
 
