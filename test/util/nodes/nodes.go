@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 )
 
 // NodesSelector represent the label selector used to filter impacted nodes.

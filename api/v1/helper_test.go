@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var update = flag.Bool("updategolden", false, "update .golden files")

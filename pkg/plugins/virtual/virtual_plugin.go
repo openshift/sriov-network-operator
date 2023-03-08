@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/golang/glog"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"

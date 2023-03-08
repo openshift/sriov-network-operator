@@ -3,15 +3,14 @@ package utils
 import (
 	"context"
 
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
 	conf "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 

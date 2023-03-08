@@ -10,14 +10,9 @@ import (
 	"strings"
 	"time"
 
-	configv1 "github.com/openshift/api/config/v1"
-
 	"github.com/golang/glog"
-	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/version"
+	configv1 "github.com/openshift/api/config/v1"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -26,7 +21,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/connrotation"
 
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/version"
 )
 
 var (

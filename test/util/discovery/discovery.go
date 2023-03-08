@@ -5,12 +5,13 @@ import (
 	"os"
 	"strconv"
 
-	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 )
 
 // Enabled indicates whether test discovery mode is enabled.

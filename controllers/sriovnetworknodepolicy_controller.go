@@ -46,7 +46,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 )
 
 // SriovNetworkNodePolicyReconciler reconciles a SriovNetworkNodePolicy object

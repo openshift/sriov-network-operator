@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"testing"
 
-	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-
 	dptypes "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/types"
+
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 
 func TestNodeSelectorMerge(t *testing.T) {
