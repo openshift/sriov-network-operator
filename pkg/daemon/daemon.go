@@ -685,15 +685,16 @@ func rebootNode() {
 		glog.Errorf("rebootNode(): %v", err)
 	}
 	defer exit()
-	// creates a new transient systemd unit to reboot the system.
-	// We explictily try to stop kubelet.service first, before anything else; this
-	// way we ensure the rest of system stays running, because kubelet may need
-	// to do "graceful" shutdown by e.g. de-registering with a load balancer.
-	// However note we use `;` instead of `&&` so we keep rebooting even
-	// if kubelet failed to shutdown - that way the machine will still eventually reboot
-	// as systemd will time out the stop invocation.
+	// creates a new transient systemd unit to reboot the system that
+	// reboots the system using `systemctl rooboot``
+	// by shutting down the system this way instead via `reboot`,
+	// when kubelet is configured with a shutdownGracePeriod, then it will
+	// be give some time to pods to run their preStop scripts and respond to
+	// SIGTERM by terminating gracefully before being forcefully killed via
+	// SIGKILL. stopping the kubelet service and then immediately running
+	// `reboot` just results in all pods being immediately killed
 	cmd := exec.Command("systemd-run", "--unit", "sriov-network-config-daemon-reboot",
-		"--description", "sriov-network-config-daemon reboot node", "/bin/sh", "-c", "systemctl stop kubelet.service; reboot")
+		"--description", "sriov-network-config-daemon reboot node", "/bin/sh", "-c", "systemctl reboot")
 
 	if err := cmd.Run(); err != nil {
 		glog.Errorf("failed to reboot node: %v", err)
