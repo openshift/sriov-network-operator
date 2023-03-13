@@ -3,4 +3,4 @@ dropins:
 - name: 10-hw-offload.conf
   contents: |
     [Service]
-    ExecStartPre=/bin/ovs-vsctl set Open_vSwitch . other_config:hw-offload=true
+    ExecStartPre=/bin/ovs-vsctl --no-wait set Open_vSwitch . other_config:hw-offload=true
