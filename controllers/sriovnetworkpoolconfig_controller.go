@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -16,15 +17,15 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
-	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 // SriovNetworkPoolConfigReconciler reconciles a SriovNetworkPoolConfig object
 type SriovNetworkPoolConfigReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme           *runtime.Scheme
+	OpenshiftContext *utils.OpenshiftContext
 }
 
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworkpoolconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -43,10 +44,9 @@ type SriovNetworkPoolConfigReconciler struct {
 func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("sriovnetworkpoolconfig", req.NamespacedName)
 	isHypershift := false
-	if utils.ClusterType == utils.ClusterTypeOpenshift {
-		var err error
-		if isHypershift, err = utils.IsExternalControlPlaneCluster(r.Client); err != nil {
-			return reconcile.Result{}, err
+	if r.OpenshiftContext.IsOpenshiftCluster() {
+		if r.OpenshiftContext.IsHypershift() {
+			isHypershift = true
 		}
 		logger = logger.WithValues("isHypershift", isHypershift)
 	}

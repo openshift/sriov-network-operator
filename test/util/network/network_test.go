@@ -3,6 +3,7 @@ package network
 import (
 	"testing"
 
+	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	"github.com/stretchr/testify/assert"
 
 	k8sv1 "k8s.io/api/core/v1"
@@ -10,7 +11,7 @@ import (
 )
 
 func TestGetSriovNicIPs(t *testing.T) {
-	networksStatus := `[{
+	networkStatus := `[{
 		"name": "network1",
 		    "interface": "eth0",
 		"ips": [
@@ -39,7 +40,7 @@ func TestGetSriovNicIPs(t *testing.T) {
 	p := &k8sv1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				"k8s.v1.cni.cncf.io/networks-status": networksStatus,
+				netattdefv1.NetworkStatusAnnot: networkStatus,
 			},
 		},
 	}
@@ -61,12 +62,12 @@ func TestGetSriovNicIPsErrors(t *testing.T) {
 	p := &k8sv1.Pod{}
 	_, err := GetSriovNicIPs(p, "eth0")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "has no annotation `k8s.v1.cni.cncf.io/networks-status`")
+	assert.Contains(t, err.Error(), "has no annotation `k8s.v1.cni.cncf.io/network-status`")
 
 	p = &k8sv1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				"k8s.v1.cni.cncf.io/networks-status": "xxx",
+				"k8s.v1.cni.cncf.io/network-status": "xxx",
 			},
 		},
 	}

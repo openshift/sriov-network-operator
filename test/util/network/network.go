@@ -7,10 +7,11 @@ import (
 	"strings"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 	k8sv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 )
 
 // Needed for parsing of podinfo
@@ -86,7 +87,7 @@ func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, op
 func GetNicsByPrefix(pod *k8sv1.Pod, ifcPrefix string) ([]string, error) {
 	var nets []Network
 	nics := []string{}
-	err := json.Unmarshal([]byte(pod.ObjectMeta.Annotations["k8s.v1.cni.cncf.io/networks-status"]), &nets)
+	err := json.Unmarshal([]byte(pod.ObjectMeta.Annotations[netattdefv1.NetworkStatusAnnot]), &nets)
 	if err != nil {
 		return nil, err
 	}
@@ -101,15 +102,15 @@ func GetNicsByPrefix(pod *k8sv1.Pod, ifcPrefix string) ([]string, error) {
 // GetSriovNicIPs returns the list of ip addresses related to the given
 // interface name for the given pod.
 func GetSriovNicIPs(pod *k8sv1.Pod, ifcName string) ([]string, error) {
-	networksStatus, ok := pod.ObjectMeta.Annotations["k8s.v1.cni.cncf.io/networks-status"]
+	networksStatus, ok := pod.ObjectMeta.Annotations[netattdefv1.NetworkStatusAnnot]
 	if !ok {
-		return nil, fmt.Errorf("pod [%s] has no annotation `k8s.v1.cni.cncf.io/networks-status`", pod.Name)
+		return nil, fmt.Errorf("pod [%s] has no annotation `%s`", netattdefv1.NetworkStatusAnnot, pod.Name)
 	}
 
 	var nets []Network
 	err := json.Unmarshal([]byte(networksStatus), &nets)
 	if err != nil {
-		return nil, fmt.Errorf("can't unmarshal annotation `k8s.v1.cni.cncf.io/networks-status`: %w", err)
+		return nil, fmt.Errorf("can't unmarshal annotation `%s`: %w", netattdefv1.NetworkStatusAnnot, err)
 	}
 	for _, net := range nets {
 		if net.Interface != ifcName {

@@ -10,14 +10,9 @@ import (
 	"strings"
 	"time"
 
-	configv1 "github.com/openshift/api/config/v1"
-
 	"github.com/golang/glog"
-	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/version"
+	configv1 "github.com/openshift/api/config/v1"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -26,10 +21,11 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/connrotation"
 
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	mcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/version"
 )
 
 var (
@@ -131,22 +127,9 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 
 	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
-	mcclient := mcclientset.NewForConfigOrDie(config)
-	openshiftFlavor := utils.OpenshiftFlavorDefault
-	if utils.ClusterType == utils.ClusterTypeOpenshift {
-		infraClient, err := client.New(config, client.Options{
-			Scheme: scheme.Scheme,
-		})
-		if err != nil {
-			panic(err)
-		}
-		isHypershift, err := utils.IsExternalControlPlaneCluster(infraClient)
-		if err != nil {
-			panic(err)
-		}
-		if isHypershift {
-			openshiftFlavor = utils.OpenshiftFlavorHypershift
-		}
+	openshiftContext, err := utils.NewOpenshiftContext(config, scheme.Scheme)
+	if err != nil {
+		panic(err)
 	}
 
 	config.Timeout = 5 * time.Second
@@ -184,6 +167,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	var namespace = os.Getenv("NAMESPACE")
 	if err := sriovnetworkv1.InitNicIDMap(kubeclient, namespace); err != nil {
 		glog.Errorf("failed to run init NicIdMap: %v", err)
+		panic(err.Error())
 	}
 
 	// block the deamon process until nodeWriter finish first its run
@@ -199,10 +183,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		startOpts.nodeName,
 		snclient,
 		kubeclient,
-		utils.OpenshiftContext{
-			McClient:        mcclient,
-			OpenshiftFlavor: openshiftFlavor,
-		},
+		openshiftContext,
 		exitCh,
 		stopCh,
 		syncCh,
@@ -220,7 +201,8 @@ func updateDialer(clientConfig *rest.Config) (func(), error) {
 	if clientConfig.Transport != nil || clientConfig.Dial != nil {
 		return nil, fmt.Errorf("there is already a transport or dialer configured")
 	}
-	d := connrotation.NewDialer((&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext)
+	f := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
+	d := connrotation.NewDialer(f.DialContext)
 	clientConfig.Dial = d.DialContext
 	return d.CloseAll, nil
 }

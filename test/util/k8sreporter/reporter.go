@@ -9,13 +9,14 @@ import (
 	"strings"
 	"sync"
 
-	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
 	"github.com/onsi/ginkgo/v2/types"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
 )
 
 type KubernetesReporter struct {
