@@ -26,7 +26,7 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
         node-role.kubernetes.io/worker:
       tolerations:
       - operator: Exists
