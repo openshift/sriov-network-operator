@@ -240,6 +240,66 @@ SUBSYSTEM=="net", ACTION=="add|move", ATTRS{phys_switch_id}!="", ATTR{phys_port_
 			assertFileContents(networkManagerUdevRulePath, expectedContents)
 		})
 	})
+
+	Context("isNodeDraining", func() {
+
+		It("for a non-Openshift cluster", func() {
+			sut.openshiftContext = &utils.OpenshiftContext{IsOpenShiftCluster: false}
+
+			sut.node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-node",
+					Annotations: map[string]string{}}}
+
+			Expect(sut.isNodeDraining()).To(BeFalse())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
+			Expect(sut.isNodeDraining()).To(BeTrue())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
+			Expect(sut.isNodeDraining()).To(BeTrue())
+		})
+
+		It("for an Openshift cluster", func() {
+			sut.openshiftContext = &utils.OpenshiftContext{
+				IsOpenShiftCluster: true,
+				OpenshiftFlavor:    utils.OpenshiftFlavorDefault,
+			}
+
+			sut.node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-node",
+					Annotations: map[string]string{}}}
+
+			Expect(sut.isNodeDraining()).To(BeFalse())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
+			Expect(sut.isNodeDraining()).To(BeFalse())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
+			Expect(sut.isNodeDraining()).To(BeTrue())
+		})
+
+		It("for an Openshift Hypershift cluster", func() {
+			sut.openshiftContext = &utils.OpenshiftContext{
+				IsOpenShiftCluster: true,
+				OpenshiftFlavor:    utils.OpenshiftFlavorHypershift,
+			}
+
+			sut.node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-node",
+					Annotations: map[string]string{}}}
+
+			Expect(sut.isNodeDraining()).To(BeFalse())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
+			Expect(sut.isNodeDraining()).To(BeTrue())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
+			Expect(sut.isNodeDraining()).To(BeTrue())
+		})
+	})
 })
 
 func createSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
