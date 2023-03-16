@@ -32,8 +32,6 @@ var (
 	CleanupTimeout       = time.Second * 5
 )
 
-const emptyCurls = "{}"
-
 func WaitForSriovNetworkNodeStateReady(nodeState *sriovnetworkv1.SriovNetworkNodeState, client client.Client, namespace, name string, retryInterval, timeout time.Duration) error {
 	time.Sleep(30 * time.Second)
 	err := wait.PollImmediate(retryInterval, timeout, func() (done bool, err error) {
@@ -145,45 +143,6 @@ func GenerateSriovNetworkCRs(namespace string, specs map[string]sriovnetworkv1.S
 	return crs
 }
 
-func GenerateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
-	spoofchk := ""
-	trust := ""
-	ipam := emptyCurls
-
-	if cr.Spec.Trust == sriovnetworkv1.SriovCniStateOn {
-		trust = `"trust":"on",`
-	} else if cr.Spec.Trust == sriovnetworkv1.SriovCniStateOff {
-		trust = `"trust":"off",`
-	}
-
-	if cr.Spec.SpoofChk == sriovnetworkv1.SriovCniStateOn {
-		spoofchk = `"spoofchk":"on",`
-	} else if cr.Spec.SpoofChk == sriovnetworkv1.SriovCniStateOff {
-		spoofchk = `"spoofchk":"off",`
-	}
-
-	state := getLinkState(cr.Spec.LinkState)
-
-	if cr.Spec.IPAM != "" {
-		ipam = cr.Spec.IPAM
-	}
-	vlanQoS := cr.Spec.VlanQoS
-
-	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s","type":"sriov","vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.GetName(), cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, ipam)
-}
-
-func getLinkState(state string) string {
-	st := ""
-	if state == sriovnetworkv1.SriovCniStateAuto {
-		st = `"link_state":"auto",`
-	} else if state == sriovnetworkv1.SriovCniStateEnable {
-		st = `"link_state":"enable",`
-	} else if state == sriovnetworkv1.SriovCniStateDisable {
-		st = `"link_state":"disable",`
-	}
-	return st
-}
-
 func GenerateSriovIBNetworkCRs(namespace string, specs map[string]sriovnetworkv1.SriovIBNetworkSpec) map[string]sriovnetworkv1.SriovIBNetwork {
 	crs := make(map[string]sriovnetworkv1.SriovIBNetwork)
 
@@ -201,16 +160,6 @@ func GenerateSriovIBNetworkCRs(namespace string, specs map[string]sriovnetworkv1
 		}
 	}
 	return crs
-}
-
-func GenerateExpectedIBNetConfig(cr *sriovnetworkv1.SriovIBNetwork) string {
-	ipam := emptyCurls
-	state := getLinkState(cr.Spec.LinkState)
-
-	if cr.Spec.IPAM != "" {
-		ipam = cr.Spec.IPAM
-	}
-	return fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s","type":"ib-sriov",%s"ipam":%s }`, cr.GetName(), state, ipam)
 }
 
 func ValidateDevicePluginConfig(nps []*sriovnetworkv1.SriovNetworkNodePolicy, rawConfig string) error {
