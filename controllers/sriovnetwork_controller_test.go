@@ -20,7 +20,10 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
-const on = "on"
+const (
+	on         = "on"
+	emptyCurls = "{}"
+)
 
 var _ = Describe("SriovNetwork Controller", func() {
 
@@ -55,7 +58,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 		DescribeTable("should be possible to create/delete net-att-def",
 			func(cr sriovnetworkv1.SriovNetwork) {
 				var err error
-				expect := util.GenerateExpectedNetConfig(&cr)
+				expect := generateExpectedNetConfig(&cr)
 
 				By("Create the SriovNetwork Custom Resource")
 				// get global framework variables
@@ -123,7 +126,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 				}()
 				Expect(err).NotTo(HaveOccurred())
 				found := &sriovnetworkv1.SriovNetwork{}
-				expect := util.GenerateExpectedNetConfig(&new)
+				expect := generateExpectedNetConfig(&new)
 
 				retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 					// Retrieve the latest version of SriovNetwork before attempting update
@@ -183,7 +186,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 					},
 				}
 				var err error
-				expect := util.GenerateExpectedNetConfig(&cr)
+				expect := generateExpectedNetConfig(&cr)
 
 				err = k8sClient.Create(goctx.TODO(), &cr)
 				Expect(err).NotTo(HaveOccurred())
@@ -213,3 +216,34 @@ var _ = Describe("SriovNetwork Controller", func() {
 		})
 	})
 })
+
+func generateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
+	spoofchk := ""
+	trust := ""
+	ipam := emptyCurls
+
+	if cr.Spec.Trust == sriovnetworkv1.SriovCniStateOn {
+		trust = `"trust":"on",`
+	} else if cr.Spec.Trust == sriovnetworkv1.SriovCniStateOff {
+		trust = `"trust":"off",`
+	}
+
+	if cr.Spec.SpoofChk == sriovnetworkv1.SriovCniStateOn {
+		spoofchk = `"spoofchk":"on",`
+	} else if cr.Spec.SpoofChk == sriovnetworkv1.SriovCniStateOff {
+		spoofchk = `"spoofchk":"off",`
+	}
+
+	state := getLinkState(cr.Spec.LinkState)
+
+	if cr.Spec.IPAM != "" {
+		ipam = cr.Spec.IPAM
+	}
+	vlanQoS := cr.Spec.VlanQoS
+
+	configStr, err := formatJSON(fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s","type":"sriov","vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.GetName(), cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, ipam))
+	if err != nil {
+		panic(err)
+	}
+	return configStr
+}
