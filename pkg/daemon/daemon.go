@@ -578,18 +578,17 @@ func (dn *Daemon) nodeHasAnnotation(annoKey string, value string) bool {
 }
 
 func (dn *Daemon) isNodeDraining() bool {
-	if anno, ok := dn.node.Annotations[annoKey]; ok && (anno == annoDraining || anno == annoMcpPaused) {
-		// for openshift cluster draining should be true only if the annotation has MCP paused
-		if dn.openshiftContext.IsOpenshiftCluster() && !dn.openshiftContext.IsHypershift() {
-			if anno == annoMcpPaused {
-				return true
-			} else {
-				return false
-			}
-		}
-		return true
+	anno, ok := dn.node.Annotations[annoKey]
+	if !ok {
+		return false
 	}
-	return false
+
+	if dn.openshiftContext.IsOpenshiftCluster() && !dn.openshiftContext.IsHypershift() {
+		// for openshift cluster draining should be true only if the annotation has MCP paused
+		return anno == annoMcpPaused
+	}
+
+	return anno == annoDraining || anno == annoMcpPaused
 }
 
 func (dn *Daemon) completeDrain() error {
