@@ -111,6 +111,11 @@ spec:
               resourceName:
                 description: SRIOV Network device plugin endpoint resource name
                 type: string
+              vdpaType:
+                description: VDPA device type. Allowed value "virtio"
+                enum:
+                - virtio
+                type: string
             required:
             - nicSelector
             - nodeSelector
