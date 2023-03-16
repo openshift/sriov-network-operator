@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
 
@@ -37,4 +39,12 @@ func GetImagePullSecrets() []string {
 	} else {
 		return []string{}
 	}
+}
+
+func formatJSON(str string) (string, error) {
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, []byte(str), "", "    "); err != nil {
+		return "", err
+	}
+	return prettyJSON.String(), nil
 }
