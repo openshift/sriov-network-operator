@@ -214,9 +214,8 @@ func TestValidatePolicyForNodeStateWithValidPolicy(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodeState(policy, state, NewNode())
+	err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(ok).To(Equal(true))
 }
 
 func TestValidatePolicyForNodeStateWithInvalidNumVfsPolicy(t *testing.T) {
@@ -241,9 +240,8 @@ func TestValidatePolicyForNodeStateWithInvalidNumVfsPolicy(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodeState(policy, state, NewNode())
+	err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), state.Status.Interfaces[0].TotalVfs))))
-	g.Expect(ok).To(Equal(false))
 }
 
 func TestValidatePolicyForNodePolicyWithOverlappedVfRange(t *testing.T) {
@@ -267,9 +265,8 @@ func TestValidatePolicyForNodePolicyWithOverlappedVfRange(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodePolicy(policy, appliedPolicy)
+	err := validatePolicyForNodePolicy(policy, appliedPolicy)
 	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("VF index range in %s is overlapped with existing policy %s", policy.Spec.NicSelector.PfNames[0], appliedPolicy.ObjectMeta.Name))))
-	g.Expect(ok).To(Equal(false))
 }
 
 func TestValidatePolicyForNodeStateWithUpdatedExistingVfRange(t *testing.T) {
@@ -294,9 +291,8 @@ func TestValidatePolicyForNodeStateWithUpdatedExistingVfRange(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodePolicy(policy, appliedPolicy)
+	err := validatePolicyForNodePolicy(policy, appliedPolicy)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(ok).To(Equal(true))
 }
 
 func TestStaticValidateSriovNetworkNodePolicyWithValidVendorDevice(t *testing.T) {
@@ -500,9 +496,8 @@ func TestValidatePolicyForNodeStateVdpaWithNotSupportedVendor(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodeState(policy, state, NewNode())
+	err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("vendor(%s) in CR %s not supported for virtio-vdpa", state.Status.Interfaces[0].Vendor, policy.Name))))
-	g.Expect(ok).To(Equal(false))
 }
 
 func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
@@ -528,9 +523,8 @@ func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(cfg).ToNot(BeNil())
 	kubeclient = kubernetes.NewForConfigOrDie(cfg)
-	ok, err := validatePolicyForNodeState(policy, state, NewNode())
+	err = validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(ok).To(Equal(true))
 }
 
 func TestValidatePolicyForNodeStateWithInvalidPfName(t *testing.T) {
@@ -551,9 +545,8 @@ func TestValidatePolicyForNodeStateWithInvalidPfName(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodeState(policy, state, NewNode())
+	err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(ok).To(Equal(true))
 	g.Expect(interfaceSelected).To(Equal(false))
 }
 
@@ -575,9 +568,8 @@ func TestValidatePolicyForNodeStateWithValidPfName(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodeState(policy, state, NewNode())
+	err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(ok).To(Equal(true))
 	g.Expect(interfaceSelected).To(Equal(true))
 }
 
@@ -616,9 +608,8 @@ func TestValidatePolicyForNodeStateWithValidNetFilter(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodeState(policy, state, NewNode())
+	err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(ok).To(Equal(true))
 	g.Expect(interfaceSelected).To(Equal(true))
 }
 
@@ -681,8 +672,7 @@ func TestValidatePolicyForNodeStateWithValidVFAndNetFilter(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	ok, err := validatePolicyForNodeState(policy, state, NewNode())
+	err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(ok).To(Equal(true))
 	g.Expect(interfaceSelected).To(Equal(true))
 }
