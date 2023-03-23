@@ -117,6 +117,12 @@ func (r *SriovIBNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		return reconcile.Result{}, err
 	}
+	// format CNI config json in CR for easier readability
+	netAttDef.Spec.Config, err = formatJSON(netAttDef.Spec.Config)
+	if err != nil {
+		reqLogger.Error(err, "Couldn't process rendered NetworkAttachmentDefinition config", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+		return reconcile.Result{}, err
+	}
 	if lnns, ok := instance.GetAnnotations()[sriovnetworkv1.LASTNETWORKNAMESPACE]; ok && netAttDef.GetNamespace() != lnns {
 		err = r.Delete(ctx, &netattdefv1.NetworkAttachmentDefinition{
 			ObjectMeta: metav1.ObjectMeta{

@@ -579,10 +579,17 @@ func (dn *Daemon) nodeHasAnnotation(annoKey string, value string) bool {
 }
 
 func (dn *Daemon) isNodeDraining() bool {
-	if anno, ok := dn.node.Annotations[annoKey]; ok && (anno == annoDraining || anno == annoMcpPaused) {
-		return true
+	anno, ok := dn.node.Annotations[annoKey]
+	if !ok {
+		return false
 	}
-	return false
+
+	if dn.openshiftContext.IsOpenshiftCluster() && !dn.openshiftContext.IsHypershift() {
+		// for openshift cluster draining should be true only if the annotation has MCP paused
+		return anno == annoMcpPaused
+	}
+
+	return anno == annoDraining || anno == annoMcpPaused
 }
 
 func (dn *Daemon) completeDrain() error {
@@ -1030,7 +1037,18 @@ func tryCreateNMUdevRule() error {
 	dirPath := path.Join(filesystemRoot, "/host/etc/udev/rules.d")
 	filePath := path.Join(dirPath, "10-nm-unmanaged.rules")
 
-	newContent := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(sriovnetworkv1.GetSupportedVfIds(), "|"))
+	// we need to remove the Red Hat Virtio network device from the udev rule configuration
+	// if we don't remove it when running the config-daemon on a virtual node it will disconnect the node after a reboot
+	// even that the operator should not be installed on virtual environments that are not openstack
+	// we should not destroy the cluster if the operator is installed there
+	supportedVfIds := []string{}
+	for _, vfID := range sriovnetworkv1.GetSupportedVfIds() {
+		if vfID == "0x1000" {
+			continue
+		}
+		supportedVfIds = append(supportedVfIds, vfID)
+	}
+	newContent := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(supportedVfIds, "|"))
 
 	// add NM udev rules for renaming VF rep
 	newContent = newContent + "SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n"
