@@ -47,7 +47,7 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 		DescribeTable("should be possible to create/delete net-att-def",
 			func(cr sriovnetworkv1.SriovIBNetwork) {
 				var err error
-				expect := util.GenerateExpectedIBNetConfig(&cr)
+				expect := generateExpectedIBNetConfig(&cr)
 
 				By("Create the SriovIBNetwork Custom Resource")
 				// get global framework variables
@@ -104,7 +104,7 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 					Expect(k8sClient.Delete(goctx.TODO(), &old)).To(Succeed())
 				}()
 				found := &sriovnetworkv1.SriovIBNetwork{}
-				expect := util.GenerateExpectedIBNetConfig(&new)
+				expect := generateExpectedIBNetConfig(&new)
 
 				retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 					// Retrieve the latest version of SriovIBNetwork before attempting update
@@ -161,7 +161,7 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 				},
 			}
 			var err error
-			expect := util.GenerateExpectedIBNetConfig(&cr)
+			expect := generateExpectedIBNetConfig(&cr)
 
 			err = k8sClient.Create(goctx.TODO(), &cr)
 			Expect(err).NotTo(HaveOccurred())
@@ -190,3 +190,29 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 		})
 	})
 })
+
+func generateExpectedIBNetConfig(cr *sriovnetworkv1.SriovIBNetwork) string {
+	ipam := emptyCurls
+	state := getLinkState(cr.Spec.LinkState)
+
+	if cr.Spec.IPAM != "" {
+		ipam = cr.Spec.IPAM
+	}
+	configStr, err := formatJSON(fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s","type":"ib-sriov",%s"ipam":%s }`, cr.GetName(), state, ipam))
+	if err != nil {
+		panic(err)
+	}
+	return configStr
+}
+
+func getLinkState(state string) string {
+	st := ""
+	if state == sriovnetworkv1.SriovCniStateAuto {
+		st = `"link_state":"auto",`
+	} else if state == sriovnetworkv1.SriovCniStateEnable {
+		st = `"link_state":"enable",`
+	} else if state == sriovnetworkv1.SriovCniStateDisable {
+		st = `"link_state":"disable",`
+	}
+	return st
+}
