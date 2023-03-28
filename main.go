@@ -88,6 +88,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	openshiftContext, err := utils.NewOpenshiftContext(restConfig, scheme)
+	if err != nil {
+		setupLog.Error(err, "couldn't create openshift context")
+		os.Exit(1)
+	}
+
 	le := leaderelection.GetLeaderElectionConfig(kubeClient, enableLeaderElection)
 
 	namespace := os.Getenv("NAMESPACE")
@@ -143,15 +149,17 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.SriovOperatorConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		OpenshiftContext: openshiftContext,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovOperatorConfig")
 		os.Exit(1)
 	}
 	if err = (&controllers.SriovNetworkPoolConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		OpenshiftContext: openshiftContext,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovNetworkPoolConfig")
 		os.Exit(1)

@@ -11,7 +11,6 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	fakemcclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/fake"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakek8s "k8s.io/client-go/kubernetes/fake"
@@ -100,7 +99,6 @@ var _ = Describe("Config Daemon", func() {
 
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
 		client := fakesnclientset.NewSimpleClientset()
-		mcClient := fakemcclientset.NewSimpleClientset()
 
 		err = sriovnetworkv1.InitNicIDMap(kubeClient, namespace)
 		Expect(err).ToNot(HaveOccurred())
@@ -108,10 +106,7 @@ var _ = Describe("Config Daemon", func() {
 		sut = New("test-node",
 			client,
 			kubeClient,
-			utils.OpenshiftContext{
-				McClient:        mcClient,
-				OpenshiftFlavor: utils.OpenshiftFlavorDefault,
-			},
+			&utils.OpenshiftContext{IsOpenShiftCluster: false, OpenshiftFlavor: ""},
 			exitCh,
 			stopCh,
 			syncCh,
@@ -243,6 +238,66 @@ SUBSYSTEM=="net", ACTION=="add|move", ATTRS{phys_switch_id}!="", ATTR{phys_port_
 `
 			// No need to trigger any action on config-daemon, as it checks the file in the main loop
 			assertFileContents(networkManagerUdevRulePath, expectedContents)
+		})
+	})
+
+	Context("isNodeDraining", func() {
+
+		It("for a non-Openshift cluster", func() {
+			sut.openshiftContext = &utils.OpenshiftContext{IsOpenShiftCluster: false}
+
+			sut.node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-node",
+					Annotations: map[string]string{}}}
+
+			Expect(sut.isNodeDraining()).To(BeFalse())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
+			Expect(sut.isNodeDraining()).To(BeTrue())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
+			Expect(sut.isNodeDraining()).To(BeTrue())
+		})
+
+		It("for an Openshift cluster", func() {
+			sut.openshiftContext = &utils.OpenshiftContext{
+				IsOpenShiftCluster: true,
+				OpenshiftFlavor:    utils.OpenshiftFlavorDefault,
+			}
+
+			sut.node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-node",
+					Annotations: map[string]string{}}}
+
+			Expect(sut.isNodeDraining()).To(BeFalse())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
+			Expect(sut.isNodeDraining()).To(BeFalse())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
+			Expect(sut.isNodeDraining()).To(BeTrue())
+		})
+
+		It("for an Openshift Hypershift cluster", func() {
+			sut.openshiftContext = &utils.OpenshiftContext{
+				IsOpenShiftCluster: true,
+				OpenshiftFlavor:    utils.OpenshiftFlavorHypershift,
+			}
+
+			sut.node = &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-node",
+					Annotations: map[string]string{}}}
+
+			Expect(sut.isNodeDraining()).To(BeFalse())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
+			Expect(sut.isNodeDraining()).To(BeTrue())
+
+			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
+			Expect(sut.isNodeDraining()).To(BeTrue())
 		})
 	})
 })
