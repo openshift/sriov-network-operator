@@ -44,7 +44,8 @@ import (
 // SriovOperatorConfigReconciler reconciles a SriovOperatorConfig object
 type SriovOperatorConfigReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme           *runtime.Scheme
+	OpenshiftContext *utils.OpenshiftContext
 }
 
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -229,12 +230,13 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(dc *sriovnetworkv1.Sriov
 		data.Data["CaBundle"] = os.Getenv("WEBHOOK_CA_BUNDLE")
 		data.Data["DevMode"] = os.Getenv("DEV_MODE")
 		data.Data["ImagePullSecrets"] = GetImagePullSecrets()
-		external, err := utils.IsExternalControlPlaneCluster(r.Client)
-		if err != nil {
-			logger.Error(err, "Fail to get control plane topology")
-			return err
+
+		data.Data["ExternalControlPlane"] = false
+		if r.OpenshiftContext.IsOpenshiftCluster() {
+			external := r.OpenshiftContext.IsHypershift()
+			data.Data["ExternalControlPlane"] = external
 		}
-		data.Data["ExternalControlPlane"] = external
+
 		objs, err := render.RenderDir(path, &data)
 		if err != nil {
 			logger.Error(err, "Fail to render webhook manifests")
