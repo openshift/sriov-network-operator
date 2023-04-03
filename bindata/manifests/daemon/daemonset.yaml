@@ -38,28 +38,6 @@ spec:
       {{- end }}
       {{- end }}
       containers:
-      - name: sriov-cni
-        image: {{.SRIOVCNIImage}}
-        securityContext:
-          privileged: true
-        resources:
-          requests:
-            cpu: 10m
-            memory: 10Mi
-        volumeMounts:
-        - name: cnibin
-          mountPath: /host/opt/cni/bin
-      - name: sriov-infiniband-cni
-        image: {{.SRIOVInfiniBandCNIImage}}
-        securityContext:
-          privileged: true
-        resources:
-          requests:
-            cpu: 10m
-            memory: 10Mi
-        volumeMounts:
-        - name: cnibin
-          mountPath: /host/opt/cni/bin
       - name: sriov-network-config-daemon
         image: {{.Image}}
         command:
@@ -87,12 +65,34 @@ spec:
             cpu: 100m
             memory: 100Mi
         volumeMounts:
-        - name: host
-          mountPath: /host
+          - name: host
+            mountPath: /host
         lifecycle:
           preStop:
             exec:
               command: ["/bindata/scripts/clean-k8s-services.sh"]
+      - name: sriov-cni
+        image: {{.SRIOVCNIImage}}
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+        volumeMounts:
+        - name: cnibin
+          mountPath: /host/opt/cni/bin
+      - name: sriov-infiniband-cni
+        image: {{.SRIOVInfiniBandCNIImage}}
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+        volumeMounts:
+        - name: cnibin
+          mountPath: /host/opt/cni/bin
       volumes:
       - name: host
         hostPath:
