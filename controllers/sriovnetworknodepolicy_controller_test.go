@@ -170,6 +170,24 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 				},
 			},
 		},
+		{
+			tname: "testExcludeTopology",
+			policy: sriovnetworkv1.SriovNetworkNodePolicy{
+				Spec: v1.SriovNetworkNodePolicySpec{
+					ResourceName:    "resourceName",
+					ExcludeTopology: true,
+				},
+			},
+			expResource: dptypes.ResourceConfList{
+				ResourceList: []dptypes.ResourceConfig{
+					{
+						ResourceName:    "resourceName",
+						Selectors:       mustMarshallSelector(t, &dptypes.NetDeviceSelectors{}),
+						ExcludeTopology: true,
+					},
+				},
+			},
+		},
 	}
 
 	reconciler := SriovNetworkNodePolicyReconciler{}

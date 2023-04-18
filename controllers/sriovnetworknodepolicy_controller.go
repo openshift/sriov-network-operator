@@ -689,6 +689,8 @@ func createDevicePluginResource(
 	rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
 	rc.Selectors = &rawNetDeviceSelectors
 
+	rc.ExcludeTopology = p.Spec.ExcludeTopology
+
 	return rc, nil
 }
 
@@ -757,6 +759,8 @@ func updateDevicePluginResource(
 	}
 	rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
 	rc.Selectors = &rawNetDeviceSelectors
+
+	rc.ExcludeTopology = p.Spec.ExcludeTopology
 
 	return nil
 }
