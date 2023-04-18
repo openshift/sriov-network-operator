@@ -57,6 +57,8 @@ type SriovNetworkNodePolicySpec struct {
 	// +kubebuilder:validation:Enum=virtio
 	// VDPA device type. Allowed value "virtio"
 	VdpaType string `json:"vdpaType,omitempty"`
+	// Exclude device's NUMA node when advertising this resource by SRIOV network device plugin. Default to false.
+	ExcludeTopology bool `json:"excludeTopology,omitempty"`
 }
 
 type SriovNetworkNicSelector struct {
