@@ -588,135 +588,25 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 			continue
 		}
 
+		nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
+		err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: node.Name}, nodeState)
+		if err != nil {
+			return rcl, err
+		}
+
 		found, i := resourceNameInList(p.Spec.ResourceName, &rcl)
-		netDeviceSelectors := dptypes.NetDeviceSelectors{}
+
 		if found {
-			if err := json.Unmarshal(*rcl.ResourceList[i].Selectors, &netDeviceSelectors); err != nil {
-				return rcl, err
-			}
-
-			if p.Spec.NicSelector.Vendor != "" && !sriovnetworkv1.StringInArray(p.Spec.NicSelector.Vendor, netDeviceSelectors.Vendors) {
-				netDeviceSelectors.Vendors = append(netDeviceSelectors.Vendors, p.Spec.NicSelector.Vendor)
-			}
-			if p.Spec.NicSelector.DeviceID != "" {
-				var deviceID string
-				if p.Spec.NumVfs == 0 {
-					deviceID = p.Spec.NicSelector.DeviceID
-				} else {
-					deviceID = sriovnetworkv1.GetVfDeviceID(p.Spec.NicSelector.DeviceID)
-				}
-
-				if !sriovnetworkv1.StringInArray(deviceID, netDeviceSelectors.Devices) && deviceID != "" {
-					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, deviceID)
-				}
-			}
-			if len(p.Spec.NicSelector.PfNames) > 0 {
-				netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
-			}
-			// vfio-pci device link type is not detectable
-			if p.Spec.DeviceType != constants.DeviceTypeVfioPci {
-				if p.Spec.LinkType != "" {
-					linkType := constants.LinkTypeEthernet
-					if strings.EqualFold(p.Spec.LinkType, constants.LinkTypeIB) {
-						linkType = constants.LinkTypeInfiniband
-					}
-					if !sriovnetworkv1.StringInArray(linkType, netDeviceSelectors.LinkTypes) {
-						netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
-					}
-				}
-			}
-			if len(p.Spec.NicSelector.RootDevices) > 0 {
-				netDeviceSelectors.RootDevices = sriovnetworkv1.UniqueAppend(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
-			}
-			// Removed driver constraint for "netdevice" DeviceType
-			if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
-				netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, p.Spec.DeviceType)
-			}
-			// Enable the selection of devices using NetFilter
-			if p.Spec.NicSelector.NetFilter != "" {
-				nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
-				err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: node.Name}, nodeState)
-				if err == nil {
-					// Loop through interfaces status to find a match for NetworkID or NetworkTag
-					for _, intf := range nodeState.Status.Interfaces {
-						if sriovnetworkv1.NetFilterMatch(p.Spec.NicSelector.NetFilter, intf.NetFilter) {
-							// Found a match add the Interfaces PciAddress
-							netDeviceSelectors.PciAddresses = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PciAddresses, intf.PciAddress)
-						}
-					}
-				}
-			}
-
-			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
+			err := updateDevicePluginResource(ctx, &rcl.ResourceList[i], &p, nodeState)
 			if err != nil {
 				return rcl, err
 			}
-			rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
-			rcl.ResourceList[i].Selectors = &rawNetDeviceSelectors
 			logger.Info("Update resource", "Resource", rcl.ResourceList[i])
 		} else {
-			rc := &dptypes.ResourceConfig{
-				ResourceName: p.Spec.ResourceName,
-			}
-			netDeviceSelectors.IsRdma = p.Spec.IsRdma
-			netDeviceSelectors.NeedVhostNet = p.Spec.NeedVhostNet
-			netDeviceSelectors.VdpaType = dptypes.VdpaType(p.Spec.VdpaType)
-
-			if p.Spec.NicSelector.Vendor != "" {
-				netDeviceSelectors.Vendors = append(netDeviceSelectors.Vendors, p.Spec.NicSelector.Vendor)
-			}
-			if p.Spec.NicSelector.DeviceID != "" {
-				var deviceID string
-				if p.Spec.NumVfs == 0 {
-					deviceID = p.Spec.NicSelector.DeviceID
-				} else {
-					deviceID = sriovnetworkv1.GetVfDeviceID(p.Spec.NicSelector.DeviceID)
-				}
-
-				if !sriovnetworkv1.StringInArray(deviceID, netDeviceSelectors.Devices) && deviceID != "" {
-					netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, deviceID)
-				}
-			}
-			if len(p.Spec.NicSelector.PfNames) > 0 {
-				netDeviceSelectors.PfNames = append(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
-			}
-			// vfio-pci device link type is not detectable
-			if p.Spec.DeviceType != constants.DeviceTypeVfioPci {
-				if p.Spec.LinkType != "" {
-					linkType := constants.LinkTypeEthernet
-					if strings.EqualFold(p.Spec.LinkType, constants.LinkTypeIB) {
-						linkType = constants.LinkTypeInfiniband
-					}
-					netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
-				}
-			}
-			if len(p.Spec.NicSelector.RootDevices) > 0 {
-				netDeviceSelectors.RootDevices = append(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
-			}
-			// Removed driver constraint for "netdevice" DeviceType
-			if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
-				netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, p.Spec.DeviceType)
-			}
-			// Enable the selection of devices using NetFilter
-			if p.Spec.NicSelector.NetFilter != "" {
-				nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
-				err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: node.Name}, nodeState)
-				if err == nil {
-					// Loop through interfaces status to find a match for NetworkID or NetworkTag
-					for _, intf := range nodeState.Status.Interfaces {
-						if sriovnetworkv1.NetFilterMatch(p.Spec.NicSelector.NetFilter, intf.NetFilter) {
-							// Found a match add the Interfaces PciAddress
-							netDeviceSelectors.PciAddresses = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PciAddresses, intf.PciAddress)
-						}
-					}
-				}
-			}
-			netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
+			rc, err := createDevicePluginResource(ctx, &p, nodeState)
 			if err != nil {
 				return rcl, err
 			}
-			rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
-			rc.Selectors = &rawNetDeviceSelectors
 			rcl.ResourceList = append(rcl.ResourceList, *rc)
 			logger.Info("Add resource", "Resource", *rc, "Resource list", rcl.ResourceList)
 		}
@@ -731,4 +621,142 @@ func resourceNameInList(name string, rcl *dptypes.ResourceConfList) (bool, int) 
 		}
 	}
 	return false, 0
+}
+
+func createDevicePluginResource(
+	ctx context.Context,
+	p *sriovnetworkv1.SriovNetworkNodePolicy,
+	nodeState *sriovnetworkv1.SriovNetworkNodeState) (*dptypes.ResourceConfig, error) {
+	netDeviceSelectors := dptypes.NetDeviceSelectors{}
+
+	rc := &dptypes.ResourceConfig{
+		ResourceName: p.Spec.ResourceName,
+	}
+	netDeviceSelectors.IsRdma = p.Spec.IsRdma
+	netDeviceSelectors.NeedVhostNet = p.Spec.NeedVhostNet
+	netDeviceSelectors.VdpaType = dptypes.VdpaType(p.Spec.VdpaType)
+
+	if p.Spec.NicSelector.Vendor != "" {
+		netDeviceSelectors.Vendors = append(netDeviceSelectors.Vendors, p.Spec.NicSelector.Vendor)
+	}
+	if p.Spec.NicSelector.DeviceID != "" {
+		var deviceID string
+		if p.Spec.NumVfs == 0 {
+			deviceID = p.Spec.NicSelector.DeviceID
+		} else {
+			deviceID = sriovnetworkv1.GetVfDeviceID(p.Spec.NicSelector.DeviceID)
+		}
+
+		if !sriovnetworkv1.StringInArray(deviceID, netDeviceSelectors.Devices) && deviceID != "" {
+			netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, deviceID)
+		}
+	}
+	if len(p.Spec.NicSelector.PfNames) > 0 {
+		netDeviceSelectors.PfNames = append(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
+	}
+	// vfio-pci device link type is not detectable
+	if p.Spec.DeviceType != constants.DeviceTypeVfioPci {
+		if p.Spec.LinkType != "" {
+			linkType := constants.LinkTypeEthernet
+			if strings.EqualFold(p.Spec.LinkType, constants.LinkTypeIB) {
+				linkType = constants.LinkTypeInfiniband
+			}
+			netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
+		}
+	}
+	if len(p.Spec.NicSelector.RootDevices) > 0 {
+		netDeviceSelectors.RootDevices = append(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
+	}
+	// Removed driver constraint for "netdevice" DeviceType
+	if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
+		netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, p.Spec.DeviceType)
+	}
+	// Enable the selection of devices using NetFilter
+	if p.Spec.NicSelector.NetFilter != "" {
+		// Loop through interfaces status to find a match for NetworkID or NetworkTag
+		for _, intf := range nodeState.Status.Interfaces {
+			if sriovnetworkv1.NetFilterMatch(p.Spec.NicSelector.NetFilter, intf.NetFilter) {
+				// Found a match add the Interfaces PciAddress
+				netDeviceSelectors.PciAddresses = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PciAddresses, intf.PciAddress)
+			}
+		}
+	}
+
+	netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
+	if err != nil {
+		return nil, err
+	}
+	rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
+	rc.Selectors = &rawNetDeviceSelectors
+
+	return rc, nil
+}
+
+func updateDevicePluginResource(
+	ctx context.Context,
+	rc *dptypes.ResourceConfig,
+	p *sriovnetworkv1.SriovNetworkNodePolicy,
+	nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+	netDeviceSelectors := dptypes.NetDeviceSelectors{}
+
+	if err := json.Unmarshal(*rc.Selectors, &netDeviceSelectors); err != nil {
+		return err
+	}
+
+	if p.Spec.NicSelector.Vendor != "" && !sriovnetworkv1.StringInArray(p.Spec.NicSelector.Vendor, netDeviceSelectors.Vendors) {
+		netDeviceSelectors.Vendors = append(netDeviceSelectors.Vendors, p.Spec.NicSelector.Vendor)
+	}
+	if p.Spec.NicSelector.DeviceID != "" {
+		var deviceID string
+		if p.Spec.NumVfs == 0 {
+			deviceID = p.Spec.NicSelector.DeviceID
+		} else {
+			deviceID = sriovnetworkv1.GetVfDeviceID(p.Spec.NicSelector.DeviceID)
+		}
+
+		if !sriovnetworkv1.StringInArray(deviceID, netDeviceSelectors.Devices) && deviceID != "" {
+			netDeviceSelectors.Devices = append(netDeviceSelectors.Devices, deviceID)
+		}
+	}
+	if len(p.Spec.NicSelector.PfNames) > 0 {
+		netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
+	}
+	// vfio-pci device link type is not detectable
+	if p.Spec.DeviceType != constants.DeviceTypeVfioPci {
+		if p.Spec.LinkType != "" {
+			linkType := constants.LinkTypeEthernet
+			if strings.EqualFold(p.Spec.LinkType, constants.LinkTypeIB) {
+				linkType = constants.LinkTypeInfiniband
+			}
+			if !sriovnetworkv1.StringInArray(linkType, netDeviceSelectors.LinkTypes) {
+				netDeviceSelectors.LinkTypes = sriovnetworkv1.UniqueAppend(netDeviceSelectors.LinkTypes, linkType)
+			}
+		}
+	}
+	if len(p.Spec.NicSelector.RootDevices) > 0 {
+		netDeviceSelectors.RootDevices = sriovnetworkv1.UniqueAppend(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
+	}
+	// Removed driver constraint for "netdevice" DeviceType
+	if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
+		netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, p.Spec.DeviceType)
+	}
+	// Enable the selection of devices using NetFilter
+	if p.Spec.NicSelector.NetFilter != "" {
+		// Loop through interfaces status to find a match for NetworkID or NetworkTag
+		for _, intf := range nodeState.Status.Interfaces {
+			if sriovnetworkv1.NetFilterMatch(p.Spec.NicSelector.NetFilter, intf.NetFilter) {
+				// Found a match add the Interfaces PciAddress
+				netDeviceSelectors.PciAddresses = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PciAddresses, intf.PciAddress)
+			}
+		}
+	}
+
+	netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
+	if err != nil {
+		return err
+	}
+	rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
+	rc.Selectors = &rawNetDeviceSelectors
+
+	return nil
 }
