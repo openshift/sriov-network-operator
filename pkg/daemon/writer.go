@@ -122,8 +122,8 @@ func (w *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformType) e
 	var iface []sriovnetworkv1.InterfaceExt
 	var err error
 
-	if platformType == utils.VirtualOpenStack {
-		iface, err = utils.DiscoverSriovDevicesVirtual(w.openStackDevicesInfo)
+	if platformType == utils.VirtualOpenStack || platformType == utils.GKE {
+		iface, err = utils.DiscoverSriovDevicesVirtual(platformType, w.openStackDevicesInfo)
 	} else {
 		iface, err = utils.DiscoverSriovDevices(w.withUnsupportedDevices)
 	}

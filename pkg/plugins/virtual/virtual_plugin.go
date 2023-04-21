@@ -1,6 +1,7 @@
 package virtual
 
 import (
+	"os"
 	"reflect"
 
 	"github.com/golang/glog"
@@ -20,6 +21,7 @@ type VirtualPlugin struct {
 	DesireState    *sriovnetworkv1.SriovNetworkNodeState
 	LastState      *sriovnetworkv1.SriovNetworkNodeState
 	LoadVfioDriver uint
+	Platform       utils.PlatformType
 }
 
 const (
@@ -28,12 +30,17 @@ const (
 	loaded
 )
 
+const (
+	pathSysVfioNoiommu = "/sys/module/vfio/parameters/enable_unsafe_noiommu_mode"
+)
+
 // Initialize our plugin and set up initial values
-func NewVirtualPlugin() (plugin.VendorPlugin, error) {
+func NewVirtualPlugin(platform utils.PlatformType) (plugin.VendorPlugin, error) {
 	return &VirtualPlugin{
 		PluginName:     PluginName,
 		SpecVersion:    "1.0",
 		LoadVfioDriver: unloaded,
+		Platform:       platform,
 	}, nil
 }
 
@@ -69,19 +76,26 @@ func (p *VirtualPlugin) Apply() error {
 	glog.Infof("virtual-plugin Apply(): desiredState=%v", p.DesireState.Spec)
 
 	if p.LoadVfioDriver == loading {
-		// In virtual deployments of Kubernetes where the underlying virtualization platform does not support a virtualized iommu
-		// the VFIO PCI driver needs to be loaded with a special flag.
-		// This is the case for OpenStack deployments where the underlying virtualization platform is KVM.
-		// NOTE: if VFIO was already loaded for some reason, we will not try to load it again with the new options.
-		kernelArgs := "enable_unsafe_noiommu_mode=1"
-		if err := utils.LoadKernelModule("vfio", kernelArgs); err != nil {
-			glog.Errorf("virtual-plugin Apply(): fail to load vfio kmod: %v", err)
-			return err
-		}
+		if p.Platform == utils.GKE {
+			if err := enableUnsafeNoiommu(); err != nil {
+				glog.Error("virtual-plugin Apply: fail to enable unsafe no iommu for GKE platform: %v", err)
+				return err
+			}
+		} else {
+			// In virtual deployments of Kubernetes where the underlying virtualization platform does not support a virtualized iommu
+			// the VFIO PCI driver needs to be loaded with a special flag.
+			// This is the case for OpenStack deployments where the underlying virtualization platform is KVM.
+			// NOTE: if VFIO was already loaded for some reason, we will not try to load it again with the new options.
+			kernelArgs := "enable_unsafe_noiommu_mode=1"
+			if err := utils.LoadKernelModule("vfio", kernelArgs); err != nil {
+				glog.Errorf("virtual-plugin Apply(): fail to load vfio kmod: %v", err)
+				return err
+			}
 
-		if err := utils.LoadKernelModule("vfio_pci"); err != nil {
-			glog.Errorf("virtual-plugin Apply(): fail to load vfio_pci kmod: %v", err)
-			return err
+			if err := utils.LoadKernelModule("vfio_pci"); err != nil {
+				glog.Errorf("virtual-plugin Apply(): fail to load vfio_pci kmod: %v", err)
+				return err
+			}
 		}
 		p.LoadVfioDriver = loaded
 	}
@@ -116,4 +130,21 @@ func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
 		}
 	}
 	return false
+}
+
+func enableUnsafeNoiommu() error {
+	glog.Info("virtual_plugin enableUnsafeNoiommu()")
+
+	f, err := os.OpenFile(pathSysVfioNoiommu, os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteString("1")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

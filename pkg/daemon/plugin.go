@@ -31,8 +31,8 @@ func enablePlugins(platform utils.PlatformType, ns *sriovnetworkv1.SriovNetworkN
 	glog.Infof("enableVendorPlugins(): enabling plugins")
 	enabledPlugins := map[string]plugin.VendorPlugin{}
 
-	if platform == utils.VirtualOpenStack {
-		virtualPlugin, err := VirtualPlugin()
+	if platform == utils.VirtualOpenStack || platform == utils.GKE {
+		virtualPlugin, err := VirtualPlugin(platform)
 		if err != nil {
 			glog.Errorf("enableVendorPlugins(): failed to load the virtual plugin error: %v", err)
 			return nil, err

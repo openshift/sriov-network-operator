@@ -28,6 +28,8 @@ const (
 	Baremetal PlatformType = iota
 	// VirtualOpenStack ...
 	VirtualOpenStack
+	// GKE platform
+	GKE
 )
 
 func (e PlatformType) String() string {
@@ -36,6 +38,8 @@ func (e PlatformType) String() string {
 		return "Baremetal"
 	case VirtualOpenStack:
 		return "Virtual/Openstack"
+	case GKE:
+		return "GKE"
 	default:
 		return fmt.Sprintf("%d", int(e))
 	}
@@ -45,6 +49,8 @@ var (
 	// PlatformMap contains supported platforms for virtual VF
 	PlatformMap = map[string]PlatformType{
 		"openstack": VirtualOpenStack,
+		// For GKE platform, we must look for "gce" string in the node's Provider ID
+		"gce":       GKE,
 	}
 )
 
@@ -271,7 +277,7 @@ func CreateOpenstackDevicesInfo(metaData *OSPMetaData, networkData *OSPNetworkDa
 }
 
 // DiscoverSriovDevicesVirtual discovers VFs on a virtual platform
-func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.InterfaceExt, error) {
+func DiscoverSriovDevicesVirtual(platform PlatformType, devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.InterfaceExt, error) {
 	glog.V(2).Info("DiscoverSriovDevicesVirtual()")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
@@ -298,8 +304,12 @@ func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.I
 
 		deviceInfo, exist := devicesInfo[device.Address]
 		if !exist {
-			glog.Warningf("DiscoverSriovDevicesVirtual(): unable to find device in devicesInfo list for pci %s", device.Address)
-			continue
+			if platform == VirtualOpenStack {
+				glog.Warningf("DiscoverSriovDevicesVirtual(): unable to find device in devicesInfo list for pci %s", device.Address)
+				continue
+			} else {
+				deviceInfo = &OSPDeviceInfo{}
+			}
 		}
 		netFilter := deviceInfo.NetworkID
 		metaMac := deviceInfo.MacAddress
