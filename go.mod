@@ -12,7 +12,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/hashicorp/go-retryablehttp v0.7.0
 	github.com/jaypipes/ghw v0.9.0
-	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.1-0.20201119153432-9d213757d22d
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
 	github.com/k8snetworkplumbingwg/sriov-network-device-plugin v0.0.0-20221127172732-a5a7395122e3
 	github.com/onsi/ginkgo/v2 v2.5.0
 	github.com/onsi/gomega v1.24.0
