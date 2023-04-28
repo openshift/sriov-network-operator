@@ -256,7 +256,7 @@ func TestValidatePolicyForNodeStateWithValidPolicy(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 }
 
@@ -282,7 +282,7 @@ func TestValidatePolicyForNodeStateWithInvalidNumVfsPolicy(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(MatchError("numVfs(65) in CR p1 exceed the maximum allowed value(64) interface(ens803f0)"))
 }
 
@@ -309,7 +309,7 @@ func TestValidatePolicyForNodeStateWithInvalidNumVfsExternallyCreated(t *testing
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("numVfs(%d) in CR %s is higher than the virtual functions allocated for the PF externally value(%d)", policy.Spec.NumVfs, policy.GetName(), state.Status.Interfaces[0].NumVfs))))
 }
 
@@ -336,7 +336,7 @@ func TestValidatePolicyForNodeStateWithValidNumVfsExternallyCreated(t *testing.T
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 }
 
@@ -363,7 +363,7 @@ func TestValidatePolicyForNodeStateWithValidLowerNumVfsExternallyCreated(t *test
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 }
 
@@ -500,7 +500,7 @@ func TestValidatePolicyForNodeStateWithExternallyManageAndMTU(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 }
 
@@ -528,7 +528,7 @@ func TestValidatePolicyForNodeStateWithExternallyManageAndDifferentMTU(t *testin
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(HaveOccurred())
 }
 
@@ -556,16 +556,16 @@ func TestValidatePolicyForNodeStateWithExternallyManageAndLinkType(t *testing.T)
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 
 	policy.Spec.LinkType = "eth"
-	err = validatePolicyForNodeState(policy, state, NewNode())
+	_, err = validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 
 	policy.Spec.LinkType = "ETH"
 	state.Status.Interfaces[0].LinkType = "eth"
-	err = validatePolicyForNodeState(policy, state, NewNode())
+	_, err = validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 }
 
@@ -594,7 +594,7 @@ func TestValidatePolicyForNodeStateWithExternallyManageAndDifferentLinkType(t *t
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(HaveOccurred())
 }
 
@@ -994,7 +994,7 @@ func TestValidatePolicyForNodeStateVirtioVdpaWithNotSupportedVendor(t *testing.T
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(MatchError("vendor(8086) in CR p1 not supported for vdpa interface(ens803f0)"))
 }
 
@@ -1021,7 +1021,7 @@ func TestValidatePolicyForNodeStateVhostVdpaWithNotSupportedVendor(t *testing.T)
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(MatchError("vendor(8086) in CR p1 not supported for vdpa interface(ens803f0)"))
 }
 
@@ -1048,7 +1048,7 @@ func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(cfg).ToNot(BeNil())
 	kubeclient = kubernetes.NewForConfigOrDie(cfg)
-	err = validatePolicyForNodeState(policy, state, NewNode())
+	_, err = validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 }
 
@@ -1070,7 +1070,7 @@ func TestValidatePolicyForNodeStateWithInvalidPfName(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(interfaceSelected).To(Equal(false))
 }
@@ -1093,7 +1093,7 @@ func TestValidatePolicyForNodeStateWithValidPfName(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(interfaceSelected).To(Equal(true))
 }
@@ -1133,7 +1133,7 @@ func TestValidatePolicyForNodeStateWithValidNetFilter(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(interfaceSelected).To(Equal(true))
 }
@@ -1197,7 +1197,7 @@ func TestValidatePolicyForNodeStateWithValidVFAndNetFilter(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(interfaceSelected).To(Equal(true))
 }
