@@ -249,10 +249,7 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 	return nil
 }
 
-func validatePolicyForNodePolicy(
-	current *sriovnetworkv1.SriovNetworkNodePolicy,
-	previous *sriovnetworkv1.SriovNetworkNodePolicy,
-) error {
+func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
 	glog.V(2).Infof("validateConflictPolicy(): validate policy %s against policy %s",
 		current.GetName(), previous.GetName())
 
@@ -260,6 +257,20 @@ func validatePolicyForNodePolicy(
 		return nil
 	}
 
+	err := validatePfNames(current, previous)
+	if err != nil {
+		return err
+	}
+
+	err = validateExludeTopologyField(current, previous)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validatePfNames(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
 	for _, curPf := range current.Spec.NicSelector.PfNames {
 		curName, curRngSt, curRngEnd, err := sriovnetworkv1.ParsePFName(curPf)
 		if err != nil {
@@ -279,6 +290,19 @@ func validatePolicyForNodePolicy(
 		}
 	}
 	return nil
+}
+
+func validateExludeTopologyField(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
+	if current.Spec.ResourceName != previous.Spec.ResourceName {
+		return nil
+	}
+
+	if current.Spec.ExcludeTopology == previous.Spec.ExcludeTopology {
+		return nil
+	}
+
+	return fmt.Errorf("excludeTopology[%t] field conflicts with policy [%s].ExcludeTopology[%t] as they target the same resource[%s]",
+		current.Spec.ExcludeTopology, previous.GetName(), previous.Spec.ExcludeTopology, current.Spec.ResourceName)
 }
 
 func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt, node *corev1.Node) error {
