@@ -7,30 +7,44 @@
 # --privileged --volume /dev:/dev --entrypoint \
 # /bindata/scripts/bf2-switch-mode.sh http://url/of/image && \
 # systemctl reboot
+#
+# Returns 0   if no reboot is necessary however devices may not be found.
+# Returns 120 if reboot is necessary after applying firmware changes.
 
-set -e
+set -o pipefail
 
 mode=${1:-query}
 device=${2:-"$(mstconfig q | grep "Device:" | awk 'BEGIN {FS="/";} { print $6 }')"}
+if [ $? -ne 0 ]; then
+    echo "Failed to query for device."
+    exit 0
+fi
 
 if [ -z "$device" ]; then
     echo "Can't find device."
-    exit 120
+    exit 0
 else
     echo Found device: "${device}"
 fi
 
 type=$(mstconfig -d $device q | grep "Device type:" | awk '{ print $3}')
+if [ $? -ne 0 ]; then
+    echo "Failed to query ${device} for device type."
+    exit 0
+fi
 
 if [ "${type}" != "BlueField2" ]; then
     echo "Device is not a Bluefield2"
-    exit 120
+    exit 0
 fi
 
 fwreset () {
     mstfwreset -y -d "${device}" reset
+    if [ $? -ne 0 ]; then
+        echo "Failed to run mstfwreset for ${device}."
+    fi
     echo "Switched to ${mode} mode."
-    exit 0
+    exit 120
 }
 
 query () {
@@ -40,6 +54,10 @@ query () {
         INTERNAL_CPU_ESWITCH_MANAGER \
         INTERNAL_CPU_IB_VPORT0 \
         INTERNAL_CPU_OFFLOAD_ENGINE | tail -n 5 | awk '{print $2}' | xargs echo)
+    if [ $? -ne 0 ]; then
+        echo "Failed to get the current config for ${device}."
+        exit 0
+    fi
     echo "Current DPU configuration: ${current_config}"
 }
 
@@ -56,6 +74,9 @@ case "${mode}" in
                 INTERNAL_CPU_ESWITCH_MANAGER=ECPF \
                 INTERNAL_CPU_IB_VPORT0=ECPF \
                 INTERNAL_CPU_OFFLOAD_ENGINE=ENABLED
+            if [ $? -ne 0 ]; then
+                echo "Failed to config for DPU mode on ${device}."
+            fi
             fwreset
         fi
         ;;
@@ -70,6 +91,9 @@ case "${mode}" in
                 INTERNAL_CPU_ESWITCH_MANAGER=EXT_HOST_PF \
                 INTERNAL_CPU_IB_VPORT0=EXT_HOST_PF \
                 INTERNAL_CPU_OFFLOAD_ENGINE=DISABLED
+            if [ $? -ne 0 ]; then
+                echo "Failed to config for NIC mode on ${device}."
+            fi
             fwreset
         fi
         ;;
@@ -78,5 +102,5 @@ case "${mode}" in
         ;;
 esac
 
-exit 120
+exit 0
 
