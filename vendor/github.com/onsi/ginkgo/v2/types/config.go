@@ -8,6 +8,7 @@ package types
 import (
 	"flag"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ type SuiteConfig struct {
 	PollProgressAfter     time.Duration
 	PollProgressInterval  time.Duration
 	Timeout               time.Duration
+	EmitSpecProgress      bool // this is deprecated but its removal is causing compile issue for some users that were setting it manually
 	OutputInterceptorMode string
 	SourceRoots           []string
 	GracePeriod           time.Duration
@@ -301,7 +303,7 @@ var SuiteConfigFlags = GinkgoFlags{
 	{KeyPath: "D.RegexScansFilePath", DeprecatedName: "regexScansFilePath", DeprecatedDocLink: "removed--regexscansfilepath", DeprecatedVersion: "2.0.0"},
 	{KeyPath: "D.DebugParallel", DeprecatedName: "debug", DeprecatedDocLink: "removed--debug", DeprecatedVersion: "2.0.0"},
 	{KeyPath: "D.EmitSpecProgress", DeprecatedName: "progress", SectionKey: "debug",
-		DeprecatedVersion: "2.5.0", Usage: ".  The funcitonality provided by --progress was confusing and is no longer needed.  Use --show-node-events instead to see node entry and exit events included in the timeline of failed and verbose specs.  Or you can run with -vv to always see all node events.  Lastly, --poll-progress-after and the PollProgressAfter decorator now provide a better mechanism for debugging specs that tend to get stuck."},
+		DeprecatedVersion: "2.5.0", Usage: ".  The functionality provided by --progress was confusing and is no longer needed.  Use --show-node-events instead to see node entry and exit events included in the timeline of failed and verbose specs.  Or you can run with -vv to always see all node events.  Lastly, --poll-progress-after and the PollProgressAfter decorator now provide a better mechanism for debugging specs that tend to get stuck."},
 }
 
 // ParallelConfigFlags provides flags for the Ginkgo test process (not the CLI)
@@ -599,11 +601,27 @@ func VetAndInitializeCLIAndGoConfig(cliConfig CLIConfig, goFlagsConfig GoFlagsCo
 }
 
 // GenerateGoTestCompileArgs is used by the Ginkgo CLI to generate command line arguments to pass to the go test -c command when compiling the test
-func GenerateGoTestCompileArgs(goFlagsConfig GoFlagsConfig, destination string, packageToBuild string) ([]string, error) {
+func GenerateGoTestCompileArgs(goFlagsConfig GoFlagsConfig, destination string, packageToBuild string, pathToInvocationPath string) ([]string, error) {
 	// if the user has set the CoverProfile run-time flag make sure to set the build-time cover flag to make sure
 	// the built test binary can generate a coverprofile
 	if goFlagsConfig.CoverProfile != "" {
 		goFlagsConfig.Cover = true
+	}
+
+	if goFlagsConfig.CoverPkg != "" {
+		coverPkgs := strings.Split(goFlagsConfig.CoverPkg, ",")
+		adjustedCoverPkgs := make([]string, len(coverPkgs))
+		for i, coverPkg := range coverPkgs {
+			coverPkg = strings.Trim(coverPkg, " ")
+			if strings.HasPrefix(coverPkg, "./") {
+				// this is a relative coverPkg - we need to reroot it
+				adjustedCoverPkgs[i] = "./" + filepath.Join(pathToInvocationPath, strings.TrimPrefix(coverPkg, "./"))
+			} else {
+				// this is a package name - don't touch it
+				adjustedCoverPkgs[i] = coverPkg
+			}
+		}
+		goFlagsConfig.CoverPkg = strings.Join(adjustedCoverPkgs, ",")
 	}
 
 	args := []string{"test", "-c", "-o", destination, packageToBuild}
