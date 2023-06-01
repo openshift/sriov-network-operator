@@ -5,6 +5,7 @@ The following SR-IOV capable hardware is supported with sriov-network-operator:
 | Model                    | Vendor ID | Device ID |
 | ------------------------ | --------- | --------- |
 | Intel XXV710 Family |  8086 | 158b |
+| Intel X550 Family | 8086 | 1563 |
 | Intel X557 Family |  8086 | 1589 |
 | Intel E810 Family | 8086  | 1591 |
 | Intel E810-CQDA2/2CQDA2 Family | 8086  | 1592 |
@@ -19,6 +20,7 @@ The following SR-IOV capable hardware is supported with sriov-network-operator:
 | Mellanox MT28908 Family [ConnectX-6 Lx] | 15b3 | 101f |
 | Mellanox MT2910 Family [ConnectX-7 | 15b3 | 1021 |
 | Mellanox MT42822 BlueField-2 integrated ConnectX-6 Dx | 15b3 | a2d6 |
+| Mellanox MT43244 BlueField-3 integrated ConnectX-7 Dx | 15b3 | a2dc |
 | Qlogic QL45000 Series 50GbE Controller | 1077 | 1654 |
 | Marvell OCTEON TX2 CN96XX | 177d | b200 |
 | Marvell OCTEON TX2 CN98XX | 177d | b100 |
@@ -40,6 +42,7 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Model                    | SR-IOV Kernel | SR-IOV DPDK | SR-IOV Hardware Offload (switchdev) |
 | ------------------------ | ------------- | ----------- |------------------------------------ |
 | Intel XXV710 Family | V | V | X |
+| Intel X550 Family | V | V | X |
 | Intel X557 Family | V | V | X |
 | Intel E810 Family | V | V | X |
 | Intel E810-CQDA2/2CQDA2 Family | V | V | X |
@@ -54,6 +57,7 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Mellanox MT28908 Family [ConnectX-6 Lx] | V | V | V |
 | Mellanox MT28908 Family [ConnectX-7] | V | V | V |
 | Mellanox MT42822 BlueField-2 integrated ConnectX-6 Dx | V | V | V |
+| Mellanox MT43244 BlueField-3 integrated ConnectX-6 Dx | V | V | V |
 | Qlogic QL45000 Series 50GbE Controller | V | X | X |
 | Marvell OCTEON TX2 CN96XX | V | V | X |
 | Marvell OCTEON TX2 CN98XX | V | V | X |

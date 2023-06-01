@@ -39,6 +39,7 @@ const (
 	ClusterTypeKubernetes = "kubernetes"
 	VendorMellanox        = "15b3"
 	DeviceBF2             = "a2d6"
+	DeviceBF3             = "a2dc"
 )
 
 var InitialState sriovnetworkv1.SriovNetworkNodeState
@@ -196,8 +197,8 @@ func skipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.Inter
 		return true, nil
 	}
 
-	// Nvidia_mlx5_MT42822_BlueField-2_integrated_ConnectX-6_Dx in OpenShift
-	if ClusterType == ClusterTypeOpenshift && ifStatus.Vendor == VendorMellanox && ifStatus.DeviceID == DeviceBF2 {
+	//  NVIDIA BlueField 2 and BlueField3 in OpenShift
+	if ClusterType == ClusterTypeOpenshift && ifStatus.Vendor == VendorMellanox && (ifStatus.DeviceID == DeviceBF2 || ifStatus.DeviceID == DeviceBF3) {
 		// TODO: remove this when switch to the systemd configuration support.
 		mode, err := mellanoxBlueFieldMode(ifStatus.PciAddress)
 		if err != nil {
