@@ -294,6 +294,79 @@ func TestValidatePolicyForNodeStateWithUpdatedExistingVfRange(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 }
 
+func TestValidatePoliciesWithDifferentExcludeTopologyForTheSameResource(t *testing.T) {
+	current := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "currentPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName:    "resourceX",
+			ExcludeTopology: true,
+		},
+	}
+
+	previous := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "previousPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName:    "resourceX",
+			ExcludeTopology: false,
+		},
+	}
+
+	err := validatePolicyForNodePolicy(current, previous)
+
+	g := NewGomegaWithT(t)
+	g.Expect(err).To(MatchError("excludeTopology[true] field conflicts with policy [previousPolicy].ExcludeTopology[false] as they target the same resource[resourceX]"))
+}
+
+func TestValidatePoliciesWithDifferentExcludeTopologyForTheSameResourceAndTheSamePF(t *testing.T) {
+	current := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "currentPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName:    "resourceX",
+			NumVfs:          10,
+			NicSelector:     SriovNetworkNicSelector{PfNames: []string{"eno1#0-4"}},
+			ExcludeTopology: true,
+		},
+	}
+
+	previous := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "previousPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName:    "resourceX",
+			NumVfs:          10,
+			NicSelector:     SriovNetworkNicSelector{PfNames: []string{"eno1#5-9"}},
+			ExcludeTopology: false,
+		},
+	}
+
+	err := validatePolicyForNodePolicy(current, previous)
+
+	g := NewGomegaWithT(t)
+	g.Expect(err).To(MatchError("excludeTopology[true] field conflicts with policy [previousPolicy].ExcludeTopology[false] as they target the same resource[resourceX]"))
+}
+
+func TestValidatePoliciesWithSameExcludeTopologyForTheSameResource(t *testing.T) {
+	current := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "currentPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName:    "resourceX",
+			ExcludeTopology: true,
+		},
+	}
+
+	previous := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "previousPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName:    "resourceX",
+			ExcludeTopology: true,
+		},
+	}
+
+	err := validatePolicyForNodePolicy(current, previous)
+
+	g := NewGomegaWithT(t)
+	g.Expect(err).NotTo(HaveOccurred())
+}
+
 func TestStaticValidateSriovNetworkNodePolicyWithValidVendorDevice(t *testing.T) {
 	policy := &SriovNetworkNodePolicy{
 		Spec: SriovNetworkNodePolicySpec{
