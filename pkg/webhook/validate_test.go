@@ -21,6 +21,8 @@ func TestMain(m *testing.M) {
 		"8086 158b 154c", // I40e 25G SFP28
 		"8086 1572 154c", // I40e 10G X710 SFP+
 		"8086 0d58 154c", // I40e XXV710 N3000
+		"8086 1581 154c", // I40e X710 Backplane
+		"8086 15ff 154c", // I40e X710 Base T
 		"8086 1583 154c", // I40e 40G XL710 QSFP+
 		"8086 1591 1889", // Columbiaville E810
 		"8086 1592 1889", // Columbiaville E810-CQDA2/2CQDA2
