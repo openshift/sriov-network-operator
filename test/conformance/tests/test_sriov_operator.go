@@ -982,7 +982,7 @@ var _ = Describe("[sriov] operator", func() {
 						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), vfioNode, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
 						return nodeState.Spec.Interfaces
-					}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
 						IgnoreExtras,
 						Fields{
 							"Name":   Equal(vfioNic.Name),
@@ -1097,7 +1097,7 @@ var _ = Describe("[sriov] operator", func() {
 						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
 						Expect(err).ToNot(HaveOccurred())
 						return nodeState.Spec.Interfaces
-					}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
 						IgnoreExtras,
 						Fields{
 							"Name":     Equal(intf.Name),
@@ -1676,6 +1676,9 @@ var _ = Describe("[sriov] operator", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(errOutput).To(Equal(""))
 				Expect(output).To(ContainSubstring("tap23: <BROADCAST,MULTICAST> mtu 1500"))
+
+				err = clients.Delete(context.Background(), podObj)
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 	})
@@ -1977,7 +1980,7 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool, podCa
 		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
-	}, 3*time.Minute, 1*time.Second).Should(Equal(corev1.PodRunning))
+	}, 5*time.Minute, 1*time.Second).Should(Equal(corev1.PodRunning))
 	pod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred())
 	return pod

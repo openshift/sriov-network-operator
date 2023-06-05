@@ -189,20 +189,9 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	for _, node := range nodeList.Items {
 		if cr.Selected(&node) {
 			nodesSelected = true
-			for _, ns := range nsList.Items {
-				if ns.GetName() == node.GetName() {
-					if ok, err := validatePolicyForNodeState(cr, &ns, &node); err != nil || !ok {
-						return false, err
-					}
-				}
-			}
-			// validate current policy against policies in API (may not be converted to SriovNetworkNodeState yet)
-			for _, np := range npList.Items {
-				if np.GetName() != cr.GetName() && np.Selected(&node) {
-					if ok, err := validatePolicyForNodePolicy(cr, &np); err != nil || !ok {
-						return false, err
-					}
-				}
+			err = validatePolicyForNodeStateAndPolicy(nsList, npList, &node, cr)
+			if err != nil {
+				return false, err
 			}
 		}
 	}
@@ -217,44 +206,75 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	return true, nil
 }
 
-func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) (bool, error) {
-	glog.V(2).Infof("validatePolicyForNodeState(): validate policy %s for node %s.", policy.GetName(), state.GetName())
-	for _, iface := range state.Status.Interfaces {
-		if validateNicModel(&policy.Spec.NicSelector, &iface, node) {
-			interfaceSelected = true
-			if policy.GetName() != constants.DefaultPolicyName && policy.Spec.NumVfs == 0 {
-				return false, fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
-			}
-			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID {
-				return false, fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), iface.TotalVfs)
-			}
-			if policy.Spec.NumVfs > MlxMaxVFs && iface.Vendor == MellanoxID {
-				return false, fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs)
-			}
-			// vdpa: only mellanox cards are supported
-			if policy.Spec.VdpaType == constants.VdpaTypeVirtio && iface.Vendor != MellanoxID {
-				return false, fmt.Errorf("vendor(%s) in CR %s not supported for virtio-vdpa", iface.Vendor, policy.GetName())
+func validatePolicyForNodeStateAndPolicy(nsList *sriovnetworkv1.SriovNetworkNodeStateList, npList *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node, cr *sriovnetworkv1.SriovNetworkNodePolicy) error {
+	for _, ns := range nsList.Items {
+		if ns.GetName() == node.GetName() {
+			if err := validatePolicyForNodeState(cr, &ns, node); err != nil {
+				return err
 			}
 		}
 	}
-	return true, nil
+	// validate current policy against policies in API (may not be converted to SriovNetworkNodeState yet)
+	for _, np := range npList.Items {
+		if np.GetName() != cr.GetName() && np.Selected(node) {
+			if err := validatePolicyForNodePolicy(cr, &np); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
-func validatePolicyForNodePolicy(
-	current *sriovnetworkv1.SriovNetworkNodePolicy,
-	previous *sriovnetworkv1.SriovNetworkNodePolicy,
-) (bool, error) {
+func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) error {
+	glog.V(2).Infof("validatePolicyForNodeState(): validate policy %s for node %s.", policy.GetName(), state.GetName())
+	for _, iface := range state.Status.Interfaces {
+		err := validateNicModel(&policy.Spec.NicSelector, &iface, node)
+		if err == nil {
+			interfaceSelected = true
+			if policy.GetName() != constants.DefaultPolicyName && policy.Spec.NumVfs == 0 {
+				return fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
+			}
+			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID {
+				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), iface.TotalVfs)
+			}
+			if policy.Spec.NumVfs > MlxMaxVFs && iface.Vendor == MellanoxID {
+				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs)
+			}
+			// vdpa: only mellanox cards are supported
+			if policy.Spec.VdpaType == constants.VdpaTypeVirtio && iface.Vendor != MellanoxID {
+				return fmt.Errorf("vendor(%s) in CR %s not supported for virtio-vdpa", iface.Vendor, policy.GetName())
+			}
+		}
+	}
+	return nil
+}
+
+func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
 	glog.V(2).Infof("validateConflictPolicy(): validate policy %s against policy %s",
 		current.GetName(), previous.GetName())
 
 	if current.GetName() == previous.GetName() {
-		return true, nil
+		return nil
 	}
 
+	err := validatePfNames(current, previous)
+	if err != nil {
+		return err
+	}
+
+	err = validateExludeTopologyField(current, previous)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validatePfNames(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
 	for _, curPf := range current.Spec.NicSelector.PfNames {
 		curName, curRngSt, curRngEnd, err := sriovnetworkv1.ParsePFName(curPf)
 		if err != nil {
-			return false, fmt.Errorf("invalid PF name: %s", curPf)
+			return fmt.Errorf("invalid PF name: %s", curPf)
 		}
 		for _, prePf := range previous.Spec.NicSelector.PfNames {
 			// Not validate return err of ParsePFName for previous PF
@@ -262,25 +282,38 @@ func validatePolicyForNodePolicy(
 			preName, preRngSt, preRngEnd, _ := sriovnetworkv1.ParsePFName(prePf)
 			if curName == preName {
 				if curRngEnd < preRngSt || curRngSt > preRngEnd {
-					return true, nil
+					return nil
 				} else {
-					return false, fmt.Errorf("VF index range in %s is overlapped with existing policy %s", curPf, previous.GetName())
+					return fmt.Errorf("VF index range in %s is overlapped with existing policy %s", curPf, previous.GetName())
 				}
 			}
 		}
 	}
-	return true, nil
+	return nil
 }
 
-func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt, node *corev1.Node) bool {
+func validateExludeTopologyField(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
+	if current.Spec.ResourceName != previous.Spec.ResourceName {
+		return nil
+	}
+
+	if current.Spec.ExcludeTopology == previous.Spec.ExcludeTopology {
+		return nil
+	}
+
+	return fmt.Errorf("excludeTopology[%t] field conflicts with policy [%s].ExcludeTopology[%t] as they target the same resource[%s]",
+		current.Spec.ExcludeTopology, previous.GetName(), previous.Spec.ExcludeTopology, current.Spec.ResourceName)
+}
+
+func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *sriovnetworkv1.InterfaceExt, node *corev1.Node) error {
 	if selector.Vendor != "" && selector.Vendor != iface.Vendor {
-		return false
+		return fmt.Errorf("selector vendor: %s is not equal to the interface vendor: %s", selector.Vendor, iface.Vendor)
 	}
 	if selector.DeviceID != "" && selector.DeviceID != iface.DeviceID {
-		return false
+		return fmt.Errorf("selector device ID: %s is not equal to the interface device ID: %s", selector.Vendor, iface.Vendor)
 	}
 	if len(selector.RootDevices) > 0 && !sriovnetworkv1.StringInArray(iface.PciAddress, selector.RootDevices) {
-		return false
+		return fmt.Errorf("interface PCI address: %s not found in root devices", iface.PciAddress)
 	}
 	if len(selector.PfNames) > 0 {
 		var pfNames []string
@@ -293,13 +326,13 @@ func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *s
 			}
 		}
 		if !sriovnetworkv1.StringInArray(iface.Name, pfNames) {
-			return false
+			return fmt.Errorf("interface name: %s not found in physical function names", iface.PciAddress)
 		}
 	}
 
 	// check the vendor/device ID to make sure only devices in supported list are allowed.
 	if sriovnetworkv1.IsSupportedModel(iface.Vendor, iface.DeviceID) {
-		return true
+		return nil
 	}
 
 	// Check the vendor and device ID of the VF only if we are on a virtual environment
@@ -307,9 +340,9 @@ func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *s
 		if strings.Contains(strings.ToLower(node.Spec.ProviderID), strings.ToLower(key)) &&
 			selector.NetFilter != "" && selector.NetFilter == iface.NetFilter &&
 			sriovnetworkv1.IsVfSupportedModel(iface.Vendor, iface.DeviceID) {
-			return true
+			return nil
 		}
 	}
 
-	return false
+	return fmt.Errorf("vendor and device ID is not in supported list")
 }
