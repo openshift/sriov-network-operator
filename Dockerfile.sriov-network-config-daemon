@@ -5,7 +5,7 @@ RUN make _build-sriov-network-config-daemon BIN_PATH=build/_output/cmd
 
 FROM quay.io/centos/centos:stream9
 ARG MSTFLINT=mstflint
-RUN ARCH_DEP_PKGS=$(if [ "$(uname -m)" != "s390x" ]; then echo -n ${MSTFLINT} ; fi) && yum -y install hwdata $ARCH_DEP_PKGS && yum clean all
+RUN ARCH_DEP_PKGS=$(if [ "$(uname -m)" != "s390x" ]; then echo -n ${MSTFLINT} ; fi) && yum -y install pciutils hwdata $ARCH_DEP_PKGS && yum clean all
 LABEL io.k8s.display-name="sriov-network-config-daemon" \
       io.k8s.description="This is a daemon that manage and config sriov network devices in Kubernetes cluster"
 COPY --from=builder /go/src/github.com/k8snetworkplumbingwg/sriov-network-operator/build/_output/cmd/sriov-network-config-daemon /usr/bin/
