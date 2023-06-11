@@ -506,18 +506,22 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 				go dn.getDrainLock(ctx, done)
 				<-done
 			}
+		}
 
-			if dn.openshiftContext.IsOpenshiftCluster() && !dn.openshiftContext.IsHypershift() {
-				glog.Infof("nodeStateSyncHandler(): pause MCP")
-				if err := dn.pauseMCP(); err != nil {
-					return err
-				}
+		if dn.openshiftContext.IsOpenshiftCluster() && !dn.openshiftContext.IsHypershift() {
+			glog.Infof("nodeStateSyncHandler(): pause MCP")
+			if err := dn.pauseMCP(); err != nil {
+				return err
 			}
 		}
 
-		glog.Info("nodeStateSyncHandler(): drain node")
-		if err := dn.drainNode(); err != nil {
-			return err
+		if dn.disableDrain {
+			glog.Info("nodeStateSyncHandler(): disable drain is true skipping drain")
+		} else {
+			glog.Info("nodeStateSyncHandler(): drain node")
+			if err := dn.drainNode(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -577,15 +581,12 @@ func (dn *Daemon) nodeHasAnnotation(annoKey string, value string) bool {
 	return false
 }
 
+// isNodeDraining: check if the node is draining
+// both Draining and MCP paused labels will return true
 func (dn *Daemon) isNodeDraining() bool {
 	anno, ok := dn.node.Annotations[annoKey]
 	if !ok {
 		return false
-	}
-
-	if dn.openshiftContext.IsOpenshiftCluster() && !dn.openshiftContext.IsHypershift() {
-		// for openshift cluster draining should be true only if the annotation has MCP paused
-		return anno == annoMcpPaused
 	}
 
 	return anno == annoDraining || anno == annoMcpPaused
@@ -894,11 +895,6 @@ func (dn *Daemon) pauseMCP() error {
 }
 
 func (dn *Daemon) drainNode() error {
-	if dn.disableDrain {
-		glog.Info("drainNode(): disable drain is true skipping drain")
-		return nil
-	}
-
 	glog.Info("drainNode(): Update prepared")
 	var err error
 
