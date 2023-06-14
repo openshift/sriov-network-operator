@@ -1,6 +1,7 @@
 apiVersion: v1
 data:
   Broadcom_bnxt_en_BCM57414_NetXtreme-E: 14e4 16d7 16c1
+  Broadcom_bnxt_en_BCM57800_NetXtreme-E: 14e4 168a 16a9
   Broadcom_bnxt_en_BCM57508_NetXtreme-E: 14e4 1750 1806
   Intel_i40e_X710_10G: 8086 1572 154c
   Intel_i40e_XL710_40G: 8086 1583 154c

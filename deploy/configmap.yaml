@@ -3,6 +3,10 @@ kind: ConfigMap
 metadata:
   name: supported-nic-ids
 data:
+  Intel_ixgbe_82599ES: "8086 10fb 10ed"
+  Intel_ixgbe_X520: "8086 154d 10ed"
+  Intel_ixgbe_X520-AT2: "8086 1528 1515"
+  Intel_ixgbe_X550T: "8086 1563 1565"
   Intel_i40e_XXV710: "8086 158a 154c"
   Intel_i40e_25G_SFP28: "8086 158b 154c"
   Intel_i40e_10G_X710_SFP: "8086 1572 154c"
@@ -25,6 +29,7 @@ data:
   Nvidia_mlx5_MT42822_BlueField-2_integrated_ConnectX-6_Dx: "15b3 a2d6 101e"
   Nvidia_mlx5_MT43244_BlueField-3_integrated_ConnectX-7_Dx: "15b3 a2dc 101e"
   Broadcom_bnxt_BCM57414_2x25G: "14e4 16d7 16dc"
+  Broadcom_bnxt_en_BCM57800_NetXtreme-E: "14e4 168a 16a9"
   Broadcom_bnxt_BCM75508_2x100G: "14e4 1750 1806"
   Qlogic_qede_QL45000_50G: "1077 1654 1664"
   Red_Hat_Virtio_network_device: "1af4 1000 1000"
