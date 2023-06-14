@@ -275,7 +275,7 @@ SUBSYSTEM=="net", ACTION=="add|move", ATTRS{phys_switch_id}!="", ATTR{phys_port_
 			Expect(sut.isNodeDraining()).To(BeFalse())
 
 			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
-			Expect(sut.isNodeDraining()).To(BeFalse())
+			Expect(sut.isNodeDraining()).To(BeTrue())
 
 			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
 			Expect(sut.isNodeDraining()).To(BeTrue())
