@@ -88,6 +88,11 @@ spec:
                     items:
                       type: string
                     type: array
+                  pciAddresses:
+                    description: pciAddress of SR-IoV PF or PF.
+                    items:
+                      type: string
+                    type: array
                   rootDevices:
                     description: PCI address of SR-IoV PF.
                     items:

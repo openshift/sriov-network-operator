@@ -667,6 +667,9 @@ func createDevicePluginResource(
 	if len(p.Spec.NicSelector.RootDevices) > 0 {
 		netDeviceSelectors.RootDevices = append(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
 	}
+	if len(p.Spec.NicSelector.PciAddresses) > 0 {
+		netDeviceSelectors.PciAddresses = append(netDeviceSelectors.PciAddresses, p.Spec.NicSelector.PciAddresses...)
+	}
 	// Removed driver constraint for "netdevice" DeviceType
 	if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
 		netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, p.Spec.DeviceType)
@@ -737,6 +740,9 @@ func updateDevicePluginResource(
 	}
 	if len(p.Spec.NicSelector.RootDevices) > 0 {
 		netDeviceSelectors.RootDevices = sriovnetworkv1.UniqueAppend(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
+	}
+	if len(p.Spec.NicSelector.PciAddresses) > 0 {
+		netDeviceSelectors.PciAddresses = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PciAddresses, p.Spec.NicSelector.PciAddresses...)
 	}
 	// Removed driver constraint for "netdevice" DeviceType
 	if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
