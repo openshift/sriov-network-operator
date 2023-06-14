@@ -7,6 +7,7 @@ data:
   Intel_i40e_25G_SFP28: "8086 158b 154c"
   Intel_i40e_10G_X710_SFP: "8086 1572 154c"
   Intel_ixgbe_10G_X550: "8086 1563 1565"
+  Intel_ixgbe_82576: "8086 10c9 10ca"
   Intel_i40e_X710_X557_AT_10G: "8086 1589 154c"
   Intel_i40e_10G_X710_BACKPLANE: "8086 1581 154c"
   Intel_i40e_10G_X710_BASE_T: "8086 15ff 154c"

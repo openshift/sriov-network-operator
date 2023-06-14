@@ -12,6 +12,7 @@ import (
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 )
 
 // Needed for parsing of podinfo
@@ -36,6 +37,11 @@ func CreateSriovNetwork(clientSet *testclient.ClientSet, intf *sriovv1.Interface
 			// for pod to pod connectivity tests in the same host
 			LinkState: "enable",
 		}}
+
+	// https://bugzilla.redhat.com/show_bug.cgi?id=2214976
+	if cluster.VirtualCluster() {
+		sriovNetwork.Spec.LinkState = ""
+	}
 
 	for _, o := range options {
 		o(sriovNetwork)
