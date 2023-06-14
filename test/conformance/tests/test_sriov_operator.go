@@ -513,6 +513,11 @@ var _ = Describe("[sriov] operator", func() {
 
 			// 25961
 			It("Should configure the the link state variable", func() {
+				if cluster.VirtualCluster() {
+					// https://bugzilla.redhat.com/show_bug.cgi?id=2214976
+					Skip("Bug in IGB driver")
+				}
+
 				sriovNetwork := &sriovv1.SriovNetwork{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-statenetwork", Namespace: operatorNamespace},
 					Spec: sriovv1.SriovNetworkSpec{
@@ -1165,6 +1170,11 @@ var _ = Describe("[sriov] operator", func() {
 			Context("PF shutdown", func() {
 				// 29398
 				It("Should be able to create pods successfully if PF is down.Pods are able to communicate with each other on the same node", func() {
+					if cluster.VirtualCluster() {
+						// https://bugzilla.redhat.com/show_bug.cgi?id=2214976
+						Skip("Bug in IGB driver")
+					}
+
 					resourceName := testResourceName
 					var testNode string
 					var unusedSriovDevice *sriovv1.InterfaceExt
@@ -1214,6 +1224,11 @@ var _ = Describe("[sriov] operator", func() {
 
 			Context("MTU", func() {
 				BeforeEach(func() {
+					if cluster.VirtualCluster() {
+						// https://bugzilla.redhat.com/show_bug.cgi?id=2214977
+						Skip("Bug in IGB driver")
+					}
+
 					var node string
 					resourceName := "mturesource"
 					var numVfs int
@@ -1309,7 +1324,6 @@ var _ = Describe("[sriov] operator", func() {
 							ResourceName:     resourceName,
 							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
 							NetworkNamespace: namespaces.Test,
-							LinkState:        "enable",
 						}}
 
 					// We need this to be able to run the connectivity checks on Mellanox cards
@@ -1399,11 +1413,11 @@ var _ = Describe("[sriov] operator", func() {
 						},
 
 						Spec: sriovv1.SriovNetworkNodePolicySpec{
-							NumVfs:       10,
+							NumVfs:       7,
 							ResourceName: "resourceXXX",
 							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
 							NicSelector: sriovv1.SriovNetworkNicSelector{
-								PfNames: []string{intf.Name + "#0-4"},
+								PfNames: []string{intf.Name + "#0-3"},
 							},
 							ExcludeTopology: true,
 						},
@@ -1416,11 +1430,11 @@ var _ = Describe("[sriov] operator", func() {
 						},
 
 						Spec: sriovv1.SriovNetworkNodePolicySpec{
-							NumVfs:       10,
+							NumVfs:       7,
 							ResourceName: "resourceXXX",
 							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
 							NicSelector: sriovv1.SriovNetworkNicSelector{
-								PfNames: []string{intf.Name + "#5-9"},
+								PfNames: []string{intf.Name + "#4-6"},
 							},
 							ExcludeTopology: false,
 						},
@@ -1433,11 +1447,11 @@ var _ = Describe("[sriov] operator", func() {
 						},
 
 						Spec: sriovv1.SriovNetworkNodePolicySpec{
-							NumVfs:       10,
+							NumVfs:       7,
 							ResourceName: "resourceYYY",
 							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
 							NicSelector: sriovv1.SriovNetworkNicSelector{
-								PfNames: []string{intf.Name + "#5-9"},
+								PfNames: []string{intf.Name + "#4-6"},
 							},
 							ExcludeTopology: false,
 						},
@@ -1451,15 +1465,15 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					assertDevicePluginConfigurationContains(node,
-						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-4"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
+						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-3"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
 
 					err = clients.Create(context.Background(), excludeTopologyFalseResourceYYY)
 					Expect(err).ToNot(HaveOccurred())
 
 					assertDevicePluginConfigurationContains(node,
-						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-4"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
+						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-3"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
 					assertDevicePluginConfigurationContains(node,
-						fmt.Sprintf(`{"resourceName":"resourceYYY","selectors":{"pfNames":["%s#5-9"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
+						fmt.Sprintf(`{"resourceName":"resourceYYY","selectors":{"pfNames":["%s#4-6"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
 				})
 
 				It("multiple values for the same resource should not be allowed", func() {
@@ -1733,7 +1747,6 @@ var _ = Describe("[sriov] operator", func() {
 						ResourceName:     resourceName,
 						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
 						NetworkNamespace: namespaces.Test,
-						LinkState:        "enable",
 					}}
 
 				// We need this to be able to run the connectivity checks on Mellanox cards
@@ -2222,9 +2235,9 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool, podCa
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
 	}, 5*time.Minute, 1*time.Second).Should(Equal(corev1.PodRunning))
-	pod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
+	podObj, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred())
-	return pod
+	return podObj
 }
 
 func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
@@ -2233,15 +2246,19 @@ func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
 		ipProtocolVersion = "4"
 	}
 	podDefinition := pod.RedefineWithNodeSelector(
-		pod.RedefineWithRestartPolicy(
-			pod.RedefineWithCommand(
-				pod.DefineWithNetworks([]string{sriovNetworkAttachment}),
-				[]string{"sh", "-c", fmt.Sprintf("ping -%s -c 3 %s", ipProtocolVersion, ip)}, []string{},
+		pod.RedefineWithCapabilities(
+			pod.RedefineWithRestartPolicy(
+				pod.RedefineWithCommand(
+					pod.DefineWithNetworks([]string{sriovNetworkAttachment}),
+					[]string{"sh", "-c", fmt.Sprintf("ping -%s -c 3 %s", ipProtocolVersion, ip)}, []string{},
+				),
+				corev1.RestartPolicyNever,
 			),
-			corev1.RestartPolicyNever,
+			[]corev1.Capability{"NET_RAW"},
 		),
 		nodeSelector,
 	)
+
 	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
