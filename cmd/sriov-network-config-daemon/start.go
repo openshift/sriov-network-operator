@@ -14,7 +14,9 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -150,17 +152,34 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		destdir = "/host/tmp"
 	}
 
-	platformType := utils.Baremetal
-
-	nodeInfo, err := kubeclient.CoreV1().Nodes().Get(context.Background(), startOpts.nodeName, v1.GetOptions{})
-	if err == nil {
-		for key, pType := range utils.PlatformMap {
-			if strings.Contains(strings.ToLower(nodeInfo.Spec.ProviderID), strings.ToLower(key)) {
-				platformType = pType
-			}
+	backoff := wait.Backoff{
+		Steps:    5,
+		Duration: 10 * time.Second,
+		Factor:   2,
+	}
+	var lastErr error
+	var nodeInfo *corev1.Node
+	if err = wait.ExponentialBackoff(backoff, func() (bool, error) {
+		var nodeErr error
+		nodeInfo, nodeErr = kubeclient.CoreV1().Nodes().Get(context.Background(), startOpts.nodeName, v1.GetOptions{})
+		if nodeErr != nil {
+			lastErr = nodeErr
+			glog.Warningf("failed to obtain node %s: %v, retrying", startOpts.nodeName, nodeErr)
+			return false, nil
 		}
-	} else {
-		glog.Fatalf("Failed to fetch node state %s, %v!", startOpts.nodeName, err)
+		return true, nil
+	}); err != nil {
+		if err == wait.ErrWaitTimeout {
+			glog.Errorf("failed to obtain node (%d tries): %v :%v", backoff.Steps, err, lastErr)
+		}
+		panic(lastErr.Error())
+	}
+
+	platformType := utils.Baremetal
+	for key, pType := range utils.PlatformMap {
+		if strings.Contains(strings.ToLower(nodeInfo.Spec.ProviderID), strings.ToLower(key)) {
+			platformType = pType
+		}
 	}
 	glog.V(0).Infof("Running on platform: %s", platformType.String())
 
