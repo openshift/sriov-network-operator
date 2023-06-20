@@ -1,0 +1,30 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: sriov-config-service
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    systemd:
+      units:
+        - contents: |
+            [Unit]
+            Description=Configures SRIOV NIC
+            # Removal of this file signals firstboot completion
+            ConditionPathExists=!/etc/ignition-machine-config-encapsulated.json
+            # This service is used to configure the SR-IOV VFs on NICs
+            Wants=network-pre.target
+            Before=network-pre.target
+            
+            [Service]
+            Type=oneshot
+            ExecStart=/var/lib/sriov/sriov-network-config-daemon service -v {{ .LogLevel }}
+            StandardOutput=journal+console
+            
+            [Install]
+            WantedBy=multi-user.target
+          enabled: true
+          name: "sriov-config.service"

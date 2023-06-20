@@ -26,7 +26,7 @@ spec:
       hostPID: true
       nodeSelector:
         kubernetes.io/os: linux
-        node-role.kubernetes.io/worker:
+        node-role.kubernetes.io/worker: ""
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-network-config-daemon
@@ -37,16 +37,66 @@ spec:
       - name: {{ . }}
       {{- end }}
       {{- end }}
+      initContainers:
+        - name: sriov-cni
+          image: {{.SRIOVCNIImage}}
+          command:
+            - /bin/sh
+            - -c
+            - cp /usr/bin/sriov /host/opt/cni/bin/
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+          volumeMounts:
+            - name: cnibin
+              mountPath: /host/opt/cni/bin
+        - name: sriov-infiniband-cni
+          image: {{.SRIOVInfiniBandCNIImage}}
+          command:
+            - /bin/sh
+            - -c
+            - cp /usr/bin/ib-sriov /host/opt/cni/bin/
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+          volumeMounts:
+            - name: cnibin
+              mountPath: /host/opt/cni/bin
+      {{- if .UsedSystemdMode}}
+        - name: sriov-service-copy
+          image: {{.Image}}
+          command:
+            - /bin/bash
+            - -c
+            - mkdir -p /host/var/lib/sriov/ && cp /usr/bin/sriov-network-config-daemon /host/var/lib/sriov/sriov-network-config-daemon && chcon -t bin_t /host/var/lib/sriov/sriov-network-config-daemon | true # Allow systemd to run the file, use pipe true to not failed if the system doesn't have selinux or apparmor enabled
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+          volumeMounts:
+            - name: host
+              mountPath: /host
+      {{- end }}
       containers:
       - name: sriov-network-config-daemon
         image: {{.Image}}
         command:
           - sriov-network-config-daemon
-        imagePullPolicy: IfNotPresent
         securityContext:
           privileged: true
         args:
           - "start"
+        {{- if .UsedSystemdMode}}
+          - --use-systemd-service
+        {{- end }}
         env:
           - name: NODE_NAME
             valueFrom:
@@ -71,28 +121,6 @@ spec:
           preStop:
             exec:
               command: ["/bindata/scripts/clean-k8s-services.sh"]
-      - name: sriov-cni
-        image: {{.SRIOVCNIImage}}
-        securityContext:
-          privileged: true
-        resources:
-          requests:
-            cpu: 10m
-            memory: 10Mi
-        volumeMounts:
-        - name: cnibin
-          mountPath: /host/opt/cni/bin
-      - name: sriov-infiniband-cni
-        image: {{.SRIOVInfiniBandCNIImage}}
-        securityContext:
-          privileged: true
-        resources:
-          requests:
-            cpu: 10m
-            memory: 10Mi
-        volumeMounts:
-        - name: cnibin
-          mountPath: /host/opt/cni/bin
       volumes:
       - name: host
         hostPath:

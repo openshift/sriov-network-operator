@@ -1,0 +1,15 @@
+contents: |
+  [Unit]
+  Description=Configures SRIOV NIC
+  Wants=network-pre.target
+  Before=network-pre.target
+  
+  [Service]
+  Type=oneshot
+  ExecStart=/var/lib/sriov/sriov-network-config-daemon service
+  StandardOutput=journal+console
+  
+  [Install]
+  WantedBy=multi-user.target
+enabled: true
+name: sriov-config.service
