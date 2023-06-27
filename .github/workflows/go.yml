@@ -45,6 +45,22 @@ jobs:
     - name: test bindata/scripts
       run: make test-bindata-scripts
 
+  golangci:
+    name: Golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go 1.19
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.19.x
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
+        version: v1.46
+
   test-coverage:
     name: test-coverage
     runs-on: ubuntu-latest
