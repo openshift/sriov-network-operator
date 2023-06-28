@@ -17,6 +17,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
@@ -47,7 +49,48 @@ func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operati
 		warnings = append(warnings, "Node draining is disabled for applying SriovNetworkNodePolicy, it may result in workload interruption.")
 	}
 
+	err := validateSriovOperatorConfigDisableDrain(cr)
+	if err != nil {
+		return false, warnings, err
+	}
+
 	return true, warnings, nil
+}
+
+// validateSriovOperatorConfigDisableDrain checks if the user is setting `.Spec.DisableDrain` from false to true while
+// operator is updating one or more nodes. Disabling the drain at this stage would prevent the operator to uncordon a node at
+// the end of the update operation, keeping nodes un-schedulable until manual intervention.
+func validateSriovOperatorConfigDisableDrain(cr *sriovnetworkv1.SriovOperatorConfig) error {
+	if !cr.Spec.DisableDrain {
+		return nil
+	}
+
+	previousConfig, err := snclient.SriovnetworkV1().SriovOperatorConfigs(cr.Namespace).Get(context.Background(), cr.Name, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("can't validate SriovOperatorConfig[%s] DisableDrain against its previous value: %q", cr.Name, err)
+	}
+
+	if previousConfig.Spec.DisableDrain == cr.Spec.DisableDrain {
+		// DisableDrain didn't change
+		return nil
+	}
+
+	// DisableDrain has been changed `false -> true`, check if any node is updating
+	nodeStates, err := snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("can't validate SriovOperatorConfig[%s] DisableDrain transition to true: %q", cr.Name, err)
+	}
+
+	for _, nodeState := range nodeStates.Items {
+		if nodeState.Status.SyncStatus == "InProgress" {
+			return fmt.Errorf("can't set Spec.DisableDrain = true while node[%s] is updating", nodeState.Name)
+		}
+	}
+
+	return nil
 }
 
 func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1.Operation) (bool, []string, error) {
