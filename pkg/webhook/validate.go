@@ -35,17 +35,19 @@ func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operati
 	glog.V(2).Infof("validateSriovOperatorConfig: %v", cr)
 	var warnings []string
 
-	if cr.GetName() == constants.DefaultConfigName {
-		if operation == v1.Delete {
-			return false, warnings, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
-		}
-
-		if cr.Spec.DisableDrain {
-			warnings = append(warnings, "Node draining is disabled for applying SriovNetworkNodePolicy, it may result in workload interruption.")
-		}
-		return true, warnings, nil
+	if cr.GetName() != constants.DefaultConfigName {
+		return false, warnings, fmt.Errorf("only default SriovOperatorConfig is used")
 	}
-	return false, warnings, fmt.Errorf("only default SriovOperatorConfig is used")
+
+	if operation == v1.Delete {
+		return false, warnings, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
+	}
+
+	if cr.Spec.DisableDrain {
+		warnings = append(warnings, "Node draining is disabled for applying SriovNetworkNodePolicy, it may result in workload interruption.")
+	}
+
+	return true, warnings, nil
 }
 
 func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1.Operation) (bool, []string, error) {
