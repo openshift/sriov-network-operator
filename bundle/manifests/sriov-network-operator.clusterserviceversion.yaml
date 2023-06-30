@@ -100,7 +100,7 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/pliurh/sriov-network-operator-manager:bd1
-    createdAt: "2023-07-06T12:11:19Z"
+    createdAt: "2023-07-11T11:54:39Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     olm.skipRange: '>=4.3.0-0 <4.14.0'
