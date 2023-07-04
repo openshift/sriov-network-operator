@@ -666,7 +666,7 @@ func unbindDriverIfNeeded(vfAddr string, isRdma bool) error {
 }
 
 func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
-	glog.Infof("getLinkType(): Device %s", ifaceStatus.PciAddress)
+	glog.V(2).Infof("getLinkType(): Device %s", ifaceStatus.PciAddress)
 	if ifaceStatus.Name != "" {
 		link, err := netlink.LinkByName(ifaceStatus.Name)
 		if err != nil {
