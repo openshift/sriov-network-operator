@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -719,10 +720,16 @@ func generateRandomGUID() net.HardwareAddr {
 
 func GetNicSriovMode(pciAddress string) (string, error) {
 	glog.V(2).Infof("GetNicSriovMode(): device %s", pciAddress)
+
 	devLink, err := netlink.DevLinkGetDeviceByName("pci", pciAddress)
 	if err != nil {
+		if errors.Is(err, syscall.ENODEV) {
+			// the device doesn't support devlink
+			return "", nil
+		}
 		return "", err
 	}
+
 	return devLink.Attrs.Eswitch.Mode, nil
 }
 
