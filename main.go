@@ -69,6 +69,7 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -82,6 +83,7 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	restConfig := ctrl.GetConfigOrDie()
+
 	kubeClient, err := client.New(restConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "couldn't create client")
@@ -210,7 +212,7 @@ func main() {
 func initNicIDMap() error {
 	namespace := os.Getenv("NAMESPACE")
 	kubeclient := kubernetes.NewForConfigOrDie(ctrl.GetConfigOrDie())
-	if err := sriovnetworkv1.InitNicIDMap(kubeclient, namespace); err != nil {
+	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, namespace); err != nil {
 		return err
 	}
 
