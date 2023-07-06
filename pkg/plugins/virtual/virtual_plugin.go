@@ -7,6 +7,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
@@ -20,6 +21,8 @@ type VirtualPlugin struct {
 	DesireState    *sriovnetworkv1.SriovNetworkNodeState
 	LastState      *sriovnetworkv1.SriovNetworkNodeState
 	LoadVfioDriver uint
+	RunningOnHost  bool
+	HostManager    host.HostManagerInterface
 }
 
 const (
@@ -29,11 +32,13 @@ const (
 )
 
 // Initialize our plugin and set up initial values
-func NewVirtualPlugin() (plugin.VendorPlugin, error) {
+func NewVirtualPlugin(runningOnHost bool) (plugin.VendorPlugin, error) {
 	return &VirtualPlugin{
 		PluginName:     PluginName,
 		SpecVersion:    "1.0",
 		LoadVfioDriver: unloaded,
+		RunningOnHost:  runningOnHost,
+		HostManager:    host.NewHostManager(runningOnHost),
 	}, nil
 }
 
@@ -74,12 +79,12 @@ func (p *VirtualPlugin) Apply() error {
 		// This is the case for OpenStack deployments where the underlying virtualization platform is KVM.
 		// NOTE: if VFIO was already loaded for some reason, we will not try to load it again with the new options.
 		kernelArgs := "enable_unsafe_noiommu_mode=1"
-		if err := utils.LoadKernelModule("vfio", kernelArgs); err != nil {
+		if err := p.HostManager.LoadKernelModule("vfio", kernelArgs); err != nil {
 			glog.Errorf("virtual-plugin Apply(): fail to load vfio kmod: %v", err)
 			return err
 		}
 
-		if err := utils.LoadKernelModule("vfio_pci"); err != nil {
+		if err := p.HostManager.LoadKernelModule("vfio_pci"); err != nil {
 			glog.Errorf("virtual-plugin Apply(): fail to load vfio_pci kmod: %v", err)
 			return err
 		}
@@ -105,6 +110,13 @@ func (p *VirtualPlugin) Apply() error {
 	*p.LastState = *p.DesireState
 
 	return nil
+}
+
+func (p *VirtualPlugin) SetSystemdFlag() {
+}
+
+func (p *VirtualPlugin) IsSystemService() bool {
+	return false
 }
 
 func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {

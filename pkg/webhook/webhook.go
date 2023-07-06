@@ -14,7 +14,7 @@ import (
 var namespace = os.Getenv("NAMESPACE")
 
 func RetriveSupportedNics() error {
-	if err := sriovnetworkv1.InitNicIDMap(kubeclient, namespace); err != nil {
+	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, namespace); err != nil {
 		return err
 	}
 	return nil

@@ -51,7 +51,7 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 		return nil, fmt.Errorf("failed to find matching node states %v", err)
 	}
 
-	err = sriovv1.InitNicIDMap(kubernetes.NewForConfigOrDie(clients.Config), operatorNamespace)
+	err = sriovv1.InitNicIDMapFromConfigMap(kubernetes.NewForConfigOrDie(clients.Config), operatorNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to InitNicIdMap %v", err)
 	}

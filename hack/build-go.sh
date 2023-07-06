@@ -32,7 +32,7 @@ fi
 
 mkdir -p ${BIN_PATH}
 
-CGO_ENABLED=${CGO_ENABLED:-1}
+CGO_ENABLED=${CGO_ENABLED:-0}
 
 
 if [[ ${WHAT} == "manager" ]]; then

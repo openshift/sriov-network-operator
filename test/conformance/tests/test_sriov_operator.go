@@ -36,7 +36,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
 )
 
-var waitingTime time.Duration = 20 * time.Minute
+var waitingTime = 20 * time.Minute
 var sriovNetworkName = "test-sriovnetwork"
 var snoTimeoutMultiplier time.Duration = 0
 

@@ -49,12 +49,15 @@ var (
 )
 
 const (
-	ospMetaDataDir     = "/host/var/config/openstack/2018-08-27"
-	ospMetaDataBaseURL = "http://169.254.169.254/openstack/2018-08-27"
-	ospNetworkDataFile = ospMetaDataDir + "/network_data.json"
-	ospMetaDataFile    = ospMetaDataDir + "/meta_data.json"
-	ospNetworkDataURL  = ospMetaDataBaseURL + "/network_data.json"
-	ospMetaDataURL     = ospMetaDataBaseURL + "/meta_data.json"
+	ospHostMetaDataDir     = "/host/var/config/openstack/2018-08-27"
+	ospMetaDataDir         = "/var/config/openstack/2018-08-27"
+	ospMetaDataBaseURL     = "http://169.254.169.254/openstack/2018-08-27"
+	ospHostNetworkDataFile = ospHostMetaDataDir + "/network_data.json"
+	ospHostMetaDataFile    = ospHostMetaDataDir + "/meta_data.json"
+	ospNetworkDataFile     = ospMetaDataDir + "/network_data.json"
+	ospMetaDataFile        = ospMetaDataDir + "/meta_data.json"
+	ospNetworkDataURL      = ospMetaDataBaseURL + "/network_data.json"
+	ospMetaDataURL         = ospMetaDataBaseURL + "/meta_data.json"
 )
 
 // OSPMetaDataDevice -- Device structure within meta_data.json
@@ -111,8 +114,8 @@ type OSPDeviceInfo struct {
 }
 
 // GetOpenstackData gets the metadata and network_data
-func GetOpenstackData() (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
-	metaData, networkData, err = getOpenstackDataFromConfigDrive()
+func GetOpenstackData(useHostPath bool) (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
+	metaData, networkData, err = getOpenstackDataFromConfigDrive(useHostPath)
 	if err != nil {
 		metaData, networkData, err = getOpenstackDataFromMetadataService()
 	}
@@ -120,37 +123,45 @@ func GetOpenstackData() (metaData *OSPMetaData, networkData *OSPNetworkData, err
 }
 
 // getOpenstackDataFromConfigDrive reads the meta_data and network_data files
-func getOpenstackDataFromConfigDrive() (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
+func getOpenstackDataFromConfigDrive(useHostPath bool) (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
 	metaData = &OSPMetaData{}
 	networkData = &OSPNetworkData{}
 	glog.Infof("reading OpenStack meta_data from config-drive")
 	var metadataf *os.File
-	metadataf, err = os.Open(ospMetaDataFile)
+	ospMetaDataFilePath := ospMetaDataFile
+	if useHostPath {
+		ospMetaDataFilePath = ospHostMetaDataFile
+	}
+	metadataf, err = os.Open(ospMetaDataFilePath)
 	if err != nil {
-		return metaData, networkData, fmt.Errorf("error opening file %s: %w", ospMetaDataFile, err)
+		return metaData, networkData, fmt.Errorf("error opening file %s: %w", ospHostMetaDataFile, err)
 	}
 	defer func() {
 		if e := metadataf.Close(); err == nil && e != nil {
-			err = fmt.Errorf("error closing file %s: %w", ospMetaDataFile, e)
+			err = fmt.Errorf("error closing file %s: %w", ospHostMetaDataFile, e)
 		}
 	}()
 	if err = json.NewDecoder(metadataf).Decode(&metaData); err != nil {
-		return metaData, networkData, fmt.Errorf("error unmarshalling metadata from file %s: %w", ospMetaDataFile, err)
+		return metaData, networkData, fmt.Errorf("error unmarshalling metadata from file %s: %w", ospHostMetaDataFile, err)
 	}
 
 	glog.Infof("reading OpenStack network_data from config-drive")
 	var networkDataf *os.File
-	networkDataf, err = os.Open(ospNetworkDataFile)
+	ospNetworkDataFilePath := ospNetworkDataFile
+	if useHostPath {
+		ospNetworkDataFilePath = ospHostNetworkDataFile
+	}
+	networkDataf, err = os.Open(ospNetworkDataFilePath)
 	if err != nil {
-		return metaData, networkData, fmt.Errorf("error opening file %s: %w", ospNetworkDataFile, err)
+		return metaData, networkData, fmt.Errorf("error opening file %s: %w", ospHostNetworkDataFile, err)
 	}
 	defer func() {
 		if e := networkDataf.Close(); err == nil && e != nil {
-			err = fmt.Errorf("error closing file %s: %w", ospNetworkDataFile, e)
+			err = fmt.Errorf("error closing file %s: %w", ospHostNetworkDataFile, e)
 		}
 	}()
 	if err = json.NewDecoder(networkDataf).Decode(&networkData); err != nil {
-		return metaData, networkData, fmt.Errorf("error unmarshalling metadata from file %s: %w", ospNetworkDataFile, err)
+		return metaData, networkData, fmt.Errorf("error unmarshalling metadata from file %s: %w", ospHostNetworkDataFile, err)
 	}
 	return metaData, networkData, err
 }
