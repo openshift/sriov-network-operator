@@ -33,6 +33,7 @@ func TestMain(m *testing.M) {
 		"15b3 101b 101c", // ConnectX-6
 		"15b3 101d 101e", // ConnectX-6 Dx
 		"15b3 a2d6 101e", // MT42822 BlueField-2 integrated ConnectX-6 Dx
+		"15b3 a2dc 101e", // MT43244_BlueField-3 integrated ConnectX-7 Dx 
 		"14e4 16d7 16dc", // BCM57414 2x25G
 		"14e4 1750 1806", // BCM75508 2x100G
 	}
