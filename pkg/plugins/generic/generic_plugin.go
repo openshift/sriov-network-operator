@@ -195,15 +195,17 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 		configured := false
 		for _, iface := range desired {
 			if iface.PciAddress == ifaceStatus.PciAddress {
-				// TODO: no need to perform further checks if ifaceStatus.NumVfs equals to 0
-				// once https://github.com/kubernetes/kubernetes/issues/109595 will be fixed
 				configured = true
+				if ifaceStatus.NumVfs == 0 {
+					glog.V(2).Infof("generic-plugin needDrainNode(): no need drain, for PCI address %s current NumVfs is 0", iface.PciAddress)
+					break
+				}
 				if utils.NeedUpdate(&iface, &ifaceStatus) {
-					glog.V(2).Infof("generic-plugin needDrainNode(): need drain, PF %s request update", iface.PciAddress)
+					glog.V(2).Infof("generic-plugin needDrainNode(): need drain, for PCI address %s request update", iface.PciAddress)
 					needDrain = true
 					return
 				}
-				glog.V(2).Infof("generic-plugin needDrainNode(): no need drain, expect NumVfs %v, current NumVfs %v", iface.NumVfs, ifaceStatus.NumVfs)
+				glog.V(2).Infof("generic-plugin needDrainNode(): no need drain,for PCI address %s expect NumVfs %v, current NumVfs %v", iface.PciAddress, iface.NumVfs, ifaceStatus.NumVfs)
 			}
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {
