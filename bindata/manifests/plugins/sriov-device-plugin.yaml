@@ -48,6 +48,9 @@ spec:
         - --log-level=10
         - --resource-prefix={{.ResourcePrefix}}
         - --config-file=/etc/pcidp/$(NODE_NAME)
+        {{- if .UseCDI }}
+        - --use-cdi
+        {{- end }}
         env:
         - name: NODE_NAME
           valueFrom:
@@ -71,6 +74,10 @@ spec:
           readOnly: true
         - name: device-info
           mountPath: /var/run/k8s.cni.cncf.io/devinfo/dp
+        {{- if .UseCDI }}
+        - name: dynamic-cdi
+          mountPath: /var/run/cdi
+        {{- end }}
       volumes:
         - name: devicesock
           hostPath:
@@ -85,3 +92,9 @@ spec:
           hostPath:
             path: /var/run/k8s.cni.cncf.io/devinfo/dp
             type: DirectoryOrCreate
+        {{- if .UseCDI }}
+        - name: dynamic-cdi
+          hostPath:
+            path: /var/run/cdi
+            type: DirectoryOrCreate
+        {{- end }}
