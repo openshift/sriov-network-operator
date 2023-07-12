@@ -358,6 +358,9 @@ github.com/onsi/gomega/matchers/support/goraph/edge
 github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
+# github.com/openshift-kni/k8sreporter v1.0.4
+## explicit; go 1.20
+github.com/openshift-kni/k8sreporter
 # github.com/openshift/api v0.0.0-20221220162201-efeef9d83325
 ## explicit; go 1.18
 github.com/openshift/api/config/v1
@@ -1244,7 +1247,7 @@ k8s.io/kubectl/pkg/validation
 # k8s.io/kubelet v0.25.1
 ## explicit; go 1.19
 k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1
-# k8s.io/utils v0.0.0-20230209194617-a36077c30491
+# k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
 ## explicit; go 1.18
 k8s.io/utils/buffer
 k8s.io/utils/clock
