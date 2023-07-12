@@ -17,6 +17,7 @@ require (
 	github.com/k8snetworkplumbingwg/sriov-network-device-plugin v0.0.0-20221127172732-a5a7395122e3
 	github.com/onsi/ginkgo/v2 v2.9.5
 	github.com/onsi/gomega v1.27.7
+	github.com/openshift-kni/k8sreporter v1.0.4
 	github.com/openshift/api v0.0.0-20221220162201-efeef9d83325
 	github.com/openshift/client-go v0.0.0-20220831193253-4950ae70c8ea
 	github.com/openshift/machine-config-operator v0.0.1-0.20230118083703-fc27a2bdaa85
@@ -35,7 +36,7 @@ require (
 	k8s.io/client-go v0.27.4
 	k8s.io/code-generator v0.27.4
 	k8s.io/kubectl v0.27.4
-	k8s.io/utils v0.0.0-20230209194617-a36077c30491
+	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
 	sigs.k8s.io/controller-runtime v0.15.2
 )
 
