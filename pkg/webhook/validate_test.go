@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -14,6 +15,8 @@ import (
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+
+	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
 )
 
 func TestMain(m *testing.M) {
@@ -131,11 +134,8 @@ func NewNode() *corev1.Node {
 	return &corev1.Node{Spec: corev1.NodeSpec{ProviderID: "openstack"}}
 }
 
-func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
-	var err error
-	var ok bool
-	var w []string
-	config := &SriovOperatorConfig{
+func newDefaultOperatorConfig() *SriovOperatorConfig {
+	return &SriovOperatorConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default",
 		},
@@ -147,8 +147,15 @@ func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 			LogLevel:                 2,
 		},
 	}
+}
+
+func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ok, _, err = validateSriovOperatorConfig(config, "DELETE")
+
+	config := newDefaultOperatorConfig()
+	snclient = fakesnclientset.NewSimpleClientset()
+
+	ok, _, err := validateSriovOperatorConfig(config, "DELETE")
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(ok).To(Equal(false))
 
@@ -156,12 +163,45 @@ func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 
-	ok, w, err = validateSriovOperatorConfig(config, "UPDATE")
+	ok, w, err := validateSriovOperatorConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 	g.Expect(w[0]).To(ContainSubstring("Node draining is disabled"))
 
 	ok, _, err = validateSriovOperatorConfig(config, "CREATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+}
+
+func TestValidateSriovOperatorConfigDisableDrain(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	config := newDefaultOperatorConfig()
+	config.Spec.DisableDrain = false
+
+	nodeState := &SriovNetworkNodeState{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-1", Namespace: namespace},
+		Status: SriovNetworkNodeStateStatus{
+			SyncStatus: "InProgress",
+		},
+	}
+
+	snclient = fakesnclientset.NewSimpleClientset(
+		config,
+		nodeState,
+	)
+
+	config.Spec.DisableDrain = true
+	ok, _, err := validateSriovOperatorConfig(config, "UPDATE")
+	g.Expect(err).To(MatchError("can't set Spec.DisableDrain = true while node[worker-1] is updating"))
+	g.Expect(ok).To(Equal(false))
+
+	// Simulate node update finished
+	nodeState.Status.SyncStatus = "Succeeded"
+	snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).
+		Update(context.Background(), nodeState, metav1.UpdateOptions{})
+
+	ok, _, err = validateSriovOperatorConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 }

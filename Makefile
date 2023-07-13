@@ -143,6 +143,9 @@ vet:
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+mock-generate: gomock
+	go generate ./...
+
 CONTROLLER_GEN = $(BIN_DIR)/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0)
@@ -154,6 +157,10 @@ kustomize: ## Download kustomize locally if necessary.
 ENVTEST = $(BIN_DIR)/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+
+GOMOCK = $(shell pwd)/bin/mockgen
+gomock:
+	$(call go-get-tool,$(GOMOCK),github.com/golang/mock/mockgen@v1.6.0)
 
 # go-install-tool will 'go install' any package $2 and install it to $1.
 define go-install-tool

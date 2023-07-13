@@ -54,7 +54,7 @@ func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.Platf
 		}
 
 		if ns == nil {
-			metaData, networkData, err := utils.GetOpenstackData()
+			metaData, networkData, err := utils.GetOpenstackData(true)
 			if err != nil {
 				glog.Errorf("RunOnce(): failed to read OpenStack data: %v", err)
 			}
@@ -109,10 +109,7 @@ func (w *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message
 			if err := w.pollNicStatus(platformType); err != nil {
 				continue
 			}
-			_, err := w.setNodeStateStatus(msg)
-			if err != nil {
-				glog.Errorf("Run() period: writing to node status failed: %v", err)
-			}
+			w.setNodeStateStatus(msg)
 		}
 	}
 }

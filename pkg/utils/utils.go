@@ -34,7 +34,7 @@ const (
 	sysClassNet           = "/sys/class/net"
 	netClass              = 0x02
 	numVfsFile            = "sriov_numvfs"
-	scriptsPath           = "bindata/scripts/load-kmod.sh"
+
 	ClusterTypeOpenshift  = "openshift"
 	ClusterTypeKubernetes = "kubernetes"
 	VendorMellanox        = "15b3"
@@ -148,14 +148,18 @@ func DiscoverSriovDevices(withUnsupported bool) ([]sriovnetworkv1.InterfaceExt, 
 
 // SyncNodeState Attempt to update the node state to match the desired state
 func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToConfig map[string]bool) error {
-	if IsKernelLockdownMode(true) && hasMellanoxInterfacesInSpec(newState) {
+	return ConfigSriovInterfaces(newState.Spec.Interfaces, newState.Status.Interfaces, pfsToConfig)
+}
+
+func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool) error {
+	if IsKernelLockdownMode(true) && hasMellanoxInterfacesInSpec(ifaceStatuses, interfaces) {
 		glog.Warningf("cannot use mellanox devices when in kernel lockdown mode")
 		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
 	}
 	var err error
-	for _, ifaceStatus := range newState.Status.Interfaces {
+	for _, ifaceStatus := range ifaceStatuses {
 		configured := false
-		for _, iface := range newState.Spec.Interfaces {
+		for _, iface := range interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
 
@@ -589,18 +593,6 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualF
 	return vf
 }
 
-func LoadKernelModule(name string, args ...string) error {
-	glog.Infof("LoadKernelModule(): try to load kernel module %s with arguments '%s'", name, args)
-	cmdArgs := strings.Join(args, " ")
-	cmd := exec.Command("/bin/sh", scriptsPath, name, cmdArgs)
-	err := cmd.Run()
-	if err != nil {
-		glog.Errorf("LoadKernelModule(): fail to load kernel module %s with arguments '%s': %v", name, args, err)
-		return err
-	}
-	return nil
-}
-
 func Chroot(path string) (func() error, error) {
 	root, err := os.Open("/")
 	if err != nil {
@@ -788,10 +780,10 @@ func RunCommand(command string, args ...string) (string, error) {
 	return stdout.String(), err
 }
 
-func hasMellanoxInterfacesInSpec(newState *sriovnetworkv1.SriovNetworkNodeState) bool {
-	for _, ifaceStatus := range newState.Status.Interfaces {
+func hasMellanoxInterfacesInSpec(ifaceStatuses sriovnetworkv1.InterfaceExts, ifaceSpecs sriovnetworkv1.Interfaces) bool {
+	for _, ifaceStatus := range ifaceStatuses {
 		if ifaceStatus.Vendor == VendorMellanox {
-			for _, iface := range newState.Spec.Interfaces {
+			for _, iface := range ifaceSpecs {
 				if iface.PciAddress == ifaceStatus.PciAddress {
 					glog.V(2).Infof("hasMellanoxInterfacesInSpec(): Mellanox device %s (pci: %s) specified in SriovNetworkNodeState spec", ifaceStatus.Name, ifaceStatus.PciAddress)
 					return true

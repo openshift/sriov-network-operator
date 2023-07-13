@@ -20,7 +20,7 @@ var _ = Describe("Generic plugin", func() {
 	var genericPlugin plugin.VendorPlugin
 	var err error
 	BeforeEach(func() {
-		genericPlugin, err = generic.NewGenericPlugin()
+		genericPlugin, err = generic.NewGenericPlugin(false)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
