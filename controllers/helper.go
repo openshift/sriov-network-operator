@@ -30,6 +30,14 @@ var webhooks = map[string](string){
 	constants.OperatorWebHookName: constants.OperatorWebHookPath,
 }
 
+const (
+	clusterRoleResourceName               = "ClusterRole"
+	clusterRoleBindingResourceName        = "ClusterRoleBinding"
+	mutatingWebhookConfigurationCRDName   = "MutatingWebhookConfiguration"
+	validatingWebhookConfigurationCRDName = "ValidatingWebhookConfiguration"
+	machineConfigCRDName                  = "MachineConfig"
+)
+
 var namespace = os.Getenv("NAMESPACE")
 
 func GetImagePullSecrets() []string {

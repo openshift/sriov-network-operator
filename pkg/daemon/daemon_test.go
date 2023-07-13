@@ -101,7 +101,7 @@ var _ = Describe("Config Daemon", func() {
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
 		client := fakesnclientset.NewSimpleClientset()
 
-		err = sriovnetworkv1.InitNicIDMap(kubeClient, namespace)
+		err = sriovnetworkv1.InitNicIDMapFromConfigMap(kubeClient, namespace)
 		Expect(err).ToNot(HaveOccurred())
 
 		sut = New("test-node",
@@ -113,6 +113,8 @@ var _ = Describe("Config Daemon", func() {
 			syncCh,
 			refreshCh,
 			utils.Baremetal,
+			false,
+			false,
 		)
 
 		sut.enabledPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{}}

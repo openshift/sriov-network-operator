@@ -41,6 +41,13 @@ spec:
                   type: string
                 description: NodeSelector selects the nodes to be configured
                 type: object
+              configurationMode:
+                description: Flag to enable the sriov-network-config-daemon to use
+                  a systemd mode instead of the regular method
+                enum:
+                - daemon
+                - systemd
+                type: string
               disableDrain:
                 description: Flag to disable nodes drain during debugging
                 type: boolean

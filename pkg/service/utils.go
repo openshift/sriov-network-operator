@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-systemd/v22/unit"
+	"github.com/golang/glog"
 	"gopkg.in/yaml.v2"
 )
 
@@ -28,7 +29,7 @@ OUTER:
 				continue OUTER
 			}
 		}
-
+		glog.Infof("DEBUG: %+v %v", optsA, *optB)
 		return true, nil
 	}
 

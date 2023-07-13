@@ -12,6 +12,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
@@ -25,6 +26,8 @@ type GenericPlugin struct {
 	LastState            *sriovnetworkv1.SriovNetworkNodeState
 	LoadVfioDriver       uint
 	LoadVirtioVdpaDriver uint
+	RunningOnHost        bool
+	HostManager          host.HostManagerInterface
 }
 
 const scriptsPath = "bindata/scripts/enable-kargs.sh"
@@ -36,12 +39,14 @@ const (
 )
 
 // Initialize our plugin and set up initial values
-func NewGenericPlugin() (plugin.VendorPlugin, error) {
+func NewGenericPlugin(runningOnHost bool) (plugin.VendorPlugin, error) {
 	return &GenericPlugin{
 		PluginName:           PluginName,
 		SpecVersion:          "1.0",
 		LoadVfioDriver:       unloaded,
 		LoadVirtioVdpaDriver: unloaded,
+		RunningOnHost:        runningOnHost,
+		HostManager:          host.NewHostManager(runningOnHost),
 	}, nil
 }
 
@@ -76,7 +81,7 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 func (p *GenericPlugin) Apply() error {
 	glog.Infof("generic-plugin Apply(): desiredState=%v", p.DesireState.Spec)
 	if p.LoadVfioDriver == loading {
-		if err := utils.LoadKernelModule("vfio_pci"); err != nil {
+		if err := p.HostManager.LoadKernelModule("vfio_pci"); err != nil {
 			glog.Errorf("generic-plugin Apply(): fail to load vfio_pci kmod: %v", err)
 			return err
 		}
@@ -84,7 +89,7 @@ func (p *GenericPlugin) Apply() error {
 	}
 
 	if p.LoadVirtioVdpaDriver == loading {
-		if err := utils.LoadKernelModule("virtio_vdpa"); err != nil {
+		if err := p.HostManager.LoadKernelModule("virtio_vdpa"); err != nil {
 			glog.Errorf("generic-plugin Apply(): fail to load virtio_vdpa kmod: %v", err)
 			return err
 		}
@@ -107,11 +112,15 @@ func (p *GenericPlugin) Apply() error {
 		return err
 	}
 
-	exit, err := utils.Chroot("/host")
-	if err != nil {
-		return err
+	// When calling from systemd do not try to chroot
+	if !p.RunningOnHost {
+		exit, err := utils.Chroot("/host")
+		if err != nil {
+			return err
+		}
+		defer exit()
 	}
-	defer exit()
+
 	if err := utils.SyncNodeState(p.DesireState, pfsToSkip); err != nil {
 		return err
 	}
@@ -186,15 +195,17 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 		configured := false
 		for _, iface := range desired {
 			if iface.PciAddress == ifaceStatus.PciAddress {
-				// TODO: no need to perform further checks if ifaceStatus.NumVfs equals to 0
-				// once https://github.com/kubernetes/kubernetes/issues/109595 will be fixed
 				configured = true
+				if ifaceStatus.NumVfs == 0 {
+					glog.V(2).Infof("generic-plugin needDrainNode(): no need drain, for PCI address %s current NumVfs is 0", iface.PciAddress)
+					break
+				}
 				if utils.NeedUpdate(&iface, &ifaceStatus) {
-					glog.V(2).Infof("generic-plugin needDrainNode(): need drain, PF %s request update", iface.PciAddress)
+					glog.V(2).Infof("generic-plugin needDrainNode(): need drain, for PCI address %s request update", iface.PciAddress)
 					needDrain = true
 					return
 				}
-				glog.V(2).Infof("generic-plugin needDrainNode(): no need drain, expect NumVfs %v, current NumVfs %v", iface.NumVfs, ifaceStatus.NumVfs)
+				glog.V(2).Infof("generic-plugin needDrainNode(): no need drain,for PCI address %s expect NumVfs %v, current NumVfs %v", iface.PciAddress, iface.NumVfs, ifaceStatus.NumVfs)
 			}
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {

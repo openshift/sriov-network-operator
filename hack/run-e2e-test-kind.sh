@@ -2,8 +2,8 @@
 set -eo pipefail
 here="$(dirname "$(readlink --canonicalize "${BASH_SOURCE[0]}")")"
 root="$(readlink --canonicalize "$here/..")"
-export SRIOV_NETWORK_OPERATOR_IMAGE="${SRIOV_NETWORK_OPERATOR_IMAGE:-sriov-network-operator:latest}"
-export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE="${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-origin-sriov-network-config-daemon:latest}"
+export SRIOV_NETWORK_OPERATOR_IMAGE="${SRIOV_NETWORK_OPERATOR_IMAGE:-sriov-network-operator:e2e-test}"
+export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE="${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-origin-sriov-network-config-daemon:e2e-test}"
 export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 INTERFACES_SWITCHER="${INTERFACES_SWITCHER:-"test-suite"}"
 SUPPORTED_INTERFACE_SWTICHER_MODES=("test-suite", "system-service")

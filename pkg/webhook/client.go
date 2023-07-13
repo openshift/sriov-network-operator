@@ -11,7 +11,7 @@ import (
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 )
 
-var snclient *snclientset.Clientset
+var snclient snclientset.Interface
 var kubeclient *kubernetes.Clientset
 
 func SetupInClusterClient() error {
