@@ -58,8 +58,8 @@ contents:
           do
             extract_min_max_ids
             vdpaType=$(jq -c '.vdpaType' -r <<< $group)
-            if [ $vfid -le $maxId ] && [ $vfid -ge $minId ] && [ $vdpaType == "virtio" ]; then
-              vdpa_cmd="vdpa dev add name vdpa:"${VfPciAddr}" mgmtdev pci/"${VfPciAddr}
+            if [ $vfid -le $maxId ] && [ $vfid -ge $minId ] && [ $vdpaType != "" ]; then
+              vdpa_cmd="vdpa dev add name vdpa:"${VfPciAddr}" mgmtdev pci/"${VfPciAddr}" max_vqp 32"
               eval $vdpa_cmd
             fi
           done
