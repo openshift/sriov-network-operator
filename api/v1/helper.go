@@ -236,7 +236,6 @@ func (p *SriovNetworkNodePolicy) Selected(node *corev1.Node) bool {
 		}
 		return false
 	}
-	log.Info("Selected():", "node", node.Name)
 	return true
 }
 
