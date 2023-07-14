@@ -576,7 +576,7 @@ func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, e
 
 func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx context.Context, pl *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node) (dptypes.ResourceConfList, error) {
 	logger := log.Log.WithName("renderDevicePluginConfigData")
-	logger.Info("Start to render device plugin config data")
+	logger.Info("Start to render device plugin config data", "node", node.Name)
 	rcl := dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
 		if p.Name == constants.DefaultPolicyName {
@@ -608,7 +608,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 				return rcl, err
 			}
 			rcl.ResourceList = append(rcl.ResourceList, *rc)
-			logger.Info("Add resource", "Resource", *rc, "Resource list", rcl.ResourceList)
+			logger.Info("Add resource", "Resource", *rc)
 		}
 	}
 	return rcl, nil
