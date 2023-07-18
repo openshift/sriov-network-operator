@@ -19,34 +19,67 @@ import (
 
 var PluginName = "generic_plugin"
 
+// driver id
+const (
+	Vfio = iota
+	VirtioVdpa
+)
+
+// driver name
+const (
+	vfioPciDriver    = "vfio_pci"
+	virtioVdpaDriver = "virtio_vdpa"
+)
+
+// function type for determining if a given driver has to be loaded in the kernel
+type needDriver func(state *sriovnetworkv1.SriovNetworkNodeState, driverState *DriverState) bool
+
+type DriverState struct {
+	DriverName     string
+	DeviceType     string
+	VdpaType       string
+	NeedDriverFunc needDriver
+	DriverLoaded   bool
+}
+
+type DriverStateMapType map[uint]*DriverState
+
 type GenericPlugin struct {
-	PluginName           string
-	SpecVersion          string
-	DesireState          *sriovnetworkv1.SriovNetworkNodeState
-	LastState            *sriovnetworkv1.SriovNetworkNodeState
-	LoadVfioDriver       uint
-	LoadVirtioVdpaDriver uint
-	RunningOnHost        bool
-	HostManager          host.HostManagerInterface
+	PluginName     string
+	SpecVersion    string
+	DesireState    *sriovnetworkv1.SriovNetworkNodeState
+	LastState      *sriovnetworkv1.SriovNetworkNodeState
+	DriverStateMap DriverStateMapType
+	RunningOnHost  bool
+	HostManager    host.HostManagerInterface
 }
 
 const scriptsPath = "bindata/scripts/enable-kargs.sh"
 
-const (
-	unloaded = iota
-	loading
-	loaded
-)
-
 // Initialize our plugin and set up initial values
 func NewGenericPlugin(runningOnHost bool) (plugin.VendorPlugin, error) {
+	driverStateMap := make(map[uint]*DriverState)
+	driverStateMap[Vfio] = &DriverState{
+		DriverName:     vfioPciDriver,
+		DeviceType:     constants.DeviceTypeVfioPci,
+		VdpaType:       "",
+		NeedDriverFunc: needDriverCheckDeviceType,
+		DriverLoaded:   false,
+	}
+	driverStateMap[VirtioVdpa] = &DriverState{
+		DriverName:     virtioVdpaDriver,
+		DeviceType:     constants.DeviceTypeNetDevice,
+		VdpaType:       constants.VdpaTypeVirtio,
+		NeedDriverFunc: needDriverCheckVdpaType,
+		DriverLoaded:   false,
+	}
+
 	return &GenericPlugin{
-		PluginName:           PluginName,
-		SpecVersion:          "1.0",
-		LoadVfioDriver:       unloaded,
-		LoadVirtioVdpaDriver: unloaded,
-		RunningOnHost:        runningOnHost,
-		HostManager:          host.NewHostManager(runningOnHost),
+		PluginName:     PluginName,
+		SpecVersion:    "1.0",
+		DriverStateMap: driverStateMap,
+		RunningOnHost:  runningOnHost,
+		HostManager:    host.NewHostManager(runningOnHost),
 	}, nil
 }
 
@@ -60,7 +93,7 @@ func (p *GenericPlugin) Spec() string {
 	return p.SpecVersion
 }
 
-// OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
+// OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need drain and/or reboot node
 func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	glog.Info("generic-plugin OnNodeStateChange()")
 	needDrain = false
@@ -69,7 +102,7 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 	p.DesireState = new
 
 	needDrain = needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
-	needReboot = needRebootNode(new, &p.LoadVfioDriver, &p.LoadVirtioVdpaDriver)
+	needReboot = needRebootNode(new, p.DriverStateMap)
 
 	if needReboot {
 		needDrain = true
@@ -77,24 +110,23 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 	return
 }
 
+func (p *GenericPlugin) syncDriverState() error {
+	for _, driverState := range p.DriverStateMap {
+		if !driverState.DriverLoaded && driverState.NeedDriverFunc(p.DesireState, driverState) {
+			glog.V(2).Infof("loading driver %s", driverState.DriverName)
+			if err := p.HostManager.LoadKernelModule(driverState.DriverName); err != nil {
+				glog.Errorf("generic-plugin syncDriverState(): fail to load %s kmod: %v", driverState.DriverName, err)
+				return err
+			}
+			driverState.DriverLoaded = true
+		}
+	}
+	return nil
+}
+
 // Apply config change
 func (p *GenericPlugin) Apply() error {
 	glog.Infof("generic-plugin Apply(): desiredState=%v", p.DesireState.Spec)
-	if p.LoadVfioDriver == loading {
-		if err := p.HostManager.LoadKernelModule("vfio_pci"); err != nil {
-			glog.Errorf("generic-plugin Apply(): fail to load vfio_pci kmod: %v", err)
-			return err
-		}
-		p.LoadVfioDriver = loaded
-	}
-
-	if p.LoadVirtioVdpaDriver == loading {
-		if err := p.HostManager.LoadKernelModule("virtio_vdpa"); err != nil {
-			glog.Errorf("generic-plugin Apply(): fail to load virtio_vdpa kmod: %v", err)
-			return err
-		}
-		p.LoadVirtioVdpaDriver = loaded
-	}
 
 	if p.LastState != nil {
 		glog.Infof("generic-plugin Apply(): lastStat=%v", p.LastState.Spec)
@@ -102,6 +134,10 @@ func (p *GenericPlugin) Apply() error {
 			glog.Info("generic-plugin Apply(): nothing to apply")
 			return nil
 		}
+	}
+
+	if err := p.syncDriverState(); err != nil {
+		return err
 	}
 
 	// Create a map with all the PFs we will need to configure
@@ -129,10 +165,10 @@ func (p *GenericPlugin) Apply() error {
 	return nil
 }
 
-func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
+func needDriverCheckDeviceType(state *sriovnetworkv1.SriovNetworkNodeState, driverState *DriverState) bool {
 	for _, iface := range state.Spec.Interfaces {
 		for i := range iface.VfGroups {
-			if iface.VfGroups[i].DeviceType == constants.DeviceTypeVfioPci {
+			if iface.VfGroups[i].DeviceType == driverState.DeviceType {
 				return true
 			}
 		}
@@ -140,10 +176,10 @@ func needVfioDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
 	return false
 }
 
-func needVirtioVdpaDriver(state *sriovnetworkv1.SriovNetworkNodeState) bool {
+func needDriverCheckVdpaType(state *sriovnetworkv1.SriovNetworkNodeState, driverState *DriverState) bool {
 	for _, iface := range state.Spec.Interfaces {
 		for i := range iface.VfGroups {
-			if iface.VfGroups[i].VdpaType == constants.VdpaTypeVirtio {
+			if iface.VfGroups[i].VdpaType == driverState.VdpaType {
 				return true
 			}
 		}
@@ -217,35 +253,46 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 	return
 }
 
-func needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState, loadVfioDriver *uint, loadVirtioVdpaDriver *uint) (needReboot bool) {
-	needReboot = false
-	if *loadVfioDriver != loaded {
-		if needVfioDriver(state) {
-			*loadVfioDriver = loading
-			update, err := tryEnableIommuInKernelArgs()
-			if err != nil {
-				glog.Errorf("generic-plugin needRebootNode():fail to enable iommu in kernel args: %v", err)
-			}
-			if update {
-				glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for enabling iommu kernel args")
-			}
-			needReboot = needReboot || update
+func needRebootIfVfio(state *sriovnetworkv1.SriovNetworkNodeState, driverMap DriverStateMapType) (needReboot bool) {
+	driverState := driverMap[Vfio]
+	if !driverState.DriverLoaded && driverState.NeedDriverFunc(state, driverState) {
+		var err error
+		needReboot, err = tryEnableIommuInKernelArgs()
+		if err != nil {
+			glog.Errorf("generic-plugin needRebootNode():fail to enable iommu in kernel args: %v", err)
+		}
+		if needReboot {
+			glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for enabling iommu kernel args")
 		}
 	}
+	return needReboot
+}
 
-	if *loadVirtioVdpaDriver != loaded {
-		if needVirtioVdpaDriver(state) {
-			*loadVirtioVdpaDriver = loading
-		}
-	}
+func needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState, driverMap DriverStateMapType) (needReboot bool) {
+	needReboot = needRebootIfVfio(state, driverMap)
+	updateNode, err := utils.WriteSwitchdevConfFile(state)
 
-	update, err := utils.WriteSwitchdevConfFile(state)
 	if err != nil {
 		glog.Errorf("generic-plugin needRebootNode(): fail to write switchdev device config file")
 	}
-	if update {
+	if updateNode {
 		glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for updating switchdev device configuration")
 	}
-	needReboot = needReboot || update
+	needReboot = needReboot || updateNode
 	return
 }
+
+// ////////////// for testing purposes only ///////////////////////
+func (p *GenericPlugin) getDriverStateMap() DriverStateMapType {
+	return p.DriverStateMap
+}
+
+func (p *GenericPlugin) loadDriverForTests(state *sriovnetworkv1.SriovNetworkNodeState) {
+	for _, driverState := range p.DriverStateMap {
+		if !driverState.DriverLoaded && driverState.NeedDriverFunc(state, driverState) {
+			driverState.DriverLoaded = true
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////
