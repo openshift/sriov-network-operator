@@ -54,8 +54,8 @@ type SriovNetworkNodePolicySpec struct {
 	// +kubebuilder:validation:Enum=legacy;switchdev
 	// NIC Device Mode. Allowed value "legacy","switchdev".
 	EswitchMode string `json:"eSwitchMode,omitempty"`
-	// +kubebuilder:validation:Enum=virtio
-	// VDPA device type. Allowed value "virtio"
+	// +kubebuilder:validation:Enum=virtio;vhost
+	// VDPA device type. Allowed value "virtio", "vhost"
 	VdpaType string `json:"vdpaType,omitempty"`
 	// Exclude device's NUMA node when advertising this resource by SRIOV network device plugin. Default to false.
 	ExcludeTopology bool `json:"excludeTopology,omitempty"`

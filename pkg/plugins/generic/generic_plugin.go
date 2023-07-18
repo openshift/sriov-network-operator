@@ -23,12 +23,14 @@ var PluginName = "generic_plugin"
 const (
 	Vfio = iota
 	VirtioVdpa
+	VhostVdpa
 )
 
 // driver name
 const (
 	vfioPciDriver    = "vfio_pci"
 	virtioVdpaDriver = "virtio_vdpa"
+	vhostVdpaDriver  = "vhost_vdpa"
 )
 
 // function type for determining if a given driver has to be loaded in the kernel
@@ -70,6 +72,13 @@ func NewGenericPlugin(runningOnHost bool) (plugin.VendorPlugin, error) {
 		DriverName:     virtioVdpaDriver,
 		DeviceType:     constants.DeviceTypeNetDevice,
 		VdpaType:       constants.VdpaTypeVirtio,
+		NeedDriverFunc: needDriverCheckVdpaType,
+		DriverLoaded:   false,
+	}
+	driverStateMap[VhostVdpa] = &DriverState{
+		DriverName:     vhostVdpaDriver,
+		DeviceType:     constants.DeviceTypeNetDevice,
+		VdpaType:       constants.VdpaTypeVhost,
 		NeedDriverFunc: needDriverCheckVdpaType,
 		DriverLoaded:   false,
 	}
