@@ -40,6 +40,14 @@ spec:
                   type: string
                 description: NodeSelector selects the nodes to be configured
                 type: object
+              configurationMode:
+                description: 'Flag to enable the sriov-network-config-daemon to use
+                  a systemd service to configure SR-IOV devices on boot Default mode:
+                  daemon'
+                enum:
+                - daemon
+                - systemd
+                type: string
               disableDrain:
                 description: Flag to disable nodes drain during debugging
                 type: boolean
