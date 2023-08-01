@@ -90,11 +90,11 @@ func ApplyObject(ctx context.Context, client k8sclient.Client, obj *uns.Unstruct
 	if err := MergeObjectForUpdate(existing, obj); err != nil {
 		return errors.Wrapf(err, "could not merge object %s with existing", objDesc)
 	}
-	if !equality.Semantic.DeepDerivative(obj, existing) {
+	if !equality.Semantic.DeepEqual(existing, obj) {
 		if err := client.Update(ctx, obj); err != nil {
 			return errors.Wrapf(err, "could not update object %s", objDesc)
 		} else {
-			log.Printf("update was successful")
+			log.Printf("update was successful %s", objDesc)
 		}
 	}
 
