@@ -1405,7 +1405,7 @@ var _ = Describe("[sriov] operator", func() {
 						},
 					}
 
-					excludeTopologyTrueResourceXXX = &sriovv1.SriovNetworkNodePolicy{
+					excludeTopologyFalseResourceXXX = &sriovv1.SriovNetworkNodePolicy{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      "test-exclude-topology-false-res-xxx",
 							Namespace: operatorNamespace,
@@ -1416,7 +1416,7 @@ var _ = Describe("[sriov] operator", func() {
 							ResourceName: "resourceXXX",
 							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
 							NicSelector: sriovv1.SriovNetworkNicSelector{
-								PfNames: []string{intf.Name + "#0-4"},
+								PfNames: []string{intf.Name + "#5-9"},
 							},
 							ExcludeTopology: false,
 						},
@@ -1467,7 +1467,7 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).To(HaveOccurred())
 
 					Expect(err.Error()).To(ContainSubstring(
-						"excludeTopology[false] field conflicts with policy [test-exclude-topology-true].ExcludeTopology[true]" +
+						"excludeTopology[false] field conflicts with policy [test-exclude-topology-true-res-xxx].ExcludeTopology[true]" +
 							" as they target the same resource[resourceXXX]"))
 				})
 			})
