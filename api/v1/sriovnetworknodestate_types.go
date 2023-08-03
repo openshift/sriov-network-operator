@@ -29,14 +29,17 @@ type SriovNetworkNodeStateSpec struct {
 	Interfaces      Interfaces `json:"interfaces,omitempty"`
 }
 
+type Interfaces []Interface
+
 type Interface struct {
-	PciAddress  string    `json:"pciAddress"`
-	NumVfs      int       `json:"numVfs,omitempty"`
-	Mtu         int       `json:"mtu,omitempty"`
-	Name        string    `json:"name,omitempty"`
-	LinkType    string    `json:"linkType,omitempty"`
-	EswitchMode string    `json:"eSwitchMode,omitempty"`
-	VfGroups    []VfGroup `json:"vfGroups,omitempty"`
+	PciAddress        string    `json:"pciAddress"`
+	NumVfs            int       `json:"numVfs,omitempty"`
+	Mtu               int       `json:"mtu,omitempty"`
+	Name              string    `json:"name,omitempty"`
+	LinkType          string    `json:"linkType,omitempty"`
+	EswitchMode       string    `json:"eSwitchMode,omitempty"`
+	VfGroups          []VfGroup `json:"vfGroups,omitempty"`
+	ExternallyManaged bool      `json:"externallyManaged,omitempty"`
 }
 
 type VfGroup struct {
@@ -49,23 +52,22 @@ type VfGroup struct {
 	VdpaType     string `json:"vdpaType,omitempty"`
 }
 
-type Interfaces []Interface
-
 type InterfaceExt struct {
-	Name        string            `json:"name,omitempty"`
-	Mac         string            `json:"mac,omitempty"`
-	Driver      string            `json:"driver,omitempty"`
-	PciAddress  string            `json:"pciAddress"`
-	Vendor      string            `json:"vendor,omitempty"`
-	DeviceID    string            `json:"deviceID,omitempty"`
-	NetFilter   string            `json:"netFilter,omitempty"`
-	Mtu         int               `json:"mtu,omitempty"`
-	NumVfs      int               `json:"numVfs,omitempty"`
-	LinkSpeed   string            `json:"linkSpeed,omitempty"`
-	LinkType    string            `json:"linkType,omitempty"`
-	EswitchMode string            `json:"eSwitchMode,omitempty"`
-	TotalVfs    int               `json:"totalvfs,omitempty"`
-	VFs         []VirtualFunction `json:"Vfs,omitempty"`
+	Name              string            `json:"name,omitempty"`
+	Mac               string            `json:"mac,omitempty"`
+	Driver            string            `json:"driver,omitempty"`
+	PciAddress        string            `json:"pciAddress"`
+	Vendor            string            `json:"vendor,omitempty"`
+	DeviceID          string            `json:"deviceID,omitempty"`
+	NetFilter         string            `json:"netFilter,omitempty"`
+	Mtu               int               `json:"mtu,omitempty"`
+	NumVfs            int               `json:"numVfs,omitempty"`
+	LinkSpeed         string            `json:"linkSpeed,omitempty"`
+	LinkType          string            `json:"linkType,omitempty"`
+	EswitchMode       string            `json:"eSwitchMode,omitempty"`
+	ExternallyManaged bool              `json:"externallyManaged,omitempty"`
+	TotalVfs          int               `json:"totalvfs,omitempty"`
+	VFs               []VirtualFunction `json:"Vfs,omitempty"`
 }
 type InterfaceExts []InterfaceExt
 
