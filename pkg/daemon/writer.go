@@ -30,6 +30,7 @@ type NodeStateStatusWriter struct {
 	OnHeartbeatFailure     func()
 	openStackDevicesInfo   utils.OSPDevicesInfo
 	withUnsupportedDevices bool
+	storeManager           utils.StoreManagerInterface
 }
 
 // NewNodeStateStatusWriter Create a new NodeStateStatusWriter
@@ -46,6 +47,13 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func(), devMo
 func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.PlatformType) error {
 	glog.V(0).Infof("RunOnce()")
 	msg := Message{}
+
+	storeManager, err := utils.NewStoreManager(false)
+	if err != nil {
+		glog.Errorf("failed to create store manager: %v", err)
+		return err
+	}
+	w.storeManager = storeManager
 
 	if platformType == utils.VirtualOpenStack {
 		ns, err := w.getCheckPointNodeState(destDir)
@@ -100,10 +108,7 @@ func (w *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message
 			if err != nil {
 				glog.Errorf("Run() refresh: writing to node status failed: %v", err)
 			}
-
-			if msg.syncStatus == syncStatusSucceeded || msg.syncStatus == syncStatusFailed {
-				syncCh <- struct{}{}
-			}
+			syncCh <- struct{}{}
 		case <-time.After(30 * time.Second):
 			glog.V(2).Info("Run(): period refresh")
 			if err := w.pollNicStatus(platformType); err != nil {
@@ -122,7 +127,7 @@ func (w *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformType) e
 	if platformType == utils.VirtualOpenStack {
 		iface, err = utils.DiscoverSriovDevicesVirtual(w.openStackDevicesInfo)
 	} else {
-		iface, err = utils.DiscoverSriovDevices(w.withUnsupportedDevices)
+		iface, err = utils.DiscoverSriovDevices(w.withUnsupportedDevices, w.storeManager)
 	}
 	if err != nil {
 		return err

@@ -108,6 +108,10 @@ type Daemon struct {
 	workqueue workqueue.RateLimitingInterface
 
 	mcpName string
+
+	storeManager utils.StoreManagerInterface
+
+	hostManager host.HostManagerInterface
 }
 
 const (
@@ -122,9 +126,6 @@ const (
 )
 
 var namespace = os.Getenv("NAMESPACE")
-
-// used by test to mock interactions with filesystem
-var filesystemRoot string = ""
 
 // writer implements io.Writer interface as a pass-through for glog.
 type writer struct {
@@ -232,16 +233,23 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	defer utilruntime.HandleCrash()
 	defer dn.workqueue.ShutDown()
 
+	hostManager := host.NewHostManager(dn.useSystemdService)
+	dn.hostManager = hostManager
 	if !dn.useSystemdService {
-		hostManager := host.NewHostManager(dn.useSystemdService)
-		hostManager.TryEnableRdma()
-		hostManager.TryEnableTun()
-		hostManager.TryEnableVhostNet()
+		dn.hostManager.TryEnableRdma()
+		dn.hostManager.TryEnableTun()
+		dn.hostManager.TryEnableVhostNet()
 		err := systemd.CleanSriovFilesFromHost(utils.ClusterType == utils.ClusterTypeOpenshift)
 		if err != nil {
 			glog.Warningf("failed to remove all the systemd sriov files error: %v", err)
 		}
 	}
+
+	storeManager, err := utils.NewStoreManager(false)
+	if err != nil {
+		return err
+	}
+	dn.storeManager = storeManager
 
 	if err := dn.tryCreateUdevRuleWrapper(); err != nil {
 		return err
@@ -515,6 +523,12 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	}
 
 	if latestState.GetGeneration() == 1 && len(latestState.Spec.Interfaces) == 0 {
+		err = dn.storeManager.ClearPCIAddressFolder()
+		if err != nil {
+			glog.Errorf("failed to clear the PCI address configuration: %v", err)
+			return err
+		}
+
 		glog.V(0).Infof("nodeStateSyncHandler(): Name: %s, Interface policy spec not yet set by controller", latestState.Name)
 		if latestState.Status.SyncStatus != "Succeeded" {
 			dn.refreshCh <- Message{
@@ -531,10 +545,22 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		syncStatus:    syncStatusInProgress,
 		lastSyncError: "",
 	}
+	// wait for writer to refresh status then pull again the latest node state
+	<-dn.syncCh
+
+	// we need to load the latest status to our object
+	// if we don't do it we can have a race here where the user remove the virtual functions but the operator didn't
+	// trigger the refresh
+	updatedState, err := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), dn.name, metav1.GetOptions{})
+	if err != nil {
+		glog.Warningf("nodeStateSyncHandler(): Failed to fetch node state %s: %v", dn.name, err)
+		return err
+	}
+	latestState.Status = updatedState.Status
 
 	// load plugins if it has not loaded
 	if len(dn.enabledPlugins) == 0 {
-		dn.enabledPlugins, err = enablePlugins(dn.platform, dn.useSystemdService, latestState)
+		dn.enabledPlugins, err = enablePlugins(dn.platform, dn.useSystemdService, latestState, dn.hostManager, dn.storeManager)
 		if err != nil {
 			glog.Errorf("nodeStateSyncHandler(): failed to enable vendor plugins error: %v", err)
 			return err
@@ -1056,7 +1082,7 @@ func (dn *Daemon) drainNode() error {
 func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	glog.V(2).Infof("tryCreateSwitchdevUdevRule()")
 	var newContent string
-	filePath := path.Join(filesystemRoot, "/host/etc/udev/rules.d/20-switchdev.rules")
+	filePath := path.Join(utils.FilesystemRoot, "/host/etc/udev/rules.d/20-switchdev.rules")
 
 	for _, ifaceStatus := range nodeState.Status.Interfaces {
 		if ifaceStatus.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
@@ -1092,7 +1118,7 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 	}
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command("/bin/bash", path.Join(filesystemRoot, udevScriptsPath))
+	cmd := exec.Command("/bin/bash", path.Join(utils.FilesystemRoot, udevScriptsPath))
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -1113,7 +1139,7 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 
 func tryCreateNMUdevRule() error {
 	glog.V(2).Infof("tryCreateNMUdevRule()")
-	dirPath := path.Join(filesystemRoot, "/host/etc/udev/rules.d")
+	dirPath := path.Join(utils.FilesystemRoot, "/host/etc/udev/rules.d")
 	filePath := path.Join(dirPath, "10-nm-unmanaged.rules")
 
 	// we need to remove the Red Hat Virtio network device from the udev rule configuration
