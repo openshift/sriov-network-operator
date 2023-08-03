@@ -27,8 +27,6 @@ import (
 )
 
 const (
-	SriovConfBasePath          = "/etc/sriov-operator"
-	HostSriovConfBasePath      = "/host" + SriovConfBasePath
 	SriovSwitchDevConfPath     = SriovConfBasePath + "/sriov_config.json"
 	SriovHostSwitchDevConfPath = "/host" + SriovSwitchDevConfPath
 )
