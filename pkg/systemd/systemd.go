@@ -41,6 +41,8 @@ const (
 
 	SriovServicePath     = "/etc/systemd/system/sriov-config.service"
 	SriovHostServicePath = "/host" + SriovServicePath
+
+	HostSriovConfBasePath = "/host" + utils.SriovConfBasePath
 )
 
 type SriovConfig struct {
@@ -80,8 +82,8 @@ func WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, unsupportedNi
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Create the sriov-operator folder on the host if it doesn't exist
-			if _, err := os.Stat(utils.HostSriovConfBasePath); os.IsNotExist(err) {
-				err = os.Mkdir(utils.HostSriovConfBasePath, os.ModeDir)
+			if _, err := os.Stat(HostSriovConfBasePath); os.IsNotExist(err) {
+				err = os.Mkdir(HostSriovConfBasePath, os.ModeDir)
 				if err != nil {
 					glog.Errorf("WriteConfFile(): fail to create sriov-operator folder: %v", err)
 					return false, err
