@@ -51,17 +51,17 @@ type HostManagerInterface interface {
 	// private functions
 	// part of the interface for the mock generation
 	LoadKernelModule(name string, args ...string) error
-	isKernelModuleLoaded(string) (bool, error)
-	isRHELSystem() (bool, error)
-	isUbuntuSystem() (bool, error)
-	isCoreOS() (bool, error)
-	rdmaIsLoaded() (bool, error)
-	enableRDMA(string, string, string) (bool, error)
-	installRDMA(string) error
-	triggerUdevEvent() error
-	reloadDriver(string) error
-	enableRDMAOnRHELMachine() (bool, error)
-	getOSPrettyName() (string, error)
+	IsKernelModuleLoaded(string) (bool, error)
+	IsRHELSystem() (bool, error)
+	IsUbuntuSystem() (bool, error)
+	IsCoreOS() (bool, error)
+	RdmaIsLoaded() (bool, error)
+	EnableRDMA(string, string, string) (bool, error)
+	InstallRDMA(string) error
+	TriggerUdevEvent() error
+	ReloadDriver(string) error
+	EnableRDMAOnRHELMachine() (bool, error)
+	GetOSPrettyName() (string, error)
 }
 
 type HostManager struct {
@@ -78,11 +78,11 @@ func NewHostManager(runOnHost bool) HostManagerInterface {
 
 func (h *HostManager) LoadKernelModule(name string, args ...string) error {
 	glog.Infof("LoadKernelModule(): try to load kernel module %s with arguments '%s'", name, args)
-	chrootDefinition := getChrootExtention(h.RunOnHost)
+	chrootDefinition := getChrootExtension(h.RunOnHost)
 	cmdArgs := strings.Join(args, " ")
 
 	// check if the driver is already loaded in to the system
-	isLoaded, err := h.isKernelModuleLoaded(name)
+	isLoaded, err := h.IsKernelModuleLoaded(name)
 	if err != nil {
 		glog.Errorf("LoadKernelModule(): failed to check if kernel module %s is already loaded", name)
 	}
@@ -99,23 +99,23 @@ func (h *HostManager) LoadKernelModule(name string, args ...string) error {
 	return nil
 }
 
-func (h *HostManager) isKernelModuleLoaded(kernelModuleName string) (bool, error) {
-	glog.Infof("isKernelModuleLoaded(): check if kernel module %s is loaded", kernelModuleName)
-	chrootDefinition := getChrootExtention(h.RunOnHost)
+func (h *HostManager) IsKernelModuleLoaded(kernelModuleName string) (bool, error) {
+	glog.Infof("IsKernelModuleLoaded(): check if kernel module %s is loaded", kernelModuleName)
+	chrootDefinition := getChrootExtension(h.RunOnHost)
 
 	stdout, stderr, err := h.cmd.Run("/bin/sh", "-c", fmt.Sprintf("%s lsmod | grep \"^%s\"", chrootDefinition, kernelModuleName))
 	if err != nil && stderr.Len() != 0 {
-		glog.Errorf("isKernelModuleLoaded(): failed to check if kernel module %s is loaded: error: %v stderr %s", kernelModuleName, err, stderr.String())
+		glog.Errorf("IsKernelModuleLoaded(): failed to check if kernel module %s is loaded: error: %v stderr %s", kernelModuleName, err, stderr.String())
 		return false, err
 	}
-	glog.V(2).Infof("isKernelModuleLoaded(): %v", stdout.String())
+	glog.V(2).Infof("IsKernelModuleLoaded(): %v", stdout.String())
 	if stderr.Len() != 0 {
-		glog.Errorf("isKernelModuleLoaded(): failed to check if kernel module %s is loaded: error: %v stderr %s", kernelModuleName, err, stderr.String())
+		glog.Errorf("IsKernelModuleLoaded(): failed to check if kernel module %s is loaded: error: %v stderr %s", kernelModuleName, err, stderr.String())
 		return false, fmt.Errorf(stderr.String())
 	}
 
 	if stdout.Len() != 0 {
-		glog.Infof("isKernelModuleLoaded(): kernel module %s already loaded", kernelModuleName)
+		glog.Infof("IsKernelModuleLoaded(): kernel module %s already loaded", kernelModuleName)
 		return true, nil
 	}
 
@@ -136,7 +136,7 @@ func (h *HostManager) TryEnableVhostNet() {
 
 func (h *HostManager) TryEnableRdma() (bool, error) {
 	glog.V(2).Infof("tryEnableRdma()")
-	chrootDefinition := getChrootExtention(h.RunOnHost)
+	chrootDefinition := getChrootExtension(h.RunOnHost)
 
 	// check if the driver is already loaded in to the system
 	_, stderr, mlx4Err := h.cmd.Run("/bin/sh", "-c", fmt.Sprintf("grep --quiet 'mlx4_en' <(%s lsmod)", chrootDefinition))
@@ -156,7 +156,7 @@ func (h *HostManager) TryEnableRdma() (bool, error) {
 		return false, nil
 	}
 
-	isRhelSystem, err := h.isRHELSystem()
+	isRhelSystem, err := h.IsRHELSystem()
 	if err != nil {
 		glog.Errorf("tryEnableRdma(): failed to check if the machine is base on RHEL: %v", err)
 		return false, err
@@ -164,20 +164,20 @@ func (h *HostManager) TryEnableRdma() (bool, error) {
 
 	// RHEL check
 	if isRhelSystem {
-		return h.enableRDMAOnRHELMachine()
+		return h.EnableRDMAOnRHELMachine()
 	}
 
-	isUbuntuSystem, err := h.isUbuntuSystem()
+	isUbuntuSystem, err := h.IsUbuntuSystem()
 	if err != nil {
 		glog.Errorf("tryEnableRdma(): failed to check if the machine is base on Ubuntu: %v", err)
 		return false, err
 	}
 
 	if isUbuntuSystem {
-		return h.enableRDMAOnUbuntuMachine()
+		return h.EnableRDMAOnUbuntuMachine()
 	}
 
-	osName, err := h.getOSPrettyName()
+	osName, err := h.GetOSPrettyName()
 	if err != nil {
 		glog.Errorf("tryEnableRdma(): failed to check OS name: %v", err)
 		return false, err
@@ -187,19 +187,19 @@ func (h *HostManager) TryEnableRdma() (bool, error) {
 	return false, fmt.Errorf("unable to load RDMA unsupported OS: %s", osName)
 }
 
-func (h *HostManager) enableRDMAOnRHELMachine() (bool, error) {
-	glog.Infof("enableRDMAOnRHELMachine()")
-	isCoreOsSystem, err := h.isCoreOS()
+func (h *HostManager) EnableRDMAOnRHELMachine() (bool, error) {
+	glog.Infof("EnableRDMAOnRHELMachine()")
+	isCoreOsSystem, err := h.IsCoreOS()
 	if err != nil {
-		glog.Errorf("enableRDMAOnRHELMachine(): failed to check if the machine runs CoreOS: %v", err)
+		glog.Errorf("EnableRDMAOnRHELMachine(): failed to check if the machine runs CoreOS: %v", err)
 		return false, err
 	}
 
 	// CoreOS check
 	if isCoreOsSystem {
-		isRDMALoaded, err := h.rdmaIsLoaded()
+		isRDMALoaded, err := h.RdmaIsLoaded()
 		if err != nil {
-			glog.Errorf("enableRDMAOnRHELMachine(): failed to check if RDMA kernel modules are loaded: %v", err)
+			glog.Errorf("EnableRDMAOnRHELMachine(): failed to check if RDMA kernel modules are loaded: %v", err)
 			return false, err
 		}
 
@@ -207,26 +207,26 @@ func (h *HostManager) enableRDMAOnRHELMachine() (bool, error) {
 	}
 
 	// RHEL
-	glog.Infof("enableRDMAOnRHELMachine(): enabling RDMA on RHEL machine")
-	isRDMAEnable, err := h.enableRDMA(rhelRDMAConditionFile, rhelRDMAServiceName, rhelPackageManager)
+	glog.Infof("EnableRDMAOnRHELMachine(): enabling RDMA on RHEL machine")
+	isRDMAEnable, err := h.EnableRDMA(rhelRDMAConditionFile, rhelRDMAServiceName, rhelPackageManager)
 	if err != nil {
-		glog.Errorf("enableRDMAOnRHELMachine(): failed to enable RDMA on RHEL machine: %v", err)
+		glog.Errorf("EnableRDMAOnRHELMachine(): failed to enable RDMA on RHEL machine: %v", err)
 		return false, err
 	}
 
 	// check if we need to install rdma-core package
 	if isRDMAEnable {
-		isRDMALoaded, err := h.rdmaIsLoaded()
+		isRDMALoaded, err := h.RdmaIsLoaded()
 		if err != nil {
-			glog.Errorf("enableRDMAOnRHELMachine(): failed to check if RDMA kernel modules are loaded: %v", err)
+			glog.Errorf("EnableRDMAOnRHELMachine(): failed to check if RDMA kernel modules are loaded: %v", err)
 			return false, err
 		}
 
 		// if ib kernel module is not loaded trigger a loading
 		if isRDMALoaded {
-			err = h.triggerUdevEvent()
+			err = h.TriggerUdevEvent()
 			if err != nil {
-				glog.Errorf("enableRDMAOnRHELMachine() failed to trigger udev event: %v", err)
+				glog.Errorf("EnableRDMAOnRHELMachine() failed to trigger udev event: %v", err)
 				return false, err
 			}
 		}
@@ -235,27 +235,27 @@ func (h *HostManager) enableRDMAOnRHELMachine() (bool, error) {
 	return true, nil
 }
 
-func (h *HostManager) enableRDMAOnUbuntuMachine() (bool, error) {
-	glog.Infof("enableRDMAOnUbuntuMachine(): enabling RDMA on RHEL machine")
-	isRDMAEnable, err := h.enableRDMA(ubuntuRDMAConditionFile, ubuntuRDMAServiceName, ubuntuPackageManager)
+func (h *HostManager) EnableRDMAOnUbuntuMachine() (bool, error) {
+	glog.Infof("EnableRDMAOnUbuntuMachine(): enabling RDMA on RHEL machine")
+	isRDMAEnable, err := h.EnableRDMA(ubuntuRDMAConditionFile, ubuntuRDMAServiceName, ubuntuPackageManager)
 	if err != nil {
-		glog.Errorf("enableRDMAOnUbuntuMachine(): failed to enable RDMA on Ubuntu machine: %v", err)
+		glog.Errorf("EnableRDMAOnUbuntuMachine(): failed to enable RDMA on Ubuntu machine: %v", err)
 		return false, err
 	}
 
 	// check if we need to install rdma-core package
 	if isRDMAEnable {
-		isRDMALoaded, err := h.rdmaIsLoaded()
+		isRDMALoaded, err := h.RdmaIsLoaded()
 		if err != nil {
-			glog.Errorf("enableRDMAOnUbuntuMachine(): failed to check if RDMA kernel modules are loaded: %v", err)
+			glog.Errorf("EnableRDMAOnUbuntuMachine(): failed to check if RDMA kernel modules are loaded: %v", err)
 			return false, err
 		}
 
 		// if ib kernel module is not loaded trigger a loading
 		if isRDMALoaded {
-			err = h.triggerUdevEvent()
+			err = h.TriggerUdevEvent()
 			if err != nil {
-				glog.Errorf("enableRDMAOnUbuntuMachine() failed to trigger udev event: %v", err)
+				glog.Errorf("EnableRDMAOnUbuntuMachine() failed to trigger udev event: %v", err)
 				return false, err
 			}
 		}
@@ -264,27 +264,27 @@ func (h *HostManager) enableRDMAOnUbuntuMachine() (bool, error) {
 	return true, nil
 }
 
-func (h *HostManager) isRHELSystem() (bool, error) {
-	glog.Infof("isRHELSystem(): checking for RHEL machine")
+func (h *HostManager) IsRHELSystem() (bool, error) {
+	glog.Infof("IsRHELSystem(): checking for RHEL machine")
 	path := redhatReleaseFile
 	if !h.RunOnHost {
 		path = pathlib.Join(hostPathFromDaemon, path)
 	}
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
-			glog.V(2).Infof("isRHELSystem() not a RHEL machine")
+			glog.V(2).Infof("IsRHELSystem() not a RHEL machine")
 			return false, nil
 		}
 
-		glog.Errorf("isRHELSystem() failed to check for os release file on path %s: %v", path, err)
+		glog.Errorf("IsRHELSystem() failed to check for os release file on path %s: %v", path, err)
 		return false, err
 	}
 
 	return true, nil
 }
 
-func (h *HostManager) isCoreOS() (bool, error) {
-	glog.Infof("isCoreOS(): checking for CoreOS machine")
+func (h *HostManager) IsCoreOS() (bool, error) {
+	glog.Infof("IsCoreOS(): checking for CoreOS machine")
 	path := redhatReleaseFile
 	if !h.RunOnHost {
 		path = pathlib.Join(hostPathFromDaemon, path)
@@ -292,7 +292,7 @@ func (h *HostManager) isCoreOS() (bool, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		glog.Errorf("isCoreOS(): failed to read RHEL release file on path %s: %v", path, err)
+		glog.Errorf("IsCoreOS(): failed to read RHEL release file on path %s: %v", path, err)
 		return false, err
 	}
 
@@ -303,8 +303,8 @@ func (h *HostManager) isCoreOS() (bool, error) {
 	return false, nil
 }
 
-func (h *HostManager) isUbuntuSystem() (bool, error) {
-	glog.Infof("isUbuntuSystem(): checking for Ubuntu machine")
+func (h *HostManager) IsUbuntuSystem() (bool, error) {
+	glog.Infof("IsUbuntuSystem(): checking for Ubuntu machine")
 	path := genericOSReleaseFile
 	if !h.RunOnHost {
 		path = pathlib.Join(hostPathFromDaemon, path)
@@ -312,17 +312,17 @@ func (h *HostManager) isUbuntuSystem() (bool, error) {
 
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
-			glog.Errorf("isUbuntuSystem() os-release on path %s doesn't exist: %v", path, err)
+			glog.Errorf("IsUbuntuSystem() os-release on path %s doesn't exist: %v", path, err)
 			return false, err
 		}
 
-		glog.Errorf("isUbuntuSystem() failed to check for os release file on path %s: %v", path, err)
+		glog.Errorf("IsUbuntuSystem() failed to check for os release file on path %s: %v", path, err)
 		return false, err
 	}
 
 	stdout, stderr, err := h.cmd.Run("/bin/sh", "-c", fmt.Sprintf("grep -i --quiet 'ubuntu' %s", path))
 	if err != nil && stderr.Len() != 0 {
-		glog.Errorf("isUbuntuSystem(): failed to check for ubuntu operating system name in os-releasae file: error: %v stderr %s", err, stderr.String())
+		glog.Errorf("IsUbuntuSystem(): failed to check for ubuntu operating system name in os-releasae file: error: %v stderr %s", err, stderr.String())
 		return false, fmt.Errorf(stderr.String())
 	}
 
@@ -333,14 +333,14 @@ func (h *HostManager) isUbuntuSystem() (bool, error) {
 	return false, nil
 }
 
-func (h *HostManager) rdmaIsLoaded() (bool, error) {
-	glog.V(2).Infof("rdmaIsLoaded()")
-	chrootDefinition := getChrootExtention(h.RunOnHost)
+func (h *HostManager) RdmaIsLoaded() (bool, error) {
+	glog.V(2).Infof("RdmaIsLoaded()")
+	chrootDefinition := getChrootExtension(h.RunOnHost)
 
 	// check if the driver is already loaded in to the system
 	_, stderr, err := h.cmd.Run("/bin/sh", "-c", fmt.Sprintf("grep --quiet '\\(^ib\\|^rdma\\)' <(%s lsmod)", chrootDefinition))
 	if err != nil && stderr.Len() != 0 {
-		glog.Errorf("rdmaIsLoaded(): fail to check if ib and rdma kernel modules are loaded: error: %v stderr %s", err, stderr.String())
+		glog.Errorf("RdmaIsLoaded(): fail to check if ib and rdma kernel modules are loaded: error: %v stderr %s", err, stderr.String())
 		return false, fmt.Errorf(stderr.String())
 	}
 
@@ -351,61 +351,61 @@ func (h *HostManager) rdmaIsLoaded() (bool, error) {
 	return true, nil
 }
 
-func (h *HostManager) enableRDMA(conditionFilePath, serviceName, packageManager string) (bool, error) {
+func (h *HostManager) EnableRDMA(conditionFilePath, serviceName, packageManager string) (bool, error) {
 	path := conditionFilePath
 	if !h.RunOnHost {
 		path = pathlib.Join(hostPathFromDaemon, path)
 	}
-	glog.Infof("enableRDMA(): checking for service file on path %s", path)
+	glog.Infof("EnableRDMA(): checking for service file on path %s", path)
 
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
-			glog.V(2).Infof("enableRDMA(): RDMA server doesn't exist")
-			err = h.installRDMA(packageManager)
+			glog.V(2).Infof("EnableRDMA(): RDMA server doesn't exist")
+			err = h.InstallRDMA(packageManager)
 			if err != nil {
-				glog.Errorf("enableRDMA() failed to install RDMA package: %v", err)
+				glog.Errorf("EnableRDMA() failed to install RDMA package: %v", err)
 				return false, err
 			}
 
-			err = h.triggerUdevEvent()
+			err = h.TriggerUdevEvent()
 			if err != nil {
-				glog.Errorf("enableRDMA() failed to trigger udev event: %v", err)
+				glog.Errorf("EnableRDMA() failed to trigger udev event: %v", err)
 				return false, err
 			}
 
 			return false, nil
 		}
 
-		glog.Errorf("enableRDMA() failed to check for os release file on path %s: %v", path, err)
+		glog.Errorf("EnableRDMA() failed to check for os release file on path %s: %v", path, err)
 		return false, err
 	}
 
-	glog.Infof("enableRDMA(): service %s.service installed", serviceName)
+	glog.Infof("EnableRDMA(): service %s.service installed", serviceName)
 	return true, nil
 }
 
-func (h *HostManager) installRDMA(packageManager string) error {
-	glog.Infof("installRDMA(): installing RDMA")
-	chrootDefinition := getChrootExtention(h.RunOnHost)
+func (h *HostManager) InstallRDMA(packageManager string) error {
+	glog.Infof("InstallRDMA(): installing RDMA")
+	chrootDefinition := getChrootExtension(h.RunOnHost)
 
 	stdout, stderr, err := h.cmd.Run("/bin/sh", "-c", fmt.Sprintf("%s %s install -y rdma-core", chrootDefinition, packageManager))
 	if err != nil && stderr.Len() != 0 {
-		glog.Errorf("installRDMA(): failed to install RDMA package output %s: error %v stderr %s", stdout.String(), err, stderr.String())
+		glog.Errorf("InstallRDMA(): failed to install RDMA package output %s: error %v stderr %s", stdout.String(), err, stderr.String())
 		return err
 	}
 
 	return nil
 }
 
-func (h *HostManager) triggerUdevEvent() error {
-	glog.Infof("triggerUdevEvent(): installing RDMA")
+func (h *HostManager) TriggerUdevEvent() error {
+	glog.Infof("TriggerUdevEvent(): installing RDMA")
 
-	err := h.reloadDriver("mlx4_en")
+	err := h.ReloadDriver("mlx4_en")
 	if err != nil {
 		return err
 	}
 
-	err = h.reloadDriver("mlx5_core")
+	err = h.ReloadDriver("mlx5_core")
 	if err != nil {
 		return err
 	}
@@ -413,30 +413,30 @@ func (h *HostManager) triggerUdevEvent() error {
 	return nil
 }
 
-func (h *HostManager) reloadDriver(driverName string) error {
-	glog.Infof("reloadDriver(): reload driver %s", driverName)
-	chrootDefinition := getChrootExtention(h.RunOnHost)
+func (h *HostManager) ReloadDriver(driverName string) error {
+	glog.Infof("ReloadDriver(): reload driver %s", driverName)
+	chrootDefinition := getChrootExtension(h.RunOnHost)
 
 	_, stderr, err := h.cmd.Run("/bin/sh", "-c", fmt.Sprintf("%s modprobe -r %s && %s modprobe %s", chrootDefinition, driverName, chrootDefinition, driverName))
 	if err != nil && stderr.Len() != 0 {
-		glog.Errorf("installRDMA(): failed to reload %s kernel module: error %v stderr %s", driverName, err, stderr.String())
+		glog.Errorf("InstallRDMA(): failed to reload %s kernel module: error %v stderr %s", driverName, err, stderr.String())
 		return err
 	}
 
 	return nil
 }
 
-func (h *HostManager) getOSPrettyName() (string, error) {
+func (h *HostManager) GetOSPrettyName() (string, error) {
 	path := genericOSReleaseFile
 	if !h.RunOnHost {
 		path = pathlib.Join(hostPathFromDaemon, path)
 	}
 
-	glog.Infof("getOSPrettyName(): getting os name from os-release file")
+	glog.Infof("GetOSPrettyName(): getting os name from os-release file")
 
 	stdout, stderr, err := h.cmd.Run("/bin/sh", "-c", fmt.Sprintf("cat %s | grep PRETTY_NAME | cut -c 13-", path))
 	if err != nil && stderr.Len() != 0 {
-		glog.Errorf("isUbuntuSystem(): failed to check for ubuntu operating system name in os-releasae file: error: %v stderr %s", err, stderr.String())
+		glog.Errorf("IsUbuntuSystem(): failed to check for ubuntu operating system name in os-releasae file: error: %v stderr %s", err, stderr.String())
 		return "", fmt.Errorf(stderr.String())
 	}
 
@@ -447,9 +447,9 @@ func (h *HostManager) getOSPrettyName() (string, error) {
 	return "", fmt.Errorf("failed to find pretty operating system name")
 }
 
-func getChrootExtention(runOnHost bool) string {
+func getChrootExtension(runOnHost bool) string {
 	if !runOnHost {
-		return "chroot /host/"
+		return fmt.Sprintf("chroot %s/host", utils.FilesystemRoot)
 	}
-	return ""
+	return utils.FilesystemRoot
 }
