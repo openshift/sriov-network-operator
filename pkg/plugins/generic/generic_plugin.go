@@ -54,12 +54,13 @@ type GenericPlugin struct {
 	DriverStateMap DriverStateMapType
 	RunningOnHost  bool
 	HostManager    host.HostManagerInterface
+	StoreManager   utils.StoreManagerInterface
 }
 
 const scriptsPath = "bindata/scripts/enable-kargs.sh"
 
 // Initialize our plugin and set up initial values
-func NewGenericPlugin(runningOnHost bool) (plugin.VendorPlugin, error) {
+func NewGenericPlugin(runningOnHost bool, hostManager host.HostManagerInterface, storeManager utils.StoreManagerInterface) (plugin.VendorPlugin, error) {
 	driverStateMap := make(map[uint]*DriverState)
 	driverStateMap[Vfio] = &DriverState{
 		DriverName:     vfioPciDriver,
@@ -82,13 +83,13 @@ func NewGenericPlugin(runningOnHost bool) (plugin.VendorPlugin, error) {
 		NeedDriverFunc: needDriverCheckVdpaType,
 		DriverLoaded:   false,
 	}
-
 	return &GenericPlugin{
 		PluginName:     PluginName,
 		SpecVersion:    "1.0",
 		DriverStateMap: driverStateMap,
 		RunningOnHost:  runningOnHost,
-		HostManager:    host.NewHostManager(runningOnHost),
+		HostManager:    hostManager,
+		StoreManager:   storeManager,
 	}, nil
 }
 
@@ -110,7 +111,7 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 	err = nil
 	p.DesireState = new
 
-	needDrain = needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
+	needDrain = p.needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
 	needReboot = needRebootNode(new, p.DriverStateMap)
 
 	if needReboot {
@@ -233,8 +234,9 @@ func isCommandNotFound(err error) bool {
 	return false
 }
 
-func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool) {
+func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool) {
 	glog.V(2).Infof("generic-plugin needDrainNode(): current state '%+v', desired state '%+v'", current, desired)
+
 	needDrain = false
 	for _, ifaceStatus := range current {
 		configured := false
@@ -254,6 +256,27 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 			}
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {
+			// load the PF info
+			pfStatus, exist, err := p.StoreManager.LoadPfsStatus(ifaceStatus.PciAddress)
+			if err != nil {
+				glog.Errorf("generic-plugin needDrainNode(): failed to load info about PF status for pci address %s: %v", ifaceStatus.PciAddress, err)
+				continue
+			}
+
+			if !exist {
+				glog.Infof("generic-plugin needDrainNode(): PF name %s with pci address %s has VFs configured but they weren't created by the sriov operator. Skipping drain",
+					ifaceStatus.Name,
+					ifaceStatus.PciAddress)
+				continue
+			}
+
+			if pfStatus.ExternallyManaged {
+				glog.Infof("generic-plugin needDrainNode()(): PF name %s with pci address %s was externally created. Skipping drain",
+					ifaceStatus.Name,
+					ifaceStatus.PciAddress)
+				continue
+			}
+
 			glog.V(2).Infof("generic-plugin needDrainNode(): need drain, %v needs to be reset", ifaceStatus)
 			needDrain = true
 			return
