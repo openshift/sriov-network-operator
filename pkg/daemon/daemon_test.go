@@ -85,7 +85,9 @@ var _ = Describe("Config Daemon", func() {
 		fakeFs := &fakefilesystem.FS{
 			Dirs: []string{
 				"bindata/scripts",
-				"host",
+				"host/etc/sriov-operator",
+				"host/etc/sriov-operator/pci",
+				"host/etc/udev/rules.d",
 			},
 			Symlinks: map[string]string{},
 			Files: map[string][]byte{
@@ -95,7 +97,7 @@ var _ = Describe("Config Daemon", func() {
 		}
 
 		var err error
-		filesystemRoot, cleanFakeFs, err = fakeFs.Use()
+		utils.FilesystemRoot, cleanFakeFs, err = fakeFs.Use()
 		Expect(err).ToNot(HaveOccurred())
 
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
@@ -120,7 +122,9 @@ var _ = Describe("Config Daemon", func() {
 		sut.enabledPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{}}
 
 		go func() {
-			sut.Run(stopCh, exitCh)
+			defer GinkgoRecover()
+			err := sut.Run(stopCh, exitCh)
+			Expect(err).ToNot(HaveOccurred())
 		}()
 	})
 
@@ -134,7 +138,6 @@ var _ = Describe("Config Daemon", func() {
 	})
 
 	Context("Should", func() {
-
 		It("restart sriov-device-plugin pod", func() {
 
 			_, err := sut.kubeClient.CoreV1().Nodes().
@@ -234,7 +237,7 @@ var _ = Describe("Config Daemon", func() {
 
 		It("configure udev rules on host", func() {
 
-			networkManagerUdevRulePath := path.Join(filesystemRoot, "host/etc/udev/rules.d/10-nm-unmanaged.rules")
+			networkManagerUdevRulePath := path.Join(utils.FilesystemRoot, "host/etc/udev/rules.d/10-nm-unmanaged.rules")
 
 			expectedContents := `ACTION=="add|change|move", ATTRS{device}=="0x1014|0x154c", ENV{NM_UNMANAGED}="1"
 SUBSYSTEM=="net", ACTION=="add|move", ATTRS{phys_switch_id}!="", ATTR{phys_port_name}=="pf*vf*", ENV{NM_UNMANAGED}="1"
