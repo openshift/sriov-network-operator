@@ -211,6 +211,23 @@ VF groups** (when #-notation is used in pfName field) are merged, otherwise only
 the highest priority policy is applied. In case of same-priority policies and
 overlapping VF groups, only the last processed policy is applied.
 
+#### Externally Manage virtual functions
+
+When `ExternallyManage` is request on a policy the operator will only skip the virtual function creation.
+The operator will only bind the virtual functions to the requested driver and expose them via the device plugin.
+Another difference when this field is requested in the policy is that when this policy is removed the operator
+will not remove the virtual functions from the policy.
+
+*Note:* This means the user must create the virtual functions before they apply the policy or the webhook will reject
+the policy creation.
+
+It's possible to use something like nmstate kubernetes-nmstate or just a simple systemd file to create
+the virtual functions on boot.
+
+This feature was created to support deployments where the user want to use some of the virtual funtions for the host
+communication like storage network or out of band managment and the virtual functions must exist on boot and not only
+after the operator and config-daemon are running.
+
 ## Components and design
 
 This operator is split into 2 components:
