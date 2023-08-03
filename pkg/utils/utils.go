@@ -48,6 +48,7 @@ const (
 	udevDisableNM   = "/bindata/scripts/udev-find-sriov-pf.sh"
 	nmUdevRule      = "SUBSYSTEM==\"net\", ACTION==\"add|change|move\", ATTRS{device}==\"%s\", IMPORT{program}=\"/etc/udev/disable-nm-sriov.sh $env{INTERFACE} %s\""
 
+	KernelArgPciRealloc = "pci=realloc"
 	KernelArgIntelIommu = "intel_iommu=on"
 	KernelArgIommuPt    = "iommu=pt"
 )

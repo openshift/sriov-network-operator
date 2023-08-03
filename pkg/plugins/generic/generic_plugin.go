@@ -2,6 +2,7 @@ package generic
 
 import (
 	"bytes"
+	"errors"
 	"os/exec"
 	"reflect"
 	"strconv"
@@ -116,7 +117,7 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 	needDrain = p.needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
 	needReboot, err = p.needRebootNode(new)
 	if err != nil {
-		return false, false, err
+		return needDrain, needReboot, err
 	}
 
 	if needReboot {
@@ -173,6 +174,10 @@ func (p *GenericPlugin) Apply() error {
 	}
 
 	if err := utils.SyncNodeState(p.DesireState, pfsToSkip); err != nil {
+		// Catch the "cannot allocate memory" error and try to use PCI realloc
+		if errors.Is(err, syscall.ENOMEM) {
+			p.addToDesiredKernelArgs(utils.KernelArgPciRealloc)
+		}
 		return err
 	}
 	p.LastState = &sriovnetworkv1.SriovNetworkNodeState{}
