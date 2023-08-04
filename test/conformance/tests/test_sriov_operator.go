@@ -1368,6 +1368,109 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(stdout).To(ContainSubstring("2 packets transmitted, 2 received, 0% packet loss"))
 				})
 			})
+
+			Context("ExcludeTopology", func() {
+
+				var excludeTopologyTrueResourceXXX, excludeTopologyFalseResourceXXX, excludeTopologyFalseResourceYYY *sriovv1.SriovNetworkNodePolicy
+				var node string
+				var intf *sriovv1.InterfaceExt
+
+				BeforeEach(func() {
+					if discovery.Enabled() {
+						Skip("Test unsuitable to be run in discovery mode")
+					}
+
+					node = sriovInfos.Nodes[0]
+					sriovDeviceList, err := sriovInfos.FindSriovDevices(node)
+					Expect(err).ToNot(HaveOccurred())
+					unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
+					Expect(err).ToNot(HaveOccurred())
+
+					intf = unusedSriovDevices[0]
+
+					excludeTopologyTrueResourceXXX = &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-exclude-topology-true-res-xxx",
+							Namespace: operatorNamespace,
+						},
+
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NumVfs:       10,
+							ResourceName: "resourceXXX",
+							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name + "#0-4"},
+							},
+							ExcludeTopology: true,
+						},
+					}
+
+					excludeTopologyFalseResourceXXX = &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-exclude-topology-false-res-xxx",
+							Namespace: operatorNamespace,
+						},
+
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NumVfs:       10,
+							ResourceName: "resourceXXX",
+							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name + "#5-9"},
+							},
+							ExcludeTopology: false,
+						},
+					}
+
+					excludeTopologyFalseResourceYYY = &sriovv1.SriovNetworkNodePolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-exclude-topology-false-res-yyy",
+							Namespace: operatorNamespace,
+						},
+
+						Spec: sriovv1.SriovNetworkNodePolicySpec{
+							NumVfs:       10,
+							ResourceName: "resourceYYY",
+							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
+							NicSelector: sriovv1.SriovNetworkNicSelector{
+								PfNames: []string{intf.Name + "#5-9"},
+							},
+							ExcludeTopology: false,
+						},
+					}
+
+				})
+
+				It("field is forwarded to the device plugin configuration", func() {
+
+					err := clients.Create(context.Background(), excludeTopologyTrueResourceXXX)
+					Expect(err).ToNot(HaveOccurred())
+
+					assertDevicePluginConfigurationContains(node,
+						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-4"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
+
+					err = clients.Create(context.Background(), excludeTopologyFalseResourceYYY)
+					Expect(err).ToNot(HaveOccurred())
+
+					assertDevicePluginConfigurationContains(node,
+						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-4"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
+					assertDevicePluginConfigurationContains(node,
+						fmt.Sprintf(`{"resourceName":"resourceYYY","selectors":{"pfNames":["%s#5-9"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
+				})
+
+				It("multiple values for the same resource should not be allowed", func() {
+
+					err := clients.Create(context.Background(), excludeTopologyTrueResourceXXX)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = clients.Create(context.Background(), excludeTopologyFalseResourceXXX)
+					Expect(err).To(HaveOccurred())
+
+					Expect(err.Error()).To(ContainSubstring(
+						"excludeTopology[false] field conflicts with policy [test-exclude-topology-true-res-xxx].ExcludeTopology[true]" +
+							" as they target the same resource[resourceXXX]"))
+				})
+			})
 		})
 
 		Context("Nic Validation", func() {
@@ -2126,4 +2229,19 @@ func assertObjectIsNotFound(name string, obj runtimeclient.Object) {
 		err := clients.Get(context.Background(), runtimeclient.ObjectKey{Name: name, Namespace: operatorNamespace}, obj)
 		return err != nil && k8serrors.IsNotFound(err)
 	}, 2*time.Minute, 10*time.Second).Should(BeTrue())
+}
+
+func assertDevicePluginConfigurationContains(node, configuration string) {
+	Eventually(func(g Gomega) map[string]string {
+		cfg := corev1.ConfigMap{}
+		err := clients.Get(context.Background(), runtimeclient.ObjectKey{
+			Name:      "device-plugin-config",
+			Namespace: operatorNamespace,
+		}, &cfg)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		return cfg.Data
+	}, 30*time.Second, 2*time.Second).Should(
+		HaveKeyWithValue(node, ContainSubstring(configuration)),
+	)
 }

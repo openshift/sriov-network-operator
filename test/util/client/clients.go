@@ -52,6 +52,7 @@ func New(kubeconfig string) *ClientSet {
 		config, err = rest.InClusterConfig()
 	}
 	if err != nil {
+		glog.Warningf("Error while building client config: %v", err)
 		return nil
 	}
 
@@ -74,6 +75,7 @@ func New(kubeconfig string) *ClientSet {
 		Scheme: crScheme,
 	})
 	if err != nil {
+		glog.Warningf("Error while creating ClientSet: %v", err)
 		return nil
 	}
 	return clientSet
