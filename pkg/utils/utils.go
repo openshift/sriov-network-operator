@@ -262,7 +262,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		}
 	}
 	// set PF mtu
-	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
+	if iface.Mtu > 0 && iface.Mtu > ifaceStatus.Mtu {
 		err = setNetdevMTU(iface.PciAddress, iface.Mtu)
 		if err != nil {
 			glog.Warningf("configSriovDevice(): fail to set mtu for PF %s: %v", iface.PciAddress, err)
