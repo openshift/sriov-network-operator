@@ -711,6 +711,9 @@ func createDevicePluginResource(
 	// Enable the selection of devices using NetFilter
 	if p.Spec.NicSelector.NetFilter != "" {
 		// Loop through interfaces status to find a match for NetworkID or NetworkTag
+		if len(nodeState.Status.Interfaces) == 0 {
+			return nil, fmt.Errorf("node state %s doesn't contain interfaces data", nodeState.Name)
+		}
 		for _, intf := range nodeState.Status.Interfaces {
 			if sriovnetworkv1.NetFilterMatch(p.Spec.NicSelector.NetFilter, intf.NetFilter) {
 				// Found a match add the Interfaces PciAddress
