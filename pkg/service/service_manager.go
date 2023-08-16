@@ -1,7 +1,6 @@
 package service
 
 import (
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -43,7 +42,7 @@ func (sm *serviceManager) IsServiceExist(servicePath string) (bool, error) {
 
 // ReadService read service from given path
 func (sm *serviceManager) ReadService(servicePath string) (*Service, error) {
-	data, err := ioutil.ReadFile(path.Join(sm.chroot, servicePath))
+	data, err := os.ReadFile(path.Join(sm.chroot, servicePath))
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +57,7 @@ func (sm *serviceManager) ReadService(servicePath string) (*Service, error) {
 // EnableService creates service file and enables it with systemctl enable
 func (sm *serviceManager) EnableService(service *Service) error {
 	// Write service file
-	err := ioutil.WriteFile(path.Join(sm.chroot, service.Path), []byte(service.Content), 0644)
+	err := os.WriteFile(path.Join(sm.chroot, service.Path), []byte(service.Content), 0644)
 	if err != nil {
 		return err
 	}

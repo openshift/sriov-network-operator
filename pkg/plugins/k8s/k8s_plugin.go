@@ -2,7 +2,6 @@ package k8s
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -346,7 +345,7 @@ func (p *K8sPlugin) getSwitchDevSystemServices() []*service.Service {
 }
 
 func (p *K8sPlugin) isSwitchdevScriptNeedUpdate(scriptObj *service.ScriptManifestFile) (needUpdate bool, err error) {
-	data, err := ioutil.ReadFile(path.Join(chroot, scriptObj.Path))
+	data, err := os.ReadFile(path.Join(chroot, scriptObj.Path))
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return false, err
@@ -457,7 +456,7 @@ func (p *K8sPlugin) updateSwitchdevService() error {
 	}
 
 	if p.updateTarget.switchdevBeforeNMRunScript {
-		err := ioutil.WriteFile(path.Join(chroot, p.switchdevBeforeNMRunScript.Path),
+		err := os.WriteFile(path.Join(chroot, p.switchdevBeforeNMRunScript.Path),
 			[]byte(p.switchdevBeforeNMRunScript.Contents.Inline), 0755)
 		if err != nil {
 			return err
@@ -465,7 +464,7 @@ func (p *K8sPlugin) updateSwitchdevService() error {
 	}
 
 	if p.updateTarget.switchdevAfterNMRunScript {
-		err := ioutil.WriteFile(path.Join(chroot, p.switchdevAfterNMRunScript.Path),
+		err := os.WriteFile(path.Join(chroot, p.switchdevAfterNMRunScript.Path),
 			[]byte(p.switchdevAfterNMRunScript.Contents.Inline), 0755)
 		if err != nil {
 			return err
@@ -473,7 +472,7 @@ func (p *K8sPlugin) updateSwitchdevService() error {
 	}
 
 	if p.updateTarget.switchdevUdevScript {
-		err := ioutil.WriteFile(path.Join(chroot, p.switchdevUdevScript.Path),
+		err := os.WriteFile(path.Join(chroot, p.switchdevUdevScript.Path),
 			[]byte(p.switchdevUdevScript.Contents.Inline), 0755)
 		if err != nil {
 			return err
