@@ -24,7 +24,7 @@ operator:
                 values: [ "" ]
   nameOverride: ""
   fullnameOverride: ""
-  resourcePrefix: "openshift.io"
+  resourcePrefix: "mec.io"
   enableAdmissionController: false
   cniBinPath: "/opt/cni/bin"
   clusterType: "kubernetes"
