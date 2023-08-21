@@ -126,6 +126,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	mgrGlobal.GetCache().IndexField(context.Background(), &sriovnetworkv1.SriovNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
+		return []string{o.(*sriovnetworkv1.SriovNetwork).Spec.NetworkNamespace}
+	})
+
 	if err := initNicIDMap(); err != nil {
 		setupLog.Error(err, "unable to init NicIdMap")
 		os.Exit(1)
