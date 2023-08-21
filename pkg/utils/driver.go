@@ -2,7 +2,6 @@ package utils
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -24,7 +23,7 @@ func Unbind(pciAddr string) error {
 	}
 
 	filePath := filepath.Join(sysBusPciDrivers, driver, "unbind")
-	err := ioutil.WriteFile(filePath, []byte(pciAddr), os.ModeAppend)
+	err := os.WriteFile(filePath, []byte(pciAddr), os.ModeAppend)
 	if err != nil {
 		glog.Errorf("Unbind(): fail to unbind driver for device %s. %s", pciAddr, err)
 		return err
@@ -49,13 +48,13 @@ func BindDpdkDriver(pciAddr, driver string) error {
 	}
 
 	driverOverridePath := filepath.Join(sysBusPciDevices, pciAddr, "driver_override")
-	err := ioutil.WriteFile(driverOverridePath, []byte(driver), os.ModeAppend)
+	err := os.WriteFile(driverOverridePath, []byte(driver), os.ModeAppend)
 	if err != nil {
 		glog.Errorf("BindDpdkDriver(): fail to write driver_override for device %s %s", driver, err)
 		return err
 	}
 	bindPath := filepath.Join(sysBusPciDrivers, driver, "bind")
-	err = ioutil.WriteFile(bindPath, []byte(pciAddr), os.ModeAppend)
+	err = os.WriteFile(bindPath, []byte(pciAddr), os.ModeAppend)
 	if err != nil {
 		glog.Errorf("BindDpdkDriver(): fail to bind driver for device %s: %s", pciAddr, err)
 		_, err := os.Readlink(filepath.Join(sysBusPciDevices, pciAddr, "iommu_group"))
@@ -65,7 +64,7 @@ func BindDpdkDriver(pciAddr, driver string) error {
 		}
 		return err
 	}
-	err = ioutil.WriteFile(driverOverridePath, []byte(""), os.ModeAppend)
+	err = os.WriteFile(driverOverridePath, []byte(""), os.ModeAppend)
 	if err != nil {
 		glog.Errorf("BindDpdkDriver(): fail to clear driver_override for device %s: %s", pciAddr, err)
 		return err
@@ -90,12 +89,12 @@ func BindDefaultDriver(pciAddr string) error {
 	}
 
 	driverOverridePath := filepath.Join(sysBusPciDevices, pciAddr, "driver_override")
-	err := ioutil.WriteFile(driverOverridePath, []byte("\x00"), os.ModeAppend)
+	err := os.WriteFile(driverOverridePath, []byte("\x00"), os.ModeAppend)
 	if err != nil {
 		glog.Errorf("BindDefaultDriver(): fail to write driver_override for device %s: %s", pciAddr, err)
 		return err
 	}
-	err = ioutil.WriteFile(sysBusPciDriversProbe, []byte(pciAddr), os.ModeAppend)
+	err = os.WriteFile(sysBusPciDriversProbe, []byte(pciAddr), os.ModeAppend)
 	if err != nil {
 		glog.Errorf("BindDefaultDriver(): fail to bind driver for device %s: %s", pciAddr, err)
 		return err
