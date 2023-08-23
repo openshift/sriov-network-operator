@@ -56,3 +56,8 @@ func formatJSON(str string) (string, error) {
 	}
 	return prettyJSON.String(), nil
 }
+
+func GetDefaultNodeSelector() map[string]string {
+	return map[string]string{"node-role.kubernetes.io/worker": "",
+		"kubernetes.io/os": "linux"}
+}
