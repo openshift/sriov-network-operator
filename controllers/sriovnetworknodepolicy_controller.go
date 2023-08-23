@@ -335,6 +335,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(ctx context.Cont
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
 	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
+	data.Data["NodeSelectorField"] = GetDefaultNodeSelector()
 
 	objs, err := renderDsForCR(constants.PluginPath, &data)
 	if err != nil {
