@@ -217,6 +217,8 @@ func (dn *Daemon) tryCreateUdevRuleWrapper() error {
 
 // Run the config daemon
 func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
+	glog.V(0).Infof("Run(): node: %s", dn.name)
+
 	if utils.ClusterType == utils.ClusterTypeOpenshift {
 		glog.V(0).Infof("Run(): start daemon. openshiftFlavor: %s", dn.openshiftContext.OpenshiftFlavor)
 	} else {
