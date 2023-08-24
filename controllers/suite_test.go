@@ -113,6 +113,10 @@ var _ = BeforeSuite(func(done Done) {
 		return []string{o.(*sriovnetworkv1.SriovNetwork).Spec.NetworkNamespace}
 	})
 
+	k8sManager.GetCache().IndexField(context.Background(), &sriovnetworkv1.SriovIBNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
+		return []string{o.(*sriovnetworkv1.SriovIBNetwork).Spec.NetworkNamespace}
+	})
+
 	err = (&SriovNetworkReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
