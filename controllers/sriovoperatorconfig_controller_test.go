@@ -151,7 +151,7 @@ var _ = Describe("Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		PIt("should be able to update the node selector of sriov-network-config-daemon", func() {
+		It("should be able to update the node selector of sriov-network-config-daemon", func() {
 			By("specify the configDaemonNodeSelector")
 			config := &sriovnetworkv1.SriovOperatorConfig{}
 			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", interval, timeout)
