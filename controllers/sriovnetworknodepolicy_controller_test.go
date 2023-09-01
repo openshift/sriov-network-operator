@@ -8,9 +8,13 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	dptypes "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/types"
 )
@@ -129,27 +133,18 @@ func TestNodeSelectorMerge(t *testing.T) {
 	}
 }
 
-func buildSelector(vdpaType dptypes.VdpaType) (json.RawMessage, error) {
-	netDeviceSelectors := dptypes.NetDeviceSelectors{}
-	netDeviceSelectors.IsRdma = false
-	netDeviceSelectors.NeedVhostNet = false
-	netDeviceSelectors.VdpaType = vdpaType
-
-	netDeviceSelectorsMarshal, err := json.Marshal(netDeviceSelectors)
+func mustMarshallSelector(t *testing.T, input *dptypes.NetDeviceSelectors) *json.RawMessage {
+	out, err := json.Marshal(input)
 	if err != nil {
-		return nil, err
+		t.Error(err)
+		t.FailNow()
+		return nil
 	}
-	rawNetDeviceSelectors := json.RawMessage(netDeviceSelectorsMarshal)
-	return rawNetDeviceSelectors, nil
+	ret := json.RawMessage(out)
+	return &ret
 }
 
 func TestRenderDevicePluginConfigData(t *testing.T) {
-	rawNetDeviceSelectors, err := buildSelector(dptypes.VdpaType(consts.VdpaTypeVirtio))
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
 	table := []struct {
 		tname       string
 		policy      sriovnetworkv1.SriovNetworkNodePolicy
@@ -168,7 +163,27 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 				ResourceList: []dptypes.ResourceConfig{
 					{
 						ResourceName: "resourceName",
-						Selectors:    &rawNetDeviceSelectors,
+						Selectors: mustMarshallSelector(t, &dptypes.NetDeviceSelectors{
+							VdpaType: dptypes.VdpaType(consts.VdpaTypeVirtio),
+						}),
+					},
+				},
+			},
+		},
+		{
+			tname: "testExcludeTopology",
+			policy: sriovnetworkv1.SriovNetworkNodePolicy{
+				Spec: v1.SriovNetworkNodePolicySpec{
+					ResourceName:    "resourceName",
+					ExcludeTopology: true,
+				},
+			},
+			expResource: dptypes.ResourceConfList{
+				ResourceList: []dptypes.ResourceConfig{
+					{
+						ResourceName:    "resourceName",
+						Selectors:       mustMarshallSelector(t, &dptypes.NetDeviceSelectors{}),
+						ExcludeTopology: true,
 					},
 				},
 			},
@@ -177,16 +192,23 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 
 	reconciler := SriovNetworkNodePolicyReconciler{}
 
+	node := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}}
+	nodeState := sriovnetworkv1.SriovNetworkNodeState{ObjectMeta: metav1.ObjectMeta{Name: node.Name, Namespace: namespace}}
+
+	scheme := runtime.NewScheme()
+	utilruntime.Must(sriovnetworkv1.AddToScheme(scheme))
+	reconciler.Client = fake.NewClientBuilder().
+		WithScheme(scheme).WithObjects(&nodeState).
+		Build()
+
 	for _, tc := range table {
 		policyList := sriovnetworkv1.SriovNetworkNodePolicyList{Items: []sriovnetworkv1.SriovNetworkNodePolicy{tc.policy}}
-		node := corev1.Node{}
+
 		t.Run(tc.tname, func(t *testing.T) {
 			resourceList, err := reconciler.renderDevicePluginConfigData(context.TODO(), &policyList, &node)
 			if err != nil {
 				t.Error(tc.tname, "renderDevicePluginConfigData has failed")
 			}
-
-			t.Logf("SelectorObj: %v", resourceList.ResourceList[0].SelectorObj)
 
 			if !cmp.Equal(resourceList, tc.expResource) {
 				t.Error(tc.tname, "ResourceConfList not as expected", cmp.Diff(resourceList, tc.expResource))
