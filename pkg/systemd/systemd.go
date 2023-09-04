@@ -18,7 +18,6 @@ package systemd
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -56,7 +55,7 @@ type SriovResult struct {
 }
 
 func ReadConfFile() (spec *SriovConfig, err error) {
-	rawConfig, err := ioutil.ReadFile(SriovSystemdConfigPath)
+	rawConfig, err := os.ReadFile(SriovSystemdConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +100,7 @@ func WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, unsupportedNi
 		}
 	}
 
-	oldContent, err := ioutil.ReadFile(SriovHostSystemdConfigPath)
+	oldContent, err := os.ReadFile(SriovHostSystemdConfigPath)
 	if err != nil {
 		glog.Errorf("WriteConfFile(): fail to read file: %v", err)
 		return false, err
@@ -128,7 +127,7 @@ func WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, unsupportedNi
 	glog.V(2).Infof("WriteConfFile(): previews configuration is not equal: old config:\n%s\nnew config:\n%s\n", string(oldContent), string(newContent))
 
 	glog.V(2).Infof("WriteConfFile(): write '%s' to %s", newContent, SriovHostSystemdConfigPath)
-	err = ioutil.WriteFile(SriovHostSystemdConfigPath, newContent, 0644)
+	err = os.WriteFile(SriovHostSystemdConfigPath, newContent, 0644)
 	if err != nil {
 		glog.Errorf("WriteConfFile(): fail to write file: %v", err)
 		return false, err
@@ -167,7 +166,7 @@ func WriteSriovResult(result *SriovResult) error {
 	}
 
 	glog.V(2).Infof("WriteSriovResult(): write '%s' to %s", string(out), SriovSystemdResultPath)
-	err = ioutil.WriteFile(SriovSystemdResultPath, out, 0644)
+	err = os.WriteFile(SriovSystemdResultPath, out, 0644)
 	if err != nil {
 		glog.Errorf("WriteSriovResult(): failed to write sriov result file on path %s: %v", SriovSystemdResultPath, err)
 		return err
@@ -188,7 +187,7 @@ func ReadSriovResult() (*SriovResult, error) {
 		}
 	}
 
-	rawConfig, err := ioutil.ReadFile(SriovHostSystemdResultPath)
+	rawConfig, err := os.ReadFile(SriovHostSystemdResultPath)
 	if err != nil {
 		glog.Errorf("ReadSriovResult(): failed to read sriov result file on path %s: %v", SriovHostSystemdResultPath, err)
 		return nil, err
@@ -224,7 +223,7 @@ func WriteSriovSupportedNics() error {
 		rawNicList = append(rawNicList, []byte(fmt.Sprintf("%s\n", line))...)
 	}
 
-	err = ioutil.WriteFile(sriovHostSystemdSupportedNicPath, rawNicList, 0644)
+	err = os.WriteFile(sriovHostSystemdSupportedNicPath, rawNicList, 0644)
 	if err != nil {
 		glog.Errorf("WriteSriovSupportedNics(): failed to write sriov supporter nics ids file on path %s: %v", sriovHostSystemdSupportedNicPath, err)
 		return err
@@ -245,7 +244,7 @@ func ReadSriovSupportedNics() ([]string, error) {
 		}
 	}
 
-	rawConfig, err := ioutil.ReadFile(sriovSystemdSupportedNicPath)
+	rawConfig, err := os.ReadFile(sriovSystemdSupportedNicPath)
 	if err != nil {
 		glog.Errorf("ReadSriovSupportedNics(): failed to read sriov supporter nics file on path %s: %v", sriovSystemdSupportedNicPath, err)
 		return nil, err

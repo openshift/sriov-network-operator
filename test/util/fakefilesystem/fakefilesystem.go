@@ -2,7 +2,6 @@ package fakefilesystem
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 )
@@ -24,7 +23,7 @@ type FS struct {
 // ````
 func (f *FS) Use() (string, func(), error) {
 	// create the new fake fs root dir in /tmp/sriov...
-	rootDir, err := ioutil.TempDir("", "sriov-operator")
+	rootDir, err := os.MkdirTemp("", "sriov-operator")
 	if err != nil {
 		return "", nil, fmt.Errorf("error creating fake root dir: %w", err)
 	}

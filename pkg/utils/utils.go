@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -305,7 +304,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		}
 	}
 	// set PF mtu
-	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
+	if iface.Mtu > 0 && iface.Mtu > ifaceStatus.Mtu {
 		err = setNetdevMTU(iface.PciAddress, iface.Mtu)
 		if err != nil {
 			glog.Warningf("configSriovDevice(): fail to set mtu for PF %s: %v", iface.PciAddress, err)
@@ -423,12 +422,12 @@ func setSriovNumVfs(pciAddr string, numVfs int) error {
 	glog.V(2).Infof("setSriovNumVfs(): set NumVfs for device %s to %d", pciAddr, numVfs)
 	numVfsFilePath := filepath.Join(sysBusPciDevices, pciAddr, numVfsFile)
 	bs := []byte(strconv.Itoa(numVfs))
-	err := ioutil.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
+	err := os.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
 	if err != nil {
 		glog.Warningf("setSriovNumVfs(): fail to reset NumVfs file %s", numVfsFilePath)
 		return err
 	}
-	err = ioutil.WriteFile(numVfsFilePath, bs, os.ModeAppend)
+	err = os.WriteFile(numVfsFilePath, bs, os.ModeAppend)
 	if err != nil {
 		glog.Warningf("setSriovNumVfs(): fail to set NumVfs file %s", numVfsFilePath)
 		return err
@@ -454,7 +453,7 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 		}
 		mtuFile := "net/" + ifaceName[0] + "/mtu"
 		mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
-		return ioutil.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
+		return os.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
 	}, backoff.WithMaxRetries(b, 10))
 	if err != nil {
 		glog.Warningf("setNetdevMTU(): fail to write mtu file after retrying: %v", err)
@@ -498,7 +497,7 @@ func getNetdevMTU(pciAddr string) int {
 	}
 	mtuFile := "net/" + ifaceName + "/mtu"
 	mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
-	data, err := ioutil.ReadFile(mtuFilePath)
+	data, err := os.ReadFile(mtuFilePath)
 	if err != nil {
 		glog.Warningf("getNetdevMTU(): fail to read mtu file %s", mtuFilePath)
 		return 0
@@ -514,7 +513,7 @@ func getNetdevMTU(pciAddr string) int {
 func getNetDevMac(ifaceName string) string {
 	glog.V(2).Infof("getNetDevMac(): get Mac for device %s", ifaceName)
 	macFilePath := filepath.Join(sysClassNet, ifaceName, "address")
-	data, err := ioutil.ReadFile(macFilePath)
+	data, err := os.ReadFile(macFilePath)
 	if err != nil {
 		glog.Warningf("getNetDevMac(): fail to read Mac file %s", macFilePath)
 		return ""
@@ -526,7 +525,7 @@ func getNetDevMac(ifaceName string) string {
 func getNetDevLinkSpeed(ifaceName string) string {
 	glog.V(2).Infof("getNetDevLinkSpeed(): get LinkSpeed for device %s", ifaceName)
 	speedFilePath := filepath.Join(sysClassNet, ifaceName, "speed")
-	data, err := ioutil.ReadFile(speedFilePath)
+	data, err := os.ReadFile(speedFilePath)
 	if err != nil {
 		glog.Warningf("getNetDevLinkSpeed(): fail to read Link Speed file %s", speedFilePath)
 		return ""
@@ -728,7 +727,7 @@ func GetNicSriovMode(pciAddress string) (string, error) {
 
 func GetPhysSwitchID(name string) (string, error) {
 	swIDFile := filepath.Join(sysClassNet, name, "phys_switch_id")
-	physSwitchID, err := ioutil.ReadFile(swIDFile)
+	physSwitchID, err := os.ReadFile(swIDFile)
 	if err != nil {
 		return "", err
 	}
@@ -740,7 +739,7 @@ func GetPhysSwitchID(name string) (string, error) {
 
 func GetPhysPortName(name string) (string, error) {
 	devicePortNameFile := filepath.Join(sysClassNet, name, "phys_port_name")
-	physPortName, err := ioutil.ReadFile(devicePortNameFile)
+	physPortName, err := os.ReadFile(devicePortNameFile)
 	if err != nil {
 		return "", err
 	}

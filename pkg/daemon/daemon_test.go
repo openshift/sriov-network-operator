@@ -3,7 +3,7 @@ package daemon
 import (
 	"context"
 	"flag"
-	"io/ioutil"
+	"os"
 	"path"
 	"testing"
 
@@ -321,7 +321,7 @@ func updateSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetwor
 
 func assertFileContents(path, contents string) {
 	Eventually(func() (string, error) {
-		ret, err := ioutil.ReadFile(path)
+		ret, err := os.ReadFile(path)
 		return string(ret), err
 	}, "10s").WithOffset(1).Should(Equal(contents))
 }

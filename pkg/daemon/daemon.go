@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -1056,7 +1055,7 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 		}
 	}
 
-	oldContent, err := ioutil.ReadFile(filePath)
+	oldContent, err := os.ReadFile(filePath)
 	// if oldContent = newContent, don't do anything
 	if err == nil && newContent == string(oldContent) {
 		return nil
@@ -1069,7 +1068,7 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 
 	// if the file does not exist or if oldContent != newContent
 	// write to file and create it if it doesn't exist
-	err = ioutil.WriteFile(filePath, []byte(newContent), 0664)
+	err = os.WriteFile(filePath, []byte(newContent), 0664)
 	if err != nil {
 		glog.Errorf("tryCreateSwitchdevUdevRule(): fail to write file: %v", err)
 		return err
@@ -1116,7 +1115,7 @@ func tryCreateNMUdevRule() error {
 	// add NM udev rules for renaming VF rep
 	newContent = newContent + "SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n"
 
-	oldContent, err := ioutil.ReadFile(filePath)
+	oldContent, err := os.ReadFile(filePath)
 	// if oldContent = newContent, don't do anything
 	if err == nil && newContent == string(oldContent) {
 		return nil
@@ -1135,7 +1134,7 @@ func tryCreateNMUdevRule() error {
 
 	// if the file does not exist or if oldContent != newContent
 	// write to file and create it if it doesn't exist
-	err = ioutil.WriteFile(filePath, []byte(newContent), 0666)
+	err = os.WriteFile(filePath, []byte(newContent), 0666)
 	if err != nil {
 		glog.Errorf("tryCreateNMUdevRule(): fail to write file: %v", err)
 		return err

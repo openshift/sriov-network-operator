@@ -1,7 +1,8 @@
 package service
 
 import (
-	"io/ioutil"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/coreos/go-systemd/v22/unit"
@@ -55,7 +56,7 @@ OUTER:
 		newServiceOptions = append(newServiceOptions, opt)
 	}
 
-	data, err := ioutil.ReadAll(unit.Serialize(newServiceOptions))
+	data, err := io.ReadAll(unit.Serialize(newServiceOptions))
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +85,7 @@ OUTER:
 		serviceOptions = append(serviceOptions, appendOpt)
 	}
 
-	data, err := ioutil.ReadAll(unit.Serialize(serviceOptions))
+	data, err := io.ReadAll(unit.Serialize(serviceOptions))
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +99,7 @@ OUTER:
 
 // ReadServiceInjectionManifestFile reads service injection file
 func ReadServiceInjectionManifestFile(path string) (*Service, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +118,7 @@ func ReadServiceInjectionManifestFile(path string) (*Service, error) {
 
 // ReadServiceManifestFile reads service file
 func ReadServiceManifestFile(path string) (*Service, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +137,7 @@ func ReadServiceManifestFile(path string) (*Service, error) {
 
 // ReadScriptManifestFile reads script file
 func ReadScriptManifestFile(path string) (*ScriptManifestFile, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
