@@ -3,8 +3,6 @@ package daemon
 import (
 	"context"
 	"flag"
-	"os"
-	"path"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -234,17 +232,6 @@ var _ = Describe("Config Daemon", func() {
 
 			Expect(sut.nodeState.GetGeneration()).To(BeNumerically("==", 777))
 		})
-
-		It("configure udev rules on host", func() {
-
-			networkManagerUdevRulePath := path.Join(utils.FilesystemRoot, "host/etc/udev/rules.d/10-nm-unmanaged.rules")
-
-			expectedContents := `ACTION=="add|change|move", ATTRS{device}=="0x1014|0x154c", ENV{NM_UNMANAGED}="1"
-SUBSYSTEM=="net", ACTION=="add|move", ATTRS{phys_switch_id}!="", ATTR{phys_port_name}=="pf*vf*", ENV{NM_UNMANAGED}="1"
-`
-			// No need to trigger any action on config-daemon, as it checks the file in the main loop
-			assertFileContents(networkManagerUdevRulePath, expectedContents)
-		})
 	})
 
 	Context("isNodeDraining", func() {
@@ -320,11 +307,4 @@ func updateSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetwor
 		SriovNetworkNodeStates(namespace).
 		Update(context.Background(), nodeState, metav1.UpdateOptions{})
 	return err
-}
-
-func assertFileContents(path, contents string) {
-	Eventually(func() (string, error) {
-		ret, err := os.ReadFile(path)
-		return string(ret), err
-	}, "10s").WithOffset(1).Should(Equal(contents))
 }

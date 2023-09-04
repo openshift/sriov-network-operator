@@ -189,33 +189,6 @@ func New(
 	}
 }
 
-func (dn *Daemon) tryCreateUdevRuleWrapper() error {
-	ns, nodeStateErr := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(
-		context.Background(),
-		dn.name,
-		metav1.GetOptions{},
-	)
-	if nodeStateErr != nil {
-		glog.Warningf("Could not fetch node state %s: %v, skip updating switchdev udev rules", dn.name, nodeStateErr)
-	} else {
-		err := tryCreateSwitchdevUdevRule(ns)
-		if err != nil {
-			glog.Warningf("Failed to create switchdev udev rules: %v", err)
-		}
-	}
-
-	// update udev rule only if we are on a BM environment
-	// for virtual environments we don't disable the vfs as they may be used by the platform/host
-	if dn.platform != utils.VirtualOpenStack {
-		err := tryCreateNMUdevRule()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // Run the config daemon
 func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	if utils.ClusterType == utils.ClusterTypeOpenshift {
@@ -249,8 +222,11 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	}
 	dn.storeManager = storeManager
 
-	if err := dn.tryCreateUdevRuleWrapper(); err != nil {
-		return err
+	if err := dn.prepareNMUdevRule(); err != nil {
+		glog.Warningf("failed to prepare udev files to disable network manager on requested VFs: %v", err)
+	}
+	if err := dn.tryCreateSwitchdevUdevRule(); err != nil {
+		glog.Warningf("failed to create udev files for switchdev")
 	}
 
 	var timeout int64 = 5
@@ -325,7 +301,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 			return err
 		case <-time.After(30 * time.Second):
 			glog.V(2).Info("Run(): period refresh")
-			if err := dn.tryCreateUdevRuleWrapper(); err != nil {
+			if err := dn.tryCreateSwitchdevUdevRule(); err != nil {
 				glog.V(2).Info("Could not create udev rule: ", err)
 			}
 		}
@@ -1062,8 +1038,18 @@ func (dn *Daemon) drainNode() error {
 	return nil
 }
 
-func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+func (dn *Daemon) tryCreateSwitchdevUdevRule() error {
 	glog.V(2).Infof("tryCreateSwitchdevUdevRule()")
+	nodeState, nodeStateErr := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(
+		context.Background(),
+		dn.name,
+		metav1.GetOptions{},
+	)
+	if nodeStateErr != nil {
+		glog.Warningf("Could not fetch node state %s: %v, skip updating switchdev udev rules", dn.name, nodeStateErr)
+		return nil
+	}
+
 	var newContent string
 	filePath := path.Join(utils.FilesystemRoot, "/host/etc/udev/rules.d/20-switchdev.rules")
 
@@ -1120,11 +1106,7 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 	return nil
 }
 
-func tryCreateNMUdevRule() error {
-	glog.V(2).Infof("tryCreateNMUdevRule()")
-	dirPath := path.Join(utils.FilesystemRoot, "/host/etc/udev/rules.d")
-	filePath := path.Join(dirPath, "10-nm-unmanaged.rules")
-
+func (dn *Daemon) prepareNMUdevRule() error {
 	// we need to remove the Red Hat Virtio network device from the udev rule configuration
 	// if we don't remove it when running the config-daemon on a virtual node it will disconnect the node after a reboot
 	// even that the operator should not be installed on virtual environments that are not openstack
@@ -1136,34 +1118,6 @@ func tryCreateNMUdevRule() error {
 		}
 		supportedVfIds = append(supportedVfIds, vfID)
 	}
-	newContent := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(supportedVfIds, "|"))
 
-	// add NM udev rules for renaming VF rep
-	newContent = newContent + "SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n"
-
-	oldContent, err := os.ReadFile(filePath)
-	// if oldContent = newContent, don't do anything
-	if err == nil && newContent == string(oldContent) {
-		return nil
-	}
-
-	glog.V(2).Infof("Old udev content '%v' and new content '%v' differ. Writing to file %v.",
-		strings.TrimSuffix(string(oldContent), "\n"),
-		strings.TrimSuffix(newContent, "\n"),
-		filePath)
-
-	err = os.MkdirAll(dirPath, os.ModePerm)
-	if err != nil && !os.IsExist(err) {
-		glog.Errorf("tryCreateNMUdevRule(): failed to create dir %s: %v", dirPath, err)
-		return err
-	}
-
-	// if the file does not exist or if oldContent != newContent
-	// write to file and create it if it doesn't exist
-	err = os.WriteFile(filePath, []byte(newContent), 0666)
-	if err != nil {
-		glog.Errorf("tryCreateNMUdevRule(): fail to write file: %v", err)
-		return err
-	}
-	return nil
+	return utils.PrepareNMUdevRule(supportedVfIds)
 }
