@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -40,6 +41,10 @@ const (
 	VendorMellanox        = "15b3"
 	DeviceBF2             = "a2d6"
 	DeviceBF3             = "a2dc"
+
+	udevFolder      = "/etc/udev"
+	udevRulesFolder = udevFolder + "/rules.d"
+	udevDisableNM   = "/bindata/scripts/udev-find-sriov-pf.sh"
 )
 
 var InitialState sriovnetworkv1.SriovNetworkNodeState
@@ -49,6 +54,8 @@ var pfPhysPortNameRe = regexp.MustCompile(`p\d+`)
 
 // FilesystemRoot used by test to mock interactions with filesystem
 var FilesystemRoot = ""
+
+var SupportedVfIds []string
 
 func init() {
 	ClusterType = os.Getenv("CLUSTER_TYPE")
@@ -242,6 +249,11 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 					ifaceStatus.Name,
 					ifaceStatus.PciAddress)
 				continue
+			} else {
+				err = RemoveUdevRule(ifaceStatus.PciAddress)
+				if err != nil {
+					return err
+				}
 			}
 
 			if err = resetSriovDevice(ifaceStatus); err != nil {
@@ -362,15 +374,27 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 	// set numVFs
 	if iface.NumVfs != ifaceStatus.NumVfs {
 		if iface.ExternallyManaged {
-			errMsg := fmt.Sprintf("configSriovDevice(): number of request virtual functions %d is not equal to configured virtual functions %d but the policy is configured as ExternallyManaged for device %s", iface.NumVfs, ifaceStatus.NumVfs, iface.PciAddress)
-			glog.Error(errMsg)
-			return fmt.Errorf(errMsg)
-		}
+			if iface.NumVfs > ifaceStatus.NumVfs {
+				errMsg := fmt.Sprintf("configSriovDevice(): number of request virtual functions %d is not equal to configured virtual functions %d but the policy is configured as ExternallyManaged for device %s", iface.NumVfs, ifaceStatus.NumVfs, iface.PciAddress)
+				glog.Error(errMsg)
+				return fmt.Errorf(errMsg)
+			}
+		} else {
+			// create the udev rule to disable all the vfs from network manager as this vfs are managed by the operator
+			err = AddUdevRule(iface.PciAddress)
+			if err != nil {
+				return err
+			}
 
-		err = setSriovNumVfs(iface.PciAddress, iface.NumVfs)
-		if err != nil {
-			glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
-			return err
+			err = setSriovNumVfs(iface.PciAddress, iface.NumVfs)
+			if err != nil {
+				err = RemoveUdevRule(iface.PciAddress)
+				if err != nil {
+					return err
+				}
+				glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
+				return err
+			}
 		}
 	}
 	// set PF mtu
@@ -884,5 +908,65 @@ func RebindVfToDefaultDriver(vfAddr string) error {
 	}
 
 	glog.Warningf("RebindVfToDefaultDriver(): workaround implemented for VF %s", vfAddr)
+	return nil
+}
+
+func PrepareNMUdevRule(supportedVfIds []string) error {
+	glog.V(2).Infof("PrepareNMUdevRule()")
+	dirPath := path.Join(FilesystemRoot, "/host/etc/udev/rules.d")
+	filePath := path.Join(dirPath, "10-nm-unmanaged.rules")
+
+	// remove the old unmanaged rules file
+	if _, err := os.Stat(filePath); err == nil {
+		err = os.Remove(filePath)
+		if err != nil {
+			glog.Warningf("failed to remove the network manager global unmanaged rule on path %s: %v", filePath, err)
+		}
+	}
+
+	// create the pf finder script for udev rules
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command("/bin/bash", path.Join(FilesystemRoot, udevDisableNM))
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	glog.V(2).Infof("PrepareNMUdevRule(): %v", cmd.Stdout)
+
+	//save the device list to use for udev rules
+	SupportedVfIds = supportedVfIds
+	return nil
+}
+
+func AddUdevRule(pfPciAddress string) error {
+	glog.V(2).Infof("AddUdevRule(): %s", pfPciAddress)
+	pathFile := udevRulesFolder
+	udevRuleContent := fmt.Sprintf("SUBSYSTEM==\"net\", ACTION==\"add|change|move\", ATTRS{device}==\"%s\", IMPORT{program}=\"/etc/udev/disable-nm-sriov.sh $env{INTERFACE} %s\"", strings.Join(SupportedVfIds, "|"), pfPciAddress)
+
+	err := os.MkdirAll(pathFile, os.ModePerm)
+	if err != nil && !os.IsExist(err) {
+		glog.Errorf("AddUdevRule(): failed to create dir %s: %v", pathFile, err)
+		return err
+	}
+
+	filePath := path.Join(pathFile, fmt.Sprintf("10-nm-disable-%s.rules", pfPciAddress))
+	// if the file does not exist or if oldContent != newContent
+	// write to file and create it if it doesn't exist
+	err = os.WriteFile(filePath, []byte(udevRuleContent), 0666)
+	if err != nil {
+		glog.Errorf("AddUdevRule(): fail to write file: %v", err)
+		return err
+	}
+	return nil
+}
+
+func RemoveUdevRule(pfPciAddress string) error {
+	pathFile := udevRulesFolder
+	filePath := path.Join(pathFile, fmt.Sprintf("10-nm-disable-%s.rules", pfPciAddress))
+	err := os.Remove(filePath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	return nil
 }
