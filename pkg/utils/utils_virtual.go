@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -382,7 +381,7 @@ func tryToGetVirtualInterfaceName(pciAddr string) string {
 		return ""
 	}
 
-	fInfos, err := ioutil.ReadDir(netDir[0])
+	fInfos, err := os.ReadDir(netDir[0])
 	if err != nil {
 		glog.Warningf("tryToGetVirtualInterfaceName(): failed to read net directory %s: %q", netDir, err)
 		return ""

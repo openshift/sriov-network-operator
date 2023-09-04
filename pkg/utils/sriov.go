@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/golang/glog"
@@ -125,7 +124,7 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 			return
 		}
 	}
-	oldContent, err := ioutil.ReadFile(SriovHostSwitchDevConfPath)
+	oldContent, err := os.ReadFile(SriovHostSwitchDevConfPath)
 	if err != nil {
 		glog.Errorf("WriteSwitchdevConfFile(): fail to read file: %v", err)
 		return
@@ -145,7 +144,7 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 	}
 	update = true
 	glog.V(2).Infof("WriteSwitchdevConfFile(): write '%s' to switchdev.conf", newContent)
-	err = ioutil.WriteFile(SriovHostSwitchDevConfPath, newContent, 0644)
+	err = os.WriteFile(SriovHostSwitchDevConfPath, newContent, 0644)
 	if err != nil {
 		glog.Errorf("WriteSwitchdevConfFile(): fail to write file: %v", err)
 		return
