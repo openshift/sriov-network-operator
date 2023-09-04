@@ -75,7 +75,6 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - deadcode
     - depguard
     - dogsled
     # TODO fix issues- dupl
@@ -99,16 +98,13 @@ linters:
     - misspell
     # TODO fix issues- nakedret
     # TODO fix issues- prealloc
-    - rowserrcheck
       #- scopelint
     # TODO fix issues- staticcheck
-    - structcheck
     - stylecheck
     - typecheck
     - unconvert
     # TODO fix issues- unparam
     - unused
-    - varcheck
     - whitespace
 
 issues:
