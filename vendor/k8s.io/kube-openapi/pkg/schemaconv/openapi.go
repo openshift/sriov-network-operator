@@ -25,6 +25,16 @@ import (
 	"sigs.k8s.io/structured-merge-diff/v4/schema"
 )
 
+// ToSchemaFromOpenAPI converts a directory of OpenAPI schemas to an smd Schema.
+//   - models: a map from definition name to OpenAPI V3 structural schema for each definition.
+//     Key in map is used to resolve references in the schema.
+//   - preserveUnknownFields: flag indicating whether unknown fields in all schemas should be preserved.
+//   - returns: nil and an error if there is a parse error, or if schema does not satisfy a
+//     required structural schema invariant for conversion. If no error, returns
+//     a new smd schema.
+//
+// Schema should be validated as structural before using with this function, or
+// there may be information lost.
 func ToSchemaFromOpenAPI(models map[string]*spec.Schema, preserveUnknownFields bool) (*schema.Schema, error) {
 	c := convert{
 		preserveUnknownFields: preserveUnknownFields,
@@ -38,12 +48,15 @@ func ToSchemaFromOpenAPI(models map[string]*spec.Schema, preserveUnknownFields b
 		}
 
 		var a schema.Atom
-		if name == quantityResource || name == rawExtensionResource {
-			//!TODO: add support to the openapi schema to properly support these
-			// Hardcode both quantity and raw extension to use untyped schemas
+
+		// Hard-coded schemas for now as proto_models implementation functions.
+		// https://github.com/kubernetes/kube-openapi/issues/364
+		if name == quantityResource {
 			a = schema.Atom{
-				Scalar: ptr(schema.Scalar("untyped")),
+				Scalar: untypedDef.Atom.Scalar,
 			}
+		} else if name == rawExtensionResource {
+			a = untypedDef.Atom
 		} else {
 			c2 := c.push(name, &a)
 			c2.visitSpec(spec)
