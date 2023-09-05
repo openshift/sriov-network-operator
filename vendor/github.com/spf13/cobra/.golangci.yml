@@ -19,7 +19,6 @@ linters:
   disable-all: true
   enable:
     #- bodyclose
-    - deadcode
     #- depguard
     #- dogsled
     #- dupl
@@ -48,15 +47,12 @@ linters:
     #- nakedret
     #- noctx
     #- nolintlint
-    #- rowserrcheck
     #- scopelint
     #- staticcheck
-    - structcheck
     #- stylecheck
     #- typecheck
     - unconvert
     #- unparam
     #- unused
-    - varcheck
     #- whitespace
   fast: false

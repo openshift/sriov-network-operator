@@ -203,12 +203,12 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	}
 
 	// vdpa: deviceType must be set to 'netdevice'
-	if cr.Spec.DeviceType != constants.DeviceTypeNetDevice && cr.Spec.VdpaType == constants.VdpaTypeVirtio {
-		return false, fmt.Errorf("'deviceType: %s' conflicts with 'vdpaType: virtio'; Set 'deviceType' to (string)'netdevice' Or Remove 'vdpaType'", cr.Spec.DeviceType)
+	if cr.Spec.DeviceType != constants.DeviceTypeNetDevice && (cr.Spec.VdpaType == constants.VdpaTypeVirtio || cr.Spec.VdpaType == constants.VdpaTypeVhost) {
+		return false, fmt.Errorf("'deviceType: %s' conflicts with '%s'; Set 'deviceType' to (string)'netdevice' Or Remove 'vdpaType'", cr.Spec.DeviceType, cr.Spec.VdpaType)
 	}
 	// vdpa: device must be configured in switchdev mode
-	if cr.Spec.VdpaType == constants.VdpaTypeVirtio && cr.Spec.EswitchMode != sriovnetworkv1.ESwithModeSwitchDev {
-		return false, fmt.Errorf("virtio/vdpa requires the device to be configured in switchdev mode")
+	if (cr.Spec.VdpaType == constants.VdpaTypeVirtio || cr.Spec.VdpaType == constants.VdpaTypeVhost) && cr.Spec.EswitchMode != sriovnetworkv1.ESwithModeSwitchDev {
+		return false, fmt.Errorf("vdpa requires the device to be configured in switchdev mode")
 	}
 	return true, nil
 }
@@ -286,8 +286,8 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs)
 			}
 			// vdpa: only mellanox cards are supported
-			if policy.Spec.VdpaType == constants.VdpaTypeVirtio && iface.Vendor != MellanoxID {
-				return fmt.Errorf("vendor(%s) in CR %s not supported for virtio-vdpa", iface.Vendor, policy.GetName())
+			if (policy.Spec.VdpaType == constants.VdpaTypeVirtio || policy.Spec.VdpaType == constants.VdpaTypeVhost) && iface.Vendor != MellanoxID {
+				return fmt.Errorf("vendor(%s) in CR %s not supported for vdpa", iface.Vendor, policy.GetName())
 			}
 		}
 	}
