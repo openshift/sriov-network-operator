@@ -31,9 +31,6 @@ SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
 # Current Operator version
 VERSION ?= 4.14.0
-# Default bundle image tag
-BUNDLE_IMG ?= controller-bundle:$(VERSION)
-# Options for 'bundle-build'
 ifneq ($(origin CHANNELS), undefined)
 BUNDLE_CHANNELS := --channels=$(CHANNELS)
 endif
@@ -176,23 +173,6 @@ skopeo:
 
 fakechroot:
 	if ! which fakechroot; then if [ -f /etc/redhat-release ]; then dnf -y install fakechroot; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install fakechroot; fi; fi
-
-# Generate bundle manifests and metadata, then validate generated files.
-.PHONY: bundle
-bundle: manifests
-	rm -f bundle/manifests/*
-	MANIFEST_YAML=$$(ls manifests/stable/*.yaml | grep -v supported-nic-ids_v1_configmap.yaml) ; \
-	rm -f $$MANIFEST_YAML
-	operator-sdk generate kustomize manifests --interactive=false -q
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) --extra-service-accounts sriov-network-config-daemon
-	operator-sdk bundle validate ./bundle
-	BUNDLE_MANIFEST_YAML=$$(ls bundle/manifests/* | grep -v supported-nic-ids_v1_configmap.yaml); \
-	cp $$BUNDLE_MANIFEST_YAML manifests/stable
-# Build the bundle image.
-.PHONY: bundle-build
-bundle-build:
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 deploy-setup: export ENABLE_ADMISSION_CONTROLLER?=true
 deploy-setup: skopeo install
