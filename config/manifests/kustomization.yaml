@@ -1,0 +1,2 @@
+resources:
+-  config/manifests/bases/sriov-network-operator.clusterserviceversion.yaml
