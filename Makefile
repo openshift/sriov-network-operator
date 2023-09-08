@@ -29,8 +29,6 @@ PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
-# Current Operator version
-VERSION ?= 4.14.0
 ifneq ($(origin CHANNELS), undefined)
 BUNDLE_CHANNELS := --channels=$(CHANNELS)
 endif
@@ -49,12 +47,6 @@ GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
 # we keep it fixed to avoid it from unexpectedly failing on the project
 # in case of a version bump
 GOLANGCI_LINT_VER = v1.51.0
-
-GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
-# golangci-lint version should be updated periodically
-# we keep it fixed to avoid it from unexpectedly failing on the project
-# in case of a version bump
-GOLANGCI_LINT_VER = v1.46.1
 
 
 .PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests update-codegen
