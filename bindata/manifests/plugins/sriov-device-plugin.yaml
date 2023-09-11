@@ -60,7 +60,10 @@ spec:
             memory: 50Mi
         volumeMounts:
         - name: devicesock
-          mountPath: /var/lib/kubelet/
+          mountPath: /var/lib/kubelet/device-plugins
+          readOnly: false
+        - name: plugins-registry
+          mountPath: /var/lib/kubelet/plugins_registry
           readOnly: false
         - name: config-volume
           mountPath: /etc/pcidp/
@@ -70,7 +73,10 @@ spec:
       volumes:
         - name: devicesock
           hostPath:
-            path: /var/lib/kubelet/
+            path: /var/lib/kubelet/device-plugins
+        - name: plugins-registry
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
         - name: config-volume
           configMap: 
             name: device-plugin-config
