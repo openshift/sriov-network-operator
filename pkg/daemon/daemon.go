@@ -217,6 +217,8 @@ func (dn *Daemon) tryCreateUdevRuleWrapper() error {
 
 // Run the config daemon
 func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
+	glog.V(0).Infof("Run(): node: %s", dn.name)
+
 	if utils.ClusterType == utils.ClusterTypeOpenshift {
 		glog.V(0).Infof("Run(): start daemon. openshiftFlavor: %s", dn.openshiftContext.OpenshiftFlavor)
 	} else {
@@ -400,16 +402,31 @@ func (dn *Daemon) nodeUpdateHandler(old, new interface{}) {
 		return
 	}
 	dn.node = node.DeepCopy()
+
 	nodes, err := dn.nodeLister.List(labels.Everything())
 	if err != nil {
+		glog.Errorf("nodeUpdateHandler(): failed to list nodes: %v", err)
 		return
 	}
-	for _, node := range nodes {
-		if node.GetName() != dn.name && (node.Annotations[annoKey] == annoDraining || node.Annotations[annoKey] == annoMcpPaused) {
+
+	// Checking if other nodes are draining
+	for _, otherNode := range nodes {
+		if otherNode.GetName() == dn.name {
+			continue
+		}
+
+		drainingAnnotationValue := otherNode.Annotations[annoKey]
+		if drainingAnnotationValue == annoDraining || drainingAnnotationValue == annoMcpPaused {
+			glog.V(2).Infof("nodeUpdateHandler(): node is not drainable as [%s] has [%s == %s] ", otherNode.Name, annoKey, drainingAnnotationValue)
 			dn.drainable = false
 			return
 		}
 	}
+
+	if !dn.drainable {
+		glog.V(2).Infof("nodeUpdateHandler(): node is now drainable")
+	}
+
 	dn.drainable = true
 }
 
