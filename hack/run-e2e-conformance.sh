@@ -18,4 +18,4 @@ GOPATH="${GOPATH:-~/go}"
 JUNIT_OUTPUT="${JUNIT_OUTPUT:-/tmp/artifacts}"
 export PATH=$PATH:$GOPATH/bin
 
-GOFLAGS=-mod=vendor ginkgo -output-dir=$JUNIT_OUTPUT --junit-report "unit_report.xml" "$SUITE"
+GOFLAGS=-mod=vendor ginkgo -output-dir=$JUNIT_OUTPUT --junit-report "unit_report.xml" "$SUITE" -- -report=$JUNIT_OUTPUT
