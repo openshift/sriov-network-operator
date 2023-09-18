@@ -262,7 +262,7 @@ func validatePolicyForNodeStateAndPolicy(nsList *sriovnetworkv1.SriovNetworkNode
 	for _, ns := range nsList.Items {
 		if ns.GetName() == node.GetName() {
 			if err := validatePolicyForNodeState(cr, &ns, node); err != nil {
-				return err
+				return fmt.Errorf("%s node(%s)", err.Error(), node.Name)
 			}
 		}
 	}
@@ -278,7 +278,6 @@ func validatePolicyForNodeStateAndPolicy(nsList *sriovnetworkv1.SriovNetworkNode
 }
 
 func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) error {
-	glog.V(2).Infof("validatePolicyForNodeState(): validate policy %s for node %s.", policy.GetName(), state.GetName())
 	for _, iface := range state.Status.Interfaces {
 		err := validateNicModel(&policy.Spec.NicSelector, &iface, node)
 		if err == nil {
@@ -287,10 +286,10 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 				return fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
 			}
 			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID {
-				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), iface.TotalVfs)
+				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d) interface(%s)", policy.Spec.NumVfs, policy.GetName(), iface.TotalVfs, iface.Name)
 			}
 			if policy.Spec.NumVfs > MlxMaxVFs && iface.Vendor == MellanoxID {
-				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs)
+				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d) interface(%s)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs, iface.Name)
 			}
 
 			// Externally create validations
@@ -309,7 +308,7 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 			}
 			// vdpa: only mellanox cards are supported
 			if (policy.Spec.VdpaType == constants.VdpaTypeVirtio || policy.Spec.VdpaType == constants.VdpaTypeVhost) && iface.Vendor != MellanoxID {
-				return fmt.Errorf("vendor(%s) in CR %s not supported for vdpa", iface.Vendor, policy.GetName())
+				return fmt.Errorf("vendor(%s) in CR %s not supported for vdpa interface(%s)", iface.Vendor, policy.GetName(), iface.Name)
 			}
 		}
 	}

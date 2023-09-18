@@ -285,7 +285,7 @@ func TestValidatePolicyForNodeStateWithInvalidNumVfsPolicy(t *testing.T) {
 	}
 	g := NewGomegaWithT(t)
 	err := validatePolicyForNodeState(policy, state, NewNode())
-	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), state.Status.Interfaces[0].TotalVfs))))
+	g.Expect(err).To(MatchError("numVfs(65) in CR p1 exceed the maximum allowed value(64) interface(ens803f0)"))
 }
 
 func TestValidatePolicyForNodeStateWithInvalidNumVfsExternallyCreated(t *testing.T) {
@@ -997,7 +997,7 @@ func TestValidatePolicyForNodeStateVirtioVdpaWithNotSupportedVendor(t *testing.T
 	}
 	g := NewGomegaWithT(t)
 	err := validatePolicyForNodeState(policy, state, NewNode())
-	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("vendor(%s) in CR %s not supported for vdpa", state.Status.Interfaces[0].Vendor, policy.Name))))
+	g.Expect(err).To(MatchError("vendor(8086) in CR p1 not supported for vdpa interface(ens803f0)"))
 }
 
 func TestValidatePolicyForNodeStateVhostVdpaWithNotSupportedVendor(t *testing.T) {
@@ -1024,7 +1024,7 @@ func TestValidatePolicyForNodeStateVhostVdpaWithNotSupportedVendor(t *testing.T)
 	}
 	g := NewGomegaWithT(t)
 	err := validatePolicyForNodeState(policy, state, NewNode())
-	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("vendor(%s) in CR %s not supported for vdpa", state.Status.Interfaces[0].Vendor, policy.Name))))
+	g.Expect(err).To(MatchError("vendor(8086) in CR p1 not supported for vdpa interface(ens803f0)"))
 }
 
 func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
