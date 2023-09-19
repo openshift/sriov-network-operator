@@ -21,11 +21,16 @@ func New(reportPath string) (*kniK8sReporter.KubernetesReporter, error) {
 		return nil
 	}
 
+	operatorNamespace := os.Getenv("OPERATOR_NAMESPACE")
+	if operatorNamespace == "" {
+		operatorNamespace = "openshift-sriov-network-operator"
+	}
+
 	dumpNamespace := func(ns string) bool {
 		switch {
 		case ns == namespaces.Test:
 			return true
-		case ns == "openshift-sriov-network-operator":
+		case ns == operatorNamespace:
 			return true
 		case strings.HasPrefix(ns, "sriov-"):
 			return true
