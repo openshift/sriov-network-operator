@@ -4,6 +4,7 @@ run:
 linters:
   disable-all: true
   enable:
+    - deadcode
     - dupl
     - errcheck
     - gofmt
@@ -14,7 +15,9 @@ linters:
     - ineffassign
     - misspell
     - nakedret
+    - structcheck
     - unused
+    - varcheck
 
 linters-settings:
   gofmt:
