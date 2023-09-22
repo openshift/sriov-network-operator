@@ -48,7 +48,7 @@ spec:
   linkType: eth
 ```
 
-### Create NetworkAttachementDefinition CRD with OVS CNI config
+### Create NetworkAttachmentDefinition CRD with OVS CNI config
 
 ```yaml
 apiVersion: "k8s.cni.cncf.io/v1"
