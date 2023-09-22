@@ -529,6 +529,10 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
 	}
 
+	// logLevel and logFile are currently not supports by the ip-sriov-cni -> hardcode them to false.
+	data.Data["LogLevelConfigured"] = false
+	data.Data["LogFileConfigured"] = false
+
 	objs, err := render.RenderDir(ManifestsPath, &data)
 	if err != nil {
 		return nil, err
@@ -658,6 +662,11 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["MetaPluginsConfigured"] = true
 		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
 	}
+
+	data.Data["LogLevelConfigured"] = (cr.Spec.LogLevel != "")
+	data.Data["LogLevel"] = cr.Spec.LogLevel
+	data.Data["LogFileConfigured"] = (cr.Spec.LogFile != "")
+	data.Data["LogFile"] = cr.Spec.LogFile
 
 	objs, err := render.RenderDir(ManifestsPath, &data)
 	if err != nil {
