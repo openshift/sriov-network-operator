@@ -483,8 +483,8 @@ func (s *SriovNetworkNodeState) GetDriverByPciAddress(addr string) string {
 
 // RenderNetAttDef renders a net-att-def for ib-sriov CNI
 func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
-	logger := log.WithName("renderNetAttDef")
-	logger.Info("Start to render IB SRIOV CNI NetworkAttachementDefinition")
+	logger := log.WithName("RenderNetAttDef")
+	logger.Info("Start to render IB SRIOV CNI NetworkAttachmentDefinition")
 
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
@@ -535,7 +535,7 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	}
 	for _, obj := range objs {
 		raw, _ := json.Marshal(obj)
-		logger.Info("render NetworkAttachementDefinition output", "raw", string(raw))
+		logger.Info("render NetworkAttachmentDefinition output", "raw", string(raw))
 	}
 	return objs[0], nil
 }
@@ -564,8 +564,8 @@ func (cr *SriovIBNetwork) DeleteNetAttDef(c client.Client) error {
 
 // RenderNetAttDef renders a net-att-def for sriov CNI
 func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
-	logger := log.WithName("renderNetAttDef")
-	logger.Info("Start to render SRIOV CNI NetworkAttachementDefinition")
+	logger := log.WithName("RenderNetAttDef")
+	logger.Info("Start to render SRIOV CNI NetworkAttachmentDefinition")
 
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
@@ -665,7 +665,7 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	}
 	for _, obj := range objs {
 		raw, _ := json.Marshal(obj)
-		logger.Info("render NetworkAttachementDefinition output", "raw", string(raw))
+		logger.Info("render NetworkAttachmentDefinition output", "raw", string(raw))
 	}
 	return objs[0], nil
 }
