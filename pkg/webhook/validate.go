@@ -303,7 +303,7 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 				}
 
 				if policy.Spec.LinkType != "" && strings.ToLower(policy.Spec.LinkType) != strings.ToLower(iface.LinkType) {
-					return fmt.Errorf("LinkType(%d) in CR %s is not equal to the LinkType for the PF externally value(%d)", policy.Spec.Mtu, policy.GetName(), iface.Mtu)
+					return fmt.Errorf("LinkType(%s) in CR %s is not equal to the LinkType for the PF externally value(%s)", policy.Spec.LinkType, policy.GetName(), iface.LinkType)
 				}
 			}
 			// vdpa: only mellanox cards are supported

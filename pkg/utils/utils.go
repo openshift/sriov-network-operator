@@ -51,6 +51,7 @@ const (
 	udevFolder      = "/etc/udev"
 	udevRulesFolder = udevFolder + "/rules.d"
 	udevDisableNM   = "/bindata/scripts/udev-find-sriov-pf.sh"
+	nmUdevRule      = "SUBSYSTEM==\"net\", ACTION==\"add|change|move\", ATTRS{device}==\"%s\", IMPORT{program}=\"/etc/udev/disable-nm-sriov.sh $env{INTERFACE} %s\""
 )
 
 var InitialState sriovnetworkv1.SriovNetworkNodeState
@@ -141,10 +142,10 @@ func DiscoverSriovDevices(withUnsupported bool, storeManager StoreManagerInterfa
 		pfStatus, exist, err := storeManager.LoadPfsStatus(iface.PciAddress)
 		if err != nil {
 			glog.Warningf("DiscoverSriovDevices(): failed to load PF status from disk: %v", err)
-		}
-
-		if exist {
-			iface.ExternallyManaged = pfStatus.ExternallyManaged
+		} else {
+			if exist {
+				iface.ExternallyManaged = pfStatus.ExternallyManaged
+			}
 		}
 
 		if dputils.IsSriovPF(device.Address) {
@@ -202,7 +203,7 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 					glog.V(2).Infof("syncNodeState(): no need update interface %s", iface.PciAddress)
 
 					// Save the PF status to the host
-					err = storeManager.SaveLastPfAppliedStatus(iface.PciAddress, &iface)
+					err = storeManager.SaveLastPfAppliedStatus(&iface)
 					if err != nil {
 						glog.Errorf("SyncNodeState(): failed to save PF applied config to host: %v", err)
 						return err
@@ -223,7 +224,7 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 				}
 
 				// Save the PF status to the host
-				err = storeManager.SaveLastPfAppliedStatus(iface.PciAddress, &iface)
+				err = storeManager.SaveLastPfAppliedStatus(&iface)
 				if err != nil {
 					glog.Errorf("SyncNodeState(): failed to save PF applied config to host: %v", err)
 					return err
@@ -952,9 +953,10 @@ func PrepareNMUdevRule(supportedVfIds []string) error {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
+		glog.Errorf("PrepareNMUdevRule(): failed to prepare nmUdevRule, stderr %s: %v", stderr.String(), err)
 		return err
 	}
-	glog.V(2).Infof("PrepareNMUdevRule(): %v", cmd.Stdout)
+	glog.V(2).Infof("PrepareNMUdevRule(): %v", stdout.String())
 
 	//save the device list to use for udev rules
 	SupportedVfIds = supportedVfIds
@@ -964,7 +966,7 @@ func PrepareNMUdevRule(supportedVfIds []string) error {
 func AddUdevRule(pfPciAddress string) error {
 	glog.V(2).Infof("AddUdevRule(): %s", pfPciAddress)
 	pathFile := udevRulesFolder
-	udevRuleContent := fmt.Sprintf("SUBSYSTEM==\"net\", ACTION==\"add|change|move\", ATTRS{device}==\"%s\", IMPORT{program}=\"/etc/udev/disable-nm-sriov.sh $env{INTERFACE} %s\"", strings.Join(SupportedVfIds, "|"), pfPciAddress)
+	udevRuleContent := fmt.Sprintf(nmUdevRule, strings.Join(SupportedVfIds, "|"), pfPciAddress)
 
 	err := os.MkdirAll(pathFile, os.ModePerm)
 	if err != nil && !os.IsExist(err) {
