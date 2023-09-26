@@ -22,7 +22,7 @@ const (
 //go:generate ../../bin/mockgen -destination mock/mock_store.go -source store.go
 type StoreManagerInterface interface {
 	ClearPCIAddressFolder() error
-	SaveLastPfAppliedStatus(pciAddress string, PfInfo *sriovnetworkv1.Interface) error
+	SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error
 	LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interface, bool, error)
 }
 
@@ -82,7 +82,7 @@ func (s *StoreManager) ClearPCIAddressFolder() error {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return fmt.Errorf("failed to check the pci address folder path %s", PfAppliedConfigUse)
+		return fmt.Errorf("failed to check the pci address folder path %s: %v", PfAppliedConfigUse, err)
 	}
 
 	err = os.RemoveAll(PfAppliedConfigUse)
@@ -100,7 +100,7 @@ func (s *StoreManager) ClearPCIAddressFolder() error {
 
 // SaveLastPfAppliedStatus will save the PF object as a json into the /etc/sriov-operator/pci/<pci-address>
 // this function must be called after running the chroot function
-func (s *StoreManager) SaveLastPfAppliedStatus(pciAddress string, PfInfo *sriovnetworkv1.Interface) error {
+func (s *StoreManager) SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error {
 	data, err := json.Marshal(PfInfo)
 	if err != nil {
 		glog.Errorf("failed to marshal PF status %+v: %v", *PfInfo, err)
@@ -108,7 +108,7 @@ func (s *StoreManager) SaveLastPfAppliedStatus(pciAddress string, PfInfo *sriovn
 	}
 
 	hostExtension := getHostExtension(s.RunOnHost)
-	pathFile := filepath.Join(hostExtension, PfAppliedConfig, pciAddress)
+	pathFile := filepath.Join(hostExtension, PfAppliedConfig, PfInfo.PciAddress)
 	err = os.WriteFile(pathFile, data, 0644)
 	return err
 }
