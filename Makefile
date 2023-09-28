@@ -181,6 +181,18 @@ deploy-setup-k8s: deploy-setup
 test-e2e-conformance:
 	SUITE=./test/conformance ./hack/run-e2e-conformance.sh
 
+test-e2e-conformance-virtual-k8s-cluster-ci:
+	./hack/run-e2e-conformance-virtual-cluster.sh
+
+test-e2e-conformance-virtual-k8s-cluster:
+	SKIP_DELETE=TRUE ./hack/run-e2e-conformance-virtual-cluster.sh
+
+test-e2e-conformance-virtual-ocp-cluster-ci:
+	./hack/run-e2e-conformance-virtual-ocp.sh
+
+test-e2e-conformance-virtual-ocp-cluster:
+	SKIP_DELETE=TRUE ./hack/run-e2e-conformance-virtual-ocp.sh
+
 test-e2e-validation-only:
 	SUITE=./test/validation ./hack/run-e2e-conformance.sh	
 
