@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/k8snetworkplumbingwg/sriov-network-operator
 COPY . .
 RUN make _build-manager BIN_PATH=build/_output/cmd
 
-FROM registry.ci.openshift.org/ocp/4.15:base
+FROM registry.ci.openshift.org/ocp/4.15:base-rhel9
 LABEL io.k8s.display-name="OpenShift sriov-network-operator" \
       io.k8s.description="This is the component that manange and config sriov component in Openshift cluster" \
       io.openshift.tags="openshift,networking,sr-iov" \

@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/k8snetworkplumbingwg/sriov-network-operator
 COPY . .
 RUN make _build-sriov-network-config-daemon BIN_PATH=build/_output/cmd
 
-FROM registry.ci.openshift.org/ocp/4.15:base
+FROM registry.ci.openshift.org/ocp/4.15:base-rhel9
 RUN yum -y update && ARCH_DEP_PKGS=$(if [ "$(uname -m)" != "s390x" ]; then echo -n mstflint ; fi) && yum -y install pciutils hwdata $ARCH_DEP_PKGS && yum clean all
 LABEL io.k8s.display-name="OpenShift sriov-network-config-daemon" \
       io.k8s.description="This is a daemon that manage and config sriov network devices in Openshift cluster" \
