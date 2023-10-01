@@ -210,6 +210,13 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	if (cr.Spec.VdpaType == constants.VdpaTypeVirtio || cr.Spec.VdpaType == constants.VdpaTypeVhost) && cr.Spec.EswitchMode != sriovnetworkv1.ESwithModeSwitchDev {
 		return false, fmt.Errorf("vdpa requires the device to be configured in switchdev mode")
 	}
+
+	// Externally created: we don't support  ExternallyManaged + EswitchMode
+	//TODO: if needed we will need to add this in the future as today EswitchMode is for HWOFFLOAD
+	if cr.Spec.ExternallyManaged && cr.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
+		return false, fmt.Errorf("ExternallyManaged doesn't support the device to be configured in switchdev mode")
+	}
+
 	return true, nil
 }
 
@@ -285,6 +292,21 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 			if policy.Spec.NumVfs > MlxMaxVFs && iface.Vendor == MellanoxID {
 				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs)
 			}
+
+			// Externally create validations
+			if policy.Spec.ExternallyManaged {
+				if policy.Spec.NumVfs > iface.NumVfs {
+					return fmt.Errorf("numVfs(%d) in CR %s is higher than the virtual functions allocated for the PF externally value(%d)", policy.Spec.NumVfs, policy.GetName(), iface.NumVfs)
+				}
+
+				if policy.Spec.Mtu != 0 && policy.Spec.Mtu > iface.Mtu {
+					return fmt.Errorf("MTU(%d) in CR %s is higher than the MTU for the PF externally value(%d)", policy.Spec.Mtu, policy.GetName(), iface.Mtu)
+				}
+
+				if policy.Spec.LinkType != "" && strings.ToLower(policy.Spec.LinkType) != strings.ToLower(iface.LinkType) {
+					return fmt.Errorf("LinkType(%s) in CR %s is not equal to the LinkType for the PF externally value(%s)", policy.Spec.LinkType, policy.GetName(), iface.LinkType)
+				}
+			}
 			// vdpa: only mellanox cards are supported
 			if (policy.Spec.VdpaType == constants.VdpaTypeVirtio || policy.Spec.VdpaType == constants.VdpaTypeVhost) && iface.Vendor != MellanoxID {
 				return fmt.Errorf("vendor(%s) in CR %s not supported for vdpa", iface.Vendor, policy.GetName())
@@ -326,6 +348,22 @@ func validatePfNames(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *s
 			// since it should already be evaluated in previous run.
 			preName, preRngSt, preRngEnd, _ := sriovnetworkv1.ParsePFName(prePf)
 			if curName == preName {
+				// reject policy with externallyManage if there is a policy on the same PF without it
+				if current.Spec.ExternallyManaged != previous.Spec.ExternallyManaged {
+					return fmt.Errorf("externallyManage is inconsistent with existing policy %s", previous.GetName())
+				}
+
+				// reject policy with externallyManage if there is a policy on the same PF with switch dev
+				if current.Spec.ExternallyManaged && previous.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
+					return fmt.Errorf("externallyManage overlap with switchdev mode in existing policy %s", previous.GetName())
+				}
+
+				// reject policy with externallyManage if there is a policy on the same PF with switch dev
+				if previous.Spec.ExternallyManaged && current.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
+					return fmt.Errorf("switchdev overlap with externallyManage mode in existing policy %s", previous.GetName())
+				}
+
+				// Check for overlapping ranges
 				if curRngEnd < preRngSt || curRngSt > preRngEnd {
 					return nil
 				} else {

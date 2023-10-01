@@ -95,6 +95,11 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 
 	glog.V(2).Infof("sriov-config-service read config: %v", nodeStateSpec)
 
+	storeManager, err := utils.NewStoreManager(true)
+	if err != nil {
+		glog.Errorf("failed to create store manager: %v", err)
+		return err
+	}
 	// Load kernel modules
 	hostManager := host.NewHostManager(true)
 	_, err = hostManager.TryEnableRdma()
@@ -108,14 +113,14 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 	var ifaceStatuses []sriovv1.InterfaceExt
 	if nodeStateSpec.PlatformType == utils.Baremetal {
 		// Bare metal support
-		ifaceStatuses, err = utils.DiscoverSriovDevices(nodeStateSpec.UnsupportedNics)
+		ifaceStatuses, err = utils.DiscoverSriovDevices(nodeStateSpec.UnsupportedNics, storeManager)
 		if err != nil {
 			glog.Errorf("sriov-config-service: failed to discover sriov devices on the host: %v", err)
 			return fmt.Errorf("sriov-config-service: failed to discover sriov devices on the host:  %v", err)
 		}
 
 		// Create the generic plugin
-		configPlugin, err = generic.NewGenericPlugin(true)
+		configPlugin, err = generic.NewGenericPlugin(true, hostManager, storeManager)
 		if err != nil {
 			glog.Errorf("sriov-config-service: failed to create generic plugin %v", err)
 			return fmt.Errorf("sriov-config-service failed to create generic plugin %v", err)
