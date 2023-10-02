@@ -1,6 +1,10 @@
-name: Go
+name: Test SR-IOV Operator
 
 on: [push, pull_request]
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
 
@@ -88,3 +92,56 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         path-to-lcov: lcov.out
+
+  virtual-k8s-cluster:
+    name: k8s
+    needs: [
+      build,
+      test,
+      golangci,
+    ]
+    runs-on: [ sriov ]
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Set up Go 1.20
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.20.x
+
+      - name: run test
+        run: make test-e2e-conformance-virtual-k8s-cluster-ci
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: k8s-artifact
+          path: ./k8s-artifacts
+
+  virtual-ocp:
+    name: ocp
+    needs: [
+      build,
+      test,
+      golangci,
+    ]
+
+    runs-on: [ ocp ]
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Set up Go 1.20
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.20.x
+
+      - name: run test
+        run: make test-e2e-conformance-virtual-ocp-cluster-ci
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: ocp-artifact
+          path: ./ocp-artifacts

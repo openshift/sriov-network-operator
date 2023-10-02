@@ -235,6 +235,5 @@ hack/deploy-wait.sh
 
 if [ -z $SKIP_TEST ]; then
   echo "## run sriov e2e conformance tests"
-  SUITE=./test/conformance JUNIT_OUTPUT=`pwd`/artifacts hack/run-e2e-conformance.sh
-  tar -zcvf artifacts.tar.gz `pwd`/artifacts
+  SUITE=./test/conformance JUNIT_OUTPUT=`pwd`/ocp-artifacts hack/run-e2e-conformance.sh
 fi
