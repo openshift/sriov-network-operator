@@ -70,6 +70,8 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Marvell OCTEON Fusion CNF95XX | V | V | X |
 | Marvell OCTEON 10 CN10XXX | V | V | X |
 | Marvell OCTEON Fusion CNF105XX | V | V | X |
+| Red_Hat_Virtio_network_device | X | V | X |
+| Red_Hat_Virtio_1_0_network_device | X | V | X |
 
 # Adding new Hardware
 
