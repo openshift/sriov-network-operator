@@ -35,6 +35,8 @@ var _ = Describe("SriovNetwork Controller", func() {
 				ResourceName: "resource_1",
 				IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
 				Vlan:         100,
+				VlanQoS:      5,
+				VlanProto:    "802.1ad",
 			},
 			"test-1": {
 				ResourceName:     "resource_1",
@@ -89,7 +91,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 				err = util.WaitForNamespacedObjectDeleted(netAttDef, k8sClient, ns, cr.GetName(), util.RetryInterval, util.Timeout)
 				Expect(err).NotTo(HaveOccurred())
 			},
-			Entry("with vlan flag", sriovnets["test-0"]),
+			Entry("with vlan, vlanQoS and vlanProto flag", sriovnets["test-0"]),
 			Entry("with networkNamespace flag", sriovnets["test-1"]),
 			Entry("with SpoofChk flag on", sriovnets["test-2"]),
 			Entry("with Trust flag on", sriovnets["test-3"]),
@@ -100,6 +102,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 				ResourceName: "resource_1",
 				IPAM:         `{"type":"dhcp"}`,
 				Vlan:         200,
+				VlanProto:    "802.1q",
 			},
 			"new-1": {
 				ResourceName: "resource_1",
@@ -163,7 +166,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 				Expect(anno["k8s.v1.cni.cncf.io/resourceName"]).To(Equal("openshift.io/" + new.Spec.ResourceName))
 				Expect(strings.TrimSpace(netAttDef.Spec.Config)).To(Equal(expect))
 			},
-			Entry("with vlan flag and ipam updated", sriovnets["test-4"], newsriovnets["new-0"]),
+			Entry("with vlan and proto flag and ipam updated", sriovnets["test-4"], newsriovnets["new-0"]),
 			Entry("with networkNamespace flag", sriovnets["test-4"], newsriovnets["new-1"]),
 			Entry("with SpoofChk flag on", sriovnets["test-4"], newsriovnets["new-2"]),
 			Entry("with Trust flag on", sriovnets["test-4"], newsriovnets["new-3"]),
@@ -270,6 +273,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 func generateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 	spoofchk := ""
 	trust := ""
+	vlanProto := ""
 	ipam := emptyCurls
 
 	if cr.Spec.Trust == sriovnetworkv1.SriovCniStateOn {
@@ -291,7 +295,12 @@ func generateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 	}
 	vlanQoS := cr.Spec.VlanQoS
 
-	configStr, err := formatJSON(fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s","type":"sriov","vlan":%d,%s%s%s"vlanQoS":%d,"ipam":%s }`, cr.GetName(), cr.Spec.Vlan, spoofchk, trust, state, vlanQoS, ipam))
+	if cr.Spec.VlanProto != "" {
+		vlanProto = fmt.Sprintf(`"vlanProto": "%s",`, cr.Spec.VlanProto)
+	}
+
+	configStr, err := formatJSON(fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s","type":"sriov","vlan":%d,%s%s"vlanQoS":%d,%s%s"ipam":%s }`,
+		cr.GetName(), cr.Spec.Vlan, spoofchk, trust, vlanQoS, vlanProto, state, ipam))
 	if err != nil {
 		panic(err)
 	}
