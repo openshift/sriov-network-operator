@@ -586,6 +586,12 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["VlanQoSConfigured"] = false
 	}
 
+	data.Data["VlanProtoConfigured"] = false
+	if cr.Spec.VlanProto != "" {
+		data.Data["VlanProtoConfigured"] = true
+		data.Data["SriovCniVlanProto"] = cr.Spec.VlanProto
+	}
+
 	if cr.Spec.Capabilities == "" {
 		data.Data["CapabilitiesConfigured"] = false
 	} else {
