@@ -126,23 +126,37 @@ cat << EOF > /etc/containers/registries.conf.d/003-${cluster_name}.conf
 $insecure_registry
 EOF
 
-kcli ssh $cluster_name-ctlplane-0 << EOF
+function update_host() {
+    node_name=$1
+    kcli ssh $node_name << EOF
 sudo su
 echo '$insecure_registry' > /etc/containers/registries.conf.d/003-internal.conf
 systemctl restart crio
+
+echo '[connection]
+id=multi
+type=ethernet
+[ethernet]
+[match]
+driver=igbvf;
+[ipv4]
+method=disabled
+[ipv6]
+addr-gen-mode=default
+method=disabled
+[proxy]' > /etc/NetworkManager/system-connections/multi.nmconnection
+
+chmod 600 /etc/NetworkManager/system-connections/multi.nmconnection
+systemctl restart NetworkManager
+
 EOF
 
-kcli ssh $cluster_name-worker-0 << EOF
-sudo su
-echo '$insecure_registry' > /etc/containers/registries.conf.d/003-internal.conf
-systemctl restart crio
-EOF
+}
 
-kcli ssh $cluster_name-worker-1 << EOF
-sudo su
-echo '$insecure_registry' > /etc/containers/registries.conf.d/003-internal.conf
-systemctl restart crio
-EOF
+update_host $cluster_name-ctlplane-0
+update_host $cluster_name-worker-0
+update_host $cluster_name-worker-1
+
 
 kubectl create namespace container-registry
 
@@ -347,6 +361,5 @@ hack/deploy-wait.sh
 
 if [ -z $SKIP_TEST ]; then
   echo "## run sriov e2e conformance tests"
-  SUITE=./test/conformance JUNIT_OUTPUT=`pwd`/artifacts hack/run-e2e-conformance.sh
-  tar -zcvf artifacts.tar.gz ./artifacts
+  SUITE=./test/conformance JUNIT_OUTPUT=`pwd`/k8s-artifacts hack/run-e2e-conformance.sh
 fi
