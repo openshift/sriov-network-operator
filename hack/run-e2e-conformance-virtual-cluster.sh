@@ -19,6 +19,8 @@ if [ "$NUM_OF_WORKERS" -lt 2 ]; then
     exit 1
 fi
 
+source $here/run-e2e-conformance-common
+
 check_requirements() {
   for cmd in kcli virsh virt-edit podman make go; do
     if ! command -v "$cmd" &> /dev/null; then
@@ -293,6 +295,23 @@ podman push --tls-verify=false "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
 podman rmi -fi ${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}
 podman push --tls-verify=false "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
 podman rmi -fi ${SRIOV_NETWORK_WEBHOOK_IMAGE}
+
+
+if [[ -v LOCAL_SRIOV_CNI_IMAGE ]]; then
+  export SRIOV_CNI_IMAGE="$controller_ip:5000/sriov-cni:latest"
+  podman_tag_and_push ${LOCAL_SRIOV_CNI_IMAGE} ${SRIOV_CNI_IMAGE}
+fi
+
+if [[ -v LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE ]]; then
+  export SRIOV_DEVICE_PLUGIN_IMAGE="$controller_ip:5000/sriov-network-device-plugin:latest"
+  podman_tag_and_push ${LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE} ${SRIOV_DEVICE_PLUGIN_IMAGE}
+fi
+
+if [[ -v LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE ]]; then
+  export NETWORK_RESOURCES_INJECTOR_IMAGE="$controller_ip:5000/network-resources-injector:latest"
+  podman_tag_and_push ${LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE} ${NETWORK_RESOURCES_INJECTOR_IMAGE}
+fi
+
 
 # remove the crio bridge and let flannel to recreate
 kcli ssh $cluster_name-ctlplane-0 << EOF
