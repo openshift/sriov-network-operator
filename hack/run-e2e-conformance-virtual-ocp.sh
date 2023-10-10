@@ -21,6 +21,8 @@ fi
 here="$(dirname "$(readlink --canonicalize "${BASH_SOURCE[0]}")")"
 root="$(readlink --canonicalize "$here/..")"
 
+source $here/run-e2e-conformance-common
+
 check_requirements() {
   for cmd in kcli virsh podman make go jq base64 tar; do
     if ! command -v "$cmd" &> /dev/null; then
@@ -262,6 +264,21 @@ EOF
 export SRIOV_NETWORK_OPERATOR_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-operator:latest"
 export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-config-daemon:latest"
 export SRIOV_NETWORK_WEBHOOK_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-operator-webhook:latest"
+
+if [[ -v LOCAL_SRIOV_CNI_IMAGE ]]; then
+  podman_tag_and_push ${LOCAL_SRIOV_CNI_IMAGE} "$registry/$NAMESPACE/sriov-cni:latest"
+  export SRIOV_CNI_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-cni:latest"
+fi
+
+if [[ -v LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE ]]; then
+  podman_tag_and_push ${LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE} "$registry/$NAMESPACE/sriov-network-device-plugin:latest"
+  export SRIOV_DEVICE_PLUGIN_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-device-plugin:latest"
+fi
+
+if [[ -v LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE ]]; then
+  podman_tag_and_push ${LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE} "$registry/$NAMESPACE/network-resources-injector:latest"
+  export NETWORK_RESOURCES_INJECTOR_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/network-resources-injector:latest"
+fi
 
 echo "## deploying SRIOV Network Operator"
 hack/deploy-setup.sh $NAMESPACE
