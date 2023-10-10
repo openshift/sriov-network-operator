@@ -112,6 +112,8 @@ type Daemon struct {
 	storeManager utils.StoreManagerInterface
 
 	hostManager host.HostManagerInterface
+
+	eventRecorder *EventRecorder
 }
 
 const (
@@ -149,6 +151,7 @@ func New(
 	refreshCh chan<- Message,
 	platformType utils.PlatformType,
 	useSystemdService bool,
+	er *EventRecorder,
 	devMode bool,
 ) *Daemon {
 	return &Daemon{
@@ -186,6 +189,7 @@ func New(
 		workqueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(updateDelay), 1)},
 			workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, maxUpdateBackoff)), "SriovNetworkNodeState"),
+		eventRecorder: er,
 	}
 }
 
@@ -656,6 +660,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 
 	if reqReboot {
 		glog.Info("nodeStateSyncHandler(): reboot node")
+		dn.eventRecorder.SendEvent("RebootNode", "Reboot node has been initiated")
 		rebootNode()
 		return nil
 	}
@@ -1030,6 +1035,7 @@ func (dn *Daemon) drainNode() error {
 	var lastErr error
 
 	glog.Info("drainNode(): Start draining")
+	dn.eventRecorder.SendEvent("DrainNode", "Drain node has been initiated")
 	if err = wait.ExponentialBackoff(backoff, func() (bool, error) {
 		err := drain.RunCordonOrUncordon(dn.drainer, dn.node, true)
 		if err != nil {
@@ -1048,9 +1054,11 @@ func (dn *Daemon) drainNode() error {
 		if err == wait.ErrWaitTimeout {
 			glog.Errorf("drainNode(): failed to drain node (%d tries): %v :%v", backoff.Steps, err, lastErr)
 		}
+		dn.eventRecorder.SendEvent("DrainNode", "Drain node failed")
 		glog.Errorf("drainNode(): failed to drain node: %v", err)
 		return err
 	}
+	dn.eventRecorder.SendEvent("DrainNode", "Drain node completed")
 	glog.Info("drainNode(): drain complete")
 	return nil
 }

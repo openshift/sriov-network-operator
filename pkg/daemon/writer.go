@@ -21,6 +21,7 @@ import (
 
 const (
 	CheckpointFileName = "sno-initial-node-state.json"
+	Unknown            = "Unknown"
 )
 
 type NodeStateStatusWriter struct {
@@ -31,14 +32,16 @@ type NodeStateStatusWriter struct {
 	openStackDevicesInfo   utils.OSPDevicesInfo
 	withUnsupportedDevices bool
 	storeManager           utils.StoreManagerInterface
+	eventRecorder          *EventRecorder
 }
 
 // NewNodeStateStatusWriter Create a new NodeStateStatusWriter
-func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func(), devMode bool) *NodeStateStatusWriter {
+func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func(), er *EventRecorder, devMode bool) *NodeStateStatusWriter {
 	return &NodeStateStatusWriter{
 		client:                 c,
 		node:                   n,
 		OnHeartbeatFailure:     f,
+		eventRecorder:          er,
 		withUnsupportedDevices: devMode,
 	}
 }
@@ -170,9 +173,24 @@ func (w *NodeStateStatusWriter) setNodeStateStatus(msg Message) (*sriovnetworkv1
 			// clear lastSyncError when sync Succeeded
 			nodeState.Status.LastSyncError = msg.lastSyncError
 		}
-		nodeState.Status.SyncStatus = msg.syncStatus
-
+		oldStatus := nodeState.Status.SyncStatus
+		newStatus := msg.syncStatus
+		nodeState.Status.SyncStatus = newStatus
 		glog.V(0).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
+
+		if oldStatus != newStatus {
+			if oldStatus == "" {
+				oldStatus = Unknown
+			}
+			if newStatus == "" {
+				newStatus = Unknown
+			}
+			eventMsg := fmt.Sprintf("Status changed from: %s to: %s", oldStatus, newStatus)
+			if nodeState.Status.LastSyncError != "" {
+				eventMsg = fmt.Sprintf("%s. Last Error: %s", eventMsg, nodeState.Status.LastSyncError)
+			}
+			w.eventRecorder.SendEvent("SyncStatusChanged", eventMsg)
+		}
 	})
 	if err != nil {
 		return nil, err
