@@ -29,11 +29,6 @@ PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
 
-# Current Operator version
-VERSION ?= 4.14.0
-# Default bundle image tag
-BUNDLE_IMG ?= controller-bundle:$(VERSION)
-# Options for 'bundle-build'
 ifneq ($(origin CHANNELS), undefined)
 BUNDLE_CHANNELS := --channels=$(CHANNELS)
 endif
@@ -47,12 +42,11 @@ IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:crdVersions={v1}"
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
-else
-GOBIN=$(shell go env GOBIN)
-endif
+GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
+# golangci-lint version should be updated periodically
+# we keep it fixed to avoid it from unexpectedly failing on the project
+# in case of a version bump
+GOLANGCI_LINT_VER = v1.51.0
 
 GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
 # golangci-lint version should be updated periodically
@@ -113,6 +107,20 @@ manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=$(CRD_BASES)
 	cp ./config/crd/bases/* ./deployment/sriov-network-operator/crds/
 
+sync-manifests-%: manifests
+	@mkdir -p manifests/$*
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovibnetworks.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovibnetworks_crd.yaml
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodepolicies.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetworknodepolicy.crd.yaml
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodestates.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovoperatorconfigs.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworks.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
+	@echo ""
+	@echo "*************************************************************************************************************************************************"
+	@echo "* Please manually update the sriov-network-operator.v4.7.0.clusterserviceversion.yaml and image-references files in the manifests/$* directory *"
+	@echo "*************************************************************************************************************************************************"
+	@echo ""
+
+
 # Run go fmt against code
 
 fmt: ## Go fmt your code
@@ -130,6 +138,9 @@ vet:
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+mock-generate: gomock
+	go generate ./...
+
 CONTROLLER_GEN = $(BIN_DIR)/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0)
@@ -141,6 +152,10 @@ kustomize: ## Download kustomize locally if necessary.
 ENVTEST = $(BIN_DIR)/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+
+GOMOCK = $(shell pwd)/bin/mockgen
+gomock:
+	$(call go-get-tool,$(GOMOCK),github.com/golang/mock/mockgen@v1.6.0)
 
 # go-install-tool will 'go install' any package $2 and install it to $1.
 define go-install-tool
@@ -156,23 +171,6 @@ skopeo:
 
 fakechroot:
 	if ! which fakechroot; then if [ -f /etc/redhat-release ]; then dnf -y install fakechroot; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install fakechroot; fi; fi
-
-# Generate bundle manifests and metadata, then validate generated files.
-.PHONY: bundle
-bundle: manifests
-	rm -f bundle/manifests/*
-	MANIFEST_YAML=$$(ls manifests/stable/*.yaml | grep -v supported-nic-ids_v1_configmap.yaml) ; \
-	rm -f $$MANIFEST_YAML
-	operator-sdk generate kustomize manifests --interactive=false -q
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) --extra-service-accounts sriov-network-config-daemon
-	operator-sdk bundle validate ./bundle
-	BUNDLE_MANIFEST_YAML=$$(ls bundle/manifests/* | grep -v supported-nic-ids_v1_configmap.yaml); \
-	cp $$BUNDLE_MANIFEST_YAML manifests/stable
-# Build the bundle image.
-.PHONY: bundle-build
-bundle-build:
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 deploy-setup: export ENABLE_ADMISSION_CONTROLLER?=true
 deploy-setup: skopeo install

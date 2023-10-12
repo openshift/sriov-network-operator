@@ -2,7 +2,6 @@ package netns
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -97,7 +96,7 @@ func setVfNetNs(pfPciAddr string, targetNetNs netns.NsHandle) error {
 			err.Error())
 	}
 
-	data, err := ioutil.ReadFile(numVfsFile)
+	data, err := os.ReadFile(numVfsFile)
 	if err != nil {
 		return fmt.Errorf("setVfNetNs(): failed to read '%s' from device with PCI address  '%s': '%s", numVfsFile, pfPciAddr,
 			err.Error())
@@ -119,7 +118,7 @@ func setVfNetNs(pfPciAddr string, targetNetNs netns.NsHandle) error {
 			continue
 		}
 
-		fInfos, err := ioutil.ReadDir(vfNetDir)
+		fInfos, err := os.ReadDir(vfNetDir)
 		if err != nil {
 			return fmt.Errorf("setVfNetNs(): failed to read '%s': '%s'", vfNetDir, err.Error())
 		}
@@ -149,7 +148,7 @@ func setLinkNetNs(pciAddr string, targetNetNs netns.NsHandle) error {
 	if _, err := os.Lstat(netDir); err != nil {
 		return fmt.Errorf("setLinkNetNs(): unable to find directory '%s': '%s'", netDir, err.Error())
 	}
-	fInfos, err := ioutil.ReadDir(netDir)
+	fInfos, err := os.ReadDir(netDir)
 	if err != nil {
 		return fmt.Errorf("setLinkNetNs(): failed to read '%s': '%s'", netDir, err.Error())
 	}

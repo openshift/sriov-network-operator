@@ -3,6 +3,8 @@ data:
   Broadcom_bnxt_en_BCM57414_NetXtreme-E: 14e4 16d7 16c1
   Broadcom_bnxt_en_BCM57800_NetXtreme-E: 14e4 168a 16a9
   Broadcom_bnxt_en_BCM57508_NetXtreme-E: 14e4 1750 1806
+  Intel_i40e_10G_X710_BACKPLANE: 8086 1581 154c
+  Intel_i40e_10G_X710_BASE_T: 8086 15ff 154c
   Intel_i40e_X710_10G: 8086 1572 154c
   Intel_i40e_XL710_40G: 8086 1583 154c
   Intel_i40e_XXV710: 8086 158a 154c
@@ -18,13 +20,13 @@ data:
   Intel_ixgbe_X550T: 8086 1563 1565
   Nvidia_mlx4_ConnectX-3_Pro: 15b3 1007 1004
   Nvidia_mlx5_BlueField-2_ConnectX-6_Dx: 15b3 a2d6 101e
-  Nvidia_mlx5_MT43244_BlueField-3_integrated_ConnectX-7_Dx: 15b3 a2dc 101e
   Nvidia_mlx5_ConnectX-4: 15b3 1013 1014
   Nvidia_mlx5_ConnectX-4_Lx: 15b3 1015 1016
   Nvidia_mlx5_ConnectX-5: 15b3 1017 1018
   Nvidia_mlx5_ConnectX-5_Ex: 15b3 1019 101a
   Nvidia_mlx5_ConnectX-6: 15b3 101b 101c
   Nvidia_mlx5_ConnectX-6_Dx: 15b3 101d 101e
+  Nvidia_mlx5_MT43244_BlueField-3_integrated_ConnectX-7_Dx: 15b3 a2dc 101e
   Qlogic_qede_QL41000: 1077 8070 8090
   Qlogic_qede_QL45000_25G: 1077 1656 1664
   Qlogic_qede_QL45000_50G: 1077 1654 1664

@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -14,6 +15,8 @@ import (
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+
+	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
 )
 
 func TestMain(m *testing.M) {
@@ -22,8 +25,9 @@ func TestMain(m *testing.M) {
 		"8086 158b 154c", // I40e 25G SFP28
 		"8086 1572 154c", // I40e 10G X710 SFP+
 		"8086 0d58 154c", // I40e XXV710 N3000
+		"8086 1581 154c", // I40e X710 Backplane
+		"8086 15ff 154c", // I40e X710 Base T
 		"8086 1583 154c", // I40e 40G XL710 QSFP+
-		"8086 1591 1889", // Columbiaville E810
 		"8086 1592 1889", // Columbiaville E810-CQDA2/2CQDA2
 		"8086 1593 1889", // Columbiaville E810-XXVDA4
 		"8086 159b 1889", // Columbiaville E810-XXVDA2
@@ -130,11 +134,8 @@ func NewNode() *corev1.Node {
 	return &corev1.Node{Spec: corev1.NodeSpec{ProviderID: "openstack"}}
 }
 
-func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
-	var err error
-	var ok bool
-	var w []string
-	config := &SriovOperatorConfig{
+func newDefaultOperatorConfig() *SriovOperatorConfig {
+	return &SriovOperatorConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default",
 		},
@@ -146,8 +147,15 @@ func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 			LogLevel:                 2,
 		},
 	}
+}
+
+func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 	g := NewGomegaWithT(t)
-	ok, _, err = validateSriovOperatorConfig(config, "DELETE")
+
+	config := newDefaultOperatorConfig()
+	snclient = fakesnclientset.NewSimpleClientset()
+
+	ok, _, err := validateSriovOperatorConfig(config, "DELETE")
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(ok).To(Equal(false))
 
@@ -155,12 +163,45 @@ func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 
-	ok, w, err = validateSriovOperatorConfig(config, "UPDATE")
+	ok, w, err := validateSriovOperatorConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 	g.Expect(w[0]).To(ContainSubstring("Node draining is disabled"))
 
 	ok, _, err = validateSriovOperatorConfig(config, "CREATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+}
+
+func TestValidateSriovOperatorConfigDisableDrain(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	config := newDefaultOperatorConfig()
+	config.Spec.DisableDrain = false
+
+	nodeState := &SriovNetworkNodeState{
+		ObjectMeta: metav1.ObjectMeta{Name: "worker-1", Namespace: namespace},
+		Status: SriovNetworkNodeStateStatus{
+			SyncStatus: "InProgress",
+		},
+	}
+
+	snclient = fakesnclientset.NewSimpleClientset(
+		config,
+		nodeState,
+	)
+
+	config.Spec.DisableDrain = true
+	ok, _, err := validateSriovOperatorConfig(config, "UPDATE")
+	g.Expect(err).To(MatchError("can't set Spec.DisableDrain = true while node[worker-1] is updating"))
+	g.Expect(ok).To(Equal(false))
+
+	// Simulate node update finished
+	nodeState.Status.SyncStatus = "Succeeded"
+	snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).
+		Update(context.Background(), nodeState, metav1.UpdateOptions{})
+
+	ok, _, err = validateSriovOperatorConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 }
@@ -499,7 +540,7 @@ func TestStaticValidateSriovNetworkNodePolicyWithConflictIsRdmaAndDeviceType(t *
 	g.Expect(ok).To(Equal(false))
 }
 
-func TestStaticValidateSriovNetworkNodePolicyWithConflictDeviceTypeAndVdpaType(t *testing.T) {
+func TestStaticValidateSriovNetworkNodePolicyWithConflictDeviceTypeAndVirtioVdpaType(t *testing.T) {
 	policy := &SriovNetworkNodePolicy{
 		Spec: SriovNetworkNodePolicySpec{
 			DeviceType: constants.DeviceTypeVfioPci,
@@ -519,11 +560,35 @@ func TestStaticValidateSriovNetworkNodePolicyWithConflictDeviceTypeAndVdpaType(t
 	}
 	g := NewGomegaWithT(t)
 	ok, err := staticValidateSriovNetworkNodePolicy(policy)
-	g.Expect(err).To(MatchError(ContainSubstring("'deviceType: vfio-pci' conflicts with 'vdpaType: virtio'")))
+	g.Expect(err).To(MatchError(ContainSubstring("'deviceType: vfio-pci' conflicts with 'virtio'")))
 	g.Expect(ok).To(Equal(false))
 }
 
-func TestStaticValidateSriovNetworkNodePolicyVdpaMustSpecifySwitchDev(t *testing.T) {
+func TestStaticValidateSriovNetworkNodePolicyWithConflictDeviceTypeAndVhostVdpaType(t *testing.T) {
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: constants.DeviceTypeVfioPci,
+			NicSelector: SriovNetworkNicSelector{
+				Vendor:   "15b3",
+				DeviceID: "101d",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:       1,
+			Priority:     99,
+			ResourceName: "p0",
+			VdpaType:     constants.VdpaTypeVhost,
+			EswitchMode:  "switchdev",
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(MatchError(ContainSubstring("'deviceType: vfio-pci' conflicts with 'vhost'")))
+	g.Expect(ok).To(Equal(false))
+}
+
+func TestStaticValidateSriovNetworkNodePolicyVirtioVdpaMustSpecifySwitchDev(t *testing.T) {
 	policy := &SriovNetworkNodePolicy{
 		Spec: SriovNetworkNodePolicySpec{
 			DeviceType: "netdevice",
@@ -542,11 +607,34 @@ func TestStaticValidateSriovNetworkNodePolicyVdpaMustSpecifySwitchDev(t *testing
 	}
 	g := NewGomegaWithT(t)
 	ok, err := staticValidateSriovNetworkNodePolicy(policy)
-	g.Expect(err).To(MatchError(ContainSubstring("virtio/vdpa requires the device to be configured in switchdev mode")))
+	g.Expect(err).To(MatchError(ContainSubstring("vdpa requires the device to be configured in switchdev mode")))
 	g.Expect(ok).To(Equal(false))
 }
 
-func TestValidatePolicyForNodeStateVdpaWithNotSupportedVendor(t *testing.T) {
+func TestStaticValidateSriovNetworkNodePolicyVhostVdpaMustSpecifySwitchDev(t *testing.T) {
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				Vendor:   "15b3",
+				DeviceID: "101d",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:       1,
+			Priority:     99,
+			ResourceName: "p0",
+			VdpaType:     constants.VdpaTypeVhost,
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(MatchError(ContainSubstring("vdpa requires the device to be configured in switchdev mode")))
+	g.Expect(ok).To(Equal(false))
+}
+
+func TestValidatePolicyForNodeStateVirtioVdpaWithNotSupportedVendor(t *testing.T) {
 	state := newNodeState()
 	policy := &SriovNetworkNodePolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -570,7 +658,34 @@ func TestValidatePolicyForNodeStateVdpaWithNotSupportedVendor(t *testing.T) {
 	}
 	g := NewGomegaWithT(t)
 	err := validatePolicyForNodeState(policy, state, NewNode())
-	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("vendor(%s) in CR %s not supported for virtio-vdpa", state.Status.Interfaces[0].Vendor, policy.Name))))
+	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("vendor(%s) in CR %s not supported for vdpa", state.Status.Interfaces[0].Vendor, policy.Name))))
+}
+
+func TestValidatePolicyForNodeStateVhostVdpaWithNotSupportedVendor(t *testing.T) {
+	state := newNodeState()
+	policy := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "p1",
+		},
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			VdpaType:   "vhost",
+			NicSelector: SriovNetworkNicSelector{
+				PfNames:     []string{"ens803f0"},
+				RootDevices: []string{"0000:86:00.0"},
+				Vendor:      "8086",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:       4,
+			Priority:     99,
+			ResourceName: "p0",
+		},
+	}
+	g := NewGomegaWithT(t)
+	err := validatePolicyForNodeState(policy, state, NewNode())
+	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("vendor(%s) in CR %s not supported for vdpa", state.Status.Interfaces[0].Vendor, policy.Name))))
 }
 
 func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {

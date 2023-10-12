@@ -152,7 +152,7 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 		expResource dptypes.ResourceConfList
 	}{
 		{
-			tname: "testVdpaVirtio",
+			tname: "testVirtioVdpaVirtio",
 			policy: sriovnetworkv1.SriovNetworkNodePolicy{
 				Spec: v1.SriovNetworkNodePolicySpec{
 					ResourceName: "resourceName",
@@ -166,6 +166,25 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 						ResourceName: "resourceName",
 						Selectors: mustMarshallSelector(t, &dptypes.NetDeviceSelectors{
 							VdpaType: dptypes.VdpaType(consts.VdpaTypeVirtio),
+						}),
+					},
+				},
+			},
+		}, {
+			tname: "testVhostVdpaVirtio",
+			policy: sriovnetworkv1.SriovNetworkNodePolicy{
+				Spec: v1.SriovNetworkNodePolicySpec{
+					ResourceName: "resourceName",
+					DeviceType:   consts.DeviceTypeNetDevice,
+					VdpaType:     consts.VdpaTypeVhost,
+				},
+			},
+			expResource: dptypes.ResourceConfList{
+				ResourceList: []dptypes.ResourceConfig{
+					{
+						ResourceName: "resourceName",
+						Selectors: mustMarshallSelector(t, &dptypes.NetDeviceSelectors{
+							VdpaType: dptypes.VdpaType(consts.VdpaTypeVhost),
 						}),
 					},
 				},

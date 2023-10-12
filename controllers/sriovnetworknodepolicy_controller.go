@@ -23,6 +23,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
@@ -35,9 +36,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -48,6 +52,8 @@ import (
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 )
+
+const nodePolicySyncEventName = "node-policy-sync-event"
 
 // SriovNetworkNodePolicyReconciler reconciles a SriovNetworkNodePolicy object
 type SriovNetworkNodePolicyReconciler struct {
@@ -69,8 +75,12 @@ type SriovNetworkNodePolicyReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	reqLogger := log.FromContext(ctx).WithValues("sriovnetworknodepolicy", req.NamespacedName)
+	// Only handle node-policy-sync-event
+	if req.Name != nodePolicySyncEventName || req.Namespace != "" {
+		return reconcile.Result{}, nil
+	}
 
+	reqLogger := log.FromContext(ctx)
 	reqLogger.Info("Reconciling")
 
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
@@ -132,16 +142,16 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 
 	// Sort the policies with priority, higher priority ones is applied later
 	sort.Sort(sriovnetworkv1.ByPriority(policyList.Items))
+	// Sync SriovNetworkNodeState objects
+	if err = r.syncAllSriovNetworkNodeStates(ctx, defaultPolicy, policyList, nodeList); err != nil {
+		return reconcile.Result{}, err
+	}
 	// Sync Sriov device plugin ConfigMap object
 	if err = r.syncDevicePluginConfigMap(ctx, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
 	}
 	// Render and sync Daemon objects
 	if err = r.syncPluginDaemonObjs(ctx, defaultPolicy, policyList); err != nil {
-		return reconcile.Result{}, err
-	}
-	// Sync SriovNetworkNodeState objects
-	if err = r.syncAllSriovNetworkNodeStates(ctx, defaultPolicy, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -152,8 +162,34 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	qHandler := func(q workqueue.RateLimitingInterface) {
+		q.AddAfter(reconcile.Request{NamespacedName: types.NamespacedName{
+			Namespace: "",
+			Name:      nodePolicySyncEventName,
+		}}, time.Second)
+	}
+
+	delayedEventHandler := handler.Funcs{
+		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+			log.Log.WithName("SriovNetworkNodePolicy").
+				Info("Enqueuing sync for create event", "resource", e.Object.GetName())
+			qHandler(q)
+		},
+		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			log.Log.WithName("SriovNetworkNodePolicy").
+				Info("Enqueuing sync for update event", "resource", e.ObjectNew.GetName())
+			qHandler(q)
+		},
+		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			log.Log.WithName("SriovNetworkNodePolicy").
+				Info("Enqueuing sync for delete event", "resource", e.Object.GetName())
+			qHandler(q)
+		},
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sriovnetworkv1.SriovNetworkNodePolicy{}).
+		Watches(&sriovnetworkv1.SriovNetworkNodePolicy{}, delayedEventHandler).
 		Complete(r)
 }
 
@@ -576,7 +612,7 @@ func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, e
 
 func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx context.Context, pl *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node) (dptypes.ResourceConfList, error) {
 	logger := log.Log.WithName("renderDevicePluginConfigData")
-	logger.Info("Start to render device plugin config data")
+	logger.Info("Start to render device plugin config data", "node", node.Name)
 	rcl := dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
 		if p.Name == constants.DefaultPolicyName {
@@ -608,7 +644,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 				return rcl, err
 			}
 			rcl.ResourceList = append(rcl.ResourceList, *rc)
-			logger.Info("Add resource", "Resource", *rc, "Resource list", rcl.ResourceList)
+			logger.Info("Add resource", "Resource", *rc)
 		}
 	}
 	return rcl, nil
@@ -677,6 +713,9 @@ func createDevicePluginResource(
 	// Enable the selection of devices using NetFilter
 	if p.Spec.NicSelector.NetFilter != "" {
 		// Loop through interfaces status to find a match for NetworkID or NetworkTag
+		if len(nodeState.Status.Interfaces) == 0 {
+			return nil, fmt.Errorf("node state %s doesn't contain interfaces data", nodeState.Name)
+		}
 		for _, intf := range nodeState.Status.Interfaces {
 			if sriovnetworkv1.NetFilterMatch(p.Spec.NicSelector.NetFilter, intf.NetFilter) {
 				// Found a match add the Interfaces PciAddress

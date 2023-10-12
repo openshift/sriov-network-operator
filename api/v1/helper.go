@@ -57,6 +57,13 @@ const (
 	SupportedNicIDConfigmap = "supported-nic-ids"
 )
 
+type ConfigurationModeType string
+
+const (
+	DaemonConfigurationMode  ConfigurationModeType = "daemon"
+	SystemdConfigurationMode ConfigurationModeType = "systemd"
+)
+
 func (e NetFilterType) String() string {
 	switch e {
 	case OpenstackNetworkID:
@@ -66,7 +73,7 @@ func (e NetFilterType) String() string {
 	}
 }
 
-func InitNicIDMap(client kubernetes.Interface, namespace string) error {
+func InitNicIDMapFromConfigMap(client kubernetes.Interface, namespace string) error {
 	cm, err := client.CoreV1().ConfigMaps(namespace).Get(
 		context.Background(),
 		SupportedNicIDConfigmap,
@@ -79,7 +86,12 @@ func InitNicIDMap(client kubernetes.Interface, namespace string) error {
 	for _, v := range cm.Data {
 		NicIDMap = append(NicIDMap, v)
 	}
+
 	return nil
+}
+
+func InitNicIDMapFromList(idList []string) {
+	NicIDMap = append(NicIDMap, idList...)
 }
 
 func IsSupportedVendor(vendorID string) bool {
@@ -224,7 +236,6 @@ func (p *SriovNetworkNodePolicy) Selected(node *corev1.Node) bool {
 		}
 		return false
 	}
-	log.Info("Selected():", "node", node.Name)
 	return true
 }
 

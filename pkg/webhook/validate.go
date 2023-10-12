@@ -17,6 +17,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
@@ -35,17 +37,60 @@ func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operati
 	glog.V(2).Infof("validateSriovOperatorConfig: %v", cr)
 	var warnings []string
 
-	if cr.GetName() == constants.DefaultConfigName {
-		if operation == v1.Delete {
-			return false, warnings, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
-		}
-
-		if cr.Spec.DisableDrain {
-			warnings = append(warnings, "Node draining is disabled for applying SriovNetworkNodePolicy, it may result in workload interruption.")
-		}
-		return true, warnings, nil
+	if cr.GetName() != constants.DefaultConfigName {
+		return false, warnings, fmt.Errorf("only default SriovOperatorConfig is used")
 	}
-	return false, warnings, fmt.Errorf("only default SriovOperatorConfig is used")
+
+	if operation == v1.Delete {
+		return false, warnings, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
+	}
+
+	if cr.Spec.DisableDrain {
+		warnings = append(warnings, "Node draining is disabled for applying SriovNetworkNodePolicy, it may result in workload interruption.")
+	}
+
+	err := validateSriovOperatorConfigDisableDrain(cr)
+	if err != nil {
+		return false, warnings, err
+	}
+
+	return true, warnings, nil
+}
+
+// validateSriovOperatorConfigDisableDrain checks if the user is setting `.Spec.DisableDrain` from false to true while
+// operator is updating one or more nodes. Disabling the drain at this stage would prevent the operator to uncordon a node at
+// the end of the update operation, keeping nodes un-schedulable until manual intervention.
+func validateSriovOperatorConfigDisableDrain(cr *sriovnetworkv1.SriovOperatorConfig) error {
+	if !cr.Spec.DisableDrain {
+		return nil
+	}
+
+	previousConfig, err := snclient.SriovnetworkV1().SriovOperatorConfigs(cr.Namespace).Get(context.Background(), cr.Name, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("can't validate SriovOperatorConfig[%s] DisableDrain against its previous value: %q", cr.Name, err)
+	}
+
+	if previousConfig.Spec.DisableDrain == cr.Spec.DisableDrain {
+		// DisableDrain didn't change
+		return nil
+	}
+
+	// DisableDrain has been changed `false -> true`, check if any node is updating
+	nodeStates, err := snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("can't validate SriovOperatorConfig[%s] DisableDrain transition to true: %q", cr.Name, err)
+	}
+
+	for _, nodeState := range nodeStates.Items {
+		if nodeState.Status.SyncStatus == "InProgress" {
+			return fmt.Errorf("can't set Spec.DisableDrain = true while node[%s] is updating", nodeState.Name)
+		}
+	}
+
+	return nil
 }
 
 func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1.Operation) (bool, []string, error) {
@@ -158,12 +203,12 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	}
 
 	// vdpa: deviceType must be set to 'netdevice'
-	if cr.Spec.DeviceType != constants.DeviceTypeNetDevice && cr.Spec.VdpaType == constants.VdpaTypeVirtio {
-		return false, fmt.Errorf("'deviceType: %s' conflicts with 'vdpaType: virtio'; Set 'deviceType' to (string)'netdevice' Or Remove 'vdpaType'", cr.Spec.DeviceType)
+	if cr.Spec.DeviceType != constants.DeviceTypeNetDevice && (cr.Spec.VdpaType == constants.VdpaTypeVirtio || cr.Spec.VdpaType == constants.VdpaTypeVhost) {
+		return false, fmt.Errorf("'deviceType: %s' conflicts with '%s'; Set 'deviceType' to (string)'netdevice' Or Remove 'vdpaType'", cr.Spec.DeviceType, cr.Spec.VdpaType)
 	}
 	// vdpa: device must be configured in switchdev mode
-	if cr.Spec.VdpaType == constants.VdpaTypeVirtio && cr.Spec.EswitchMode != sriovnetworkv1.ESwithModeSwitchDev {
-		return false, fmt.Errorf("virtio/vdpa requires the device to be configured in switchdev mode")
+	if (cr.Spec.VdpaType == constants.VdpaTypeVirtio || cr.Spec.VdpaType == constants.VdpaTypeVhost) && cr.Spec.EswitchMode != sriovnetworkv1.ESwithModeSwitchDev {
+		return false, fmt.Errorf("vdpa requires the device to be configured in switchdev mode")
 	}
 	return true, nil
 }
@@ -241,8 +286,8 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs)
 			}
 			// vdpa: only mellanox cards are supported
-			if policy.Spec.VdpaType == constants.VdpaTypeVirtio && iface.Vendor != MellanoxID {
-				return fmt.Errorf("vendor(%s) in CR %s not supported for virtio-vdpa", iface.Vendor, policy.GetName())
+			if (policy.Spec.VdpaType == constants.VdpaTypeVirtio || policy.Spec.VdpaType == constants.VdpaTypeVhost) && iface.Vendor != MellanoxID {
+				return fmt.Errorf("vendor(%s) in CR %s not supported for vdpa", iface.Vendor, policy.GetName())
 			}
 		}
 	}

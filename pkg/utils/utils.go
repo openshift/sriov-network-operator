@@ -2,8 +2,8 @@ package utils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -34,7 +34,7 @@ const (
 	sysClassNet           = "/sys/class/net"
 	netClass              = 0x02
 	numVfsFile            = "sriov_numvfs"
-	scriptsPath           = "bindata/scripts/load-kmod.sh"
+
 	ClusterTypeOpenshift  = "openshift"
 	ClusterTypeKubernetes = "kubernetes"
 	VendorMellanox        = "15b3"
@@ -148,14 +148,18 @@ func DiscoverSriovDevices(withUnsupported bool) ([]sriovnetworkv1.InterfaceExt, 
 
 // SyncNodeState Attempt to update the node state to match the desired state
 func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToConfig map[string]bool) error {
-	if IsKernelLockdownMode(true) && hasMellanoxInterfacesInSpec(newState) {
+	return ConfigSriovInterfaces(newState.Spec.Interfaces, newState.Status.Interfaces, pfsToConfig)
+}
+
+func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool) error {
+	if IsKernelLockdownMode(true) && hasMellanoxInterfacesInSpec(ifaceStatuses, interfaces) {
 		glog.Warningf("cannot use mellanox devices when in kernel lockdown mode")
 		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
 	}
 	var err error
-	for _, ifaceStatus := range newState.Status.Interfaces {
+	for _, ifaceStatus := range ifaceStatuses {
 		configured := false
-		for _, iface := range newState.Spec.Interfaces {
+		for _, iface := range interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
 
@@ -300,7 +304,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		}
 	}
 	// set PF mtu
-	if iface.Mtu > 0 && iface.Mtu != ifaceStatus.Mtu {
+	if iface.Mtu > 0 && iface.Mtu > ifaceStatus.Mtu {
 		err = setNetdevMTU(iface.PciAddress, iface.Mtu)
 		if err != nil {
 			glog.Warningf("configSriovDevice(): fail to set mtu for PF %s: %v", iface.PciAddress, err)
@@ -418,12 +422,12 @@ func setSriovNumVfs(pciAddr string, numVfs int) error {
 	glog.V(2).Infof("setSriovNumVfs(): set NumVfs for device %s to %d", pciAddr, numVfs)
 	numVfsFilePath := filepath.Join(sysBusPciDevices, pciAddr, numVfsFile)
 	bs := []byte(strconv.Itoa(numVfs))
-	err := ioutil.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
+	err := os.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
 	if err != nil {
 		glog.Warningf("setSriovNumVfs(): fail to reset NumVfs file %s", numVfsFilePath)
 		return err
 	}
-	err = ioutil.WriteFile(numVfsFilePath, bs, os.ModeAppend)
+	err = os.WriteFile(numVfsFilePath, bs, os.ModeAppend)
 	if err != nil {
 		glog.Warningf("setSriovNumVfs(): fail to set NumVfs file %s", numVfsFilePath)
 		return err
@@ -449,7 +453,7 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 		}
 		mtuFile := "net/" + ifaceName[0] + "/mtu"
 		mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
-		return ioutil.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
+		return os.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
 	}, backoff.WithMaxRetries(b, 10))
 	if err != nil {
 		glog.Warningf("setNetdevMTU(): fail to write mtu file after retrying: %v", err)
@@ -493,7 +497,7 @@ func getNetdevMTU(pciAddr string) int {
 	}
 	mtuFile := "net/" + ifaceName + "/mtu"
 	mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
-	data, err := ioutil.ReadFile(mtuFilePath)
+	data, err := os.ReadFile(mtuFilePath)
 	if err != nil {
 		glog.Warningf("getNetdevMTU(): fail to read mtu file %s", mtuFilePath)
 		return 0
@@ -509,7 +513,7 @@ func getNetdevMTU(pciAddr string) int {
 func getNetDevMac(ifaceName string) string {
 	glog.V(2).Infof("getNetDevMac(): get Mac for device %s", ifaceName)
 	macFilePath := filepath.Join(sysClassNet, ifaceName, "address")
-	data, err := ioutil.ReadFile(macFilePath)
+	data, err := os.ReadFile(macFilePath)
 	if err != nil {
 		glog.Warningf("getNetDevMac(): fail to read Mac file %s", macFilePath)
 		return ""
@@ -521,7 +525,7 @@ func getNetDevMac(ifaceName string) string {
 func getNetDevLinkSpeed(ifaceName string) string {
 	glog.V(2).Infof("getNetDevLinkSpeed(): get LinkSpeed for device %s", ifaceName)
 	speedFilePath := filepath.Join(sysClassNet, ifaceName, "speed")
-	data, err := ioutil.ReadFile(speedFilePath)
+	data, err := os.ReadFile(speedFilePath)
 	if err != nil {
 		glog.Warningf("getNetDevLinkSpeed(): fail to read Link Speed file %s", speedFilePath)
 		return ""
@@ -589,18 +593,6 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualF
 	return vf
 }
 
-func LoadKernelModule(name string, args ...string) error {
-	glog.Infof("LoadKernelModule(): try to load kernel module %s with arguments '%s'", name, args)
-	cmdArgs := strings.Join(args, " ")
-	cmd := exec.Command("/bin/sh", scriptsPath, name, cmdArgs)
-	err := cmd.Run()
-	if err != nil {
-		glog.Errorf("LoadKernelModule(): fail to load kernel module %s with arguments '%s': %v", name, args, err)
-		return err
-	}
-	return nil
-}
-
 func Chroot(path string) (func() error, error) {
 	root, err := os.Open("/")
 	if err != nil {
@@ -666,7 +658,7 @@ func unbindDriverIfNeeded(vfAddr string, isRdma bool) error {
 }
 
 func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
-	glog.Infof("getLinkType(): Device %s", ifaceStatus.PciAddress)
+	glog.V(2).Infof("getLinkType(): Device %s", ifaceStatus.PciAddress)
 	if ifaceStatus.Name != "" {
 		link, err := netlink.LinkByName(ifaceStatus.Name)
 		if err != nil {
@@ -720,16 +712,22 @@ func generateRandomGUID() net.HardwareAddr {
 
 func GetNicSriovMode(pciAddress string) (string, error) {
 	glog.V(2).Infof("GetNicSriovMode(): device %s", pciAddress)
+
 	devLink, err := netlink.DevLinkGetDeviceByName("pci", pciAddress)
 	if err != nil {
+		if errors.Is(err, syscall.ENODEV) {
+			// the device doesn't support devlink
+			return "", nil
+		}
 		return "", err
 	}
+
 	return devLink.Attrs.Eswitch.Mode, nil
 }
 
 func GetPhysSwitchID(name string) (string, error) {
 	swIDFile := filepath.Join(sysClassNet, name, "phys_switch_id")
-	physSwitchID, err := ioutil.ReadFile(swIDFile)
+	physSwitchID, err := os.ReadFile(swIDFile)
 	if err != nil {
 		return "", err
 	}
@@ -741,7 +739,7 @@ func GetPhysSwitchID(name string) (string, error) {
 
 func GetPhysPortName(name string) (string, error) {
 	devicePortNameFile := filepath.Join(sysClassNet, name, "phys_port_name")
-	physPortName, err := ioutil.ReadFile(devicePortNameFile)
+	physPortName, err := os.ReadFile(devicePortNameFile)
 	if err != nil {
 		return "", err
 	}
@@ -788,10 +786,10 @@ func RunCommand(command string, args ...string) (string, error) {
 	return stdout.String(), err
 }
 
-func hasMellanoxInterfacesInSpec(newState *sriovnetworkv1.SriovNetworkNodeState) bool {
-	for _, ifaceStatus := range newState.Status.Interfaces {
+func hasMellanoxInterfacesInSpec(ifaceStatuses sriovnetworkv1.InterfaceExts, ifaceSpecs sriovnetworkv1.Interfaces) bool {
+	for _, ifaceStatus := range ifaceStatuses {
 		if ifaceStatus.Vendor == VendorMellanox {
-			for _, iface := range newState.Spec.Interfaces {
+			for _, iface := range ifaceSpecs {
 				if iface.PciAddress == ifaceStatus.PciAddress {
 					glog.V(2).Infof("hasMellanoxInterfacesInSpec(): Mellanox device %s (pci: %s) specified in SriovNetworkNodeState spec", ifaceStatus.Name, ifaceStatus.PciAddress)
 					return true

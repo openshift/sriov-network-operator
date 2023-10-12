@@ -3,7 +3,7 @@ package daemon
 import (
 	"context"
 	"flag"
-	"io/ioutil"
+	"os"
 	"path"
 	"testing"
 
@@ -101,7 +101,7 @@ var _ = Describe("Config Daemon", func() {
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
 		client := fakesnclientset.NewSimpleClientset()
 
-		err = sriovnetworkv1.InitNicIDMap(kubeClient, namespace)
+		err = sriovnetworkv1.InitNicIDMapFromConfigMap(kubeClient, namespace)
 		Expect(err).ToNot(HaveOccurred())
 
 		sut = New("test-node",
@@ -113,6 +113,8 @@ var _ = Describe("Config Daemon", func() {
 			syncCh,
 			refreshCh,
 			utils.Baremetal,
+			false,
+			false,
 		)
 
 		sut.enabledPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{}}
@@ -275,7 +277,7 @@ SUBSYSTEM=="net", ACTION=="add|move", ATTRS{phys_switch_id}!="", ATTR{phys_port_
 			Expect(sut.isNodeDraining()).To(BeFalse())
 
 			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
-			Expect(sut.isNodeDraining()).To(BeFalse())
+			Expect(sut.isNodeDraining()).To(BeTrue())
 
 			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
 			Expect(sut.isNodeDraining()).To(BeTrue())
@@ -319,7 +321,7 @@ func updateSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetwor
 
 func assertFileContents(path, contents string) {
 	Eventually(func() (string, error) {
-		ret, err := ioutil.ReadFile(path)
+		ret, err := os.ReadFile(path)
 		return string(ret), err
 	}, "10s").WithOffset(1).Should(Equal(contents))
 }

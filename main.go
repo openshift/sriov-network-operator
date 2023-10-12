@@ -25,6 +25,7 @@ import (
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	openshiftconfigv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/api/errors"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -69,6 +70,7 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -76,12 +78,14 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	opts := zap.Options{
 		Development: true,
+		TimeEncoder: zapcore.RFC3339NanoTimeEncoder,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	restConfig := ctrl.GetConfigOrDie()
+
 	kubeClient, err := client.New(restConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "couldn't create client")
@@ -121,6 +125,14 @@ func main() {
 		setupLog.Error(err, "unable to start global manager")
 		os.Exit(1)
 	}
+
+	mgrGlobal.GetCache().IndexField(context.Background(), &sriovnetworkv1.SriovNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
+		return []string{o.(*sriovnetworkv1.SriovNetwork).Spec.NetworkNamespace}
+	})
+
+	mgrGlobal.GetCache().IndexField(context.Background(), &sriovnetworkv1.SriovIBNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
+		return []string{o.(*sriovnetworkv1.SriovIBNetwork).Spec.NetworkNamespace}
+	})
 
 	if err := initNicIDMap(); err != nil {
 		setupLog.Error(err, "unable to init NicIdMap")
@@ -210,7 +222,7 @@ func main() {
 func initNicIDMap() error {
 	namespace := os.Getenv("NAMESPACE")
 	kubeclient := kubernetes.NewForConfigOrDie(ctrl.GetConfigOrDie())
-	if err := sriovnetworkv1.InitNicIDMap(kubeclient, namespace); err != nil {
+	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, namespace); err != nil {
 		return err
 	}
 

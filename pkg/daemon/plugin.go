@@ -24,15 +24,16 @@ var (
 	GenericPlugin     = genericplugin.NewGenericPlugin
 	GenericPluginName = genericplugin.PluginName
 	VirtualPlugin     = virtualplugin.NewVirtualPlugin
+	VirtualPluginName = virtualplugin.PluginName
 	K8sPlugin         = k8splugin.NewK8sPlugin
 )
 
-func enablePlugins(platform utils.PlatformType, ns *sriovnetworkv1.SriovNetworkNodeState) (map[string]plugin.VendorPlugin, error) {
+func enablePlugins(platform utils.PlatformType, useSystemdService bool, ns *sriovnetworkv1.SriovNetworkNodeState) (map[string]plugin.VendorPlugin, error) {
 	glog.Infof("enableVendorPlugins(): enabling plugins")
 	enabledPlugins := map[string]plugin.VendorPlugin{}
 
 	if platform == utils.VirtualOpenStack {
-		virtualPlugin, err := VirtualPlugin()
+		virtualPlugin, err := VirtualPlugin(false)
 		if err != nil {
 			glog.Errorf("enableVendorPlugins(): failed to load the virtual plugin error: %v", err)
 			return nil, err
@@ -46,14 +47,14 @@ func enablePlugins(platform utils.PlatformType, ns *sriovnetworkv1.SriovNetworkN
 		enabledPlugins = enabledVendorPlugins
 
 		if utils.ClusterType != utils.ClusterTypeOpenshift {
-			k8sPlugin, err := K8sPlugin()
+			k8sPlugin, err := K8sPlugin(useSystemdService)
 			if err != nil {
 				glog.Errorf("enableVendorPlugins(): failed to load the k8s plugin error: %v", err)
 				return nil, err
 			}
 			enabledPlugins[k8sPlugin.Name()] = k8sPlugin
 		}
-		genericPlugin, err := GenericPlugin()
+		genericPlugin, err := GenericPlugin(false)
 		if err != nil {
 			glog.Errorf("enableVendorPlugins(): failed to load the generic plugin error: %v", err)
 			return nil, err
