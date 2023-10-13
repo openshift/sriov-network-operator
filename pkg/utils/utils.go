@@ -33,6 +33,7 @@ const (
 	sysBusPciDrivers      = "/sys/bus/pci/drivers"
 	sysBusPciDriversProbe = "/sys/bus/pci/drivers_probe"
 	sysClassNet           = "/sys/class/net"
+	procKernelCmdLine     = "/proc/cmdline"
 	netClass              = 0x02
 	numVfsFile            = "sriov_numvfs"
 
@@ -46,6 +47,10 @@ const (
 	udevRulesFolder = udevFolder + "/rules.d"
 	udevDisableNM   = "/bindata/scripts/udev-find-sriov-pf.sh"
 	nmUdevRule      = "SUBSYSTEM==\"net\", ACTION==\"add|change|move\", ATTRS{device}==\"%s\", IMPORT{program}=\"/etc/udev/disable-nm-sriov.sh $env{INTERFACE} %s\""
+
+	KernelArgPciRealloc = "pci=realloc"
+	KernelArgIntelIommu = "intel_iommu=on"
+	KernelArgIommuPt    = "iommu=pt"
 )
 
 var InitialState sriovnetworkv1.SriovNetworkNodeState
@@ -60,6 +65,31 @@ var SupportedVfIds []string
 
 func init() {
 	ClusterType = os.Getenv("CLUSTER_TYPE")
+}
+
+// GetCurrentKernelArgs This retrieves the kernel cmd line arguments
+func GetCurrentKernelArgs(chroot bool) (string, error) {
+	path := procKernelCmdLine
+	if !chroot {
+		path = "/host" + path
+	}
+	cmdLine, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("GetCurrentKernelArgs(): Error reading %s: %v", procKernelCmdLine, err)
+	}
+	return string(cmdLine), nil
+}
+
+// IsKernelArgsSet This checks if the kernel cmd line is set properly. Please note that the same key could be repeated
+// several times in the kernel cmd line. We can only ensure that the kernel cmd line has the key/val kernel arg that we set.
+func IsKernelArgsSet(cmdLine string, karg string) bool {
+	elements := strings.Fields(cmdLine)
+	for _, element := range elements {
+		if element == karg {
+			return true
+		}
+	}
+	return false
 }
 
 func DiscoverSriovDevices(withUnsupported bool, storeManager StoreManagerInterface) ([]sriovnetworkv1.InterfaceExt, error) {
