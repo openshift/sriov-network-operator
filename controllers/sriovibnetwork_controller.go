@@ -183,28 +183,30 @@ func (r *SriovIBNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 func (r *SriovIBNetworkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Reconcile when the target namespace is created after the SriovNetwork object.
 	namespaceHandler := handler.Funcs{
-		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
-			ibNetworkList := sriovnetworkv1.SriovIBNetworkList{}
-			err := r.List(ctx,
-				&ibNetworkList,
-				client.MatchingFields{"spec.networkNamespace": e.Object.GetName()},
-			)
-			if err != nil {
-				log.Log.WithName("SriovIBNetworkReconciler").
-					Info("Can't list SriovIBNetworkReconciler for namespace", "resource", e.Object.GetName(), "error", err)
-			}
-
-			for _, network := range ibNetworkList.Items {
-				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-					Namespace: network.Namespace,
-					Name:      network.Name,
-				}})
-			}
-		},
+		CreateFunc: r.namespaceHandlerCreate,
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sriovnetworkv1.SriovIBNetwork{}).
 		Watches(&netattdefv1.NetworkAttachmentDefinition{}, &handler.EnqueueRequestForObject{}).
 		Watches(&corev1.Namespace{}, &namespaceHandler).
 		Complete(r)
+}
+
+func (r *SriovIBNetworkReconciler) namespaceHandlerCreate(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+	ibNetworkList := sriovnetworkv1.SriovIBNetworkList{}
+	err := r.List(ctx,
+		&ibNetworkList,
+		client.MatchingFields{"spec.networkNamespace": e.Object.GetName()},
+	)
+	if err != nil {
+		log.Log.WithName("SriovIBNetworkReconciler").
+			Info("Can't list SriovIBNetworkReconciler for namespace", "resource", e.Object.GetName(), "error", err)
+	}
+
+	for _, network := range ibNetworkList.Items {
+		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+			Namespace: network.Namespace,
+			Name:      network.Name,
+		}})
+	}
 }
