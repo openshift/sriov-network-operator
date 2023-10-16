@@ -223,6 +223,7 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
 	nodesSelected = false
 	interfaceSelected = false
+	nodeInterfaceErrorList := make(map[string][]string)
 
 	nodeList, err := kubeclient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: labels.Set(cr.Spec.NodeSelector).String(),
@@ -241,7 +242,7 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	for _, node := range nodeList.Items {
 		if cr.Selected(&node) {
 			nodesSelected = true
-			err = validatePolicyForNodeStateAndPolicy(nsList, npList, &node, cr)
+			err = validatePolicyForNodeStateAndPolicy(nsList, npList, &node, cr, nodeInterfaceErrorList)
 			if err != nil {
 				return false, err
 			}
@@ -252,20 +253,31 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 		return false, fmt.Errorf("no matched node is selected by the nodeSelector in CR %s", cr.GetName())
 	}
 	if !interfaceSelected {
+		for nodeName, messages := range nodeInterfaceErrorList {
+			for _, message := range messages {
+				glog.V(2).Infof("%s: %s", nodeName, message)
+			}
+		}
 		return false, fmt.Errorf("no supported NIC is selected by the nicSelector in CR %s", cr.GetName())
 	}
 
 	return true, nil
 }
 
-func validatePolicyForNodeStateAndPolicy(nsList *sriovnetworkv1.SriovNetworkNodeStateList, npList *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node, cr *sriovnetworkv1.SriovNetworkNodePolicy) error {
+func validatePolicyForNodeStateAndPolicy(nsList *sriovnetworkv1.SriovNetworkNodeStateList, npList *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node, cr *sriovnetworkv1.SriovNetworkNodePolicy, nodeInterfaceErrorList map[string][]string) error {
 	for _, ns := range nsList.Items {
 		if ns.GetName() == node.GetName() {
-			if err := validatePolicyForNodeState(cr, &ns, node); err != nil {
-				return fmt.Errorf("%s node(%s)", err.Error(), node.Name)
+			interfaceAndErrorList, err := validatePolicyForNodeState(cr, &ns, node)
+			if err != nil {
+				return err
 			}
+			if interfaceAndErrorList != nil {
+				nodeInterfaceErrorList[ns.GetName()] = interfaceAndErrorList
+			}
+			break
 		}
 	}
+
 	// validate current policy against policies in API (may not be converted to SriovNetworkNodeState yet)
 	for _, np := range npList.Items {
 		if np.GetName() != cr.GetName() && np.Selected(node) {
@@ -277,42 +289,53 @@ func validatePolicyForNodeStateAndPolicy(nsList *sriovnetworkv1.SriovNetworkNode
 	return nil
 }
 
-func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) error {
+func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) ([]string, error) {
+	glog.V(2).Infof("validatePolicyForNodeState(): validate policy %s for node %s.", policy.GetName(), state.GetName())
+	interfaceSelectedForNode := false
+	var noInterfacesSelectedLog []string
 	for _, iface := range state.Status.Interfaces {
 		err := validateNicModel(&policy.Spec.NicSelector, &iface, node)
 		if err == nil {
 			interfaceSelected = true
+			interfaceSelectedForNode = true
 			if policy.GetName() != constants.DefaultPolicyName && policy.Spec.NumVfs == 0 {
-				return fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
+				return nil, fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
 			}
 			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID {
-				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d) interface(%s)", policy.Spec.NumVfs, policy.GetName(), iface.TotalVfs, iface.Name)
+				return nil, fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d) interface(%s)", policy.Spec.NumVfs, policy.GetName(), iface.TotalVfs, iface.Name)
 			}
 			if policy.Spec.NumVfs > MlxMaxVFs && iface.Vendor == MellanoxID {
-				return fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d) interface(%s)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs, iface.Name)
+				return nil, fmt.Errorf("numVfs(%d) in CR %s exceed the maximum allowed value(%d) interface(%s)", policy.Spec.NumVfs, policy.GetName(), MlxMaxVFs, iface.Name)
 			}
 
 			// Externally create validations
 			if policy.Spec.ExternallyManaged {
 				if policy.Spec.NumVfs > iface.NumVfs {
-					return fmt.Errorf("numVfs(%d) in CR %s is higher than the virtual functions allocated for the PF externally value(%d)", policy.Spec.NumVfs, policy.GetName(), iface.NumVfs)
+					return nil, fmt.Errorf("numVfs(%d) in CR %s is higher than the virtual functions allocated for the PF externally value(%d)", policy.Spec.NumVfs, policy.GetName(), iface.NumVfs)
 				}
 
 				if policy.Spec.Mtu != 0 && policy.Spec.Mtu > iface.Mtu {
-					return fmt.Errorf("MTU(%d) in CR %s is higher than the MTU for the PF externally value(%d)", policy.Spec.Mtu, policy.GetName(), iface.Mtu)
+					return nil, fmt.Errorf("MTU(%d) in CR %s is higher than the MTU for the PF externally value(%d)", policy.Spec.Mtu, policy.GetName(), iface.Mtu)
 				}
 
 				if policy.Spec.LinkType != "" && strings.ToLower(policy.Spec.LinkType) != strings.ToLower(iface.LinkType) {
-					return fmt.Errorf("LinkType(%s) in CR %s is not equal to the LinkType for the PF externally value(%s)", policy.Spec.LinkType, policy.GetName(), iface.LinkType)
+					return nil, fmt.Errorf("LinkType(%s) in CR %s is not equal to the LinkType for the PF externally value(%s)", policy.Spec.LinkType, policy.GetName(), iface.LinkType)
 				}
 			}
 			// vdpa: only mellanox cards are supported
 			if (policy.Spec.VdpaType == constants.VdpaTypeVirtio || policy.Spec.VdpaType == constants.VdpaTypeVhost) && iface.Vendor != MellanoxID {
-				return fmt.Errorf("vendor(%s) in CR %s not supported for vdpa interface(%s)", iface.Vendor, policy.GetName(), iface.Name)
+				return nil, fmt.Errorf("vendor(%s) in CR %s not supported for vdpa interface(%s)", iface.Vendor, policy.GetName(), iface.Name)
 			}
+		} else {
+			errorMessage := fmt.Sprintf("Interface: %s was not selected, since NIC model could not be validated due to the following error: %s \n", iface.Name, err)
+			noInterfacesSelectedLog = append(noInterfacesSelectedLog, errorMessage)
 		}
 	}
-	return nil
+
+	if !interfaceSelectedForNode {
+		return noInterfacesSelectedLog, nil
+	}
+	return nil, nil
 }
 
 func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
