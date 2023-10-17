@@ -104,6 +104,8 @@ var _ = Describe("Config Daemon", func() {
 		err = sriovnetworkv1.InitNicIDMapFromConfigMap(kubeClient, namespace)
 		Expect(err).ToNot(HaveOccurred())
 
+		er := NewEventRecorder(client, "test-node", kubeClient)
+
 		sut = New("test-node",
 			client,
 			kubeClient,
@@ -114,6 +116,7 @@ var _ = Describe("Config Daemon", func() {
 			refreshCh,
 			utils.Baremetal,
 			false,
+			er,
 			false,
 		)
 
