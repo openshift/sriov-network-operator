@@ -142,14 +142,20 @@ func (w *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformType) e
 
 func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv1.SriovNetworkNodeState)) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	var nodeState *sriovnetworkv1.SriovNetworkNodeState
+	var oldStatus, newStatus, lastError string
+
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		n, getErr := w.getNodeState()
 		if getErr != nil {
 			return getErr
 		}
+		oldStatus = n.Status.SyncStatus
 
 		// Call the status modifier.
 		f(n)
+
+		newStatus = n.Status.SyncStatus
+		lastError = n.Status.LastSyncError
 
 		var err error
 		nodeState, err = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(context.Background(), n, metav1.UpdateOptions{})
@@ -163,6 +169,8 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 		return nil, fmt.Errorf("unable to update node %v: %v", nodeState, err)
 	}
 
+	w.recordStatusChangeEvent(oldStatus, newStatus, lastError)
+
 	return nodeState, nil
 }
 
@@ -173,29 +181,31 @@ func (w *NodeStateStatusWriter) setNodeStateStatus(msg Message) (*sriovnetworkv1
 			// clear lastSyncError when sync Succeeded
 			nodeState.Status.LastSyncError = msg.lastSyncError
 		}
-		oldStatus := nodeState.Status.SyncStatus
-		newStatus := msg.syncStatus
-		nodeState.Status.SyncStatus = newStatus
-		glog.V(0).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
+		nodeState.Status.SyncStatus = msg.syncStatus
 
-		if oldStatus != newStatus {
-			if oldStatus == "" {
-				oldStatus = Unknown
-			}
-			if newStatus == "" {
-				newStatus = Unknown
-			}
-			eventMsg := fmt.Sprintf("Status changed from: %s to: %s", oldStatus, newStatus)
-			if nodeState.Status.LastSyncError != "" {
-				eventMsg = fmt.Sprintf("%s. Last Error: %s", eventMsg, nodeState.Status.LastSyncError)
-			}
-			w.eventRecorder.SendEvent("SyncStatusChanged", eventMsg)
-		}
+		glog.V(0).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return nodeState, nil
+}
+
+// recordStatusChangeEvent sends event in case oldStatus differs from newStatus
+func (w *NodeStateStatusWriter) recordStatusChangeEvent(oldStatus, newStatus, lastError string) {
+	if oldStatus != newStatus {
+		if oldStatus == "" {
+			oldStatus = Unknown
+		}
+		if newStatus == "" {
+			newStatus = Unknown
+		}
+		eventMsg := fmt.Sprintf("Status changed from: %s to: %s", oldStatus, newStatus)
+		if lastError != "" {
+			eventMsg = fmt.Sprintf("%s. Last Error: %s", eventMsg, lastError)
+		}
+		w.eventRecorder.SendEvent("SyncStatusChanged", eventMsg)
+	}
 }
 
 // getNodeState queries the kube apiserver to get the SriovNetworkNodeState CR
