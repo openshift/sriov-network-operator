@@ -63,6 +63,8 @@ type SriovOperatorConfigSpec struct {
 	UseCDI bool `json:"useCDI,omitempty"`
 	// DisablePlugins is a list of sriov-network-config-daemon plugins to disable
 	DisablePlugins PluginNameSlice `json:"disablePlugins,omitempty"`
+	// FeatureGates to enable experimental features
+	FeatureGates map[string]bool `json:"featureGates,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
