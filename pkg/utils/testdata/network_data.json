@@ -1,0 +1,71 @@
+{                                                                                                                                                                                                                                                                                 
+  "links": [                                                                                                                                                                                                                                                   
+    {                                                                                                                                    
+      "id": "tapa046a03c-49",                                                                                                                                                                                                                                  
+      "vif_id": "a046a03c-4996-4212-8f23-3b8f197b03b3",                                                                                                                                                                                                        
+      "type": "ovs",                                                                                                                                                                                                                                           
+      "mtu": 1500,                                                                                                             
+      "ethernet_mac_address": "fa:16:3e:9c:9f:89"                                                                              
+    },                                                                                                                         
+    {                                                                                                                          
+      "id": "tapdc2a9cd3-f7",                                                                                                  
+      "vif_id": "dc2a9cd3-f7f5-40df-9d52-328f86e6011b",                                                                        
+      "type": "hw_veb",                                                                                                        
+      "mtu": 9000,                                                                                                             
+      "ethernet_mac_address": "fa:16:3e:00:00:00"                                                                              
+    },                                                                                                                         
+    {                                                                                                                          
+      "id": "tapce5054e4-c6",                                                                                                  
+      "vif_id": "ce5054e4-c65a-4c28-843c-155ab8fed825",                                                                        
+      "type": "hw_veb",                                                                                                                                                                                                                                        
+      "mtu": 9000,                                                                                                             
+      "ethernet_mac_address": "fa:16:3e:11:11:11"                                                                                                                                                                                                              
+    }                                                                                                                          
+  ],                                                                                                                           
+  "networks": [                                                                                                                
+    {                                                                                                                          
+      "id": "network0",                                                                                                        
+      "type": "ipv4_dhcp",                                                                                                                                                                                                                                     
+      "link": "tapa046a03c-49",                                                                                                
+      "network_id": "5765e37b-0a13-49d2-a598-537178ce254f"                                                                     
+    },                                                    
+    {                                                                    
+      "id": "network1",                                                  
+      "type": "ipv4",                                                    
+      "link": "tapdc2a9cd3-f7",                                          
+      "ip_address": "192.168.177.4",                                           
+      "netmask": "255.255.255.0",                                              
+      "routes": [                                                              
+        {                                                                      
+          "network": "0.0.0.0",                                                
+          "netmask": "0.0.0.0",                                                
+          "gateway": "192.168.177.1"                                                   
+        }                                                                              
+      ],                                                                               
+      "network_id": "b3ba899a-e06c-49da-93c5-c992048390b2",                            
+      "services": []                                                                   
+    },                                                                                 
+    {                                                                                  
+      "id": "network2",                                                                
+      "type": "ipv4",                                                                  
+      "link": "tapce5054e4-c6",                                                        
+      "ip_address": "192.168.178.107",                                                 
+      "netmask": "255.255.255.0",                                                              
+      "routes": [                                                                              
+        {                                                                                      
+          "network": "0.0.0.0",                                                                
+          "netmask": "0.0.0.0",                                                                
+          "gateway": "192.168.178.1"                                                                      
+        }                                                                                                 
+      ],                                                                                                  
+      "network_id": "a81317cb-aa3d-4675-99cf-aa049f964a3c",                                               
+      "services": []                                                                                      
+    }                                                                                                     
+  ],                                                                                                      
+  "services": [                                                                                           
+    {                                                                                                     
+      "type": "dns",                                                                                      
+      "address": "10.1.2.3"                                                                            
+    }                                                                                                    
+  ]                                                                                                                    
+}
