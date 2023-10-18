@@ -143,8 +143,9 @@ var _ = Describe("[sriov] operator", func() {
 				cfg.Spec.ConfigDaemonNodeSelector = map[string]string{
 					"sriovenabled": "true",
 				}
-				err = clients.Update(context.TODO(), &cfg)
-				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					return clients.Update(context.TODO(), &cfg)
+				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
 
 				By("Checking that a daemon is scheduled only on selected node")
 				Eventually(func() bool {
@@ -159,8 +160,9 @@ var _ = Describe("[sriov] operator", func() {
 				}, &cfg)
 				Expect(err).ToNot(HaveOccurred())
 				cfg.Spec.ConfigDaemonNodeSelector = map[string]string{}
-				err = clients.Update(context.TODO(), &cfg)
-				Expect(err).ToNot(HaveOccurred())
+				Eventually(func() error {
+					return clients.Update(context.TODO(), &cfg)
+				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
 
 				By("Checking that a daemon is scheduled on each worker node")
 				Eventually(func() bool {
@@ -2323,8 +2325,9 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 			DeviceType: "netdevice",
 		},
 	}
-	err = clients.Create(context.Background(), config)
-	Expect(err).ToNot(HaveOccurred())
+	Eventually(func() error {
+		return clients.Create(context.Background(), config)
+	}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
 
 	Eventually(func() sriovv1.Interfaces {
 		nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})

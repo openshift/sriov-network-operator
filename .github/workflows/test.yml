@@ -119,6 +119,12 @@ jobs:
           name: k8s-artifact
           path: ./k8s-artifacts
 
+      - name: remove virtual cluster
+        if: always()
+        run: |
+          kcli delete cluster $CLUSTER_NAME -y
+          kcli delete network $CLUSTER_NAME -y
+
   virtual-ocp:
     name: ocp
     needs: [
@@ -145,3 +151,9 @@ jobs:
         with:
           name: ocp-artifact
           path: ./ocp-artifacts
+
+      - name: remove virtual cluster
+        if: always()
+        run: |
+          kcli delete cluster $CLUSTER_NAME -y
+          kcli delete network $CLUSTER_NAME -y
