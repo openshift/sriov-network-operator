@@ -21,6 +21,7 @@ import (
 
 const (
 	CheckpointFileName = "sno-initial-node-state.json"
+	Unknown            = "Unknown"
 )
 
 type NodeStateStatusWriter struct {
@@ -30,14 +31,17 @@ type NodeStateStatusWriter struct {
 	OnHeartbeatFailure     func()
 	openStackDevicesInfo   utils.OSPDevicesInfo
 	withUnsupportedDevices bool
+	storeManager           utils.StoreManagerInterface
+	eventRecorder          *EventRecorder
 }
 
 // NewNodeStateStatusWriter Create a new NodeStateStatusWriter
-func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func(), devMode bool) *NodeStateStatusWriter {
+func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func(), er *EventRecorder, devMode bool) *NodeStateStatusWriter {
 	return &NodeStateStatusWriter{
 		client:                 c,
 		node:                   n,
 		OnHeartbeatFailure:     f,
+		eventRecorder:          er,
 		withUnsupportedDevices: devMode,
 	}
 }
@@ -46,6 +50,13 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func(), devMo
 func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.PlatformType) error {
 	glog.V(0).Infof("RunOnce()")
 	msg := Message{}
+
+	storeManager, err := utils.NewStoreManager(false)
+	if err != nil {
+		glog.Errorf("failed to create store manager: %v", err)
+		return err
+	}
+	w.storeManager = storeManager
 
 	if platformType == utils.VirtualOpenStack {
 		ns, err := w.getCheckPointNodeState(destDir)
@@ -100,10 +111,7 @@ func (w *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message
 			if err != nil {
 				glog.Errorf("Run() refresh: writing to node status failed: %v", err)
 			}
-
-			if msg.syncStatus == syncStatusSucceeded || msg.syncStatus == syncStatusFailed {
-				syncCh <- struct{}{}
-			}
+			syncCh <- struct{}{}
 		case <-time.After(30 * time.Second):
 			glog.V(2).Info("Run(): period refresh")
 			if err := w.pollNicStatus(platformType); err != nil {
@@ -122,7 +130,7 @@ func (w *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformType) e
 	if platformType == utils.VirtualOpenStack {
 		iface, err = utils.DiscoverSriovDevicesVirtual(w.openStackDevicesInfo)
 	} else {
-		iface, err = utils.DiscoverSriovDevices(w.withUnsupportedDevices)
+		iface, err = utils.DiscoverSriovDevices(w.withUnsupportedDevices, w.storeManager)
 	}
 	if err != nil {
 		return err
@@ -134,14 +142,20 @@ func (w *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformType) e
 
 func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv1.SriovNetworkNodeState)) (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	var nodeState *sriovnetworkv1.SriovNetworkNodeState
+	var oldStatus, newStatus, lastError string
+
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		n, getErr := w.getNodeState()
 		if getErr != nil {
 			return getErr
 		}
+		oldStatus = n.Status.SyncStatus
 
 		// Call the status modifier.
 		f(n)
+
+		newStatus = n.Status.SyncStatus
+		lastError = n.Status.LastSyncError
 
 		var err error
 		nodeState, err = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(context.Background(), n, metav1.UpdateOptions{})
@@ -154,6 +168,8 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 		// may be conflict if max retries were hit
 		return nil, fmt.Errorf("unable to update node %v: %v", nodeState, err)
 	}
+
+	w.recordStatusChangeEvent(oldStatus, newStatus, lastError)
 
 	return nodeState, nil
 }
@@ -173,6 +189,23 @@ func (w *NodeStateStatusWriter) setNodeStateStatus(msg Message) (*sriovnetworkv1
 		return nil, err
 	}
 	return nodeState, nil
+}
+
+// recordStatusChangeEvent sends event in case oldStatus differs from newStatus
+func (w *NodeStateStatusWriter) recordStatusChangeEvent(oldStatus, newStatus, lastError string) {
+	if oldStatus != newStatus {
+		if oldStatus == "" {
+			oldStatus = Unknown
+		}
+		if newStatus == "" {
+			newStatus = Unknown
+		}
+		eventMsg := fmt.Sprintf("Status changed from: %s to: %s", oldStatus, newStatus)
+		if lastError != "" {
+			eventMsg = fmt.Sprintf("%s. Last Error: %s", eventMsg, lastError)
+		}
+		w.eventRecorder.SendEvent("SyncStatusChanged", eventMsg)
+	}
 }
 
 // getNodeState queries the kube apiserver to get the SriovNetworkNodeState CR

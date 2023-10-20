@@ -13,12 +13,15 @@ BUILD_GOPATH=$(TARGET_DIR):$(TARGET_DIR)/vendor:$(CURPATH)/cmd
 IMAGE_BUILDER?=docker
 IMAGE_BUILD_OPTS?=
 DOCKERFILE?=Dockerfile
+DOCKERFILE_CONFIG_DAEMON?=Dockerfile.sriov-network-config-daemon
 
 CRD_BASES=./config/crd/bases
 
 export APP_NAME?=sriov-network-operator
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
-IMAGE_TAG?=ghcr.io/k8snetworkplumbingwg/$(APP_NAME):latest
+IMAGE_REPO?=ghcr.io/k8snetworkplumbingwg
+IMAGE_TAG?=$(IMAGE_REPO)/$(APP_NAME):latest
+CONFIG_DAEMON_IMAGE_TAG?=$(IMAGE_REPO)/sriov-network-config-daemon:latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export WATCH_NAMESPACE?=openshift-sriov-network-operator
@@ -73,6 +76,7 @@ update-codegen:
 
 image: ; $(info Building image...)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE) -t $(IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
+	$(IMAGE_BUILDER) build -f $(DOCKERFILE_CONFIG_DAEMON) -t $(CONFIG_DAEMON_IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
 
 # Run tests
 test: generate vet manifests envtest
@@ -185,6 +189,18 @@ deploy-setup-k8s: deploy-setup
 
 test-e2e-conformance:
 	SUITE=./test/conformance ./hack/run-e2e-conformance.sh
+
+test-e2e-conformance-virtual-k8s-cluster-ci:
+	./hack/run-e2e-conformance-virtual-cluster.sh
+
+test-e2e-conformance-virtual-k8s-cluster:
+	SKIP_DELETE=TRUE ./hack/run-e2e-conformance-virtual-cluster.sh
+
+test-e2e-conformance-virtual-ocp-cluster-ci:
+	./hack/run-e2e-conformance-virtual-ocp.sh
+
+test-e2e-conformance-virtual-ocp-cluster:
+	SKIP_DELETE=TRUE ./hack/run-e2e-conformance-virtual-ocp.sh
 
 test-e2e-validation-only:
 	SUITE=./test/validation ./hack/run-e2e-conformance.sh

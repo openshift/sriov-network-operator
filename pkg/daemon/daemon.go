@@ -108,6 +108,12 @@ type Daemon struct {
 	workqueue workqueue.RateLimitingInterface
 
 	mcpName string
+
+	storeManager utils.StoreManagerInterface
+
+	hostManager host.HostManagerInterface
+
+	eventRecorder *EventRecorder
 }
 
 const (
@@ -122,9 +128,6 @@ const (
 )
 
 var namespace = os.Getenv("NAMESPACE")
-
-// used by test to mock interactions with filesystem
-var filesystemRoot string = ""
 
 // writer implements io.Writer interface as a pass-through for glog.
 type writer struct {
@@ -148,6 +151,7 @@ func New(
 	refreshCh chan<- Message,
 	platformType utils.PlatformType,
 	useSystemdService bool,
+	er *EventRecorder,
 	devMode bool,
 ) *Daemon {
 	return &Daemon{
@@ -185,34 +189,8 @@ func New(
 		workqueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(updateDelay), 1)},
 			workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, maxUpdateBackoff)), "SriovNetworkNodeState"),
+		eventRecorder: er,
 	}
-}
-
-func (dn *Daemon) tryCreateUdevRuleWrapper() error {
-	ns, nodeStateErr := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(
-		context.Background(),
-		dn.name,
-		metav1.GetOptions{},
-	)
-	if nodeStateErr != nil {
-		glog.Warningf("Could not fetch node state %s: %v, skip updating switchdev udev rules", dn.name, nodeStateErr)
-	} else {
-		err := tryCreateSwitchdevUdevRule(ns)
-		if err != nil {
-			glog.Warningf("Failed to create switchdev udev rules: %v", err)
-		}
-	}
-
-	// update udev rule only if we are on a BM environment
-	// for virtual environments we don't disable the vfs as they may be used by the platform/host
-	if dn.platform != utils.VirtualOpenStack {
-		err := tryCreateNMUdevRule()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // Run the config daemon
@@ -232,19 +210,29 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	defer utilruntime.HandleCrash()
 	defer dn.workqueue.ShutDown()
 
+	hostManager := host.NewHostManager(dn.useSystemdService)
+	dn.hostManager = hostManager
 	if !dn.useSystemdService {
-		hostManager := host.NewHostManager(dn.useSystemdService)
-		hostManager.TryEnableRdma()
-		hostManager.TryEnableTun()
-		hostManager.TryEnableVhostNet()
+		dn.hostManager.TryEnableRdma()
+		dn.hostManager.TryEnableTun()
+		dn.hostManager.TryEnableVhostNet()
 		err := systemd.CleanSriovFilesFromHost(utils.ClusterType == utils.ClusterTypeOpenshift)
 		if err != nil {
 			glog.Warningf("failed to remove all the systemd sriov files error: %v", err)
 		}
 	}
 
-	if err := dn.tryCreateUdevRuleWrapper(); err != nil {
+	storeManager, err := utils.NewStoreManager(false)
+	if err != nil {
 		return err
+	}
+	dn.storeManager = storeManager
+
+	if err := dn.prepareNMUdevRule(); err != nil {
+		glog.Warningf("failed to prepare udev files to disable network manager on requested VFs: %v", err)
+	}
+	if err := dn.tryCreateSwitchdevUdevRule(); err != nil {
+		glog.Warningf("failed to create udev files for switchdev")
 	}
 
 	var timeout int64 = 5
@@ -319,7 +307,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 			return err
 		case <-time.After(30 * time.Second):
 			glog.V(2).Info("Run(): period refresh")
-			if err := dn.tryCreateUdevRuleWrapper(); err != nil {
+			if err := dn.tryCreateSwitchdevUdevRule(); err != nil {
 				glog.V(2).Info("Could not create udev rule: ", err)
 			}
 		}
@@ -515,6 +503,12 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	}
 
 	if latestState.GetGeneration() == 1 && len(latestState.Spec.Interfaces) == 0 {
+		err = dn.storeManager.ClearPCIAddressFolder()
+		if err != nil {
+			glog.Errorf("failed to clear the PCI address configuration: %v", err)
+			return err
+		}
+
 		glog.V(0).Infof("nodeStateSyncHandler(): Name: %s, Interface policy spec not yet set by controller", latestState.Name)
 		if latestState.Status.SyncStatus != "Succeeded" {
 			dn.refreshCh <- Message{
@@ -531,10 +525,22 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		syncStatus:    syncStatusInProgress,
 		lastSyncError: "",
 	}
+	// wait for writer to refresh status then pull again the latest node state
+	<-dn.syncCh
+
+	// we need to load the latest status to our object
+	// if we don't do it we can have a race here where the user remove the virtual functions but the operator didn't
+	// trigger the refresh
+	updatedState, err := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), dn.name, metav1.GetOptions{})
+	if err != nil {
+		glog.Warningf("nodeStateSyncHandler(): Failed to fetch node state %s: %v", dn.name, err)
+		return err
+	}
+	latestState.Status = updatedState.Status
 
 	// load plugins if it has not loaded
 	if len(dn.enabledPlugins) == 0 {
-		dn.enabledPlugins, err = enablePlugins(dn.platform, dn.useSystemdService, latestState)
+		dn.enabledPlugins, err = enablePlugins(dn.platform, dn.useSystemdService, latestState, dn.hostManager, dn.storeManager)
 		if err != nil {
 			glog.Errorf("nodeStateSyncHandler(): failed to enable vendor plugins error: %v", err)
 			return err
@@ -654,6 +660,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 
 	if reqReboot {
 		glog.Info("nodeStateSyncHandler(): reboot node")
+		dn.eventRecorder.SendEvent("RebootNode", "Reboot node has been initiated")
 		rebootNode()
 		return nil
 	}
@@ -1028,6 +1035,7 @@ func (dn *Daemon) drainNode() error {
 	var lastErr error
 
 	glog.Info("drainNode(): Start draining")
+	dn.eventRecorder.SendEvent("DrainNode", "Drain node has been initiated")
 	if err = wait.ExponentialBackoff(backoff, func() (bool, error) {
 		err := drain.RunCordonOrUncordon(dn.drainer, dn.node, true)
 		if err != nil {
@@ -1046,17 +1054,29 @@ func (dn *Daemon) drainNode() error {
 		if err == wait.ErrWaitTimeout {
 			glog.Errorf("drainNode(): failed to drain node (%d tries): %v :%v", backoff.Steps, err, lastErr)
 		}
+		dn.eventRecorder.SendEvent("DrainNode", "Drain node failed")
 		glog.Errorf("drainNode(): failed to drain node: %v", err)
 		return err
 	}
+	dn.eventRecorder.SendEvent("DrainNode", "Drain node completed")
 	glog.Info("drainNode(): drain complete")
 	return nil
 }
 
-func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+func (dn *Daemon) tryCreateSwitchdevUdevRule() error {
 	glog.V(2).Infof("tryCreateSwitchdevUdevRule()")
+	nodeState, nodeStateErr := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(
+		context.Background(),
+		dn.name,
+		metav1.GetOptions{},
+	)
+	if nodeStateErr != nil {
+		glog.Warningf("Could not fetch node state %s: %v, skip updating switchdev udev rules", dn.name, nodeStateErr)
+		return nil
+	}
+
 	var newContent string
-	filePath := path.Join(filesystemRoot, "/host/etc/udev/rules.d/20-switchdev.rules")
+	filePath := path.Join(utils.FilesystemRoot, "/host/etc/udev/rules.d/20-switchdev.rules")
 
 	for _, ifaceStatus := range nodeState.Status.Interfaces {
 		if ifaceStatus.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
@@ -1092,7 +1112,7 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 	}
 
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command("/bin/bash", path.Join(filesystemRoot, udevScriptsPath))
+	cmd := exec.Command("/bin/bash", path.Join(utils.FilesystemRoot, udevScriptsPath))
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -1111,11 +1131,7 @@ func tryCreateSwitchdevUdevRule(nodeState *sriovnetworkv1.SriovNetworkNodeState)
 	return nil
 }
 
-func tryCreateNMUdevRule() error {
-	glog.V(2).Infof("tryCreateNMUdevRule()")
-	dirPath := path.Join(filesystemRoot, "/host/etc/udev/rules.d")
-	filePath := path.Join(dirPath, "10-nm-unmanaged.rules")
-
+func (dn *Daemon) prepareNMUdevRule() error {
 	// we need to remove the Red Hat Virtio network device from the udev rule configuration
 	// if we don't remove it when running the config-daemon on a virtual node it will disconnect the node after a reboot
 	// even that the operator should not be installed on virtual environments that are not openstack
@@ -1127,34 +1143,6 @@ func tryCreateNMUdevRule() error {
 		}
 		supportedVfIds = append(supportedVfIds, vfID)
 	}
-	newContent := fmt.Sprintf("ACTION==\"add|change|move\", ATTRS{device}==\"%s\", ENV{NM_UNMANAGED}=\"1\"\n", strings.Join(supportedVfIds, "|"))
 
-	// add NM udev rules for renaming VF rep
-	newContent = newContent + "SUBSYSTEM==\"net\", ACTION==\"add|move\", ATTRS{phys_switch_id}!=\"\", ATTR{phys_port_name}==\"pf*vf*\", ENV{NM_UNMANAGED}=\"1\"\n"
-
-	oldContent, err := os.ReadFile(filePath)
-	// if oldContent = newContent, don't do anything
-	if err == nil && newContent == string(oldContent) {
-		return nil
-	}
-
-	glog.V(2).Infof("Old udev content '%v' and new content '%v' differ. Writing to file %v.",
-		strings.TrimSuffix(string(oldContent), "\n"),
-		strings.TrimSuffix(newContent, "\n"),
-		filePath)
-
-	err = os.MkdirAll(dirPath, os.ModePerm)
-	if err != nil && !os.IsExist(err) {
-		glog.Errorf("tryCreateNMUdevRule(): failed to create dir %s: %v", dirPath, err)
-		return err
-	}
-
-	// if the file does not exist or if oldContent != newContent
-	// write to file and create it if it doesn't exist
-	err = os.WriteFile(filePath, []byte(newContent), 0666)
-	if err != nil {
-		glog.Errorf("tryCreateNMUdevRule(): fail to write file: %v", err)
-		return err
-	}
-	return nil
+	return utils.PrepareNMUdevRule(supportedVfIds)
 }

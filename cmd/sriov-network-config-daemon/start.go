@@ -159,8 +159,11 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		glog.V(0).Info("dev mode enabled")
 	}
 
+	eventRecorder := daemon.NewEventRecorder(writerclient, startOpts.nodeName, kubeclient)
+	defer eventRecorder.Shutdown()
+
 	glog.V(0).Info("starting node writer")
-	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient, startOpts.nodeName, closeAllConns, devMode)
+	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient, startOpts.nodeName, closeAllConns, eventRecorder, devMode)
 
 	destdir := os.Getenv("DEST_DIR")
 	if destdir == "" {
@@ -187,6 +190,8 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		panic(err.Error())
 	}
 
+	eventRecorder.SendEvent("ConfigDaemonStart", "Config Daemon starting")
+
 	// block the deamon process until nodeWriter finish first its run
 	err = nodeWriter.RunOnce(destdir, platformType)
 	if err != nil {
@@ -207,6 +212,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		refreshCh,
 		platformType,
 		startOpts.systemd,
+		eventRecorder,
 		devMode,
 	).Run(stopCh, exitCh)
 	if err != nil {

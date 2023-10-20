@@ -11,6 +11,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	kniK8sReporter "github.com/openshift-kni/k8sreporter"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	// Test files in this package must not end with `_test.go` suffix, as they are imported as go package
 	_ "github.com/k8snetworkplumbingwg/sriov-network-operator/test/conformance/tests"
@@ -53,6 +55,7 @@ func TestTest(t *testing.T) {
 		}
 	}
 
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	RunSpecs(t, "SRIOV Operator conformance tests")
 }
 

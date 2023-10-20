@@ -151,7 +151,7 @@ var _ = Describe("Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		PIt("should be able to update the node selector of sriov-network-config-daemon", func() {
+		It("should be able to update the node selector of sriov-network-config-daemon", func() {
 			By("specify the configDaemonNodeSelector")
 			config := &sriovnetworkv1.SriovOperatorConfig{}
 			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", interval, timeout)
@@ -163,6 +163,28 @@ var _ = Describe("Operator", func() {
 			daemonSet := &appsv1.DaemonSet{}
 			Eventually(func() map[string]string {
 				// By("wait for DaemonSet NodeSelector")
+				err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: "sriov-network-config-daemon", Namespace: testNamespace}, daemonSet)
+				if err != nil {
+					return nil
+				}
+				return daemonSet.Spec.Template.Spec.NodeSelector
+			}, timeout*10, interval).Should(Equal(config.Spec.ConfigDaemonNodeSelector))
+		})
+
+		It("should be able to do multiple updates to the node selector of sriov-network-config-daemon", func() {
+			By("changing the configDaemonNodeSelector")
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", interval, timeout)
+			Expect(err).NotTo(HaveOccurred())
+			config.Spec.ConfigDaemonNodeSelector = map[string]string{"labelA": "", "labelB": "", "labelC": ""}
+			err = k8sClient.Update(goctx.TODO(), config)
+			Expect(err).NotTo(HaveOccurred())
+			config.Spec.ConfigDaemonNodeSelector = map[string]string{"labelA": "", "labelB": ""}
+			err = k8sClient.Update(goctx.TODO(), config)
+			Expect(err).NotTo(HaveOccurred())
+
+			daemonSet := &appsv1.DaemonSet{}
+			Eventually(func() map[string]string {
 				err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: "sriov-network-config-daemon", Namespace: testNamespace}, daemonSet)
 				if err != nil {
 					return nil

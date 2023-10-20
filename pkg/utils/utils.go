@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -32,6 +33,7 @@ const (
 	sysBusPciDrivers      = "/sys/bus/pci/drivers"
 	sysBusPciDriversProbe = "/sys/bus/pci/drivers_probe"
 	sysClassNet           = "/sys/class/net"
+	procKernelCmdLine     = "/proc/cmdline"
 	netClass              = 0x02
 	numVfsFile            = "sriov_numvfs"
 
@@ -40,6 +42,15 @@ const (
 	VendorMellanox        = "15b3"
 	DeviceBF2             = "a2d6"
 	DeviceBF3             = "a2dc"
+
+	udevFolder      = "/etc/udev"
+	udevRulesFolder = udevFolder + "/rules.d"
+	udevDisableNM   = "/bindata/scripts/udev-find-sriov-pf.sh"
+	nmUdevRule      = "SUBSYSTEM==\"net\", ACTION==\"add|change|move\", ATTRS{device}==\"%s\", IMPORT{program}=\"/etc/udev/disable-nm-sriov.sh $env{INTERFACE} %s\""
+
+	KernelArgPciRealloc = "pci=realloc"
+	KernelArgIntelIommu = "intel_iommu=on"
+	KernelArgIommuPt    = "iommu=pt"
 )
 
 var InitialState sriovnetworkv1.SriovNetworkNodeState
@@ -47,11 +58,41 @@ var ClusterType string
 
 var pfPhysPortNameRe = regexp.MustCompile(`p\d+`)
 
+// FilesystemRoot used by test to mock interactions with filesystem
+var FilesystemRoot = ""
+
+var SupportedVfIds []string
+
 func init() {
 	ClusterType = os.Getenv("CLUSTER_TYPE")
 }
 
-func DiscoverSriovDevices(withUnsupported bool) ([]sriovnetworkv1.InterfaceExt, error) {
+// GetCurrentKernelArgs This retrieves the kernel cmd line arguments
+func GetCurrentKernelArgs(chroot bool) (string, error) {
+	path := procKernelCmdLine
+	if !chroot {
+		path = "/host" + path
+	}
+	cmdLine, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("GetCurrentKernelArgs(): Error reading %s: %v", procKernelCmdLine, err)
+	}
+	return string(cmdLine), nil
+}
+
+// IsKernelArgsSet This checks if the kernel cmd line is set properly. Please note that the same key could be repeated
+// several times in the kernel cmd line. We can only ensure that the kernel cmd line has the key/val kernel arg that we set.
+func IsKernelArgsSet(cmdLine string, karg string) bool {
+	elements := strings.Fields(cmdLine)
+	for _, element := range elements {
+		if element == karg {
+			return true
+		}
+	}
+	return false
+}
+
+func DiscoverSriovDevices(withUnsupported bool, storeManager StoreManagerInterface) ([]sriovnetworkv1.InterfaceExt, error) {
 	glog.V(2).Info("DiscoverSriovDevices")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
@@ -122,6 +163,15 @@ func DiscoverSriovDevices(withUnsupported bool) ([]sriovnetworkv1.InterfaceExt, 
 		}
 		iface.LinkType = getLinkType(iface)
 
+		pfStatus, exist, err := storeManager.LoadPfsStatus(iface.PciAddress)
+		if err != nil {
+			glog.Warningf("DiscoverSriovDevices(): failed to load PF status from disk: %v", err)
+		} else {
+			if exist {
+				iface.ExternallyManaged = pfStatus.ExternallyManaged
+			}
+		}
+
 		if dputils.IsSriovPF(device.Address) {
 			iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
 			iface.NumVfs = dputils.GetVFconfigured(device.Address)
@@ -156,7 +206,13 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 		glog.Warningf("cannot use mellanox devices when in kernel lockdown mode")
 		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
 	}
-	var err error
+
+	// we are already inside chroot, so we initialize the store as running on host
+	storeManager, err := NewStoreManager(true)
+	if err != nil {
+		return fmt.Errorf("SyncNodeState(): error initializing storeManager: %v", err)
+	}
+
 	for _, ifaceStatus := range ifaceStatuses {
 		configured := false
 		for _, iface := range interfaces {
@@ -169,13 +225,32 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 
 				if !NeedUpdate(&iface, &ifaceStatus) {
 					glog.V(2).Infof("syncNodeState(): no need update interface %s", iface.PciAddress)
+
+					// Save the PF status to the host
+					err = storeManager.SaveLastPfAppliedStatus(&iface)
+					if err != nil {
+						glog.Errorf("SyncNodeState(): failed to save PF applied config to host: %v", err)
+						return err
+					}
+
 					break
 				}
 				if err = configSriovDevice(&iface, &ifaceStatus); err != nil {
 					glog.Errorf("SyncNodeState(): fail to configure sriov interface %s: %v. resetting interface.", iface.PciAddress, err)
-					if resetErr := resetSriovDevice(ifaceStatus); resetErr != nil {
-						glog.Errorf("SyncNodeState(): fail to reset on error SR-IOV interface: %s", resetErr)
+					if iface.ExternallyManaged {
+						glog.Infof("SyncNodeState(): skipping device reset as the nic is marked as externally created")
+					} else {
+						if resetErr := resetSriovDevice(ifaceStatus); resetErr != nil {
+							glog.Errorf("SyncNodeState(): failed to reset on error SR-IOV interface: %s", resetErr)
+						}
 					}
+					return err
+				}
+
+				// Save the PF status to the host
+				err = storeManager.SaveLastPfAppliedStatus(&iface)
+				if err != nil {
+					glog.Errorf("SyncNodeState(): failed to save PF applied config to host: %v", err)
 					return err
 				}
 				break
@@ -184,6 +259,32 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 		if !configured && ifaceStatus.NumVfs > 0 {
 			if skip := pfsToConfig[ifaceStatus.PciAddress]; skip {
 				continue
+			}
+
+			// load the PF info
+			pfStatus, exist, err := storeManager.LoadPfsStatus(ifaceStatus.PciAddress)
+			if err != nil {
+				glog.Errorf("SyncNodeState(): failed to load info about PF status for pci address %s: %v", ifaceStatus.PciAddress, err)
+				return err
+			}
+
+			if !exist {
+				glog.Infof("SyncNodeState(): PF name %s with pci address %s has VFs configured but they weren't created by the sriov operator. Skipping the device reset",
+					ifaceStatus.Name,
+					ifaceStatus.PciAddress)
+				continue
+			}
+
+			if pfStatus.ExternallyManaged {
+				glog.Infof("SyncNodeState(): PF name %s with pci address %s was externally created skipping the device reset",
+					ifaceStatus.Name,
+					ifaceStatus.PciAddress)
+				continue
+			} else {
+				err = RemoveUdevRule(ifaceStatus.PciAddress)
+				if err != nil {
+					return err
+				}
 			}
 
 			if err = resetSriovDevice(ifaceStatus); err != nil {
@@ -274,6 +375,12 @@ func NeedUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 							glog.V(2).Infof("NeedUpdate(): VF %d MTU needs update, desired=%d, current=%d", vf.VfID, group.Mtu, vf.Mtu)
 							return true
 						}
+
+						// this is needed to be sure the admin mac address is configured as expected
+						if iface.ExternallyManaged {
+							glog.V(2).Infof("NeedUpdate(): need to update the device as it's externally manage for pci address %s", ifaceStatus.PciAddress)
+							return true
+						}
 					}
 					break
 				}
@@ -297,10 +404,28 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 	}
 	// set numVFs
 	if iface.NumVfs != ifaceStatus.NumVfs {
-		err = setSriovNumVfs(iface.PciAddress, iface.NumVfs)
-		if err != nil {
-			glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
-			return err
+		if iface.ExternallyManaged {
+			if iface.NumVfs > ifaceStatus.NumVfs {
+				errMsg := fmt.Sprintf("configSriovDevice(): number of request virtual functions %d is not equal to configured virtual functions %d but the policy is configured as ExternallyManaged for device %s", iface.NumVfs, ifaceStatus.NumVfs, iface.PciAddress)
+				glog.Error(errMsg)
+				return fmt.Errorf(errMsg)
+			}
+		} else {
+			// create the udev rule to disable all the vfs from network manager as this vfs are managed by the operator
+			err = AddUdevRule(iface.PciAddress)
+			if err != nil {
+				return err
+			}
+
+			err = setSriovNumVfs(iface.PciAddress, iface.NumVfs)
+			if err != nil {
+				err = RemoveUdevRule(iface.PciAddress)
+				if err != nil {
+					return err
+				}
+				glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
+				return err
+			}
 		}
 	}
 	// set PF mtu
@@ -814,5 +939,66 @@ func RebindVfToDefaultDriver(vfAddr string) error {
 	}
 
 	glog.Warningf("RebindVfToDefaultDriver(): workaround implemented for VF %s", vfAddr)
+	return nil
+}
+
+func PrepareNMUdevRule(supportedVfIds []string) error {
+	glog.V(2).Infof("PrepareNMUdevRule()")
+	dirPath := path.Join(FilesystemRoot, "/host/etc/udev/rules.d")
+	filePath := path.Join(dirPath, "10-nm-unmanaged.rules")
+
+	// remove the old unmanaged rules file
+	if _, err := os.Stat(filePath); err == nil {
+		err = os.Remove(filePath)
+		if err != nil {
+			glog.Warningf("failed to remove the network manager global unmanaged rule on path %s: %v", filePath, err)
+		}
+	}
+
+	// create the pf finder script for udev rules
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command("/bin/bash", path.Join(FilesystemRoot, udevDisableNM))
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		glog.Errorf("PrepareNMUdevRule(): failed to prepare nmUdevRule, stderr %s: %v", stderr.String(), err)
+		return err
+	}
+	glog.V(2).Infof("PrepareNMUdevRule(): %v", stdout.String())
+
+	//save the device list to use for udev rules
+	SupportedVfIds = supportedVfIds
+	return nil
+}
+
+func AddUdevRule(pfPciAddress string) error {
+	glog.V(2).Infof("AddUdevRule(): %s", pfPciAddress)
+	pathFile := udevRulesFolder
+	udevRuleContent := fmt.Sprintf(nmUdevRule, strings.Join(SupportedVfIds, "|"), pfPciAddress)
+
+	err := os.MkdirAll(pathFile, os.ModePerm)
+	if err != nil && !os.IsExist(err) {
+		glog.Errorf("AddUdevRule(): failed to create dir %s: %v", pathFile, err)
+		return err
+	}
+
+	filePath := path.Join(pathFile, fmt.Sprintf("10-nm-disable-%s.rules", pfPciAddress))
+	// if the file does not exist or if oldContent != newContent
+	// write to file and create it if it doesn't exist
+	err = os.WriteFile(filePath, []byte(udevRuleContent), 0666)
+	if err != nil {
+		glog.Errorf("AddUdevRule(): fail to write file: %v", err)
+		return err
+	}
+	return nil
+}
+
+func RemoveUdevRule(pfPciAddress string) error {
+	pathFile := udevRulesFolder
+	filePath := path.Join(pathFile, fmt.Sprintf("10-nm-disable-%s.rules", pfPciAddress))
+	err := os.Remove(filePath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	return nil
 }
