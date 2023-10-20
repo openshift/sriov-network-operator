@@ -2,6 +2,7 @@ package generic
 
 import (
 	"bytes"
+	"errors"
 	"os/exec"
 	"reflect"
 	"strconv"
@@ -47,19 +48,21 @@ type DriverState struct {
 type DriverStateMapType map[uint]*DriverState
 
 type GenericPlugin struct {
-	PluginName     string
-	SpecVersion    string
-	DesireState    *sriovnetworkv1.SriovNetworkNodeState
-	LastState      *sriovnetworkv1.SriovNetworkNodeState
-	DriverStateMap DriverStateMapType
-	RunningOnHost  bool
-	HostManager    host.HostManagerInterface
+	PluginName        string
+	SpecVersion       string
+	DesireState       *sriovnetworkv1.SriovNetworkNodeState
+	LastState         *sriovnetworkv1.SriovNetworkNodeState
+	DriverStateMap    DriverStateMapType
+	DesiredKernelArgs map[string]bool
+	RunningOnHost     bool
+	HostManager       host.HostManagerInterface
+	StoreManager      utils.StoreManagerInterface
 }
 
 const scriptsPath = "bindata/scripts/enable-kargs.sh"
 
 // Initialize our plugin and set up initial values
-func NewGenericPlugin(runningOnHost bool) (plugin.VendorPlugin, error) {
+func NewGenericPlugin(runningOnHost bool, hostManager host.HostManagerInterface, storeManager utils.StoreManagerInterface) (plugin.VendorPlugin, error) {
 	driverStateMap := make(map[uint]*DriverState)
 	driverStateMap[Vfio] = &DriverState{
 		DriverName:     vfioPciDriver,
@@ -82,13 +85,14 @@ func NewGenericPlugin(runningOnHost bool) (plugin.VendorPlugin, error) {
 		NeedDriverFunc: needDriverCheckVdpaType,
 		DriverLoaded:   false,
 	}
-
 	return &GenericPlugin{
-		PluginName:     PluginName,
-		SpecVersion:    "1.0",
-		DriverStateMap: driverStateMap,
-		RunningOnHost:  runningOnHost,
-		HostManager:    host.NewHostManager(runningOnHost),
+		PluginName:        PluginName,
+		SpecVersion:       "1.0",
+		DriverStateMap:    driverStateMap,
+		DesiredKernelArgs: make(map[string]bool),
+		RunningOnHost:     runningOnHost,
+		HostManager:       hostManager,
+		StoreManager:      storeManager,
 	}, nil
 }
 
@@ -110,8 +114,11 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 	err = nil
 	p.DesireState = new
 
-	needDrain = needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
-	needReboot = needRebootNode(new, p.DriverStateMap)
+	needDrain = p.needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
+	needReboot, err = p.needRebootNode(new)
+	if err != nil {
+		return needDrain, needReboot, err
+	}
 
 	if needReboot {
 		needDrain = true
@@ -167,6 +174,10 @@ func (p *GenericPlugin) Apply() error {
 	}
 
 	if err := utils.SyncNodeState(p.DesireState, pfsToSkip); err != nil {
+		// Catch the "cannot allocate memory" error and try to use PCI realloc
+		if errors.Is(err, syscall.ENOMEM) {
+			p.addToDesiredKernelArgs(utils.KernelArgPciRealloc)
+		}
 		return err
 	}
 	p.LastState = &sriovnetworkv1.SriovNetworkNodeState{}
@@ -196,28 +207,28 @@ func needDriverCheckVdpaType(state *sriovnetworkv1.SriovNetworkNodeState, driver
 	return false
 }
 
-func tryEnableIommuInKernelArgs() (bool, error) {
-	glog.Info("generic-plugin tryEnableIommuInKernelArgs()")
-	args := [2]string{"intel_iommu=on", "iommu=pt"}
+// setKernelArg Tries to add the kernel args via ostree or grubby.
+func setKernelArg(karg string) (bool, error) {
+	glog.Info("generic-plugin setKernelArg()")
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command("/bin/sh", scriptsPath, args[0], args[1])
+	cmd := exec.Command("/bin/sh", scriptsPath, karg)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
 		// if grubby is not there log and assume kernel args are set correctly.
 		if isCommandNotFound(err) {
-			glog.Error("generic-plugin tryEnableIommuInKernelArgs(): grubby command not found. Please ensure that kernel args intel_iommu=on iommu=pt are set")
+			glog.Errorf("generic-plugin setKernelArg(): grubby or ostree command not found. Please ensure that kernel arg %s are set", karg)
 			return false, nil
 		}
-		glog.Errorf("generic-plugin tryEnableIommuInKernelArgs(): fail to enable iommu %s: %v", args, err)
+		glog.Errorf("generic-plugin setKernelArg(): fail to enable kernel arg %s: %v", karg, err)
 		return false, err
 	}
 
 	i, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
 	if err == nil {
 		if i > 0 {
-			glog.Infof("generic-plugin tryEnableIommuInKernelArgs(): need to reboot node")
+			glog.Infof("generic-plugin setKernelArg(): need to reboot node for kernel arg %s", karg)
 			return true, nil
 		}
 	}
@@ -233,8 +244,51 @@ func isCommandNotFound(err error) bool {
 	return false
 }
 
-func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool) {
+// addToDesiredKernelArgs Should be called to queue a kernel arg to be added to the node.
+func (p *GenericPlugin) addToDesiredKernelArgs(karg string) {
+	if _, ok := p.DesiredKernelArgs[karg]; !ok {
+		glog.Infof("generic-plugin addToDesiredKernelArgs(): Adding %s to desired kernel arg", karg)
+		p.DesiredKernelArgs[karg] = false
+	}
+}
+
+// syncDesiredKernelArgs Should be called to set all the kernel arguments. Returns bool if node update is needed.
+func (p *GenericPlugin) syncDesiredKernelArgs() (bool, error) {
+	needReboot := false
+	if len(p.DesiredKernelArgs) == 0 {
+		return false, nil
+	}
+	kargs, err := utils.GetCurrentKernelArgs(false)
+	if err != nil {
+		return false, err
+	}
+	for desiredKarg, attempted := range p.DesiredKernelArgs {
+		set := utils.IsKernelArgsSet(kargs, desiredKarg)
+		if !set {
+			if attempted {
+				glog.V(2).Infof("generic-plugin syncDesiredKernelArgs(): previously attempted to set kernel arg %s", desiredKarg)
+			}
+			// There is a case when we try to set the kernel argument here, the daemon could decide to not reboot because
+			// the daemon encountered a potentially one-time error. However we always want to make sure that the kernel
+			// argument is set once the daemon goes through node state sync again.
+			update, err := setKernelArg(desiredKarg)
+			if err != nil {
+				glog.Errorf("generic-plugin syncDesiredKernelArgs(): fail to set kernel arg %s: %v", desiredKarg, err)
+				return false, err
+			}
+			if update {
+				needReboot = true
+				glog.V(2).Infof("generic-plugin syncDesiredKernelArgs(): need reboot for setting kernel arg %s", desiredKarg)
+			}
+			p.DesiredKernelArgs[desiredKarg] = true
+		}
+	}
+	return needReboot, nil
+}
+
+func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool) {
 	glog.V(2).Infof("generic-plugin needDrainNode(): current state '%+v', desired state '%+v'", current, desired)
+
 	needDrain = false
 	for _, ifaceStatus := range current {
 		configured := false
@@ -254,6 +308,27 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 			}
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {
+			// load the PF info
+			pfStatus, exist, err := p.StoreManager.LoadPfsStatus(ifaceStatus.PciAddress)
+			if err != nil {
+				glog.Errorf("generic-plugin needDrainNode(): failed to load info about PF status for pci address %s: %v", ifaceStatus.PciAddress, err)
+				continue
+			}
+
+			if !exist {
+				glog.Infof("generic-plugin needDrainNode(): PF name %s with pci address %s has VFs configured but they weren't created by the sriov operator. Skipping drain",
+					ifaceStatus.Name,
+					ifaceStatus.PciAddress)
+				continue
+			}
+
+			if pfStatus.ExternallyManaged {
+				glog.Infof("generic-plugin needDrainNode()(): PF name %s with pci address %s was externally created. Skipping drain",
+					ifaceStatus.Name,
+					ifaceStatus.PciAddress)
+				continue
+			}
+
 			glog.V(2).Infof("generic-plugin needDrainNode(): need drain, %v needs to be reset", ifaceStatus)
 			needDrain = true
 			return
@@ -262,33 +337,39 @@ func needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.Int
 	return
 }
 
-func needRebootIfVfio(state *sriovnetworkv1.SriovNetworkNodeState, driverMap DriverStateMapType) (needReboot bool) {
-	driverState := driverMap[Vfio]
+func (p *GenericPlugin) addVfioDesiredKernelArg(state *sriovnetworkv1.SriovNetworkNodeState) {
+	driverState := p.DriverStateMap[Vfio]
 	if !driverState.DriverLoaded && driverState.NeedDriverFunc(state, driverState) {
-		var err error
-		needReboot, err = tryEnableIommuInKernelArgs()
-		if err != nil {
-			glog.Errorf("generic-plugin needRebootNode():fail to enable iommu in kernel args: %v", err)
-		}
-		if needReboot {
-			glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for enabling iommu kernel args")
-		}
+		p.addToDesiredKernelArgs(utils.KernelArgIntelIommu)
+		p.addToDesiredKernelArgs(utils.KernelArgIommuPt)
 	}
-	return needReboot
 }
 
-func needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState, driverMap DriverStateMapType) (needReboot bool) {
-	needReboot = needRebootIfVfio(state, driverMap)
-	updateNode, err := utils.WriteSwitchdevConfFile(state)
+func (p *GenericPlugin) needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState) (needReboot bool, err error) {
+	needReboot = false
+	p.addVfioDesiredKernelArg(state)
 
+	updateNode, err := p.syncDesiredKernelArgs()
+	if err != nil {
+		glog.Errorf("generic-plugin needRebootNode(): failed to set the desired kernel arguments")
+		return false, err
+	}
+	if updateNode {
+		glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for updating kernel arguments")
+		needReboot = true
+	}
+
+	updateNode, err = utils.WriteSwitchdevConfFile(state)
 	if err != nil {
 		glog.Errorf("generic-plugin needRebootNode(): fail to write switchdev device config file")
+		return false, err
 	}
 	if updateNode {
 		glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for updating switchdev device configuration")
+		needReboot = true
 	}
-	needReboot = needReboot || updateNode
-	return
+
+	return needReboot, nil
 }
 
 // ////////////// for testing purposes only ///////////////////////

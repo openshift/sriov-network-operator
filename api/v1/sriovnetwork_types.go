@@ -42,6 +42,9 @@ type SriovNetworkSpec struct {
 	// +kubebuilder:validation:Maximum=7
 	// VLAN QoS ID to assign for the VF. Defaults to 0.
 	VlanQoS int `json:"vlanQoS,omitempty"`
+	// +kubebuilder:validation:Enum={"802.1q","802.1Q", "802.1ad", "802.1AD"}
+	// VLAN proto to assign for the VF. Defaults to 802.1q.
+	VlanProto string `json:"vlanProto,omitempty"`
 	// VF spoof check, (on|off)
 	// +kubebuilder:validation:Enum={"on","off"}
 	SpoofChk string `json:"spoofChk,omitempty"`

@@ -21,6 +21,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -511,6 +513,11 @@ var _ = Describe("[sriov] operator", func() {
 
 			// 25961
 			It("Should configure the the link state variable", func() {
+				if cluster.VirtualCluster() {
+					// https://bugzilla.redhat.com/show_bug.cgi?id=2214976
+					Skip("Bug in IGB driver")
+				}
+
 				sriovNetwork := &sriovv1.SriovNetwork{
 					ObjectMeta: metav1.ObjectMeta{Name: "test-statenetwork", Namespace: operatorNamespace},
 					Spec: sriovv1.SriovNetworkSpec{
@@ -907,12 +914,6 @@ var _ = Describe("[sriov] operator", func() {
 	})
 
 	Describe("Custom SriovNetworkNodePolicy", func() {
-		var vfioNode string
-		var vfioNic sriovv1.InterfaceExt
-		execute.BeforeAll(func() {
-			vfioNode, vfioNic = sriovInfos.FindOneVfioSriovDevice()
-		})
-
 		BeforeEach(func() {
 			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 			Expect(err).ToNot(HaveOccurred())
@@ -920,15 +921,17 @@ var _ = Describe("[sriov] operator", func() {
 		})
 
 		Describe("Configuration", func() {
-
 			Context("Create vfio-pci node policy", func() {
+				var vfioNode string
+				var vfioNic sriovv1.InterfaceExt
+
 				BeforeEach(func() {
 					if discovery.Enabled() {
 						Skip("Test unsuitable to be run in discovery mode")
 					}
-					if vfioNode == "" {
-						Skip("skip test as no vfio-pci capable PF was found")
-					}
+
+					vfioNode, vfioNic = sriovInfos.FindOneVfioSriovDevice()
+					Expect(vfioNode).ToNot(Equal(""))
 				})
 
 				It("Should be possible to create a vfio-pci resource", func() {
@@ -964,14 +967,16 @@ var _ = Describe("[sriov] operator", func() {
 			})
 
 			Context("PF Partitioning", func() {
+				var vfioNode string
+				var vfioNic sriovv1.InterfaceExt
+
 				// 27633
 				BeforeEach(func() {
 					if discovery.Enabled() {
 						Skip("Test unsuitable to be run in discovery mode")
 					}
-					if vfioNode == "" {
-						Skip("skip test as no vfio-pci capable PF was found")
-					}
+					vfioNode, vfioNic = sriovInfos.FindOneVfioSriovDevice()
+					Expect(vfioNode).ToNot(Equal(""))
 				})
 
 				It("Should be possible to partition the pf's vfs", func() {
@@ -1161,6 +1166,11 @@ var _ = Describe("[sriov] operator", func() {
 			Context("PF shutdown", func() {
 				// 29398
 				It("Should be able to create pods successfully if PF is down.Pods are able to communicate with each other on the same node", func() {
+					if cluster.VirtualCluster() {
+						// https://bugzilla.redhat.com/show_bug.cgi?id=2214976
+						Skip("Bug in IGB driver")
+					}
+
 					resourceName := testResourceName
 					var testNode string
 					var unusedSriovDevice *sriovv1.InterfaceExt
@@ -1210,6 +1220,11 @@ var _ = Describe("[sriov] operator", func() {
 
 			Context("MTU", func() {
 				BeforeEach(func() {
+					if cluster.VirtualCluster() {
+						// https://bugzilla.redhat.com/show_bug.cgi?id=2214977
+						Skip("Bug in IGB driver")
+					}
+
 					var node string
 					resourceName := "mturesource"
 					var numVfs int
@@ -1305,7 +1320,6 @@ var _ = Describe("[sriov] operator", func() {
 							ResourceName:     resourceName,
 							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
 							NetworkNamespace: namespaces.Test,
-							LinkState:        "enable",
 						}}
 
 					// We need this to be able to run the connectivity checks on Mellanox cards
@@ -1395,11 +1409,11 @@ var _ = Describe("[sriov] operator", func() {
 						},
 
 						Spec: sriovv1.SriovNetworkNodePolicySpec{
-							NumVfs:       10,
+							NumVfs:       7,
 							ResourceName: "resourceXXX",
 							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
 							NicSelector: sriovv1.SriovNetworkNicSelector{
-								PfNames: []string{intf.Name + "#0-4"},
+								PfNames: []string{intf.Name + "#0-3"},
 							},
 							ExcludeTopology: true,
 						},
@@ -1412,11 +1426,11 @@ var _ = Describe("[sriov] operator", func() {
 						},
 
 						Spec: sriovv1.SriovNetworkNodePolicySpec{
-							NumVfs:       10,
+							NumVfs:       7,
 							ResourceName: "resourceXXX",
 							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
 							NicSelector: sriovv1.SriovNetworkNicSelector{
-								PfNames: []string{intf.Name + "#5-9"},
+								PfNames: []string{intf.Name + "#4-6"},
 							},
 							ExcludeTopology: false,
 						},
@@ -1429,11 +1443,11 @@ var _ = Describe("[sriov] operator", func() {
 						},
 
 						Spec: sriovv1.SriovNetworkNodePolicySpec{
-							NumVfs:       10,
+							NumVfs:       7,
 							ResourceName: "resourceYYY",
 							NodeSelector: map[string]string{"kubernetes.io/hostname": node},
 							NicSelector: sriovv1.SriovNetworkNicSelector{
-								PfNames: []string{intf.Name + "#5-9"},
+								PfNames: []string{intf.Name + "#4-6"},
 							},
 							ExcludeTopology: false,
 						},
@@ -1447,15 +1461,15 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					assertDevicePluginConfigurationContains(node,
-						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-4"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
+						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-3"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
 
 					err = clients.Create(context.Background(), excludeTopologyFalseResourceYYY)
 					Expect(err).ToNot(HaveOccurred())
 
 					assertDevicePluginConfigurationContains(node,
-						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-4"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
+						fmt.Sprintf(`{"resourceName":"resourceXXX","excludeTopology":true,"selectors":{"pfNames":["%s#0-3"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
 					assertDevicePluginConfigurationContains(node,
-						fmt.Sprintf(`{"resourceName":"resourceYYY","selectors":{"pfNames":["%s#5-9"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
+						fmt.Sprintf(`{"resourceName":"resourceYYY","selectors":{"pfNames":["%s#4-6"],"IsRdma":false,"NeedVhostNet":false},"SelectorObj":null}`, intf.Name))
 				})
 
 				It("multiple values for the same resource should not be allowed", func() {
@@ -1729,7 +1743,6 @@ var _ = Describe("[sriov] operator", func() {
 						ResourceName:     resourceName,
 						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
 						NetworkNamespace: namespaces.Test,
-						LinkState:        "enable",
 					}}
 
 				// We need this to be able to run the connectivity checks on Mellanox cards
@@ -1782,6 +1795,137 @@ var _ = Describe("[sriov] operator", func() {
 
 				err = clients.Delete(context.Background(), podObj)
 				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+
+		Context("ExternallyManaged Validation", func() {
+			numVfs := 5
+			var node string
+			var nic sriovv1.InterfaceExt
+			externallyManage := func(policy *sriovv1.SriovNetworkNodePolicy) {
+				policy.Spec.ExternallyManaged = true
+			}
+
+			execute.BeforeAll(func() {
+				node, nic = sriovInfos.FindOneVfioSriovDevice()
+				Expect(node).ToNot(Equal(""))
+			})
+
+			It("Should not allow to create a policy if there are no vfs configured", func() {
+				resourceName := "test"
+				_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, nic.Name, node, numVfs, resourceName, "netdevice", externallyManage)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("is higher than the virtual functions allocated for the PF externally"))
+			})
+
+			It("Should create a policy if the number of requested vfs is equal", func() {
+				resourceName := "testexternally" //nolint:goconst
+				By("allocating the 5 virtual functions to the selected device")
+				_, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo 5 > /host/sys/class/net/%s/device/sriov_numvfs", nic.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+
+				By("creating the policy that will use the 5 virtual functions we create manually on the system")
+				Eventually(func() error {
+					_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, nic.Name, node, numVfs, resourceName, "netdevice", externallyManage)
+					return err
+				}, 1*time.Minute, time.Second).ShouldNot(HaveOccurred())
+
+				Eventually(func() int64 {
+					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					allocatable, _ := resNum.AsInt64()
+					return allocatable
+				}, 2*time.Minute, time.Second).Should(Equal(int64(numVfs)))
+
+				By("cleaning the manual sriov created")
+				_, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo 0 > /host/sys/class/net/%s/device/sriov_numvfs", nic.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+			})
+
+			It("Should create a policy if the number of requested vfs is equal and not delete them when the policy is removed", func() {
+				resourceName := "testexternally"
+				var sriovPolicy *sriovv1.SriovNetworkNodePolicy
+				By("allocating the 5 virtual functions to the selected device")
+				_, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo 5 > /host/sys/class/net/%s/device/sriov_numvfs", nic.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+
+				By("creating the policy that will use the 5 virtual functions we create manually on the system")
+				Eventually(func() error {
+					sriovPolicy, err = network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, nic.Name, node, numVfs, resourceName, "netdevice", externallyManage)
+					return err
+				}, 2*time.Minute, time.Second).ShouldNot(HaveOccurred())
+
+				Eventually(func() int64 {
+					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					allocatable, _ := resNum.AsInt64()
+					return allocatable
+				}, 3*time.Minute, time.Second).Should(Equal(int64(numVfs)))
+
+				By("deleting the policy")
+				err = clients.Delete(context.Background(), sriovPolicy, &runtimeclient.DeleteOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				WaitForSRIOVStable()
+
+				Eventually(func() int64 {
+					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					allocatable, _ := resNum.AsInt64()
+					return allocatable
+				}, 2*time.Minute, time.Second).Should(Equal(int64(0)))
+
+				By("checking the virtual functions are still on the host")
+				output, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("cat /host/sys/class/net/%s/device/sriov_numvfs", nic.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+				Expect(output).To(ContainSubstring("5"))
+
+				By("cleaning the manual sriov created")
+				_, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo 0 > /host/sys/class/net/%s/device/sriov_numvfs", nic.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+			})
+
+			It("should reset the virtual functions if externallyManaged is false", func() {
+				resourceName := "testexternally" //nolint:goconst
+
+				var sriovPolicy *sriovv1.SriovNetworkNodePolicy
+				By("creating the policy for 5 virtual functions")
+				sriovPolicy, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, nic.Name, node, numVfs, resourceName, "netdevice")
+				Expect(err).ToNot(HaveOccurred())
+
+				Eventually(func() int64 {
+					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					allocatable, _ := resNum.AsInt64()
+					return allocatable
+				}, 3*time.Minute, time.Second).Should(Equal(int64(numVfs)))
+
+				By("deleting the policy")
+				err = clients.Delete(context.Background(), sriovPolicy, &runtimeclient.DeleteOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				WaitForSRIOVStable()
+
+				Eventually(func() int64 {
+					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+					allocatable, _ := resNum.AsInt64()
+					return allocatable
+				}, 3*time.Minute, time.Second).Should(Equal(int64(0)))
+
+				By("checking the virtual functions don't exist anymore on the system")
+				output, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("cat /host/sys/class/net/%s/device/sriov_numvfs", nic.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+				Expect(output).To(ContainSubstring("0"))
 			})
 		})
 	})
@@ -2084,9 +2228,9 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool, podCa
 		Expect(err).ToNot(HaveOccurred())
 		return runningPod.Status.Phase
 	}, 5*time.Minute, 1*time.Second).Should(Equal(corev1.PodRunning))
-	pod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
+	podObj, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
 	Expect(err).ToNot(HaveOccurred())
-	return pod
+	return podObj
 }
 
 func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
@@ -2095,15 +2239,19 @@ func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
 		ipProtocolVersion = "4"
 	}
 	podDefinition := pod.RedefineWithNodeSelector(
-		pod.RedefineWithRestartPolicy(
-			pod.RedefineWithCommand(
-				pod.DefineWithNetworks([]string{sriovNetworkAttachment}),
-				[]string{"sh", "-c", fmt.Sprintf("ping -%s -c 3 %s", ipProtocolVersion, ip)}, []string{},
+		pod.RedefineWithCapabilities(
+			pod.RedefineWithRestartPolicy(
+				pod.RedefineWithCommand(
+					pod.DefineWithNetworks([]string{sriovNetworkAttachment}),
+					[]string{"sh", "-c", fmt.Sprintf("ping -%s -c 3 %s", ipProtocolVersion, ip)}, []string{},
+				),
+				corev1.RestartPolicyNever,
 			),
-			corev1.RestartPolicyNever,
+			[]corev1.Capability{"NET_RAW"},
 		),
 		nodeSelector,
 	)
+
 	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
@@ -2181,6 +2329,20 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 			"Name":   Equal(intf.Name),
 			"NumVfs": Equal(numVfs),
 		})))
+}
+
+func runCommandOnConfigDaemon(nodeName string, command ...string) (string, string, error) {
+	pods := &corev1.PodList{}
+	label, err := labels.Parse("app=sriov-network-config-daemon")
+	Expect(err).ToNot(HaveOccurred())
+	field, err := fields.ParseSelector(fmt.Sprintf("spec.nodeName=%s", nodeName))
+	Expect(err).ToNot(HaveOccurred())
+	err = clients.List(context.Background(), pods, &runtimeclient.ListOptions{Namespace: operatorNamespace, LabelSelector: label, FieldSelector: field})
+	Expect(err).ToNot(HaveOccurred())
+	Expect(len(pods.Items)).To(Equal(1))
+
+	output, errOutput, err := pod.ExecCommand(clients, &pods.Items[0], command...)
+	return output, errOutput, err
 }
 
 func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {

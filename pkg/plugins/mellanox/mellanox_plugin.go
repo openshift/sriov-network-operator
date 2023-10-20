@@ -129,6 +129,11 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 		needReboot = needReboot || sriovEnNeedReboot
 		changeWithoutReboot = changeWithoutReboot || sriovEnChangeWithoutReboot
 
+		// failing as we can't the fwTotalVf is lower than the request one on a nic with externallyManage configured
+		if ifaceSpec.ExternallyManaged && needReboot {
+			return true, true, fmt.Errorf("interface %s required a change in the TotalVfs but the policy is externally managed failing: firmware TotalVf %d requested TotalVf %d", ifaceSpec.PciAddress, fwCurrent.totalVfs, totalVfs)
+		}
+
 		needLinkChange, err := handleLinkType(pciPrefix, fwCurrent, attrs)
 		if err != nil {
 			return false, false, err
@@ -329,6 +334,18 @@ func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.
 				totalVfs = otherIfaceSpec.NumVfs
 			}
 		}
+	}
+
+	// if the PF is externally managed we just need to check the totalVfs requested in the policy is not higher than
+	// the configured amount
+	if ifaceSpec.ExternallyManaged {
+		if totalVfs > fwCurrent.totalVfs {
+			glog.Errorf("The nic is externallyManaged and TotalVfs %d configured on the system is lower then requested %d, failing configuration", fwCurrent.totalVfs, totalVfs)
+			attrs.totalVfs = totalVfs
+			needReboot = true
+			changeWithoutReboot = false
+		}
+		return
 	}
 
 	if fwCurrent.totalVfs != totalVfs {

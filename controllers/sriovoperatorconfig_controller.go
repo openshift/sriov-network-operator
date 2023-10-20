@@ -154,9 +154,6 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(ctx context.Context,
 
 	names := []string{"sriov-cni", "sriov-device-plugin"}
 
-	if len(dc.Spec.ConfigDaemonNodeSelector) == 0 {
-		return nil
-	}
 	for _, name := range names {
 		err := r.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, ds)
 		if err != nil {
@@ -166,7 +163,11 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(ctx context.Context,
 			logger.Error(err, "Couldn't get daemonset", "name", name)
 			return err
 		}
-		ds.Spec.Template.Spec.NodeSelector = dc.Spec.ConfigDaemonNodeSelector
+		if len(dc.Spec.ConfigDaemonNodeSelector) == 0 {
+			ds.Spec.Template.Spec.NodeSelector = GetDefaultNodeSelector()
+		} else {
+			ds.Spec.Template.Spec.NodeSelector = dc.Spec.ConfigDaemonNodeSelector
+		}
 		err = r.Client.Update(ctx, ds)
 		if err != nil {
 			logger.Error(err, "Couldn't update daemonset", "name", name)

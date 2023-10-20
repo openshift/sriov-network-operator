@@ -28,8 +28,9 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        kubernetes.io/os: linux
-        node-role.kubernetes.io/worker:
+        {{- range $key, $value := .NodeSelectorField }}
+          {{ $key }}: {{ $value }}
+        {{- end }}
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-device-plugin
@@ -78,7 +79,7 @@ spec:
           hostPath:
             path: /var/lib/kubelet/plugins_registry
         - name: config-volume
-          configMap: 
+          configMap:
             name: device-plugin-config
         - name: device-info
           hostPath:
