@@ -35,6 +35,8 @@ WantedBy=network-online.target
 * make
 * go
 
+*Note:* For openshift you will also need a pull secret that you can download from the [Redhat Console](https://console.redhat.com/)
+
 ## Deploy the cluster
 
 use the deployment [script](../hack/run-e2e-conformance-virtual-cluster.sh), this will deploy a k8s cluster
@@ -56,3 +58,11 @@ To use the cluster after the deployment you need to export the kubeconfig
 ```
 export KUBECONFIG=$HOME/.kcli/clusters/virtual/auth/kubeconfig
 ```
+
+It's possible to also configure the number of workers using `NUM_OF_WORKERS`.
+
+*NOTE:* For OCP then min number is 3 and for k8s is 2.
+
+To work on the operator you can change the code and rebuild the operator using
+`make redeploy-operator-virtual-cluster`.
+You need to tell the cluster type for ocp `CLUSTER_TYPE=openshift` and for k8s `CLUSTER_TYPE=kubernetes`
