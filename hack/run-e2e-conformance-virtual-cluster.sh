@@ -120,6 +120,9 @@ controller_ip=`kubectl get node -o wide | grep ctlp | awk '{print $6}'`
 insecure_registry="[[registry]]
 location = \"$controller_ip:5000\"
 insecure = true
+
+[aliases]
+\"golang\" = \"docker.io/library/golang\"
 "
 
 cat << EOF > /etc/containers/registries.conf.d/003-${cluster_name}.conf
@@ -223,7 +226,7 @@ spec:
         - effect: NoSchedule
           key: node-role.kubernetes.io/control-plane
       containers:
-      - image: docker.io/registry:latest
+      - image: quay.io/libpod/registry:2.8.2
         imagePullPolicy: Always
         name: registry
         volumeMounts:

@@ -13,6 +13,7 @@ The following SR-IOV capable hardware is supported with sriov-network-operator:
 | Intel E810-CQDA2/2CQDA2 Family | 8086  | 1592 |
 | Intel E810-XXVDA4 Family | 8086  | 1593 |
 | Intel E810-XXVDA2 Family | 8086  | 159b |
+| Intel E823-C Family | 8086  | 188a |
 | Mellanox MT27700 Family [ConnectX-4] | 15b3 | 1013 |
 | Mellanox MT27710 Family [ConnectX-4 Lx] | 15b3 | 1015 |
 | Mellanox MT27800 Family [ConnectX-5] | 15b3 | 1017 |
@@ -52,6 +53,7 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Intel E810-CQDA2/2CQDA2 Family | V | V | X |
 | Intel E810-XXVDA4 Family | V | V | X |
 | Intel E810-XXVDA2 Family | V | V | X |
+| Intel E823-C Family | V | V | X |
 | Mellanox MT27700 Family [ConnectX-4] | V | V | V |
 | Mellanox MT27710 Family [ConnectX-4 Lx] | V | V | V |
 | Mellanox MT27800 Family [ConnectX-5] | V | V | V |
@@ -68,6 +70,8 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Marvell OCTEON Fusion CNF95XX | V | V | X |
 | Marvell OCTEON 10 CN10XXX | V | V | X |
 | Marvell OCTEON Fusion CNF105XX | V | V | X |
+| Red_Hat_Virtio_network_device | X | V | X |
+| Red_Hat_Virtio_1_0_network_device | X | V | X |
 
 # Adding new Hardware
 
