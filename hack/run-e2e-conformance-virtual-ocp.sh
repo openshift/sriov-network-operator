@@ -41,8 +41,8 @@ kcli create network -c 192.168.123.0/24 ocp
 kcli create network -c 192.168.${virtual_router_id}.0/24 --nodhcp -i $cluster_name
 
 cat <<EOF > ./${cluster_name}-plan.yaml
-tag: 4.14.0-rc.1
-ctlplane_memory: 24576
+tag: 4.14.0-rc.6
+ctlplane_memory: 32768
 worker_memory: 8192
 pool: default
 disk_size: 50
@@ -191,13 +191,17 @@ podman build -t "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}" -f "${root}/Dockerfile.sr
 echo "## build webhook image"
 podman build -t "${SRIOV_NETWORK_WEBHOOK_IMAGE}" -f "${root}/Dockerfile.webhook" "${root}"
 
+echo "## wait for registry to be available"
+kubectl wait configs.imageregistry.operator.openshift.io/cluster --for=condition=Available --timeout=120s
+
 dockercgf=`kubectl -n ${NAMESPACE} get sa builder -oyaml | grep imagePullSecrets -A 1 | grep -o "builder-.*"`
 auth=`kubectl -n ${NAMESPACE} get secret ${dockercgf} -ojson | jq '.data.".dockercfg"'`
 auth="${auth:1:-1}"
 auth=`echo ${auth} | base64 -d`
 echo ${auth} > registry-login.conf
 
-pass=$( jq .\"$registry\".password registry-login.conf )
+internal_registry="image-registry.openshift-image-registry.svc:5000"
+pass=$( jq .\"$internal_registry\".password registry-login.conf )
 podman login -u serviceaccount -p ${pass:1:-1} $registry --tls-verify=false
 
 podman push --tls-verify=false "${SRIOV_NETWORK_OPERATOR_IMAGE}"

@@ -85,6 +85,14 @@ spec:
                 maximum: 4096
                 minimum: 0
                 type: integer
+              vlanProto:
+                description: VLAN proto to assign for the VF. Defaults to 802.1q.
+                enum:
+                - 802.1q
+                - 802.1Q
+                - 802.1ad
+                - 802.1AD
+                type: string
               vlanQoS:
                 description: VLAN QoS ID to assign for the VF. Defaults to 0.
                 maximum: 7
