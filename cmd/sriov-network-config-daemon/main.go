@@ -39,6 +39,9 @@ func init() {
 }
 
 func main() {
+	if true {
+		panic("PANIC!!!")
+	}
 	if err := rootCmd.Execute(); err != nil {
 		glog.Exitf("Error executing mcd: %v", err)
 	}

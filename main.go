@@ -67,6 +67,7 @@ func init() {
 }
 
 func main() {
+	fmt.Println("Custom changes!")
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string

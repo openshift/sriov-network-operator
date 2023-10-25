@@ -25,6 +25,9 @@ func init() {
 }
 
 func main() {
+	if true {
+		panic("PANIC!!!")
+	}
 	flag.Set("logtostderr", "true")
 	flag.Parse()
 	glog.Info("Run sriov-network-operator-webhook")
