@@ -466,7 +466,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 
 	if dn.nodeState.GetGeneration() == latest {
 		if dn.useSystemdService {
-			serviceExist, err := dn.serviceManager.IsServiceExist(systemd.SriovServicePath)
+			serviceEnabled, err := dn.serviceManager.IsServiceEnabled(systemd.SriovServicePath)
 			if err != nil {
 				log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config service exist on host")
 				return err
@@ -475,8 +475,9 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 			// if the service doesn't exist we should continue to let the k8s plugin to create the service files
 			// this is only for k8s base environments, for openshift the sriov-operator creates a machine config to will apply
 			// the system service and reboot the node the config-daemon doesn't need to do anything.
-			if !serviceExist {
-				sriovResult = &systemd.SriovResult{SyncStatus: syncStatusFailed, LastSyncError: "sriov-config systemd service doesn't exist on node"}
+			if !serviceEnabled {
+				sriovResult = &systemd.SriovResult{SyncStatus: syncStatusFailed,
+					LastSyncError: "sriov-config systemd service is not available on node"}
 			} else {
 				sriovResult, err = systemd.ReadSriovResult()
 				if err != nil {
@@ -495,7 +496,6 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 				<-dn.syncCh
 				return nil
 			}
-			return nil
 		}
 		log.Log.V(0).Info("nodeStateSyncHandler(): Interface not changed")
 		if latestState.Status.LastSyncError != "" ||

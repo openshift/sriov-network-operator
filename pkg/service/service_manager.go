@@ -11,6 +11,7 @@ import (
 
 type ServiceManager interface {
 	IsServiceExist(string) (bool, error)
+	IsServiceEnabled(string) (bool, error)
 	ReadService(string) (*Service, error)
 	EnableService(service *Service) error
 }
@@ -27,7 +28,7 @@ func NewServiceManager(chroot string) ServiceManager {
 	return &serviceManager{root}
 }
 
-// ReadService read service from given path
+// IsServiceExist check if service unit exist
 func (sm *serviceManager) IsServiceExist(servicePath string) (bool, error) {
 	_, err := os.Stat(path.Join(sm.chroot, servicePath))
 	if err != nil {
@@ -38,6 +39,24 @@ func (sm *serviceManager) IsServiceExist(servicePath string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// IsServiceEnabled check if service exist and enabled
+func (sm *serviceManager) IsServiceEnabled(servicePath string) (bool, error) {
+	exist, err := sm.IsServiceExist(servicePath)
+	if err != nil || !exist {
+		return false, err
+	}
+	serviceName := filepath.Base(servicePath)
+	// Change root dir
+	exit, err := utils.Chroot(sm.chroot)
+	if err != nil {
+		return false, err
+	}
+	defer exit()
+
+	cmd := exec.Command("systemctl", "is-enabled", serviceName)
+	return cmd.Run() == nil, nil
 }
 
 // ReadService read service from given path
