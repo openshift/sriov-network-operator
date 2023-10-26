@@ -209,6 +209,20 @@ func ReadSriovResult() (*SriovResult, error) {
 	return result, err
 }
 
+func RemoveSriovResult() error {
+	err := os.Remove(SriovHostSystemdResultPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Log.V(2).Info("RemoveSriovResult(): result file not found")
+			return nil
+		}
+		log.Log.Error(err, "RemoveSriovResult(): failed to remove sriov result file", "path", SriovHostSystemdResultPath)
+		return err
+	}
+	log.Log.V(2).Info("RemoveSriovResult(): result file removed")
+	return nil
+}
+
 func WriteSriovSupportedNics() error {
 	_, err := os.Stat(sriovHostSystemdSupportedNicPath)
 	if err != nil {
