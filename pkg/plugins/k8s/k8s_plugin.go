@@ -322,13 +322,13 @@ func (p *K8sPlugin) switchdevServiceStateUpdate() error {
 
 func (p *K8sPlugin) sriovServiceStateUpdate() error {
 	log.Log.Info("sriovServiceStateUpdate()")
-	exist, err := p.serviceManager.IsServiceExist(p.sriovService.Path)
+	isServiceEnabled, err := p.serviceManager.IsServiceEnabled(p.sriovService.Path)
 	if err != nil {
 		return err
 	}
 
-	// create the service if it doesn't exist
-	if !exist {
+	// create and enable the service if it doesn't exist or is not enabled
+	if !isServiceEnabled {
 		p.updateTarget.sriovScript = true
 	} else {
 		p.updateTarget.sriovScript = p.isSystemServiceNeedUpdate(p.sriovService)
