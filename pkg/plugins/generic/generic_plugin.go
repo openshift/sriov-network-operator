@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"os/exec"
-	"reflect"
 	"strconv"
 	"strings"
 	"syscall"
@@ -52,7 +51,6 @@ type GenericPlugin struct {
 	PluginName          string
 	SpecVersion         string
 	DesireState         *sriovnetworkv1.SriovNetworkNodeState
-	LastState           *sriovnetworkv1.SriovNetworkNodeState
 	DriverStateMap      DriverStateMapType
 	DesiredKernelArgs   map[string]bool
 	helpers             helper.HostHelpersInterface
@@ -159,14 +157,6 @@ func (p *GenericPlugin) syncDriverState() error {
 func (p *GenericPlugin) Apply() error {
 	log.Log.Info("generic plugin Apply()", "desiredState", p.DesireState.Spec)
 
-	if p.LastState != nil {
-		log.Log.Info("generic plugin Apply()", "lastState", p.LastState.Spec)
-		if reflect.DeepEqual(p.LastState.Spec.Interfaces, p.DesireState.Spec.Interfaces) {
-			log.Log.Info("generic plugin Apply(): desired and latest state are the same, nothing to apply")
-			return nil
-		}
-	}
-
 	if err := p.syncDriverState(); err != nil {
 		return err
 	}
@@ -188,8 +178,7 @@ func (p *GenericPlugin) Apply() error {
 		}
 		return err
 	}
-	p.LastState = &sriovnetworkv1.SriovNetworkNodeState{}
-	*p.LastState = *p.DesireState
+
 	return nil
 }
 
