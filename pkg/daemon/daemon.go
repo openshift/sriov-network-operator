@@ -583,13 +583,22 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	// or there is a new config we need to apply
 	// When using systemd configuration we write the file
 	if dn.useSystemdService {
-		r, err := systemd.WriteConfFile(latestState, dn.devMode, dn.platform)
+		systemdConfModified, err := systemd.WriteConfFile(latestState, dn.devMode, dn.platform)
 		if err != nil {
 			log.Log.Error(err, "nodeStateSyncHandler(): failed to write configuration file for systemd mode")
 			return err
 		}
-		reqDrain = reqDrain || r
-		reqReboot = reqReboot || r
+		if systemdConfModified {
+			// remove existing result file to make sure that we will not use outdated result, e.g. in case if
+			// systemd service was not triggered for some reason
+			err = systemd.RemoveSriovResult()
+			if err != nil {
+				log.Log.Error(err, "nodeStateSyncHandler(): failed to remove result file for systemd mode")
+				return err
+			}
+		}
+		reqDrain = reqDrain || systemdConfModified
+		reqReboot = reqReboot || systemdConfModified
 		log.Log.V(0).Info("nodeStateSyncHandler(): systemd mode WriteConfFile results",
 			"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", dn.disableDrain)
 
