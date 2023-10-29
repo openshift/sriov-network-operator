@@ -16,8 +16,8 @@ spec:
             # Removal of this file signals firstboot completion
             ConditionPathExists=!/etc/ignition-machine-config-encapsulated.json
             # This service is used to configure the SR-IOV VFs on NICs
-            Wants=network-pre.target
-            Before=network-pre.target
+            After=network-pre.target
+            Before=NetworkManager.service kubelet.service
             
             [Service]
             Type=oneshot
