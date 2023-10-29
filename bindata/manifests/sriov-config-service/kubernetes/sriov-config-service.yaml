@@ -1,12 +1,12 @@
 contents: |
   [Unit]
   Description=Configures SRIOV NIC
-  Wants=network-pre.target
-  Before=network-pre.target
+  After=network-pre.target
+  Before=NetworkManager.service kubelet.service
   
   [Service]
   Type=oneshot
-  ExecStart=/var/lib/sriov/sriov-network-config-daemon service
+  ExecStart=/var/lib/sriov/sriov-network-config-daemon -v 2 service
   StandardOutput=journal+console
   
   [Install]
