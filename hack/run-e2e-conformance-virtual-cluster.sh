@@ -364,5 +364,14 @@ hack/deploy-wait.sh
 
 if [ -z $SKIP_TEST ]; then
   echo "## run sriov e2e conformance tests"
-  SUITE=./test/conformance JUNIT_OUTPUT=`pwd`/k8s-artifacts hack/run-e2e-conformance.sh
+
+  if [[ -v TEST_REPORT_PATH ]]; then
+    export JUNIT_OUTPUT="${root}/${TEST_REPORT_PATH}/conformance-test-report"
+  fi
+
+  SUITE=./test/conformance hack/run-e2e-conformance.sh
+
+  if [[ -v TEST_REPORT_PATH ]]; then
+    kubectl cluster-info dump --namespaces ${NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
+  fi
 fi
