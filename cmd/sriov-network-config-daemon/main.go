@@ -18,8 +18,10 @@ package main
 import (
 	"flag"
 
-	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 )
 
 const (
@@ -35,11 +37,12 @@ var (
 )
 
 func init() {
+	snolog.BindFlags(flag.CommandLine)
 	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 }
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		glog.Exitf("Error executing mcd: %v", err)
+		log.Log.Error(err, "error executing sriov-network-config-daemon")
 	}
 }
