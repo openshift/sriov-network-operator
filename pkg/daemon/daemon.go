@@ -1105,7 +1105,7 @@ func tryCreateNMUdevRule() error {
 	// we should not destroy the cluster if the operator is installed there
 	supportedVfIds := []string{}
 	for _, vfID := range sriovnetworkv1.GetSupportedVfIds() {
-		if vfID == "0x1000" {
+		if vfID == "0x1000" || vfID == "0x1041" {
 			continue
 		}
 		supportedVfIds = append(supportedVfIds, vfID)

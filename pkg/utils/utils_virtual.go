@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/jaypipes/ghw"
+	"github.com/jaypipes/ghw/pkg/net"
 
 	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 
@@ -53,10 +55,13 @@ const (
 	ospMetaDataBaseURL     = "http://169.254.169.254/openstack/2018-08-27"
 	ospHostNetworkDataFile = ospHostMetaDataDir + "/network_data.json"
 	ospHostMetaDataFile    = ospHostMetaDataDir + "/meta_data.json"
-	ospNetworkDataFile     = ospMetaDataDir + "/network_data.json"
-	ospMetaDataFile        = ospMetaDataDir + "/meta_data.json"
 	ospNetworkDataURL      = ospMetaDataBaseURL + "/network_data.json"
 	ospMetaDataURL         = ospMetaDataBaseURL + "/meta_data.json"
+)
+
+var (
+	ospNetworkDataFile = ospMetaDataDir + "/network_data.json"
+	ospMetaDataFile    = ospMetaDataDir + "/meta_data.json"
 )
 
 // OSPMetaDataDevice -- Device structure within meta_data.json
@@ -117,7 +122,39 @@ func GetOpenstackData(useHostPath bool) (metaData *OSPMetaData, networkData *OSP
 	metaData, networkData, err = getOpenstackDataFromConfigDrive(useHostPath)
 	if err != nil {
 		metaData, networkData, err = getOpenstackDataFromMetadataService()
+		if err != nil {
+			return metaData, networkData, fmt.Errorf("GetOpenStackData(): error getting OpenStack data: %w", err)
+		}
 	}
+
+	// We can't rely on the PCI address from the metadata so we will lookup the real PCI address
+	// for the NIC that matches the MAC address.
+	//
+	// Libvirt/QEMU cannot guarantee that the address specified in the XML will match the address seen by the guest.
+	// This is a well known limitation: https://libvirt.org/pci-addresses.html
+	// When using the q35 machine type, it highlights this issue due to the change from using PCI to PCI-E bus for virtual devices.
+	//
+	// With that said, the PCI value in Nova Metadata is a best effort hint due to the limitations mentioned above. Therefore
+	// we will lookup the real PCI address for the NIC that matches the MAC address.
+	netInfo, err := ghw.Network()
+	if err != nil {
+		return metaData, networkData, fmt.Errorf("GetOpenStackData(): error getting network info: %w", err)
+	}
+	for i, device := range metaData.Devices {
+		realPCIAddr, err := getPCIAddressFromMACAddress(device.Mac, netInfo.NICs)
+		if err != nil {
+			// If we can't find the PCI address, we will just print a warning, return the data as is with no error.
+			// In the future, we'll want to drain the node if sno-initial-node-state.json doesn't exist when daemon is restarted and when we have SR-IOV
+			// allocated devices already.
+			glog.Warningf("GetOpenstackData(): error getting PCI address for device %s: %v", device.Mac, err)
+			return metaData, networkData, nil
+		}
+		if realPCIAddr != device.Address {
+			glog.V(2).Infof("GetOpenstackData(): PCI address for device %s does not match Nova metadata value %s, it'll be overwritten with %s", device.Mac, device.Address, realPCIAddr)
+			metaData.Devices[i].Address = realPCIAddr
+		}
+	}
+
 	return metaData, networkData, err
 }
 
@@ -203,6 +240,26 @@ func getOpenstackDataFromMetadataService() (metaData *OSPMetaData, networkData *
 		return metaData, networkData, fmt.Errorf("error unmarshalling raw bytes %v from %s", err, ospNetworkDataURL)
 	}
 	return metaData, networkData, nil
+}
+
+// getPCIAddressFromMACAddress returns the PCI address of a device given its MAC address
+func getPCIAddressFromMACAddress(macAddress string, nics []*net.NIC) (string, error) {
+	var pciAddress string
+	for _, nic := range nics {
+		if strings.EqualFold(nic.MacAddress, macAddress) {
+			if pciAddress == "" {
+				pciAddress = *nic.PCIAddress
+			} else {
+				return "", fmt.Errorf("more than one device found with MAC address %s is unsupported", macAddress)
+			}
+		}
+	}
+
+	if pciAddress != "" {
+		return pciAddress, nil
+	}
+
+	return "", fmt.Errorf("no device found with MAC address %s", macAddress)
 }
 
 // CreateOpenstackDevicesInfo create the openstack device info map
