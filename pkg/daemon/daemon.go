@@ -313,77 +313,60 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	latest := dn.desiredNodeState.GetGeneration()
 	log.Log.V(0).Info("nodeStateSyncHandler(): new generation", "generation", latest)
 
-	if dn.currentNodeState.GetGeneration() == latest && !dn.isDrainCompleted() {
-		if vars.UsingSystemdMode {
-			serviceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovServicePath)
-			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config service exist on host")
-				return err
-			}
-			postNetworkServiceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovPostNetworkServicePath)
-			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config-post-network service exist on host")
-				return err
-			}
-
-			// if the service doesn't exist we should continue to let the k8s plugin to create the service files
-			// this is only for k8s base environments, for openshift the sriov-operator creates a machine config to will apply
-			// the system service and reboot the node the config-daemon doesn't need to do anything.
-			if !(serviceEnabled && postNetworkServiceEnabled) {
-				sriovResult = &systemd.SriovResult{SyncStatus: consts.SyncStatusFailed,
-					LastSyncError: fmt.Sprintf("some sriov systemd services are not available on node: "+
-						"sriov-config available:%t, sriov-config-post-network available:%t", serviceEnabled, postNetworkServiceEnabled)}
-			} else {
-				sriovResult, err = systemd.ReadSriovResult()
-				if err != nil {
-					log.Log.Error(err, "nodeStateSyncHandler(): failed to load sriov result file from host")
-					return err
-				}
-			}
-			if sriovResult.LastSyncError != "" || sriovResult.SyncStatus == consts.SyncStatusFailed {
-				log.Log.Info("nodeStateSyncHandler(): sync failed systemd service error", "last-sync-error", sriovResult.LastSyncError)
-
-				// add the error but don't requeue
-				dn.refreshCh <- Message{
-					syncStatus:    consts.SyncStatusFailed,
-					lastSyncError: sriovResult.LastSyncError,
-				}
-				<-dn.syncCh
-				return nil
-			}
+	// load plugins if it has not loaded
+	if len(dn.loadedPlugins) == 0 {
+		dn.loadedPlugins, err = loadPlugins(dn.desiredNodeState, dn.HostHelpers, dn.disabledPlugins)
+		if err != nil {
+			log.Log.Error(err, "nodeStateSyncHandler(): failed to enable vendor plugins")
+			return err
 		}
-		log.Log.V(0).Info("nodeStateSyncHandler(): Interface not changed")
-		if dn.desiredNodeState.Status.LastSyncError != "" ||
-			dn.desiredNodeState.Status.SyncStatus != consts.SyncStatusSucceeded {
-			dn.refreshCh <- Message{
-				syncStatus:    consts.SyncStatusSucceeded,
-				lastSyncError: "",
-			}
-			// wait for writer to refresh the status
-			<-dn.syncCh
-		}
-
-		return nil
 	}
 
-	if dn.desiredNodeState.GetGeneration() == 1 && len(dn.desiredNodeState.Spec.Interfaces) == 0 {
-		err = dn.HostHelpers.ClearPCIAddressFolder()
+	if vars.UsingSystemdMode && dn.currentNodeState.GetGeneration() == latest && !dn.isDrainCompleted() {
+		serviceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovServicePath)
 		if err != nil {
-			log.Log.Error(err, "failed to clear the PCI address configuration")
+			log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config service exist on host")
+			return err
+		}
+		postNetworkServiceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovPostNetworkServicePath)
+		if err != nil {
+			log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config-post-network service exist on host")
 			return err
 		}
 
-		log.Log.V(0).Info(
-			"nodeStateSyncHandler(): interface policy spec not yet set by controller for sriovNetworkNodeState",
-			"name", dn.desiredNodeState.Name)
-		if dn.desiredNodeState.Status.SyncStatus != "Succeeded" {
-			dn.refreshCh <- Message{
-				syncStatus:    "Succeeded",
-				lastSyncError: "",
+		// if the service doesn't exist we should continue to let the k8s plugin to create the service files
+		// this is only for k8s base environments, for openshift the sriov-operator creates a machine config to will apply
+		// the system service and reboot the node the config-daemon doesn't need to do anything.
+		if !(serviceEnabled && postNetworkServiceEnabled) {
+			sriovResult = &systemd.SriovResult{SyncStatus: consts.SyncStatusFailed,
+				LastSyncError: fmt.Sprintf("some sriov systemd services are not available on node: "+
+					"sriov-config available:%t, sriov-config-post-network available:%t", serviceEnabled, postNetworkServiceEnabled)}
+		} else {
+			sriovResult, err = systemd.ReadSriovResult()
+			if err != nil {
+				log.Log.Error(err, "nodeStateSyncHandler(): failed to load sriov result file from host")
+				return err
 			}
-			// wait for writer to refresh status
-			<-dn.syncCh
 		}
+		if sriovResult.LastSyncError != "" || sriovResult.SyncStatus == consts.SyncStatusFailed {
+			log.Log.Info("nodeStateSyncHandler(): sync failed systemd service error", "last-sync-error", sriovResult.LastSyncError)
+
+			// add the error but don't requeue
+			dn.refreshCh <- Message{
+				syncStatus:    consts.SyncStatusFailed,
+				lastSyncError: sriovResult.LastSyncError,
+			}
+			<-dn.syncCh
+			return nil
+		}
+	}
+
+	skip, err := dn.shouldSkipReconciliation(dn.desiredNodeState)
+	if err != nil {
+		return err
+	}
+	// Reconcile only when there are changes in the spec or status of managed VFs.
+	if skip {
 		return nil
 	}
 
@@ -403,15 +386,6 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		return err
 	}
 	dn.desiredNodeState.Status = updatedState.Status
-
-	// load plugins if it has not loaded
-	if len(dn.loadedPlugins) == 0 {
-		dn.loadedPlugins, err = loadPlugins(dn.desiredNodeState, dn.HostHelpers, dn.disabledPlugins)
-		if err != nil {
-			log.Log.Error(err, "nodeStateSyncHandler(): failed to enable vendor plugins")
-			return err
-		}
-	}
 
 	reqReboot := false
 	reqDrain := false
@@ -562,6 +536,58 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	// wait for writer to refresh the status
 	<-dn.syncCh
 	return nil
+}
+
+func (dn *Daemon) shouldSkipReconciliation(latestState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+	var err error
+
+	// Skip when SriovNetworkNodeState object has just been created.
+	if latestState.GetGeneration() == 1 && len(latestState.Spec.Interfaces) == 0 {
+		err = dn.HostHelpers.ClearPCIAddressFolder()
+		if err != nil {
+			log.Log.Error(err, "failed to clear the PCI address configuration")
+			return false, err
+		}
+
+		log.Log.V(0).Info(
+			"shouldSkipReconciliation(): interface policy spec not yet set by controller for sriovNetworkNodeState",
+			"name", latestState.Name)
+		if latestState.Status.SyncStatus != consts.SyncStatusSucceeded {
+			dn.refreshCh <- Message{
+				syncStatus:    consts.SyncStatusSucceeded,
+				lastSyncError: "",
+			}
+			// wait for writer to refresh status
+			<-dn.syncCh
+		}
+		return true, nil
+	}
+
+	// Verify changes in the spec of the SriovNetworkNodeState CR.
+	if dn.currentNodeState.GetGeneration() == latestState.GetGeneration() && !dn.isDrainCompleted() {
+		genericPlugin, ok := dn.loadedPlugins[GenericPluginName]
+		if ok {
+			// Verify changes in the status of the SriovNetworkNodeState CR.
+			if genericPlugin.CheckStatusChanges(latestState) {
+				return false, nil
+			}
+		}
+
+		log.Log.V(0).Info("shouldSkipReconciliation(): Interface not changed")
+		if latestState.Status.LastSyncError != "" ||
+			latestState.Status.SyncStatus != consts.SyncStatusSucceeded {
+			dn.refreshCh <- Message{
+				syncStatus:    consts.SyncStatusSucceeded,
+				lastSyncError: "",
+			}
+			// wait for writer to refresh the status
+			<-dn.syncCh
+		}
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // handleDrain: adds the right annotation to the node and nodeState object

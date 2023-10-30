@@ -21,6 +21,10 @@ func (f *FakePlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState
 	return false, false, nil
 }
 
+func (f *FakePlugin) CheckStatusChanges(new *sriovnetworkv1.SriovNetworkNodeState) bool {
+	return false
+}
+
 func (f *FakePlugin) Apply() error {
 	return nil
 }
