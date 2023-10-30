@@ -8,11 +8,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
@@ -48,12 +48,12 @@ func NewNodeStateStatusWriter(c snclientset.Interface, n string, f func(), er *E
 
 // RunOnce initial the interface status for both baremetal and virtual environments
 func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.PlatformType) error {
-	glog.V(0).Infof("RunOnce()")
+	log.Log.V(0).Info("RunOnce()")
 	msg := Message{}
 
 	storeManager, err := utils.NewStoreManager(false)
 	if err != nil {
-		glog.Errorf("failed to create store manager: %v", err)
+		log.Log.Error(err, "failed to create store manager")
 		return err
 	}
 	w.storeManager = storeManager
@@ -67,7 +67,7 @@ func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.Platf
 		if ns == nil {
 			metaData, networkData, err := utils.GetOpenstackData(true)
 			if err != nil {
-				glog.Errorf("RunOnce(): failed to read OpenStack data: %v", err)
+				log.Log.Error(err, "RunOnce(): failed to read OpenStack data")
 			}
 
 			w.openStackDevicesInfo, err = utils.CreateOpenstackDevicesInfo(metaData, networkData)
@@ -79,14 +79,14 @@ func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.Platf
 		}
 	}
 
-	glog.V(0).Info("RunOnce(): first poll for nic status")
+	log.Log.V(0).Info("RunOnce(): first poll for nic status")
 	if err := w.pollNicStatus(platformType); err != nil {
-		glog.Errorf("RunOnce(): first poll failed: %v", err)
+		log.Log.Error(err, "RunOnce(): first poll failed")
 	}
 
 	ns, err := w.setNodeStateStatus(msg)
 	if err != nil {
-		glog.Errorf("RunOnce(): first writing to node status failed: %v", err)
+		log.Log.Error(err, "RunOnce(): first writing to node status failed")
 	}
 	return w.writeCheckpointFile(ns, destDir)
 }
@@ -94,26 +94,26 @@ func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.Platf
 // Run reads from the writer channel and sets the interface status. It will
 // return if the stop channel is closed. Intended to be run via a goroutine.
 func (w *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message, syncCh chan<- struct{}, platformType utils.PlatformType) error {
-	glog.V(0).Infof("Run(): start writer")
+	log.Log.V(0).Info("Run(): start writer")
 	msg := Message{}
 
 	for {
 		select {
 		case <-stop:
-			glog.V(0).Info("Run(): stop writer")
+			log.Log.V(0).Info("Run(): stop writer")
 			return nil
 		case msg = <-refresh:
-			glog.V(0).Info("Run(): refresh trigger")
+			log.Log.V(0).Info("Run(): refresh trigger")
 			if err := w.pollNicStatus(platformType); err != nil {
 				continue
 			}
 			_, err := w.setNodeStateStatus(msg)
 			if err != nil {
-				glog.Errorf("Run() refresh: writing to node status failed: %v", err)
+				log.Log.Error(err, "Run() refresh: writing to node status failed")
 			}
 			syncCh <- struct{}{}
 		case <-time.After(30 * time.Second):
-			glog.V(2).Info("Run(): period refresh")
+			log.Log.V(2).Info("Run(): period refresh")
 			if err := w.pollNicStatus(platformType); err != nil {
 				continue
 			}
@@ -123,7 +123,7 @@ func (w *NodeStateStatusWriter) Run(stop <-chan struct{}, refresh <-chan Message
 }
 
 func (w *NodeStateStatusWriter) pollNicStatus(platformType utils.PlatformType) error {
-	glog.V(2).Info("pollNicStatus()")
+	log.Log.V(2).Info("pollNicStatus()")
 	var iface []sriovnetworkv1.InterfaceExt
 	var err error
 
@@ -160,7 +160,7 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 		var err error
 		nodeState, err = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(context.Background(), n, metav1.UpdateOptions{})
 		if err != nil {
-			glog.V(0).Infof("updateNodeStateStatusRetry(): fail to update the node status: %v", err)
+			log.Log.V(0).Error(err, "updateNodeStateStatusRetry(): fail to update the node status")
 		}
 		return err
 	})
@@ -183,7 +183,9 @@ func (w *NodeStateStatusWriter) setNodeStateStatus(msg Message) (*sriovnetworkv1
 		}
 		nodeState.Status.SyncStatus = msg.syncStatus
 
-		glog.V(0).Infof("setNodeStateStatus(): syncStatus: %s, lastSyncError: %s", nodeState.Status.SyncStatus, nodeState.Status.LastSyncError)
+		log.Log.V(0).Info("setNodeStateStatus(): status",
+			"sync-status", nodeState.Status.SyncStatus,
+			"last-sync-error", nodeState.Status.LastSyncError)
 	})
 	if err != nil {
 		return nil, err
@@ -217,7 +219,7 @@ func (w *NodeStateStatusWriter) getNodeState() (*sriovnetworkv1.SriovNetworkNode
 		if lastErr == nil {
 			return true, nil
 		}
-		glog.Warningf("getNodeState(): Failed to fetch node state %s (%v); close all connections and retry...", w.node, lastErr)
+		log.Log.Error(lastErr, "getNodeState(): Failed to fetch node state, close all connections and retry...", "name", w.node)
 		// Use the Get() also as an client-go keepalive indicator for the TCP connection.
 		w.OnHeartbeatFailure()
 		return false, nil
@@ -238,10 +240,10 @@ func (w *NodeStateStatusWriter) writeCheckpointFile(ns *sriovnetworkv1.SriovNetw
 		return err
 	}
 	defer file.Close()
-	glog.Info("writeCheckpointFile(): try to decode the checkpoint file")
+	log.Log.Info("writeCheckpointFile(): try to decode the checkpoint file")
 	if err = json.NewDecoder(file).Decode(&utils.InitialState); err != nil {
-		glog.V(2).Infof("writeCheckpointFile(): fail to decode: %v", err)
-		glog.Info("writeCheckpointFile(): write checkpoint file")
+		log.Log.V(2).Error(err, "writeCheckpointFile(): fail to decode, writing new file instead")
+		log.Log.Info("writeCheckpointFile(): write checkpoint file")
 		if err = file.Truncate(0); err != nil {
 			return err
 		}
@@ -257,7 +259,7 @@ func (w *NodeStateStatusWriter) writeCheckpointFile(ns *sriovnetworkv1.SriovNetw
 }
 
 func (w *NodeStateStatusWriter) getCheckPointNodeState(destDir string) (*sriovnetworkv1.SriovNetworkNodeState, error) {
-	glog.Infof("getCheckPointNodeState()")
+	log.Log.Info("getCheckPointNodeState()")
 	configdir := filepath.Join(destDir, CheckpointFileName)
 	file, err := os.OpenFile(configdir, os.O_RDONLY, 0644)
 	if err != nil {

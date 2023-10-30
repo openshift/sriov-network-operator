@@ -3,7 +3,7 @@ package daemon
 import (
 	"fmt"
 
-	"github.com/golang/glog"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
@@ -30,13 +30,13 @@ var (
 )
 
 func enablePlugins(platform utils.PlatformType, useSystemdService bool, ns *sriovnetworkv1.SriovNetworkNodeState, hostManager host.HostManagerInterface, storeManager utils.StoreManagerInterface) (map[string]plugin.VendorPlugin, error) {
-	glog.Infof("enableVendorPlugins(): enabling plugins")
+	log.Log.Info("enableVendorPlugins(): enabling plugins")
 	enabledPlugins := map[string]plugin.VendorPlugin{}
 
 	if platform == utils.VirtualOpenStack {
 		virtualPlugin, err := VirtualPlugin(false)
 		if err != nil {
-			glog.Errorf("enableVendorPlugins(): failed to load the virtual plugin error: %v", err)
+			log.Log.Error(err, "enableVendorPlugins(): failed to load the virtual plugin")
 			return nil, err
 		}
 		enabledPlugins[virtualPlugin.Name()] = virtualPlugin
@@ -50,14 +50,14 @@ func enablePlugins(platform utils.PlatformType, useSystemdService bool, ns *srio
 		if utils.ClusterType != utils.ClusterTypeOpenshift {
 			k8sPlugin, err := K8sPlugin(useSystemdService)
 			if err != nil {
-				glog.Errorf("enableVendorPlugins(): failed to load the k8s plugin error: %v", err)
+				log.Log.Error(err, "enableVendorPlugins(): failed to load the k8s plugin")
 				return nil, err
 			}
 			enabledPlugins[k8sPlugin.Name()] = k8sPlugin
 		}
 		genericPlugin, err := GenericPlugin(false, hostManager, storeManager)
 		if err != nil {
-			glog.Errorf("enableVendorPlugins(): failed to load the generic plugin error: %v", err)
+			log.Log.Error(err, "enableVendorPlugins(): failed to load the generic plugin")
 			return nil, err
 		}
 		enabledPlugins[genericPlugin.Name()] = genericPlugin
@@ -67,7 +67,7 @@ func enablePlugins(platform utils.PlatformType, useSystemdService bool, ns *srio
 	for pluginName := range enabledPlugins {
 		pluginList = append(pluginList, pluginName)
 	}
-	glog.Infof("enableVendorPlugins(): enabled plugins %s", pluginList)
+	log.Log.Info("enableVendorPlugins(): enabled plugins", "plugins", pluginList)
 	return enabledPlugins, nil
 }
 
@@ -78,7 +78,7 @@ func registerVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) (map[string
 		if val, ok := VendorPluginMap[iface.Vendor]; ok {
 			plug, err := val()
 			if err != nil {
-				glog.Errorf("registerVendorPlugins(): failed to load the %s plugin error: %v", plug.Name(), err)
+				log.Log.Error(err, "registerVendorPlugins(): failed to load plugin", "plugin-name", plug.Name())
 				return vendorPlugins, fmt.Errorf("registerVendorPlugins(): failed to load the %s plugin error: %v", plug.Name(), err)
 			}
 			vendorPlugins[plug.Name()] = plug
