@@ -17,7 +17,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net"
 	"net/url"
@@ -25,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	configv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
@@ -35,10 +33,12 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/connrotation"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
+	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/version"
 )
@@ -48,7 +48,7 @@ var (
 		Use:   "start",
 		Short: "Starts SR-IOV Network Config Daemon",
 		Long:  "",
-		Run:   runStartCmd,
+		RunE:  runStartCmd,
 	}
 
 	startOpts struct {
@@ -65,17 +65,18 @@ func init() {
 	startCmd.PersistentFlags().BoolVar(&startOpts.systemd, "use-systemd-service", false, "use config daemon in systemd mode")
 }
 
-func runStartCmd(cmd *cobra.Command, args []string) {
-	flag.Set("logtostderr", "true")
-	flag.Parse()
+func runStartCmd(cmd *cobra.Command, args []string) error {
+	// init logger
+	snolog.InitLog()
+	setupLog := log.Log.WithName("sriov-network-config-daemon")
 
 	// To help debugging, immediately log version
-	glog.V(2).Infof("Version: %+v", version.Version)
+	setupLog.V(2).Info("sriov-network-config-daemon", "version", version.Version)
 
 	if startOpts.nodeName == "" {
 		name, ok := os.LookupEnv("NODE_NAME")
 		if !ok || name == "" {
-			glog.Fatalf("node-name is required")
+			return fmt.Errorf("node-name is required")
 		}
 		startOpts.nodeName = name
 	}
@@ -104,19 +105,19 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	if os.Getenv("CLUSTER_TYPE") == utils.ClusterTypeOpenshift {
 		kubeconfig, err := clientcmd.LoadFromFile("/host/etc/kubernetes/kubeconfig")
 		if err != nil {
-			glog.Errorf("failed to load kubelet kubeconfig: %v", err)
+			setupLog.Error(err, "failed to load kubelet kubeconfig")
 		}
 		clusterName := kubeconfig.Contexts[kubeconfig.CurrentContext].Cluster
 		apiURL := kubeconfig.Clusters[clusterName].Server
 
 		url, err := url.Parse(apiURL)
 		if err != nil {
-			glog.Errorf("failed to parse api url from kubelet kubeconfig: %v", err)
+			setupLog.Error(err, "failed to parse api url from kubelet kubeconfig")
 		}
 
 		// The kubernetes in-cluster functions don't let you override the apiserver
 		// directly; gotta "pass" it via environment vars.
-		glog.V(0).Infof("overriding kubernetes api to %s", apiURL)
+		setupLog.V(0).Info("overriding kubernetes api", "new-url", apiURL)
 		os.Setenv("KUBERNETES_SERVICE_HOST", url.Hostname())
 		os.Setenv("KUBERNETES_SERVICE_PORT", url.Port())
 	}
@@ -130,12 +131,12 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	}
 
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
 
 	closeAllConns, err := updateDialer(config)
 	if err != nil {
-		panic(err.Error())
+		return err
 	}
 
 	sriovnetworkv1.AddToScheme(scheme.Scheme)
@@ -146,7 +147,7 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	kubeclient := kubernetes.NewForConfigOrDie(config)
 	openshiftContext, err := utils.NewOpenshiftContext(config, scheme.Scheme)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	config.Timeout = 5 * time.Second
@@ -156,13 +157,13 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	devMode := false
 	if mode == "TRUE" {
 		devMode = true
-		glog.V(0).Info("dev mode enabled")
+		setupLog.V(0).Info("dev mode enabled")
 	}
 
 	eventRecorder := daemon.NewEventRecorder(writerclient, startOpts.nodeName, kubeclient)
 	defer eventRecorder.Shutdown()
 
-	glog.V(0).Info("starting node writer")
+	setupLog.V(0).Info("starting node writer")
 	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient, startOpts.nodeName, closeAllConns, eventRecorder, devMode)
 
 	destdir := os.Getenv("DEST_DIR")
@@ -180,14 +181,15 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 			}
 		}
 	} else {
-		glog.Fatalf("Failed to fetch node state %s, %v!", startOpts.nodeName, err)
+		setupLog.Error(err, "failed to fetch node state, exiting", "node-name", startOpts.nodeName)
+		return err
 	}
-	glog.V(0).Infof("Running on platform: %s", platformType.String())
+	setupLog.Info("Running on", "platform", platformType.String())
 
 	var namespace = os.Getenv("NAMESPACE")
 	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, namespace); err != nil {
-		glog.Errorf("failed to run init NicIdMap: %v", err)
-		panic(err.Error())
+		setupLog.Error(err, "failed to run init NicIdMap")
+		return err
 	}
 
 	eventRecorder.SendEvent("ConfigDaemonStart", "Config Daemon starting")
@@ -195,12 +197,12 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	// block the deamon process until nodeWriter finish first its run
 	err = nodeWriter.RunOnce(destdir, platformType)
 	if err != nil {
-		glog.Errorf("failed to run writer: %v", err)
-		panic(err.Error())
+		setupLog.Error(err, "failed to run writer")
+		return err
 	}
 	go nodeWriter.Run(stopCh, refreshCh, syncCh, platformType)
 
-	glog.V(0).Info("Starting SriovNetworkConfigDaemon")
+	setupLog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(
 		startOpts.nodeName,
 		snclient,
@@ -216,9 +218,10 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		devMode,
 	).Run(stopCh, exitCh)
 	if err != nil {
-		glog.Errorf("failed to run daemon: %v", err)
+		setupLog.Error(err, "failed to run daemon")
 	}
-	glog.V(0).Info("Shutting down SriovNetworkConfigDaemon")
+	setupLog.V(0).Info("Shutting down SriovNetworkConfigDaemon")
+	return err
 }
 
 // updateDialer instruments a restconfig with a dial. the returned function allows forcefully closing all active connections.

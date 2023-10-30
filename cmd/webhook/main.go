@@ -4,8 +4,10 @@ import (
 	"flag"
 	"os"
 
-	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 )
 
 const (
@@ -21,16 +23,13 @@ var (
 )
 
 func init() {
+	snolog.BindFlags(flag.CommandLine)
 	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 }
 
 func main() {
-	flag.Set("logtostderr", "true")
-	flag.Parse()
-	glog.Info("Run sriov-network-operator-webhook")
-
 	if err := rootCmd.Execute(); err != nil {
-		glog.Exitf("Error executing sriov-network-operator-webhook: %v", err)
+		log.Log.Error(err, "Error executing sriov-network-operator-webhook")
 		os.Exit(1)
 	}
 }
