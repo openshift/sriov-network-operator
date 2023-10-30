@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang/glog"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/net"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 
@@ -146,11 +146,15 @@ func GetOpenstackData(useHostPath bool) (metaData *OSPMetaData, networkData *OSP
 			// If we can't find the PCI address, we will just print a warning, return the data as is with no error.
 			// In the future, we'll want to drain the node if sno-initial-node-state.json doesn't exist when daemon is restarted and when we have SR-IOV
 			// allocated devices already.
-			glog.Warningf("GetOpenstackData(): error getting PCI address for device %s: %v", device.Mac, err)
+			log.Log.Error(err, "Warning GetOpenstackData(): error getting PCI address for device",
+				"device-mac", device.Mac)
 			return metaData, networkData, nil
 		}
 		if realPCIAddr != device.Address {
-			glog.V(2).Infof("GetOpenstackData(): PCI address for device %s does not match Nova metadata value %s, it'll be overwritten with %s", device.Mac, device.Address, realPCIAddr)
+			log.Log.V(2).Info("GetOpenstackData(): PCI address for device does not match Nova metadata value, it'll be overwritten",
+				"device-mac", device.Mac,
+				"current-address", device.Address,
+				"overwrite-address", realPCIAddr)
 			metaData.Devices[i].Address = realPCIAddr
 		}
 	}
@@ -162,7 +166,7 @@ func GetOpenstackData(useHostPath bool) (metaData *OSPMetaData, networkData *OSP
 func getOpenstackDataFromConfigDrive(useHostPath bool) (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
 	metaData = &OSPMetaData{}
 	networkData = &OSPNetworkData{}
-	glog.Infof("reading OpenStack meta_data from config-drive")
+	log.Log.Info("reading OpenStack meta_data from config-drive")
 	var metadataf *os.File
 	ospMetaDataFilePath := ospMetaDataFile
 	if useHostPath {
@@ -181,7 +185,7 @@ func getOpenstackDataFromConfigDrive(useHostPath bool) (metaData *OSPMetaData, n
 		return metaData, networkData, fmt.Errorf("error unmarshalling metadata from file %s: %w", ospHostMetaDataFile, err)
 	}
 
-	glog.Infof("reading OpenStack network_data from config-drive")
+	log.Log.Info("reading OpenStack network_data from config-drive")
 	var networkDataf *os.File
 	ospNetworkDataFilePath := ospNetworkDataFile
 	if useHostPath {
@@ -203,7 +207,7 @@ func getOpenstackDataFromConfigDrive(useHostPath bool) (metaData *OSPMetaData, n
 }
 
 func getBodyFromURL(url string) ([]byte, error) {
-	glog.V(2).Infof("Getting body from %s", url)
+	log.Log.V(2).Info("Getting body from", "url", url)
 	resp, err := retryablehttp.Get(url)
 	if err != nil {
 		return nil, err
@@ -220,7 +224,7 @@ func getBodyFromURL(url string) ([]byte, error) {
 func getOpenstackDataFromMetadataService() (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
 	metaData = &OSPMetaData{}
 	networkData = &OSPNetworkData{}
-	glog.Infof("getting OpenStack meta_data from metadata server")
+	log.Log.Info("getting OpenStack meta_data from metadata server")
 	metaDataRawBytes, err := getBodyFromURL(ospMetaDataURL)
 	if err != nil {
 		return metaData, networkData, fmt.Errorf("error getting OpenStack meta_data from %s: %v", ospMetaDataURL, err)
@@ -230,7 +234,7 @@ func getOpenstackDataFromMetadataService() (metaData *OSPMetaData, networkData *
 		return metaData, networkData, fmt.Errorf("error unmarshalling raw bytes %v from %s", err, ospMetaDataURL)
 	}
 
-	glog.Infof("getting OpenStack network_data from metadata server")
+	log.Log.Info("getting OpenStack network_data from metadata server")
 	networkDataRawBytes, err := getBodyFromURL(ospNetworkDataURL)
 	if err != nil {
 		return metaData, networkData, fmt.Errorf("error getting OpenStack network_data from %s: %v", ospNetworkDataURL, err)
@@ -264,7 +268,7 @@ func getPCIAddressFromMACAddress(macAddress string, nics []*net.NIC) (string, er
 
 // CreateOpenstackDevicesInfo create the openstack device info map
 func CreateOpenstackDevicesInfo(metaData *OSPMetaData, networkData *OSPNetworkData) (OSPDevicesInfo, error) {
-	glog.Infof("CreateOpenstackDevicesInfo()")
+	log.Log.Info("CreateOpenstackDevicesInfo()")
 	devicesInfo := make(OSPDevicesInfo)
 	if metaData == nil || networkData == nil {
 		return nil, nil
@@ -303,7 +307,8 @@ func CreateOpenstackDevicesInfo(metaData *OSPMetaData, networkData *OSPNetworkDa
 
 		devClass, err := strconv.ParseInt(device.Class.ID, 16, 64)
 		if err != nil {
-			glog.Warningf("CreateOpenstackDevicesInfo(): unable to parse device class for device %+v %q", device, err)
+			log.Log.Error(err, "CreateOpenstackDevicesInfo(): unable to parse device class for device, skipping",
+				"device", device)
 			continue
 		}
 		if devClass != netClass {
@@ -339,7 +344,7 @@ func CreateOpenstackDevicesInfo(metaData *OSPMetaData, networkData *OSPNetworkDa
 
 // DiscoverSriovDevicesVirtual discovers VFs on a virtual platform
 func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.InterfaceExt, error) {
-	glog.V(2).Info("DiscoverSriovDevicesVirtual()")
+	log.Log.V(2).Info("DiscoverSriovDevicesVirtual()")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
 	pci, err := ghw.PCI()
@@ -355,7 +360,8 @@ func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.I
 	for _, device := range devices {
 		devClass, err := strconv.ParseInt(device.Class.ID, 16, 64)
 		if err != nil {
-			glog.Warningf("DiscoverSriovDevicesVirtual(): unable to parse device class for device %+v %q", device, err)
+			log.Log.Error(err, "DiscoverSriovDevicesVirtual(): unable to parse device class for device, skipping",
+				"device", device)
 			continue
 		}
 		if devClass != netClass {
@@ -365,7 +371,8 @@ func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.I
 
 		deviceInfo, exist := devicesInfo[device.Address]
 		if !exist {
-			glog.Warningf("DiscoverSriovDevicesVirtual(): unable to find device in devicesInfo list for pci %s", device.Address)
+			log.Log.Error(nil, "DiscoverSriovDevicesVirtual(): unable to find device in devicesInfo list, skipping",
+				"device", device.Address)
 			continue
 		}
 		netFilter := deviceInfo.NetworkID
@@ -373,7 +380,8 @@ func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.I
 
 		driver, err := dputils.GetDriverName(device.Address)
 		if err != nil {
-			glog.Warningf("DiscoverSriovDevicesVirtual(): unable to parse device driver for device %+v %q", device, err)
+			log.Log.Error(err, "DiscoverSriovDevicesVirtual(): unable to parse device driver for device, skipping",
+				"device", device)
 			continue
 		}
 		iface := sriovnetworkv1.InterfaceExt{
@@ -425,7 +433,7 @@ func CreateOpenstackDevicesInfoFromNodeStatus(networkState *sriovnetworkv1.Sriov
 
 // tryToGetVirtualInterfaceName get the interface name of a virtio interface
 func tryToGetVirtualInterfaceName(pciAddr string) string {
-	glog.Infof("tryToGetVirtualInterfaceName() get interface name for device %s", pciAddr)
+	log.Log.Info("tryToGetVirtualInterfaceName() get interface name for device", "device", pciAddr)
 
 	// To support different driver that is not virtio-pci like mlx
 	name := tryGetInterfaceName(pciAddr)
@@ -440,7 +448,7 @@ func tryToGetVirtualInterfaceName(pciAddr string) string {
 
 	fInfos, err := os.ReadDir(netDir[0])
 	if err != nil {
-		glog.Warningf("tryToGetVirtualInterfaceName(): failed to read net directory %s: %q", netDir, err)
+		log.Log.Error(err, "tryToGetVirtualInterfaceName(): failed to read net directory", "dir", netDir[0])
 		return ""
 	}
 
@@ -465,11 +473,11 @@ func SyncNodeStateVirtual(newState *sriovnetworkv1.SriovNetworkNodeState) error 
 		for _, iface := range newState.Spec.Interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				if !needUpdateVirtual(&iface, &ifaceStatus) {
-					glog.V(2).Infof("SyncNodeStateVirtual(): no need update interface %s", iface.PciAddress)
+					log.Log.V(2).Info("SyncNodeStateVirtual(): no need update interface", "address", iface.PciAddress)
 					break
 				}
 				if err = configSriovDeviceVirtual(&iface, &ifaceStatus); err != nil {
-					glog.Errorf("SyncNodeStateVirtual(): fail to config sriov interface %s: %v", iface.PciAddress, err)
+					log.Log.Error(err, "SyncNodeStateVirtual(): fail to config sriov interface", "address", iface.PciAddress)
 					return err
 				}
 				break
@@ -490,12 +498,14 @@ func needUpdateVirtual(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 					ingroup = true
 					if group.DeviceType != constants.DeviceTypeNetDevice {
 						if group.DeviceType != vf.Driver {
-							glog.V(2).Infof("needUpdateVirtual(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
+							log.Log.V(2).Info("needUpdateVirtual(): Driver needs update",
+								"desired", group.DeviceType, "current", vf.Driver)
 							return true
 						}
 					} else {
 						if sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
-							glog.V(2).Infof("needUpdateVirtual(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
+							log.Log.V(2).Info("needUpdateVirtual(): Driver needs update",
+								"desired", group.DeviceType, "current", vf.Driver)
 							return true
 						}
 					}
@@ -512,42 +522,44 @@ func needUpdateVirtual(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 }
 
 func configSriovDeviceVirtual(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) error {
-	glog.V(2).Infof("configSriovDeviceVirtual(): config interface %s with %v", iface.PciAddress, iface)
+	log.Log.V(2).Info("configSriovDeviceVirtual(): config interface", "address", iface.PciAddress, "config", iface)
 	// Config VFs
 	if iface.NumVfs > 0 {
 		if iface.NumVfs > 1 {
-			glog.Warningf("configSriovDeviceVirtual(): in a virtual environment, only one VF per interface (NumVfs: %d)", iface.NumVfs)
+			log.Log.Error(nil, "configSriovDeviceVirtual(): in a virtual environment, only one VF per interface",
+				"numVfs", iface.NumVfs)
 			return errors.New("NumVfs > 1")
 		}
 		if len(iface.VfGroups) != 1 {
-			glog.Warningf("configSriovDeviceVirtual(): missing VFGroup")
+			log.Log.Error(nil, "configSriovDeviceVirtual(): missing VFGroup")
 			return errors.New("NumVfs != 1")
 		}
 		addr := iface.PciAddress
-		glog.V(2).Infof("configSriovDeviceVirtual(): addr %s", addr)
+		log.Log.V(2).Info("configSriovDeviceVirtual()", "address", addr)
 		driver := ""
 		vfID := 0
 		for _, group := range iface.VfGroups {
-			glog.V(2).Infof("configSriovDeviceVirtual(): group %v", group)
+			log.Log.V(2).Info("configSriovDeviceVirtual()", "group", group)
 			if sriovnetworkv1.IndexInRange(vfID, group.VfRange) {
-				glog.V(2).Infof("configSriovDeviceVirtual(): indexInRange %d", vfID)
+				log.Log.V(2).Info("configSriovDeviceVirtual()", "indexInRange", vfID)
 				if sriovnetworkv1.StringInArray(group.DeviceType, DpdkDrivers) {
-					glog.V(2).Infof("configSriovDeviceVirtual(): driver %s", group.DeviceType)
+					log.Log.V(2).Info("configSriovDeviceVirtual()", "driver", group.DeviceType)
 					driver = group.DeviceType
 				}
 				break
 			}
 		}
 		if driver == "" {
-			glog.V(2).Infof("configSriovDeviceVirtual(): bind default")
+			log.Log.V(2).Info("configSriovDeviceVirtual(): bind default")
 			if err := BindDefaultDriver(addr); err != nil {
-				glog.Warningf("configSriovDeviceVirtual(): fail to bind default driver for device %s", addr)
+				log.Log.Error(err, "configSriovDeviceVirtual(): fail to bind default driver", "device", addr)
 				return err
 			}
 		} else {
-			glog.V(2).Infof("configSriovDeviceVirtual(): bind driver %s", driver)
+			log.Log.V(2).Info("configSriovDeviceVirtual(): bind driver", "driver", driver)
 			if err := BindDpdkDriver(addr, driver); err != nil {
-				glog.Warningf("configSriovDeviceVirtual(): fail to bind driver %s for device %s", driver, addr)
+				log.Log.Error(err, "configSriovDeviceVirtual(): fail to bind driver for device",
+					"driver", driver, "device", addr)
 				return err
 			}
 		}

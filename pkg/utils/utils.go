@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/golang/glog"
 	"github.com/jaypipes/ghw"
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 
@@ -93,7 +93,7 @@ func IsKernelArgsSet(cmdLine string, karg string) bool {
 }
 
 func DiscoverSriovDevices(withUnsupported bool, storeManager StoreManagerInterface) ([]sriovnetworkv1.InterfaceExt, error) {
-	glog.V(2).Info("DiscoverSriovDevices")
+	log.Log.V(2).Info("DiscoverSriovDevices")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
 	pci, err := ghw.PCI()
@@ -109,7 +109,8 @@ func DiscoverSriovDevices(withUnsupported bool, storeManager StoreManagerInterfa
 	for _, device := range devices {
 		devClass, err := strconv.ParseInt(device.Class.ID, 16, 64)
 		if err != nil {
-			glog.Warningf("DiscoverSriovDevices(): unable to parse device class for device %+v %q", device, err)
+			log.Log.Error(err, "DiscoverSriovDevices(): unable to parse device class, skipping",
+				"device", device)
 			continue
 		}
 		if devClass != netClass {
@@ -125,13 +126,13 @@ func DiscoverSriovDevices(withUnsupported bool, storeManager StoreManagerInterfa
 
 		driver, err := dputils.GetDriverName(device.Address)
 		if err != nil {
-			glog.Warningf("DiscoverSriovDevices(): unable to parse device driver for device %+v %q", device, err)
+			log.Log.Error(err, "DiscoverSriovDevices(): unable to parse device driver for device, skipping", "device", device)
 			continue
 		}
 
 		deviceNames, err := dputils.GetNetNames(device.Address)
 		if err != nil {
-			glog.Warningf("DiscoverSriovDevices(): unable to get device names for device %+v %q", device, err)
+			log.Log.Error(err, "DiscoverSriovDevices(): unable to get device names for device, skipping", "device", device)
 			continue
 		}
 
@@ -142,7 +143,7 @@ func DiscoverSriovDevices(withUnsupported bool, storeManager StoreManagerInterfa
 
 		if !withUnsupported {
 			if !sriovnetworkv1.IsSupportedModel(device.Vendor.ID, device.Product.ID) {
-				glog.Infof("DiscoverSriovDevices(): unsupported device %+v", device)
+				log.Log.Info("DiscoverSriovDevices(): unsupported device", "device", device)
 				continue
 			}
 		}
@@ -165,7 +166,7 @@ func DiscoverSriovDevices(withUnsupported bool, storeManager StoreManagerInterfa
 
 		pfStatus, exist, err := storeManager.LoadPfsStatus(iface.PciAddress)
 		if err != nil {
-			glog.Warningf("DiscoverSriovDevices(): failed to load PF status from disk: %v", err)
+			log.Log.Error(err, "DiscoverSriovDevices(): failed to load PF status from disk")
 		} else {
 			if exist {
 				iface.ExternallyManaged = pfStatus.ExternallyManaged
@@ -176,12 +177,14 @@ func DiscoverSriovDevices(withUnsupported bool, storeManager StoreManagerInterfa
 			iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
 			iface.NumVfs = dputils.GetVFconfigured(device.Address)
 			if iface.EswitchMode, err = GetNicSriovMode(device.Address); err != nil {
-				glog.Warningf("DiscoverSriovDevices(): unable to get device mode %+v %q", device.Address, err)
+				log.Log.Error(err, "DiscoverSriovDevices(): warning, unable to get device eswitch mode",
+					"device", device.Address)
 			}
 			if dputils.SriovConfigured(device.Address) {
 				vfs, err := dputils.GetVFList(device.Address)
 				if err != nil {
-					glog.Warningf("DiscoverSriovDevices(): unable to parse VFs for device %+v %q", device, err)
+					log.Log.Error(err, "DiscoverSriovDevices(): unable to parse VFs for device, skipping",
+						"device", device)
 					continue
 				}
 				for _, vf := range vfs {
@@ -203,7 +206,7 @@ func SyncNodeState(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToConfig m
 
 func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool) error {
 	if IsKernelLockdownMode(true) && hasMellanoxInterfacesInSpec(ifaceStatuses, interfaces) {
-		glog.Warningf("cannot use mellanox devices when in kernel lockdown mode")
+		log.Log.Error(nil, "cannot use mellanox devices when in kernel lockdown mode")
 		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
 	}
 
@@ -224,24 +227,24 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 				}
 
 				if !NeedUpdate(&iface, &ifaceStatus) {
-					glog.V(2).Infof("syncNodeState(): no need update interface %s", iface.PciAddress)
+					log.Log.V(2).Info("syncNodeState(): no need update interface", "address", iface.PciAddress)
 
 					// Save the PF status to the host
 					err = storeManager.SaveLastPfAppliedStatus(&iface)
 					if err != nil {
-						glog.Errorf("SyncNodeState(): failed to save PF applied config to host: %v", err)
+						log.Log.Error(err, "SyncNodeState(): failed to save PF applied config to host")
 						return err
 					}
 
 					break
 				}
 				if err = configSriovDevice(&iface, &ifaceStatus); err != nil {
-					glog.Errorf("SyncNodeState(): fail to configure sriov interface %s: %v. resetting interface.", iface.PciAddress, err)
+					log.Log.Error(err, "SyncNodeState(): fail to configure sriov interface. resetting interface.", "address", iface.PciAddress)
 					if iface.ExternallyManaged {
-						glog.Infof("SyncNodeState(): skipping device reset as the nic is marked as externally created")
+						log.Log.Info("SyncNodeState(): skipping device reset as the nic is marked as externally created")
 					} else {
 						if resetErr := resetSriovDevice(ifaceStatus); resetErr != nil {
-							glog.Errorf("SyncNodeState(): failed to reset on error SR-IOV interface: %s", resetErr)
+							log.Log.Error(resetErr, "SyncNodeState(): failed to reset on error SR-IOV interface")
 						}
 					}
 					return err
@@ -250,7 +253,7 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 				// Save the PF status to the host
 				err = storeManager.SaveLastPfAppliedStatus(&iface)
 				if err != nil {
-					glog.Errorf("SyncNodeState(): failed to save PF applied config to host: %v", err)
+					log.Log.Error(err, "SyncNodeState(): failed to save PF applied config to host")
 					return err
 				}
 				break
@@ -264,21 +267,22 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 			// load the PF info
 			pfStatus, exist, err := storeManager.LoadPfsStatus(ifaceStatus.PciAddress)
 			if err != nil {
-				glog.Errorf("SyncNodeState(): failed to load info about PF status for pci address %s: %v", ifaceStatus.PciAddress, err)
+				log.Log.Error(err, "SyncNodeState(): failed to load info about PF status for device",
+					"address", ifaceStatus.PciAddress)
 				return err
 			}
 
 			if !exist {
-				glog.Infof("SyncNodeState(): PF name %s with pci address %s has VFs configured but they weren't created by the sriov operator. Skipping the device reset",
-					ifaceStatus.Name,
-					ifaceStatus.PciAddress)
+				log.Log.Info("SyncNodeState(): PF name with pci address has VFs configured but they weren't created by the sriov operator. Skipping the device reset",
+					"pf-name", ifaceStatus.Name,
+					"address", ifaceStatus.PciAddress)
 				continue
 			}
 
 			if pfStatus.ExternallyManaged {
-				glog.Infof("SyncNodeState(): PF name %s with pci address %s was externally created skipping the device reset",
-					ifaceStatus.Name,
-					ifaceStatus.PciAddress)
+				log.Log.Info("SyncNodeState(): PF name with pci address was externally created skipping the device reset",
+					"pf-name", ifaceStatus.Name,
+					"address", ifaceStatus.PciAddress)
 				continue
 			} else {
 				err = RemoveUdevRule(ifaceStatus.PciAddress)
@@ -298,7 +302,7 @@ func ConfigSriovInterfaces(interfaces []sriovnetworkv1.Interface, ifaceStatuses 
 // skipConfigVf Use systemd service to configure switchdev mode or BF-2 NICs in OpenShift
 func skipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.InterfaceExt) (bool, error) {
 	if ifSpec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-		glog.V(2).Infof("skipConfigVf(): skip config VF for switchdev device")
+		log.Log.V(2).Info("skipConfigVf(): skip config VF for switchdev device")
 		return true, nil
 	}
 
@@ -314,7 +318,7 @@ func skipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.Inter
 			return false, nil
 		}
 
-		glog.V(2).Infof("skipConfigVf(): skip config VF for Bluefiled card on DPU mode")
+		log.Log.V(2).Info("skipConfigVf(): skip config VF for Bluefiled card on DPU mode")
 		return true, nil
 	}
 
@@ -330,7 +334,7 @@ func GetPfsToSkip(ns *sriovnetworkv1.SriovNetworkNodeState) (map[string]bool, er
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				skip, err := skipConfigVf(iface, ifaceStatus)
 				if err != nil {
-					glog.Errorf("GetPfsToSkip(): fail to check for skip VFs %s: %v.", iface.PciAddress, err)
+					log.Log.Error(err, "GetPfsToSkip(): fail to check for skip VFs", "device", iface.PciAddress)
 					return pfsToSkip, err
 				}
 				pfsToSkip[iface.PciAddress] = skip
@@ -346,13 +350,13 @@ func NeedUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 	if iface.Mtu > 0 {
 		mtu := iface.Mtu
 		if mtu != ifaceStatus.Mtu {
-			glog.V(2).Infof("NeedUpdate(): MTU needs update, desired=%d, current=%d", mtu, ifaceStatus.Mtu)
+			log.Log.V(2).Info("NeedUpdate(): MTU needs update", "desired", mtu, "current", ifaceStatus.Mtu)
 			return true
 		}
 	}
 
 	if iface.NumVfs != ifaceStatus.NumVfs {
-		glog.V(2).Infof("NeedUpdate(): NumVfs needs update desired=%d, current=%d", iface.NumVfs, ifaceStatus.NumVfs)
+		log.Log.V(2).Info("NeedUpdate(): NumVfs needs update", "desired", iface.NumVfs, "current", ifaceStatus.NumVfs)
 		return true
 	}
 	if iface.NumVfs > 0 {
@@ -363,22 +367,26 @@ func NeedUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 					ingroup = true
 					if group.DeviceType != constants.DeviceTypeNetDevice {
 						if group.DeviceType != vf.Driver {
-							glog.V(2).Infof("NeedUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
+							log.Log.V(2).Info("NeedUpdate(): Driver needs update",
+								"desired", group.DeviceType, "current", vf.Driver)
 							return true
 						}
 					} else {
 						if sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
-							glog.V(2).Infof("NeedUpdate(): Driver needs update, desired=%s, current=%s", group.DeviceType, vf.Driver)
+							log.Log.V(2).Info("NeedUpdate(): Driver needs update",
+								"desired", group.DeviceType, "current", vf.Driver)
 							return true
 						}
 						if vf.Mtu != 0 && group.Mtu != 0 && vf.Mtu != group.Mtu {
-							glog.V(2).Infof("NeedUpdate(): VF %d MTU needs update, desired=%d, current=%d", vf.VfID, group.Mtu, vf.Mtu)
+							log.Log.V(2).Info("NeedUpdate(): VF MTU needs update",
+								"vf", vf.VfID, "desired", group.Mtu, "current", vf.Mtu)
 							return true
 						}
 
 						// this is needed to be sure the admin mac address is configured as expected
 						if iface.ExternallyManaged {
-							glog.V(2).Infof("NeedUpdate(): need to update the device as it's externally manage for pci address %s", ifaceStatus.PciAddress)
+							log.Log.V(2).Info("NeedUpdate(): need to update the device as it's externally manage",
+								"device", ifaceStatus.PciAddress)
 							return true
 						}
 					}
@@ -395,11 +403,12 @@ func NeedUpdate(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.Int
 }
 
 func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) error {
-	glog.V(2).Infof("configSriovDevice(): config interface %s with %v", iface.PciAddress, iface)
+	log.Log.V(2).Info("configSriovDevice(): configure sriov device",
+		"device", iface.PciAddress, "config", iface)
 	var err error
 	if iface.NumVfs > ifaceStatus.TotalVfs {
 		err := fmt.Errorf("cannot config SRIOV device: NumVfs (%d) is larger than TotalVfs (%d)", iface.NumVfs, ifaceStatus.TotalVfs)
-		glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s: %v", iface.PciAddress, err)
+		log.Log.Error(err, "configSriovDevice(): fail to set NumVfs for device", "device", iface.PciAddress)
 		return err
 	}
 	// set numVFs
@@ -407,7 +416,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		if iface.ExternallyManaged {
 			if iface.NumVfs > ifaceStatus.NumVfs {
 				errMsg := fmt.Sprintf("configSriovDevice(): number of request virtual functions %d is not equal to configured virtual functions %d but the policy is configured as ExternallyManaged for device %s", iface.NumVfs, ifaceStatus.NumVfs, iface.PciAddress)
-				glog.Error(errMsg)
+				log.Log.Error(nil, errMsg)
 				return fmt.Errorf(errMsg)
 			}
 		} else {
@@ -423,7 +432,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 				if err != nil {
 					return err
 				}
-				glog.Errorf("configSriovDevice(): fail to set NumVfs for device %s", iface.PciAddress)
+				log.Log.Error(nil, "configSriovDevice(): fail to set NumVfs for device", "device", iface.PciAddress)
 				return err
 			}
 		}
@@ -432,7 +441,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 	if iface.Mtu > 0 && iface.Mtu > ifaceStatus.Mtu {
 		err = setNetdevMTU(iface.PciAddress, iface.Mtu)
 		if err != nil {
-			glog.Warningf("configSriovDevice(): fail to set mtu for PF %s: %v", iface.PciAddress, err)
+			log.Log.Error(err, "configSriovDevice(): fail to set mtu for PF", "device", iface.PciAddress)
 			return err
 		}
 	}
@@ -440,11 +449,11 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 	if iface.NumVfs > 0 {
 		vfAddrs, err := dputils.GetVFList(iface.PciAddress)
 		if err != nil {
-			glog.Warningf("configSriovDevice(): unable to parse VFs for device %+v %q", iface.PciAddress, err)
+			log.Log.Error(err, "configSriovDevice(): unable to parse VFs for device", "device", iface.PciAddress)
 		}
 		pfLink, err := netlink.LinkByName(iface.Name)
 		if err != nil {
-			glog.Errorf("configSriovDevice(): unable to get PF link for device %+v %q", iface, err)
+			log.Log.Error(err, "configSriovDevice(): unable to get PF link for device", "device", iface)
 			return err
 		}
 
@@ -456,7 +465,7 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			vfID, err := dputils.GetVFID(addr)
 			for i, group = range iface.VfGroups {
 				if err != nil {
-					glog.Warningf("configSriovDevice(): unable to get VF id %+v %q", iface.PciAddress, err)
+					log.Log.Error(err, "configSriovDevice(): unable to get VF id", "device", iface.PciAddress)
 				}
 				if sriovnetworkv1.IndexInRange(vfID, group.VfRange) {
 					isRdma = group.IsRdma
@@ -484,22 +493,22 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 				} else {
 					vfLink, err := vfIsReady(addr)
 					if err != nil {
-						glog.Errorf("configSriovDevice(): VF link is not ready for device %s %q", addr, err)
+						log.Log.Error(err, "configSriovDevice(): VF link is not ready", "address", addr)
 						err = RebindVfToDefaultDriver(addr)
 						if err != nil {
-							glog.Errorf("configSriovDevice(): failed to rebind VF %s %q", addr, err)
+							log.Log.Error(err, "configSriovDevice(): failed to rebind VF", "address", addr)
 							return err
 						}
 
 						// Try to check the VF status again
 						vfLink, err = vfIsReady(addr)
 						if err != nil {
-							glog.Errorf("configSriovDevice(): VF link is not ready for device %s %q", addr, err)
+							log.Log.Error(err, "configSriovDevice(): VF link is not ready", "address", addr)
 							return err
 						}
 					}
 					if err = setVfAdminMac(addr, pfLink, vfLink); err != nil {
-						glog.Errorf("configSriovDevice(): fail to configure VF admin mac address for device %s %q", addr, err)
+						log.Log.Error(err, "configSriovDevice(): fail to configure VF admin mac", "device", addr)
 						return err
 					}
 				}
@@ -511,19 +520,20 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 
 			if dpdkDriver == "" {
 				if err := BindDefaultDriver(addr); err != nil {
-					glog.Warningf("configSriovDevice(): fail to bind default driver for device %s", addr)
+					log.Log.Error(err, "configSriovDevice(): fail to bind default driver for device", "device", addr)
 					return err
 				}
 				// only set MTU for VF with default driver
 				if iface.VfGroups[i].Mtu > 0 {
 					if err := setNetdevMTU(addr, iface.VfGroups[i].Mtu); err != nil {
-						glog.Warningf("configSriovDevice(): fail to set mtu for VF %s: %v", addr, err)
+						log.Log.Error(err, "configSriovDevice(): fail to set mtu for VF", "address", addr)
 						return err
 					}
 				}
 			} else {
 				if err := BindDpdkDriver(addr, dpdkDriver); err != nil {
-					glog.Warningf("configSriovDevice(): fail to bind driver %s for device %s", dpdkDriver, addr)
+					log.Log.Error(err, "configSriovDevice(): fail to bind driver for device",
+						"driver", dpdkDriver, "device", addr)
 					return err
 				}
 			}
@@ -544,33 +554,33 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 }
 
 func setSriovNumVfs(pciAddr string, numVfs int) error {
-	glog.V(2).Infof("setSriovNumVfs(): set NumVfs for device %s to %d", pciAddr, numVfs)
+	log.Log.V(2).Info("setSriovNumVfs(): set NumVfs", "device", pciAddr, "numVfs", numVfs)
 	numVfsFilePath := filepath.Join(sysBusPciDevices, pciAddr, numVfsFile)
 	bs := []byte(strconv.Itoa(numVfs))
 	err := os.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
 	if err != nil {
-		glog.Warningf("setSriovNumVfs(): fail to reset NumVfs file %s", numVfsFilePath)
+		log.Log.Error(err, "setSriovNumVfs(): fail to reset NumVfs file", "path", numVfsFilePath)
 		return err
 	}
 	err = os.WriteFile(numVfsFilePath, bs, os.ModeAppend)
 	if err != nil {
-		glog.Warningf("setSriovNumVfs(): fail to set NumVfs file %s", numVfsFilePath)
+		log.Log.Error(err, "setSriovNumVfs(): fail to set NumVfs file", "path", numVfsFilePath)
 		return err
 	}
 	return nil
 }
 
 func setNetdevMTU(pciAddr string, mtu int) error {
-	glog.V(2).Infof("setNetdevMTU(): set MTU for device %s to %d", pciAddr, mtu)
+	log.Log.V(2).Info("setNetdevMTU(): set MTU", "device", pciAddr, "mtu", mtu)
 	if mtu <= 0 {
-		glog.V(2).Infof("setNetdevMTU(): not set MTU to %d", mtu)
+		log.Log.V(2).Info("setNetdevMTU(): refusing to set MTU", "mtu", mtu)
 		return nil
 	}
 	b := backoff.NewConstantBackOff(1 * time.Second)
 	err := backoff.Retry(func() error {
 		ifaceName, err := dputils.GetNetNames(pciAddr)
 		if err != nil {
-			glog.Warningf("setNetdevMTU(): fail to get interface name for %s: %s", pciAddr, err)
+			log.Log.Error(err, "setNetdevMTU(): fail to get interface name", "device", pciAddr)
 			return err
 		}
 		if len(ifaceName) < 1 {
@@ -581,7 +591,7 @@ func setNetdevMTU(pciAddr string, mtu int) error {
 		return os.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
 	}, backoff.WithMaxRetries(b, 10))
 	if err != nil {
-		glog.Warningf("setNetdevMTU(): fail to write mtu file after retrying: %v", err)
+		log.Log.Error(err, "setNetdevMTU(): fail to write mtu file after retrying")
 		return err
 	}
 	return nil
@@ -610,12 +620,12 @@ func tryGetInterfaceName(pciAddr string) string {
 		return name
 	}
 
-	glog.V(2).Infof("tryGetInterfaceName(): name is %s", netDevName)
+	log.Log.V(2).Info("tryGetInterfaceName()", "name", netDevName)
 	return netDevName
 }
 
 func getNetdevMTU(pciAddr string) int {
-	glog.V(2).Infof("getNetdevMTU(): get MTU for device %s", pciAddr)
+	log.Log.V(2).Info("getNetdevMTU(): get MTU", "device", pciAddr)
 	ifaceName := tryGetInterfaceName(pciAddr)
 	if ifaceName == "" {
 		return 0
@@ -624,23 +634,23 @@ func getNetdevMTU(pciAddr string) int {
 	mtuFilePath := filepath.Join(sysBusPciDevices, pciAddr, mtuFile)
 	data, err := os.ReadFile(mtuFilePath)
 	if err != nil {
-		glog.Warningf("getNetdevMTU(): fail to read mtu file %s", mtuFilePath)
+		log.Log.Error(err, "getNetdevMTU(): fail to read mtu file", "path", mtuFilePath)
 		return 0
 	}
 	mtu, err := strconv.Atoi(strings.TrimSpace(string(data)))
 	if err != nil {
-		glog.Warningf("getNetdevMTU(): fail to convert mtu %s to int", strings.TrimSpace(string(data)))
+		log.Log.Error(err, "getNetdevMTU(): fail to convert mtu to int", "raw-mtu", strings.TrimSpace(string(data)))
 		return 0
 	}
 	return mtu
 }
 
 func getNetDevMac(ifaceName string) string {
-	glog.V(2).Infof("getNetDevMac(): get Mac for device %s", ifaceName)
+	log.Log.V(2).Info("getNetDevMac(): get Mac", "device", ifaceName)
 	macFilePath := filepath.Join(sysClassNet, ifaceName, "address")
 	data, err := os.ReadFile(macFilePath)
 	if err != nil {
-		glog.Warningf("getNetDevMac(): fail to read Mac file %s", macFilePath)
+		log.Log.Error(err, "getNetDevMac(): fail to read Mac file", "path", macFilePath)
 		return ""
 	}
 
@@ -648,11 +658,11 @@ func getNetDevMac(ifaceName string) string {
 }
 
 func getNetDevLinkSpeed(ifaceName string) string {
-	glog.V(2).Infof("getNetDevLinkSpeed(): get LinkSpeed for device %s", ifaceName)
+	log.Log.V(2).Info("getNetDevLinkSpeed(): get LinkSpeed", "device", ifaceName)
 	speedFilePath := filepath.Join(sysClassNet, ifaceName, "speed")
 	data, err := os.ReadFile(speedFilePath)
 	if err != nil {
-		glog.Warningf("getNetDevLinkSpeed(): fail to read Link Speed file %s", speedFilePath)
+		log.Log.Error(err, "getNetDevLinkSpeed(): fail to read Link Speed file", "path", speedFilePath)
 		return ""
 	}
 
@@ -660,7 +670,7 @@ func getNetDevLinkSpeed(ifaceName string) string {
 }
 
 func resetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error {
-	glog.V(2).Infof("resetSriovDevice(): reset SRIOV device %s", ifaceStatus.PciAddress)
+	log.Log.V(2).Info("resetSriovDevice(): reset SRIOV device", "address", ifaceStatus.PciAddress)
 	if err := setSriovNumVfs(ifaceStatus.PciAddress, 0); err != nil {
 		return err
 	}
@@ -672,7 +682,7 @@ func resetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error {
 		} else {
 			mtu = 1500
 		}
-		glog.V(2).Infof("resetSriovDevice(): reset mtu to %d", mtu)
+		log.Log.V(2).Info("resetSriovDevice(): reset mtu", "value", mtu)
 		if err := setNetdevMTU(ifaceStatus.PciAddress, mtu); err != nil {
 			return err
 		}
@@ -687,11 +697,11 @@ func resetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error {
 func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction {
 	driver, err := dputils.GetDriverName(pciAddr)
 	if err != nil {
-		glog.Warningf("getVfInfo(): unable to parse device driver for device %s %q", pciAddr, err)
+		log.Log.Error(err, "getVfInfo(): unable to parse device driver", "device", pciAddr)
 	}
 	id, err := dputils.GetVFID(pciAddr)
 	if err != nil {
-		glog.Warningf("getVfInfo(): unable to get VF index for device %s %q", pciAddr, err)
+		log.Log.Error(err, "getVfInfo(): unable to get VF index", "device", pciAddr)
 	}
 	vf := sriovnetworkv1.VirtualFunction{
 		PciAddress: pciAddr,
@@ -739,14 +749,14 @@ func Chroot(path string) (func() error, error) {
 }
 
 func vfIsReady(pciAddr string) (netlink.Link, error) {
-	glog.Infof("vfIsReady(): VF device %s", pciAddr)
+	log.Log.Info("vfIsReady()", "device", pciAddr)
 	var err error
 	var vfLink netlink.Link
 	err = wait.PollImmediate(time.Second, 10*time.Second, func() (bool, error) {
 		vfName := tryGetInterfaceName(pciAddr)
 		vfLink, err = netlink.LinkByName(vfName)
 		if err != nil {
-			glog.Errorf("vfIsReady(): unable to get VF link for device %+v, %q", pciAddr, err)
+			log.Log.Error(err, "vfIsReady(): unable to get VF link", "device", pciAddr)
 		}
 		return err == nil, nil
 	})
@@ -757,11 +767,11 @@ func vfIsReady(pciAddr string) (netlink.Link, error) {
 }
 
 func setVfAdminMac(vfAddr string, pfLink, vfLink netlink.Link) error {
-	glog.Infof("setVfAdminMac(): VF %s", vfAddr)
+	log.Log.Info("setVfAdminMac()", "vf", vfAddr)
 
 	vfID, err := dputils.GetVFID(vfAddr)
 	if err != nil {
-		glog.Errorf("setVfAdminMac(): unable to get VF id %+v %q", vfAddr, err)
+		log.Log.Error(err, "setVfAdminMac(): unable to get VF id", "address", vfAddr)
 		return err
 	}
 
@@ -774,7 +784,7 @@ func setVfAdminMac(vfAddr string, pfLink, vfLink netlink.Link) error {
 
 func unbindDriverIfNeeded(vfAddr string, isRdma bool) error {
 	if isRdma {
-		glog.Infof("unbindDriverIfNeeded(): unbind driver for %s", vfAddr)
+		log.Log.Info("unbindDriverIfNeeded(): unbind driver", "device", vfAddr)
 		if err := Unbind(vfAddr); err != nil {
 			return err
 		}
@@ -783,11 +793,11 @@ func unbindDriverIfNeeded(vfAddr string, isRdma bool) error {
 }
 
 func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
-	glog.V(2).Infof("getLinkType(): Device %s", ifaceStatus.PciAddress)
+	log.Log.V(2).Info("getLinkType()", "device", ifaceStatus.PciAddress)
 	if ifaceStatus.Name != "" {
 		link, err := netlink.LinkByName(ifaceStatus.Name)
 		if err != nil {
-			glog.Warningf("getLinkType(): %v", err)
+			log.Log.Error(err, "getLinkType(): failed to get link", "device", ifaceStatus.Name)
 			return ""
 		}
 		linkType := link.Attrs().EncapType
@@ -802,10 +812,10 @@ func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
 }
 
 func setVfGUID(vfAddr string, pfLink netlink.Link) error {
-	glog.Infof("setVfGuid(): VF %s", vfAddr)
+	log.Log.Info("setVfGuid()", "vf", vfAddr)
 	vfID, err := dputils.GetVFID(vfAddr)
 	if err != nil {
-		glog.Errorf("setVfGuid(): unable to get VF id %+v %q", vfAddr, err)
+		log.Log.Error(err, "setVfGuid(): unable to get VF id", "address", vfAddr)
 		return err
 	}
 	guid := generateRandomGUID()
@@ -836,7 +846,7 @@ func generateRandomGUID() net.HardwareAddr {
 }
 
 func GetNicSriovMode(pciAddress string) (string, error) {
-	glog.V(2).Infof("GetNicSriovMode(): device %s", pciAddress)
+	log.Log.V(2).Info("GetNicSriovMode()", "device", pciAddress)
 
 	devLink, err := netlink.DevLinkGetDeviceByName("pci", pciAddress)
 	if err != nil {
@@ -890,7 +900,7 @@ func IsKernelLockdownMode(chroot bool) bool {
 		path = "/host" + path
 	}
 	out, err := RunCommand("cat", path)
-	glog.V(2).Infof("IsKernelLockdownMode(): %s, %+v", out, err)
+	log.Log.V(2).Info("IsKernelLockdownMode()", "output", out, "error", err)
 	if err != nil {
 		return false
 	}
@@ -899,7 +909,7 @@ func IsKernelLockdownMode(chroot bool) bool {
 
 // RunCommand runs a command
 func RunCommand(command string, args ...string) (string, error) {
-	glog.Infof("RunCommand(): %s %v", command, args)
+	log.Log.Info("RunCommand()", "command", command, "args", args)
 	var stdout, stderr bytes.Buffer
 
 	cmd := exec.Command(command, args...)
@@ -907,7 +917,7 @@ func RunCommand(command string, args ...string) (string, error) {
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
-	glog.V(2).Infof("RunCommand(): out:(%s), err:(%v)", stdout.String(), err)
+	log.Log.V(2).Info("RunCommand()", "output", stdout.String(), "error", err)
 	return stdout.String(), err
 }
 
@@ -916,7 +926,9 @@ func hasMellanoxInterfacesInSpec(ifaceStatuses sriovnetworkv1.InterfaceExts, ifa
 		if ifaceStatus.Vendor == VendorMellanox {
 			for _, iface := range ifaceSpecs {
 				if iface.PciAddress == ifaceStatus.PciAddress {
-					glog.V(2).Infof("hasMellanoxInterfacesInSpec(): Mellanox device %s (pci: %s) specified in SriovNetworkNodeState spec", ifaceStatus.Name, ifaceStatus.PciAddress)
+					log.Log.V(2).Info("hasMellanoxInterfacesInSpec(): Mellanox device specified in SriovNetworkNodeState spec",
+						"name", ifaceStatus.Name,
+						"address", ifaceStatus.PciAddress)
 					return true
 				}
 			}
@@ -929,21 +941,21 @@ func hasMellanoxInterfacesInSpec(ifaceStatuses sriovnetworkv1.InterfaceExts, ifa
 // This function unbind the VF from the default driver and try to bind it again
 // bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2045087
 func RebindVfToDefaultDriver(vfAddr string) error {
-	glog.Infof("RebindVfToDefaultDriver(): VF %s", vfAddr)
+	log.Log.Info("RebindVfToDefaultDriver()", "vf", vfAddr)
 	if err := Unbind(vfAddr); err != nil {
 		return err
 	}
 	if err := BindDefaultDriver(vfAddr); err != nil {
-		glog.Errorf("RebindVfToDefaultDriver(): fail to bind default driver for device %s", vfAddr)
+		log.Log.Error(err, "RebindVfToDefaultDriver(): fail to bind default driver", "device", vfAddr)
 		return err
 	}
 
-	glog.Warningf("RebindVfToDefaultDriver(): workaround implemented for VF %s", vfAddr)
+	log.Log.Info("RebindVfToDefaultDriver(): workaround implemented", "vf", vfAddr)
 	return nil
 }
 
 func PrepareNMUdevRule(supportedVfIds []string) error {
-	glog.V(2).Infof("PrepareNMUdevRule()")
+	log.Log.V(2).Info("PrepareNMUdevRule()")
 	dirPath := path.Join(FilesystemRoot, "/host/etc/udev/rules.d")
 	filePath := path.Join(dirPath, "10-nm-unmanaged.rules")
 
@@ -951,7 +963,8 @@ func PrepareNMUdevRule(supportedVfIds []string) error {
 	if _, err := os.Stat(filePath); err == nil {
 		err = os.Remove(filePath)
 		if err != nil {
-			glog.Warningf("failed to remove the network manager global unmanaged rule on path %s: %v", filePath, err)
+			log.Log.Error(err, "failed to remove the network manager global unmanaged rule",
+				"path", filePath)
 		}
 	}
 
@@ -961,10 +974,10 @@ func PrepareNMUdevRule(supportedVfIds []string) error {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		glog.Errorf("PrepareNMUdevRule(): failed to prepare nmUdevRule, stderr %s: %v", stderr.String(), err)
+		log.Log.Error(err, "PrepareNMUdevRule(): failed to prepare nmUdevRule", "stderr", stderr.String())
 		return err
 	}
-	glog.V(2).Infof("PrepareNMUdevRule(): %v", stdout.String())
+	log.Log.V(2).Info("PrepareNMUdevRule()", "stdout", stdout.String())
 
 	//save the device list to use for udev rules
 	SupportedVfIds = supportedVfIds
@@ -972,13 +985,13 @@ func PrepareNMUdevRule(supportedVfIds []string) error {
 }
 
 func AddUdevRule(pfPciAddress string) error {
-	glog.V(2).Infof("AddUdevRule(): %s", pfPciAddress)
+	log.Log.V(2).Info("AddUdevRule()", "device", pfPciAddress)
 	pathFile := udevRulesFolder
 	udevRuleContent := fmt.Sprintf(nmUdevRule, strings.Join(SupportedVfIds, "|"), pfPciAddress)
 
 	err := os.MkdirAll(pathFile, os.ModePerm)
 	if err != nil && !os.IsExist(err) {
-		glog.Errorf("AddUdevRule(): failed to create dir %s: %v", pathFile, err)
+		log.Log.Error(err, "AddUdevRule(): failed to create dir", "path", pathFile)
 		return err
 	}
 
@@ -987,7 +1000,7 @@ func AddUdevRule(pfPciAddress string) error {
 	// write to file and create it if it doesn't exist
 	err = os.WriteFile(filePath, []byte(udevRuleContent), 0666)
 	if err != nil {
-		glog.Errorf("AddUdevRule(): fail to write file: %v", err)
+		log.Log.Error(err, "AddUdevRule(): fail to write file", "path", filePath)
 		return err
 	}
 	return nil
