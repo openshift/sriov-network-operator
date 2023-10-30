@@ -35,9 +35,14 @@ func (p *IntelPlugin) Spec() string {
 }
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
-func (p *IntelPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	log.Log.Info("intel plugin OnNodeStateChange()")
+func (p *IntelPlugin) OnNodeStateChange(*sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error) {
+	log.Log.Info("intel-plugin OnNodeStateChange()")
 	return false, false, nil
+}
+
+// OnNodeStatusChange verify whether SriovNetworkNodeState CR status present changes on configured VFs.
+func (p *IntelPlugin) CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) bool {
+	return false
 }
 
 // Apply config change
