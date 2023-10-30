@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/coreos/go-systemd/v22/unit"
-	"github.com/golang/glog"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	plugins "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
@@ -121,7 +121,7 @@ func (p *K8sPlugin) Spec() string {
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	glog.Info("k8s-plugin OnNodeStateChange()")
+	log.Log.Info("k8s-plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
 
@@ -136,7 +136,7 @@ func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState)
 		// Check services
 		err = p.switchDevServicesStateUpdate()
 		if err != nil {
-			glog.Errorf("k8s-plugin OnNodeStateChange(): failed : %v", err)
+			log.Log.Error(err, "k8s-plugin OnNodeStateChange(): failed")
 			return
 		}
 	}
@@ -145,7 +145,7 @@ func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState)
 		// Check sriov service
 		err = p.sriovServiceStateUpdate()
 		if err != nil {
-			glog.Errorf("k8s-plugin OnNodeStateChange(): failed : %v", err)
+			log.Log.Error(err, "k8s-plugin OnNodeStateChange(): failed")
 			return
 		}
 	}
@@ -154,9 +154,9 @@ func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState)
 		needDrain = true
 		if p.updateTarget.needReboot() {
 			needReboot = true
-			glog.Infof("k8s-plugin OnNodeStateChange(): needReboot to update %q", p.updateTarget)
+			log.Log.Info("k8s-plugin OnNodeStateChange(): needReboot to update", "target", p.updateTarget)
 		} else {
-			glog.Infof("k8s-plugin OnNodeStateChange(): needDrain to update %q", p.updateTarget)
+			log.Log.Info("k8s-plugin OnNodeStateChange(): needDrain to update", "target", p.updateTarget)
 		}
 	}
 
@@ -165,7 +165,7 @@ func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState)
 
 // Apply config change
 func (p *K8sPlugin) Apply() error {
-	glog.Info("k8s-plugin Apply()")
+	log.Log.Info("k8s-plugin Apply()")
 	if err := p.updateSwitchdevService(); err != nil {
 		return err
 	}
@@ -321,7 +321,7 @@ func (p *K8sPlugin) switchdevServiceStateUpdate() error {
 }
 
 func (p *K8sPlugin) sriovServiceStateUpdate() error {
-	glog.Info("sriovServiceStateUpdate()")
+	log.Log.Info("sriovServiceStateUpdate()")
 	exist, err := p.serviceManager.IsServiceExist(p.sriovService.Path)
 	if err != nil {
 		return err
@@ -375,17 +375,17 @@ func (p *K8sPlugin) isSwitchdevServiceNeedUpdate(serviceObj *service.Service) (n
 }
 
 func (p *K8sPlugin) isSystemServiceNeedUpdate(serviceObj *service.Service) bool {
-	glog.Infof("isSystemServiceNeedUpdate()")
+	log.Log.Info("isSystemServiceNeedUpdate()")
 	systemService, err := p.serviceManager.ReadService(serviceObj.Path)
 	if err != nil {
-		glog.Warningf("k8s-plugin isSystemServiceNeedUpdate(): failed to read sriov-config service file %q: %v",
-			serviceObj.Path, err)
+		log.Log.Error(err, "k8s-plugin isSystemServiceNeedUpdate(): failed to read sriov-config service file, ignoring",
+			"path", serviceObj.Path)
 		return false
 	}
 	if systemService != nil {
 		needChange, err := service.CompareServices(systemService, serviceObj)
 		if err != nil {
-			glog.Warningf("k8s-plugin isSystemServiceNeedUpdate(): failed to compare sriov-config service: %v", err)
+			log.Log.Error(err, "k8s-plugin isSystemServiceNeedUpdate(): failed to compare sriov-config service, ignoring")
 			return false
 		}
 		return needChange
