@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/golang/glog"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // BlueField mode representation
@@ -30,14 +30,14 @@ const (
 )
 
 func MstConfigReadData(pciAddress string) (string, error) {
-	glog.Infof("MstConfigReadData(): device %s", pciAddress)
+	log.Log.Info("MstConfigReadData()", "device", pciAddress)
 	args := []string{"-e", "-d", pciAddress, "q"}
 	out, err := RunCommand("mstconfig", args...)
 	return out, err
 }
 
 func ParseMstconfigOutput(mstOutput string, attributes []string) (fwCurrent, fwNext map[string]string) {
-	glog.Infof("ParseMstconfigOutput(): Attributes %v", attributes)
+	log.Log.Info("ParseMstconfigOutput()", "attributes", attributes)
 	fwCurrent = map[string]string{}
 	fwNext = map[string]string{}
 	formatRegex := regexp.MustCompile(`(?P<Attribute>\w+)\s+(?P<Default>\S+)\s+(?P<Current>\S+)\s+(?P<Next>\S+)`)
@@ -56,11 +56,11 @@ func ParseMstconfigOutput(mstOutput string, attributes []string) (fwCurrent, fwN
 }
 
 func mellanoxBlueFieldMode(PciAddress string) (BlueFieldMode, error) {
-	glog.V(2).Infof("MellanoxBlueFieldMode():checking mode for card %s", PciAddress)
+	log.Log.V(2).Info("MellanoxBlueFieldMode(): checking mode for device", "device", PciAddress)
 	out, err := MstConfigReadData(PciAddress)
 	if err != nil {
-		glog.Errorf("MellanoxBlueFieldMode(): failed to get mlx nic fw data %v", err)
-		return -1, fmt.Errorf("failed to get mlx nic fw data %v", err)
+		log.Log.Error(err, "MellanoxBlueFieldMode(): failed to get mlx nic fw data")
+		return -1, fmt.Errorf("failed to get mlx nic fw data %w", err)
 	}
 
 	attrs := []string{internalCPUPageSupplier,
@@ -101,17 +101,18 @@ func mellanoxBlueFieldMode(PciAddress string) (BlueFieldMode, error) {
 		strings.Contains(internalCPUIbVportoStatus, ecpf) &&
 		strings.Contains(internalCPUOffloadEngineStatus, enabled) &&
 		strings.Contains(internalCPUModelStatus, embeddedCPU) {
-		glog.V(2).Infof("MellanoxBlueFieldMode():card %s in DPU mode", PciAddress)
+		log.Log.V(2).Info("MellanoxBlueFieldMode(): device in DPU mode", "device", PciAddress)
 		return bluefieldDpu, nil
 	} else if strings.Contains(internalCPUPageSupplierstatus, extHostPf) &&
 		strings.Contains(internalCPUEswitchManagerStatus, extHostPf) &&
 		strings.Contains(internalCPUIbVportoStatus, extHostPf) &&
 		strings.Contains(internalCPUOffloadEngineStatus, disabled) &&
 		strings.Contains(internalCPUModelStatus, embeddedCPU) {
-		glog.V(2).Infof("MellanoxBlueFieldMode():card %s in ConnectX mode", PciAddress)
+		log.Log.V(2).Info("MellanoxBlueFieldMode(): device in ConnectX mode", "device", PciAddress)
 		return bluefieldConnectXMode, nil
 	}
 
-	glog.Errorf("MellanoxBlueFieldMode(): unknown card status for %s mstconfig output \n %s", PciAddress, out)
-	return -1, fmt.Errorf("MellanoxBlueFieldMode(): unknown card status for %s", PciAddress)
+	log.Log.Error(err, "MellanoxBlueFieldMode(): unknown device status",
+		"device", PciAddress, "mstconfig-output", out)
+	return -1, fmt.Errorf("MellanoxBlueFieldMode(): unknown device status for %s", PciAddress)
 }
