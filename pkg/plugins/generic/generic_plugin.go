@@ -139,6 +139,31 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 	return
 }
 
+// CheckStatusChanges verify whether SriovNetworkNodeState CR status present changes on configured VFs.
+func (p *GenericPlugin) CheckStatusChanges(new *sriovnetworkv1.SriovNetworkNodeState) bool {
+	log.Log.Info("generic-plugin CheckStatusChanges()")
+
+	changed := false
+	for _, iface := range new.Spec.Interfaces {
+		found := false
+		for _, ifaceStatus := range new.Status.Interfaces {
+			if iface.PciAddress == ifaceStatus.PciAddress && !iface.ExternallyManaged {
+				found = true
+				if sriovnetworkv1.NeedToUpdateSriov(&iface, &ifaceStatus) {
+					changed = true
+					log.Log.Info("CheckStatusChanges(): status changed for interface", "address", iface.PciAddress)
+				}
+				break
+			}
+		}
+
+		if !found {
+			log.Log.Info("CheckStatusChanges(): no status found for interface", "address", iface.PciAddress)
+		}
+	}
+	return changed
+}
+
 func (p *GenericPlugin) syncDriverState() error {
 	for _, driverState := range p.DriverStateMap {
 		if !driverState.DriverLoaded && driverState.NeedDriverFunc(p.DesireState, driverState) {
