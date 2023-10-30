@@ -4,8 +4,6 @@ import (
 	"os"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-
-	"github.com/golang/glog"
 	clientconfigv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
 	clientmachineconfigv1 "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -17,10 +15,16 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	clientsriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/typed/sriovnetwork/v1"
+	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 )
+
+func init() {
+	snolog.InitLog()
+}
 
 // ClientSet provides the struct to talk with relevant API
 type ClientSet struct {
@@ -45,14 +49,14 @@ func New(kubeconfig string) *ClientSet {
 	}
 
 	if kubeconfig != "" {
-		glog.V(4).Infof("Loading kube client config from path %q", kubeconfig)
+		log.Log.V(4).Info("Loading kube client config", "path", kubeconfig)
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	} else {
-		glog.V(4).Infof("Using in-cluster kube client config")
+		log.Log.V(4).Info("Using in-cluster kube client config")
 		config, err = rest.InClusterConfig()
 	}
 	if err != nil {
-		glog.Warningf("Error while building client config: %v", err)
+		log.Log.Error(err, "Error while building client config")
 		return nil
 	}
 
@@ -75,7 +79,7 @@ func New(kubeconfig string) *ClientSet {
 		Scheme: crScheme,
 	})
 	if err != nil {
-		glog.Warningf("Error while creating ClientSet: %v", err)
+		log.Log.Error(err, "Error while creating ClientSet")
 		return nil
 	}
 	return clientSet
