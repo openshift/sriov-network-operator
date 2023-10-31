@@ -99,7 +99,7 @@ metadata:
     capabilities: Basic Install
     categories: Networking
     certified: "false"
-    containerImage: quay.io/openshift/origin-sriov-network-operator:latest
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.15
     createdAt: "2023-10-23T08:39:21Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
