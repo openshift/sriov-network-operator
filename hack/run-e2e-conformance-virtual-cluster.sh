@@ -11,6 +11,14 @@ HOME="/root"
 here="$(dirname "$(readlink --canonicalize "${BASH_SOURCE[0]}")")"
 root="$(readlink --canonicalize "$here/..")"
 
+NUM_OF_WORKERS=${NUM_OF_WORKERS:-2}
+total_number_of_nodes=$((1 + NUM_OF_WORKERS))
+
+if [ "$NUM_OF_WORKERS" -lt 2 ]; then
+    echo "Min number of workers is 2"
+    exit 1
+fi
+
 check_requirements() {
   for cmd in kcli virsh virt-edit podman make go; do
     if ! command -v "$cmd" &> /dev/null; then
@@ -49,7 +57,7 @@ api_ip: $api_ip
 virtual_router_id: $virtual_router_id
 domain: $domain_name
 ctlplanes: 1
-workers: 2
+workers: $NUM_OF_WORKERS
 ingress: false
 machine: q35
 engine: crio
@@ -92,7 +100,7 @@ sleep_time=10
 until $ready || [ $ATTEMPTS -eq $MAX_ATTEMPTS ]
 do
     echo "waiting for cluster to be ready"
-    if [ `kubectl get node | grep Ready | wc -l` == 3 ]; then
+    if [ `kubectl get node | grep Ready | wc -l` == $total_number_of_nodes ]; then
         echo "cluster is ready"
         ready=true
     else
@@ -108,13 +116,21 @@ if ! $ready; then
     exit 1
 fi
 
+function update_worker_labels() {
 echo "## label cluster workers as sriov capable"
-kubectl label node $cluster_name-worker-0.$domain_name feature.node.kubernetes.io/network-sriov.capable=true --overwrite
-kubectl label node $cluster_name-worker-1.$domain_name feature.node.kubernetes.io/network-sriov.capable=true --overwrite
+for ((num=0; num<NUM_OF_WORKERS; num++))
+do
+    kubectl label node $cluster_name-worker-$num.$domain_name feature.node.kubernetes.io/network-sriov.capable=true --overwrite
+done
 
 echo "## label cluster worker as worker"
-kubectl label node $cluster_name-worker-0.$domain_name node-role.kubernetes.io/worker= --overwrite
-kubectl label node $cluster_name-worker-1.$domain_name node-role.kubernetes.io/worker= --overwrite
+for ((num=0; num<NUM_OF_WORKERS; num++))
+do
+  kubectl label node $cluster_name-worker-$num.$domain_name node-role.kubernetes.io/worker= --overwrite
+done
+}
+
+update_worker_labels
 
 controller_ip=`kubectl get node -o wide | grep ctlp | awk '{print $6}'`
 insecure_registry="[[registry]]
@@ -157,9 +173,10 @@ EOF
 }
 
 update_host $cluster_name-ctlplane-0
-update_host $cluster_name-worker-0
-update_host $cluster_name-worker-1
-
+for ((num=0; num<NUM_OF_WORKERS; num++))
+do
+  update_host $cluster_name-worker-$num
+done
 
 kubectl create namespace container-registry
 
