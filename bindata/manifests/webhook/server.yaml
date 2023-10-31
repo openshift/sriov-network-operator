@@ -70,7 +70,6 @@ spec:
         - -port=6443
         - -tls-private-key-file=/etc/tls/tls.key
         - -tls-cert-file=/etc/tls/tls.crt
-        - -alsologtostderr=true
         - -insecure=true
         env:
         - name: NAMESPACE

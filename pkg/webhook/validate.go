@@ -8,18 +8,16 @@ import (
 	"strconv"
 	"strings"
 
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-
-	"github.com/golang/glog"
 	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 const (
@@ -34,7 +32,7 @@ var (
 )
 
 func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operation v1.Operation) (bool, []string, error) {
-	glog.V(2).Infof("validateSriovOperatorConfig: %v", cr)
+	log.Log.V(2).Info("validateSriovOperatorConfig", "object", cr)
 	var warnings []string
 
 	if cr.GetName() != constants.DefaultConfigName {
@@ -94,7 +92,7 @@ func validateSriovOperatorConfigDisableDrain(cr *sriovnetworkv1.SriovOperatorCon
 }
 
 func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1.Operation) (bool, []string, error) {
-	glog.V(2).Infof("validateSriovNetworkNodePolicy: %v", cr)
+	log.Log.V(2).Info("validateSriovNetworkNodePolicy", "object", cr)
 	var warnings []string
 
 	if cr.GetName() == constants.DefaultPolicyName && cr.GetNamespace() == os.Getenv("NAMESPACE") {
@@ -143,7 +141,7 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	devMode := false
 	if os.Getenv("DEV_MODE") == "TRUE" {
 		devMode = true
-		glog.V(0).Info("dev mode enabled - Admitting not supported NICs")
+		log.Log.V(0).Info("dev mode enabled - Admitting not supported NICs")
 	}
 
 	if !devMode {
@@ -255,7 +253,7 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	if !interfaceSelected {
 		for nodeName, messages := range nodeInterfaceErrorList {
 			for _, message := range messages {
-				glog.V(2).Infof("%s: %s", nodeName, message)
+				log.Log.V(2).Info("interface selection errors", "nodeName", nodeName, "message", message)
 			}
 		}
 		return false, fmt.Errorf("no supported NIC is selected by the nicSelector in CR %s", cr.GetName())
@@ -290,7 +288,8 @@ func validatePolicyForNodeStateAndPolicy(nsList *sriovnetworkv1.SriovNetworkNode
 }
 
 func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, state *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node) ([]string, error) {
-	glog.V(2).Infof("validatePolicyForNodeState(): validate policy %s for node %s.", policy.GetName(), state.GetName())
+	log.Log.V(2).Info("validatePolicyForNodeState(): validate policy for node", "policy-name",
+		policy.GetName(), "node-name", state.GetName())
 	interfaceSelectedForNode := false
 	var noInterfacesSelectedLog []string
 	for _, iface := range state.Status.Interfaces {
@@ -339,8 +338,8 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 }
 
 func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
-	glog.V(2).Infof("validateConflictPolicy(): validate policy %s against policy %s",
-		current.GetName(), previous.GetName())
+	log.Log.V(2).Info("validateConflictPolicy(): validate policy against policy",
+		"source", current.GetName(), "target", previous.GetName())
 
 	if current.GetName() == previous.GetName() {
 		return nil

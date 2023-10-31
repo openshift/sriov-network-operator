@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/coreos/go-systemd/v22/unit"
-	"github.com/golang/glog"
 	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const systemdDir = "/usr/lib/systemd/system/"
@@ -30,7 +30,7 @@ OUTER:
 				continue OUTER
 			}
 		}
-		glog.Infof("DEBUG: %+v %v", optsA, *optB)
+		log.Log.V(2).Info("CompareServices", "ServiceA", optsA, "ServiceB", *optB)
 		return true, nil
 	}
 

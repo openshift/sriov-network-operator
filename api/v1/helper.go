@@ -121,7 +121,7 @@ func IsSupportedModel(vendorID, deviceID string) bool {
 			return true
 		}
 	}
-	log.Info("IsSupportedModel():", "Unsupported model:", "vendorId:", vendorID, "deviceId:", deviceID)
+	log.Info("IsSupportedModel(): found unsupported model", "vendorId:", vendorID, "deviceId:", deviceID)
 	return false
 }
 
