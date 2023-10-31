@@ -35,7 +35,7 @@ const (
 	sysClassNet           = "/sys/class/net"
 	netClass              = 0x02
 	numVfsFile            = "sriov_numvfs"
-
+	scriptsPath           = "bindata/scripts/load-kmod.sh"
 	ClusterTypeOpenshift  = "openshift"
 	ClusterTypeKubernetes = "kubernetes"
 	VendorMellanox        = "15b3"
@@ -591,6 +591,18 @@ func getVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualF
 		continue
 	}
 	return vf
+}
+
+func LoadKernelModule(name string, args ...string) error {
+	glog.Infof("LoadKernelModule(): try to load kernel module %s with arguments '%s'", name, args)
+	cmdArgs := strings.Join(args, " ")
+	cmd := exec.Command("/bin/sh", scriptsPath, name, cmdArgs)
+	err := cmd.Run()
+	if err != nil {
+		glog.Errorf("LoadKernelModule(): fail to load kernel module %s with arguments '%s': %v", name, args, err)
+		return err
+	}
+	return nil
 }
 
 func Chroot(path string) (func() error, error) {
