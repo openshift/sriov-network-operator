@@ -99,7 +99,7 @@ metadata:
     capabilities: Basic Install
     categories: Networking
     certified: "false"
-    containerImage: quay.io/pliurh/sriov-network-operator-manager:bd1
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.11
     createdAt: 2019/04/30
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
