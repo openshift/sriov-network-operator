@@ -6,7 +6,7 @@ metadata:
     capabilities: Basic Install
     categories: Networking
     certified: "false"
-    containerImage: quay.io/openshift/origin-sriov-network-operator:latest
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.15
     createdAt: 2019/04/30
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
@@ -139,7 +139,7 @@ spec:
                       fieldPath: metadata.name
                 - name: RELEASE_VERSION
                   value: 4.15.0
-                image: quay.io/openshift/origin-sriov-network-operator:latest
+                image: quay.io/openshift/origin-sriov-network-operator:4.15
                 imagePullPolicy: IfNotPresent
                 name: sriov-network-operator
                 resources: {}
