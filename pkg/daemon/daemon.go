@@ -466,7 +466,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 
 	if dn.nodeState.GetGeneration() == latest {
 		if dn.useSystemdService {
-			serviceExist, err := dn.serviceManager.IsServiceExist(systemd.SriovServicePath)
+			serviceEnabled, err := dn.serviceManager.IsServiceEnabled(systemd.SriovServicePath)
 			if err != nil {
 				log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config service exist on host")
 				return err
@@ -475,8 +475,9 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 			// if the service doesn't exist we should continue to let the k8s plugin to create the service files
 			// this is only for k8s base environments, for openshift the sriov-operator creates a machine config to will apply
 			// the system service and reboot the node the config-daemon doesn't need to do anything.
-			if !serviceExist {
-				sriovResult = &systemd.SriovResult{SyncStatus: syncStatusFailed, LastSyncError: "sriov-config systemd service doesn't exist on node"}
+			if !serviceEnabled {
+				sriovResult = &systemd.SriovResult{SyncStatus: syncStatusFailed,
+					LastSyncError: "sriov-config systemd service is not available on node"}
 			} else {
 				sriovResult, err = systemd.ReadSriovResult()
 				if err != nil {
@@ -495,7 +496,6 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 				<-dn.syncCh
 				return nil
 			}
-			return nil
 		}
 		log.Log.V(0).Info("nodeStateSyncHandler(): Interface not changed")
 		if latestState.Status.LastSyncError != "" ||
@@ -583,13 +583,22 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	// or there is a new config we need to apply
 	// When using systemd configuration we write the file
 	if dn.useSystemdService {
-		r, err := systemd.WriteConfFile(latestState, dn.devMode, dn.platform)
+		systemdConfModified, err := systemd.WriteConfFile(latestState, dn.devMode, dn.platform)
 		if err != nil {
 			log.Log.Error(err, "nodeStateSyncHandler(): failed to write configuration file for systemd mode")
 			return err
 		}
-		reqDrain = reqDrain || r
-		reqReboot = reqReboot || r
+		if systemdConfModified {
+			// remove existing result file to make sure that we will not use outdated result, e.g. in case if
+			// systemd service was not triggered for some reason
+			err = systemd.RemoveSriovResult()
+			if err != nil {
+				log.Log.Error(err, "nodeStateSyncHandler(): failed to remove result file for systemd mode")
+				return err
+			}
+		}
+		reqDrain = reqDrain || systemdConfModified
+		reqReboot = reqReboot || systemdConfModified
 		log.Log.V(0).Info("nodeStateSyncHandler(): systemd mode WriteConfFile results",
 			"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", dn.disableDrain)
 
