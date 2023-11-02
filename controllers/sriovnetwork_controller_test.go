@@ -8,7 +8,9 @@ import (
 	"time"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	dynclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -214,6 +216,54 @@ var _ = Describe("SriovNetwork Controller", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
+
+		Context("When the target NetworkNamespace doesn't exists", func() {
+			It("should create the NetAttachDef when the namespace is created", func() {
+				cr := sriovnetworkv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-missing-namespace",
+						Namespace: testNamespace,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						NetworkNamespace: "ns-xxx",
+						ResourceName:     "resource_missing_namespace",
+						IPAM:             `{"type":"dhcp"}`,
+						Vlan:             200,
+					},
+				}
+				var err error
+				expect := generateExpectedNetConfig(&cr)
+
+				err = k8sClient.Create(goctx.TODO(), &cr)
+				Expect(err).NotTo(HaveOccurred())
+
+				DeferCleanup(func() {
+					err = k8sClient.Delete(goctx.TODO(), &cr)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				// Sleep 3 seconds to be sure the Reconcile loop has been invoked. This can be improved by exposing some information (e.g. the error)
+				// in the SriovNetwork.Status field.
+				time.Sleep(3 * time.Second)
+
+				netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: cr.GetName(), Namespace: "ns-xxx"}, netAttDef)
+				Expect(err).To(HaveOccurred())
+
+				err = k8sClient.Create(goctx.TODO(), &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: "ns-xxx"},
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				err = util.WaitForNamespacedObject(netAttDef, k8sClient, "ns-xxx", cr.GetName(), util.RetryInterval, util.Timeout)
+				Expect(err).NotTo(HaveOccurred())
+
+				anno := netAttDef.GetAnnotations()
+				Expect(anno["k8s.v1.cni.cncf.io/resourceName"]).To(Equal("openshift.io/" + cr.Spec.ResourceName))
+				Expect(strings.TrimSpace(netAttDef.Spec.Config)).To(Equal(expect))
+			})
+		})
+
 	})
 })
 
