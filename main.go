@@ -134,6 +134,7 @@ func main() {
 		return []string{o.(*sriovnetworkv1.SriovIBNetwork).Spec.NetworkNamespace}
 	})
 
+	setupLog.Info("init NicIdMap")
 	if err := initNicIDMap(); err != nil {
 		setupLog.Error(err, "unable to init NicIdMap")
 		os.Exit(1)
