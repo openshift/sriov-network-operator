@@ -468,18 +468,25 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 			i := 0
 			var dpdkDriver string
 			var isRdma bool
+			found := false
 			vfID, err := dputils.GetVFID(addr)
 			for i, group = range iface.VfGroups {
 				if err != nil {
 					log.Log.Error(err, "configSriovDevice(): unable to get VF id", "device", iface.PciAddress)
 				}
 				if sriovnetworkv1.IndexInRange(vfID, group.VfRange) {
+					found = true
 					isRdma = group.IsRdma
 					if sriovnetworkv1.StringInArray(group.DeviceType, DpdkDrivers) {
 						dpdkDriver = group.DeviceType
 					}
 					break
 				}
+			}
+
+			// Do not configure VF which is not part of any VF Group.
+			if !found {
+				continue
 			}
 
 			// only set GUID and MAC for VF with default driver
