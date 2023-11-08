@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -665,7 +666,7 @@ func unbindDriverIfNeeded(vfAddr string, isRdma bool) error {
 }
 
 func getLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
-	glog.Infof("getLinkType(): Device %s", ifaceStatus.PciAddress)
+	glog.V(2).Infof("getLinkType(): Device %s", ifaceStatus.PciAddress)
 	if ifaceStatus.Name != "" {
 		link, err := netlink.LinkByName(ifaceStatus.Name)
 		if err != nil {
@@ -719,10 +720,16 @@ func generateRandomGUID() net.HardwareAddr {
 
 func GetNicSriovMode(pciAddress string) (string, error) {
 	glog.V(2).Infof("GetNicSriovMode(): device %s", pciAddress)
+
 	devLink, err := netlink.DevLinkGetDeviceByName("pci", pciAddress)
 	if err != nil {
+		if errors.Is(err, syscall.ENODEV) {
+			// the device doesn't support devlink
+			return "", nil
+		}
 		return "", err
 	}
+
 	return devLink.Attrs.Eswitch.Mode, nil
 }
 
