@@ -3,7 +3,6 @@ package apply
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/pkg/errors"
 
@@ -24,7 +23,6 @@ func DeleteObject(ctx context.Context, client k8sclient.Client, obj *uns.Unstruc
 	gvk := obj.GroupVersionKind()
 	// used for logging and errors
 	objDesc := fmt.Sprintf("(%s) %s/%s", gvk.String(), namespace, name)
-	log.Printf("reconciling %s", objDesc)
 
 	if err := IsObjectSupported(obj); err != nil {
 		return errors.Wrapf(err, "object %s unsupported", objDesc)
@@ -36,7 +34,6 @@ func DeleteObject(ctx context.Context, client k8sclient.Client, obj *uns.Unstruc
 	err := client.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, existing)
 
 	if err != nil && apierrors.IsNotFound(err) {
-		log.Printf("does not exist, do nothing %s", objDesc)
 		return nil
 	}
 	if err != nil {
@@ -45,8 +42,6 @@ func DeleteObject(ctx context.Context, client k8sclient.Client, obj *uns.Unstruc
 
 	if err = client.Delete(ctx, existing); err != nil {
 		return errors.Wrapf(err, "could not delete object %s", objDesc)
-	} else {
-		log.Printf("delete was successful")
 	}
 	return nil
 }
@@ -62,7 +57,6 @@ func ApplyObject(ctx context.Context, client k8sclient.Client, obj *uns.Unstruct
 	gvk := obj.GroupVersionKind()
 	// used for logging and errors
 	objDesc := fmt.Sprintf("(%s) %s/%s", gvk.String(), namespace, name)
-	log.Printf("reconciling %s", objDesc)
 
 	if err := IsObjectSupported(obj); err != nil {
 		return errors.Wrapf(err, "object %s unsupported", objDesc)
@@ -74,12 +68,10 @@ func ApplyObject(ctx context.Context, client k8sclient.Client, obj *uns.Unstruct
 	err := client.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, existing)
 
 	if err != nil && apierrors.IsNotFound(err) {
-		log.Printf("does not exist, creating %s", objDesc)
 		err := client.Create(ctx, obj)
 		if err != nil {
 			return errors.Wrapf(err, "could not create %s", objDesc)
 		}
-		log.Printf("successfully created %s", objDesc)
 		return nil
 	}
 	if err != nil {
@@ -93,8 +85,6 @@ func ApplyObject(ctx context.Context, client k8sclient.Client, obj *uns.Unstruct
 	if !equality.Semantic.DeepEqual(existing, obj) {
 		if err := client.Update(ctx, obj); err != nil {
 			return errors.Wrapf(err, "could not update object %s", objDesc)
-		} else {
-			log.Printf("update was successful %s", objDesc)
 		}
 	}
 
