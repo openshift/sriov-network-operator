@@ -17,7 +17,6 @@ import (
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	daemonconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
 	mcfginformers "github.com/openshift/machine-config-operator/pkg/generated/informers/externalversions"
-	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -426,22 +425,12 @@ func (dn *Daemon) operatorConfigAddHandler(obj interface{}) {
 
 func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 	newCfg := new.(*sriovnetworkv1.SriovOperatorConfig)
-	dn.handleLogLevelChange(newCfg.Spec.LogLevel)
+	snolog.SetLogLevel(newCfg.Spec.LogLevel)
 
 	newDisableDrain := newCfg.Spec.DisableDrain
 	if dn.disableDrain != newDisableDrain {
 		dn.disableDrain = newDisableDrain
 		log.Log.Info("Set Disable Drain", "value", dn.disableDrain)
-	}
-}
-
-// handleLogLevelChange handles log level change
-func (dn *Daemon) handleLogLevelChange(logLevel int) {
-	newLevel := int8(logLevel * -1)
-	currLevel := int8(snolog.Options.Level.(zap.AtomicLevel).Level())
-	if newLevel != currLevel {
-		log.Log.Info("Set log verbose level", "new-level", newLevel, "current-level", currLevel)
-		snolog.SetLogLevel(newLevel)
 	}
 }
 
