@@ -39,6 +39,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	apply "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
@@ -123,6 +124,8 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err = r.syncPluginDaemonSet(ctx, defaultConfig); err != nil {
 		return reconcile.Result{}, err
 	}
+
+	snolog.SetLogLevel(defaultConfig.Spec.LogLevel)
 
 	// For Openshift we need to create the systemd files using a machine config
 	if utils.ClusterType == utils.ClusterTypeOpenshift {
