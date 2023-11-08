@@ -99,8 +99,8 @@ metadata:
     capabilities: Basic Install
     categories: Networking
     certified: "false"
-    containerImage: quay.io/pliurh/sriov-network-operator-manager:bd1
-    createdAt: "2023-09-11T12:53:47Z"
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.14
+    createdAt: "2023-11-24T18:31:22Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     olm.skipRange: '>=4.3.0-0 <4.14.0'
@@ -420,6 +420,13 @@ spec:
           verbs:
           - get
           - update
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
         - apiGroups:
           - coordination.k8s.io
           resources:
