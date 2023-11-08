@@ -464,28 +464,23 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 		}
 
 		for _, addr := range vfAddrs {
-			var group sriovnetworkv1.VfGroup
-			i := 0
-			var dpdkDriver string
-			var isRdma bool
-			found := false
+			var group *sriovnetworkv1.VfGroup
+
 			vfID, err := dputils.GetVFID(addr)
-			for i, group = range iface.VfGroups {
-				if err != nil {
-					log.Log.Error(err, "configSriovDevice(): unable to get VF id", "device", iface.PciAddress)
-				}
-				if sriovnetworkv1.IndexInRange(vfID, group.VfRange) {
-					found = true
-					isRdma = group.IsRdma
-					if sriovnetworkv1.StringInArray(group.DeviceType, DpdkDrivers) {
-						dpdkDriver = group.DeviceType
-					}
+			if err != nil {
+				log.Log.Error(err, "configSriovDevice(): unable to get VF id", "device", iface.PciAddress)
+				return err
+			}
+
+			for i := range iface.VfGroups {
+				if sriovnetworkv1.IndexInRange(vfID, iface.VfGroups[i].VfRange) {
+					group = &iface.VfGroups[i]
 					break
 				}
 			}
 
-			// Do not configure VF which is not part of any VF Group.
-			if !found {
+			// VF group not found.
+			if group == nil {
 				continue
 			}
 
@@ -527,26 +522,26 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 				}
 			}
 
-			if err = unbindDriverIfNeeded(addr, isRdma); err != nil {
+			if err = unbindDriverIfNeeded(addr, group.IsRdma); err != nil {
 				return err
 			}
 
-			if dpdkDriver == "" {
+			if !sriovnetworkv1.StringInArray(group.DeviceType, DpdkDrivers) {
 				if err := BindDefaultDriver(addr); err != nil {
 					log.Log.Error(err, "configSriovDevice(): fail to bind default driver for device", "device", addr)
 					return err
 				}
 				// only set MTU for VF with default driver
-				if iface.VfGroups[i].Mtu > 0 {
-					if err := setNetdevMTU(addr, iface.VfGroups[i].Mtu); err != nil {
+				if group.Mtu > 0 {
+					if err := setNetdevMTU(addr, group.Mtu); err != nil {
 						log.Log.Error(err, "configSriovDevice(): fail to set mtu for VF", "address", addr)
 						return err
 					}
 				}
 			} else {
-				if err := BindDpdkDriver(addr, dpdkDriver); err != nil {
+				if err := BindDpdkDriver(addr, group.DeviceType); err != nil {
 					log.Log.Error(err, "configSriovDevice(): fail to bind driver for device",
-						"driver", dpdkDriver, "device", addr)
+						"driver", group.DeviceType, "device", addr)
 					return err
 				}
 			}
