@@ -49,7 +49,21 @@ func InitLog() {
 	log.SetLogger(zap.New(zap.UseFlagOptions(Options)))
 }
 
-// SetLogLevel sets log level
-func SetLogLevel(lvl int8) {
-	Options.Level.(zzap.AtomicLevel).SetLevel(zapcore.Level(lvl))
+// SetLogLevel provides conversion from the operators LogLevel value ({0,1,2} where 2 is the most verbose) and sets
+// the current logging level accordingly.
+func SetLogLevel(operatorLevel int) {
+	newLevel := operatorToZapLevel(operatorLevel)
+	currLevel := Options.Level.(zzap.AtomicLevel).Level()
+	if newLevel != currLevel {
+		log.Log.Info("Set log verbose level", "new-level", operatorLevel, "current-level", zapToOperatorLevel(currLevel))
+		Options.Level.(zzap.AtomicLevel).SetLevel(newLevel)
+	}
+}
+
+func zapToOperatorLevel(zapLevel zapcore.Level) int {
+	return int(zapLevel) * -1
+}
+
+func operatorToZapLevel(operatorLevel int) zapcore.Level {
+	return zapcore.Level(operatorLevel * -1)
 }
