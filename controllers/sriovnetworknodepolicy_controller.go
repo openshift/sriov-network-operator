@@ -276,7 +276,6 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 		for _, ns := range nsList.Items {
 			found := false
 			for _, node := range nl.Items {
-				logger.Info("validate", "SriovNetworkNodeState", ns.GetName(), "node", node.GetName())
 				if ns.GetName() == node.GetName() {
 					found = true
 					break
