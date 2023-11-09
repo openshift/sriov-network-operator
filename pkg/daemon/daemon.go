@@ -298,7 +298,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 			log.Log.V(0).Info("Run(): stop daemon")
 			return nil
 		case err, more := <-exitCh:
-			log.Log.Error(err, "got an error", err)
+			log.Log.Error(err, "got an error")
 			if more {
 				dn.refreshCh <- Message{
 					syncStatus:    syncStatusFailed,
