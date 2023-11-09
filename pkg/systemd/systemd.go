@@ -167,7 +167,7 @@ func WriteSriovResult(result *SriovResult) error {
 
 	out, err := yaml.Marshal(result)
 	if err != nil {
-		log.Log.Error(err, "WriteSriovResult(): failed to marshal sriov result", err)
+		log.Log.Error(err, "WriteSriovResult(): failed to marshal sriov result")
 		return err
 	}
 
