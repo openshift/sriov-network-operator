@@ -102,6 +102,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 				reqLogger.Error(err, "Failed to create default Policy", "Namespace", namespace, "Name", constants.DefaultPolicyName)
 				return reconcile.Result{}, err
 			}
+			reqLogger.Info("Default policy created")
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
