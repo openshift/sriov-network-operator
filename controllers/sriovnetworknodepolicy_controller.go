@@ -348,7 +348,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 			}
 		}
 		newVersion.Spec.DpConfigVersion = cksum
-		if equality.Semantic.DeepDerivative(newVersion.Spec, found.Spec) {
+		if equality.Semantic.DeepEqual(newVersion.Spec, found.Spec) {
 			logger.Info("SriovNetworkNodeState did not change, not updating")
 			return nil
 		}
