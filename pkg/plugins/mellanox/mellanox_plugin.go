@@ -229,7 +229,7 @@ func getMlnxNicFwData(pciAddress string) (current, next *mlnxNic, err error) {
 
 	out, err := utils.MstConfigReadData(pciAddress)
 	if err != nil {
-		log.Log.Error(err, "mellanox-plugin getMlnxNicFwData(): failed", err)
+		log.Log.Error(err, "mellanox-plugin getMlnxNicFwData(): failed")
 		return
 	}
 	mstCurrentData, mstNextData := utils.ParseMstconfigOutput(out, attrs)
