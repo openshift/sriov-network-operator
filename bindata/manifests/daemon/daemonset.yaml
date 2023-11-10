@@ -23,6 +23,8 @@ spec:
         component: network
         type: infra
         openshift.io/component: network
+      annotations:
+        kubectl.kubernetes.io/default-container: sriov-network-config-daemon
     spec:
       hostNetwork: true
       hostPID: true
