@@ -152,7 +152,7 @@ func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error
 
 func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig) error {
 	logger := log.Log.WithName("syncConfigDaemonset")
-	logger.Info("Start to sync SRIOV plugin daemonsets nodeSelector")
+	logger.V(1).Info("Start to sync SRIOV plugin daemonsets nodeSelector")
 	ds := &appsv1.DaemonSet{}
 
 	names := []string{"sriov-cni", "sriov-device-plugin"}
@@ -183,7 +183,7 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(ctx context.Context,
 
 func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig) error {
 	logger := log.Log.WithName("syncConfigDaemonset")
-	logger.Info("Start to sync config daemonset")
+	logger.V(1).Info("Start to sync config daemonset")
 
 	data := render.MakeRenderData()
 	data.Data["Image"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
@@ -204,7 +204,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 	if envCniBinPath == "" {
 		data.Data["CNIBinPath"] = "/var/lib/cni/bin"
 	} else {
-		logger.Info("New cni bin found", "CNIBinPath", envCniBinPath)
+		logger.V(1).Info("New cni bin found", "CNIBinPath", envCniBinPath)
 		data.Data["CNIBinPath"] = envCniBinPath
 	}
 	objs, err := render.RenderDir(constants.ConfigDaemonPath, &data)
@@ -240,7 +240,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 
 func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig) error {
 	logger := log.Log.WithName("syncWebhookObjs")
-	logger.Info("Start to sync webhook objects")
+	logger.V(1).Info("Start to sync webhook objects")
 
 	for name, path := range webhooks {
 		// Render Webhook manifests
