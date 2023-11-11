@@ -113,6 +113,8 @@ var _ = Describe("[sriov] operator", func() {
 					Skip("Test unsuitable to be run in discovery mode")
 				}
 
+				testStartingTime := time.Now()
+
 				By("Checking that a daemon is scheduled on each worker node")
 				Eventually(func() bool {
 					return daemonsScheduledOnNodes("node-role.kubernetes.io/worker=")
@@ -168,6 +170,21 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() bool {
 					return daemonsScheduledOnNodes("node-role.kubernetes.io/worker")
 				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
+
+				By("Checking that a daemon is able to publish events")
+				Eventually(func() bool {
+					events, err := clients.Events(operatorNamespace).List(
+						context.Background(), metav1.ListOptions{TypeMeta: sriovv1.SriovNetworkNodeState{}.TypeMeta})
+					Expect(err).ToNot(HaveOccurred())
+
+					for _, e := range events.Items {
+						if e.Reason == "ConfigDaemonStart" &&
+							e.CreationTimestamp.Time.After(testStartingTime) {
+							return true
+						}
+					}
+					return false
+				}, 30*time.Second, 5*time.Second).Should(BeTrue(), "Config Daemon should record an event when starting")
 			})
 		})
 
@@ -911,6 +928,36 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodB.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+			})
+		})
+
+		Context("CNI Logging level", func() {
+			It("Debug logging should be visible in multus pod", func() {
+				sriovNetworkName := "test-log-level-debug-no-file"
+				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName,
+					namespaces.Test, operatorNamespace, resourceName, ipamIpv4,
+					func(sn *sriovv1.SriovNetwork) {
+						sn.Spec.LogLevel = "debug"
+					})
+				Expect(err).ToNot(HaveOccurred())
+
+				podDeployTime := time.Now()
+
+				testPod := createTestPod(node, []string{sriovNetworkName})
+
+				recentMultusLogs := getMultusPodLogs(testPod.Spec.NodeName, podDeployTime)
+
+				Expect(recentMultusLogs).To(
+					ContainElement(
+						// Assert against multiple ContainSubstring condition because we can't make assumption on the order of the chunks
+						And(
+							ContainSubstring(`level="debug"`),
+							ContainSubstring(`msg="function called"`),
+							ContainSubstring(`func="cmdAdd"`),
+							ContainSubstring(`cniName="sriov-cni"`),
+							ContainSubstring(`ifname="net1"`),
+						),
+					))
 			})
 		})
 	})
@@ -2409,4 +2456,25 @@ func assertDevicePluginConfigurationContains(node, configuration string) {
 	}, 30*time.Second, 2*time.Second).Should(
 		HaveKeyWithValue(node, ContainSubstring(configuration)),
 	)
+}
+
+func getMultusPodLogs(nodeName string, since time.Time) []string {
+	podList, err := clients.Pods("").List(context.Background(), metav1.ListOptions{
+		LabelSelector: "app=multus",
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
+	ExpectWithOffset(1, podList.Items).To(HaveLen(1), "One multus pod expected")
+
+	multusPod := podList.Items[0]
+	logStart := metav1.NewTime(since)
+	rawLogs, err := clients.Pods(multusPod.Namespace).
+		GetLogs(multusPod.Name, &corev1.PodLogOptions{
+			Container: multusPod.Spec.Containers[0].Name,
+			SinceTime: &logStart,
+		}).
+		DoRaw(context.Background())
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
+
+	return strings.Split(string(rawLogs), "\n")
 }
