@@ -17,9 +17,10 @@ import (
 )
 
 var (
-	certFile string
-	keyFile  string
-	port     int
+	certFile    string
+	keyFile     string
+	port        int
+	enableHTTP2 bool
 )
 
 var (
@@ -48,6 +49,7 @@ func init() {
 		"File containing the default x509 private key matching --tls-cert-file.")
 	startCmd.Flags().IntVar(&port, "port", 443,
 		"Secure port that the webhook listens on")
+	startCmd.Flags().BoolVar(&enableHTTP2, "enable-http2", false, "If HTTP/2 should be enabled for the metrics and webhook servers.")
 }
 
 // serve handles the http portion of a request prior to handing to an admit
@@ -152,6 +154,11 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 			TLSConfig: &tls.Config{
 				GetCertificate: keyPair.GetCertificateFunc(),
 			},
+			// CVE-2023-39325 https://github.com/golang/go/issues/63417
+			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
+		}
+		if enableHTTP2 {
+			server.TLSNextProto = nil
 		}
 		err := server.ListenAndServeTLS("", "")
 		if err != nil {
