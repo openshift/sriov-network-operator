@@ -157,27 +157,25 @@ func (r *SriovOperatorConfigReconciler) syncPluginDaemonSet(ctx context.Context,
 	logger.V(1).Info("Start to sync SRIOV plugin daemonsets nodeSelector")
 	ds := &appsv1.DaemonSet{}
 
-	names := []string{"sriov-cni", "sriov-device-plugin"}
+	name := "sriov-device-plugin"
 
-	for _, name := range names {
-		err := r.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, ds)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				continue
-			}
-			logger.Error(err, "Couldn't get daemonset", "name", name)
-			return err
+	err := r.Client.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, ds)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
 		}
-		if len(dc.Spec.ConfigDaemonNodeSelector) == 0 {
-			ds.Spec.Template.Spec.NodeSelector = GetDefaultNodeSelector()
-		} else {
-			ds.Spec.Template.Spec.NodeSelector = dc.Spec.ConfigDaemonNodeSelector
-		}
-		err = r.Client.Update(ctx, ds)
-		if err != nil {
-			logger.Error(err, "Couldn't update daemonset", "name", name)
-			return err
-		}
+		logger.Error(err, "Couldn't get daemonset", "name", name)
+		return err
+	}
+	if len(dc.Spec.ConfigDaemonNodeSelector) == 0 {
+		ds.Spec.Template.Spec.NodeSelector = GetDefaultNodeSelector()
+	} else {
+		ds.Spec.Template.Spec.NodeSelector = dc.Spec.ConfigDaemonNodeSelector
+	}
+	err = r.Client.Update(ctx, ds)
+	if err != nil {
+		logger.Error(err, "Couldn't update daemonset", "name", name)
+		return err
 	}
 
 	return nil

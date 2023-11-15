@@ -30,7 +30,6 @@ import (
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -419,57 +418,6 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(ctx context.Cont
 		err = r.syncDsObject(ctx, dp, pl, obj)
 		if err != nil {
 			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
-			return err
-		}
-	}
-
-	// Sriov-cni container has been moved to sriov-network-config-daemon DaemonSet.
-	// Delete stale sriov-cni manifests. Revert this change once sriov-cni daemonSet
-	// is deprecated.
-	err = r.deleteSriovCniManifests(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *SriovNetworkNodePolicyReconciler) deleteSriovCniManifests(ctx context.Context) error {
-	ds := &appsv1.DaemonSet{}
-	err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: "sriov-cni"}, ds)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-	} else {
-		err = r.Delete(ctx, ds)
-		if err != nil {
-			return err
-		}
-	}
-
-	rb := &rbacv1.RoleBinding{}
-	err = r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: "sriov-cni"}, rb)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-	} else {
-		err = r.Delete(ctx, rb)
-		if err != nil {
-			return err
-		}
-	}
-
-	sa := &corev1.ServiceAccount{}
-	err = r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: "sriov-cni"}, sa)
-	if err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-	} else {
-		err = r.Delete(ctx, sa)
-		if err != nil {
 			return err
 		}
 	}
