@@ -428,11 +428,11 @@ func configSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetwor
 
 			err = setSriovNumVfs(iface.PciAddress, iface.NumVfs)
 			if err != nil {
-				err = RemoveUdevRule(iface.PciAddress)
-				if err != nil {
-					return err
+				log.Log.Error(err, "configSriovDevice(): fail to set NumVfs for device", "device", iface.PciAddress)
+				errRemove := RemoveUdevRule(iface.PciAddress)
+				if errRemove != nil {
+					log.Log.Error(errRemove, "configSriovDevice(): fail to remove udev rule", "device", iface.PciAddress)
 				}
-				log.Log.Error(nil, "configSriovDevice(): fail to set NumVfs for device", "device", iface.PciAddress)
 				return err
 			}
 		}
