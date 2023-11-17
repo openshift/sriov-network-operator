@@ -20,12 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"time"
-
-	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
@@ -36,7 +33,6 @@ import (
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -46,10 +42,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+
 	dptypes "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/types"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 )
@@ -153,7 +150,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 		return reconcile.Result{}, err
 	}
 	// Render and sync Daemon objects
-	if err = r.syncPluginDaemonObjs(ctx, defaultOpConf, defaultPolicy, policyList); err != nil {
+	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultPolicy, policyList); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -361,152 +358,6 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 	return nil
 }
 
-func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(ctx context.Context, operatorConfig *sriovnetworkv1.SriovOperatorConfig, dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
-	logger := log.Log.WithName("syncPluginDaemonObjs")
-	logger.V(1).Info("Start to sync sriov daemons objects")
-
-	// render plugin manifests
-	data := render.MakeRenderData()
-	data.Data["Namespace"] = namespace
-	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
-	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
-	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
-	data.Data["NodeSelectorField"] = GetDefaultNodeSelector()
-	data.Data["UseCDI"] = operatorConfig.Spec.UseCDI
-
-	objs, err := renderDsForCR(constants.PluginPath, &data)
-	if err != nil {
-		logger.Error(err, "Fail to render SR-IoV manifests")
-		return err
-	}
-
-	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
-	err = r.Get(ctx, types.NamespacedName{
-		Name: constants.DefaultConfigName, Namespace: namespace}, defaultConfig)
-	if err != nil {
-		return err
-	}
-
-	if len(pl.Items) < 2 {
-		for _, obj := range objs {
-			err := r.deleteK8sResource(ctx, obj)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	// Sync DaemonSets
-	for _, obj := range objs {
-		if obj.GetKind() == constants.DaemonSet && len(defaultConfig.Spec.ConfigDaemonNodeSelector) > 0 {
-			scheme := kscheme.Scheme
-			ds := &appsv1.DaemonSet{}
-			err = scheme.Convert(obj, ds, nil)
-			if err != nil {
-				logger.Error(err, "Fail to convert to DaemonSet")
-				return err
-			}
-			ds.Spec.Template.Spec.NodeSelector = defaultConfig.Spec.ConfigDaemonNodeSelector
-			err = scheme.Convert(ds, obj, nil)
-			if err != nil {
-				logger.Error(err, "Fail to convert to Unstructured")
-				return err
-			}
-		}
-		err = r.syncDsObject(ctx, dp, pl, obj)
-		if err != nil {
-			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *SriovNetworkNodePolicyReconciler) deleteK8sResource(ctx context.Context, in *uns.Unstructured) error {
-	if err := apply.DeleteObject(ctx, r.Client, in); err != nil {
-		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
-	}
-	return nil
-}
-
-func (r *SriovNetworkNodePolicyReconciler) syncDsObject(ctx context.Context, dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, obj *uns.Unstructured) error {
-	logger := log.Log.WithName("syncDsObject")
-	kind := obj.GetKind()
-	logger.V(1).Info("Start to sync Objects", "Kind", kind)
-	switch kind {
-	case "ServiceAccount", "Role", "RoleBinding":
-		if err := controllerutil.SetControllerReference(dp, obj, r.Scheme); err != nil {
-			return err
-		}
-		if err := apply.ApplyObject(ctx, r.Client, obj); err != nil {
-			logger.Error(err, "Fail to sync", "Kind", kind)
-			return err
-		}
-	case constants.DaemonSet:
-		ds := &appsv1.DaemonSet{}
-		err := r.Scheme.Convert(obj, ds, nil)
-		r.syncDaemonSet(ctx, dp, pl, ds)
-		if err != nil {
-			logger.Error(err, "Fail to sync DaemonSet", "Namespace", ds.Namespace, "Name", ds.Name)
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *SriovNetworkNodePolicyReconciler) syncDaemonSet(ctx context.Context, cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *appsv1.DaemonSet) error {
-	logger := log.Log.WithName("syncDaemonSet")
-	logger.V(1).Info("Start to sync DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
-	var err error
-
-	if pl != nil {
-		if err = setDsNodeAffinity(pl, in); err != nil {
-			return err
-		}
-	}
-	if err = controllerutil.SetControllerReference(cr, in, r.Scheme); err != nil {
-		return err
-	}
-	ds := &appsv1.DaemonSet{}
-	err = r.Get(ctx, types.NamespacedName{Namespace: in.Namespace, Name: in.Name}, ds)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Created DaemonSet", in.Namespace, in.Name)
-			err = r.Create(ctx, in)
-			if err != nil {
-				logger.Error(err, "Fail to create Daemonset", "Namespace", in.Namespace, "Name", in.Name)
-				return err
-			}
-		} else {
-			logger.Error(err, "Fail to get Daemonset", "Namespace", in.Namespace, "Name", in.Name)
-			return err
-		}
-	} else {
-		logger.V(1).Info("DaemonSet already exists, updating")
-		// DeepDerivative checks for changes only comparing non zero fields in the source struct.
-		// This skips default values added by the api server.
-		// References in https://github.com/kubernetes-sigs/kubebuilder/issues/592#issuecomment-625738183
-		if equality.Semantic.DeepDerivative(in.Spec, ds.Spec) {
-			// DeepDerivative has issue detecting nodeAffinity change
-			// https://bugzilla.redhat.com/show_bug.cgi?id=1914066
-			if equality.Semantic.DeepEqual(in.Spec.Template.Spec.Affinity.NodeAffinity,
-				ds.Spec.Template.Spec.Affinity.NodeAffinity) {
-				logger.V(1).Info("Daemonset spec did not change, not updating")
-				return nil
-			}
-		}
-		err = r.Update(ctx, in)
-		if err != nil {
-			logger.Error(err, "Fail to update DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
-			return err
-		}
-	}
-	return nil
-}
-
 func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1.DaemonSet) error {
 	terms := nodeSelectorTermsForPolicyList(pl.Items)
 	if len(terms) > 0 {
@@ -557,7 +408,7 @@ func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, e
 
 	objs, err := render.RenderDir(path, data)
 	if err != nil {
-		return nil, errs.Wrap(err, "failed to render OpenShiftSRIOV Network manifests")
+		return nil, errs.Wrap(err, "failed to render SR-IOV Network Operator manifests")
 	}
 	return objs, nil
 }
