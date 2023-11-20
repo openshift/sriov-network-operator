@@ -54,7 +54,7 @@ func (w *NodeStateStatusWriter) RunOnce(destDir string, platformType utils.Platf
 		}
 
 		if ns == nil {
-			metaData, networkData, err := utils.GetOpenstackData()
+			metaData, networkData, err := utils.GetOpenstackData(true)
 			if err != nil {
 				glog.Errorf("RunOnce(): failed to read OpenStack data: %v", err)
 			}
