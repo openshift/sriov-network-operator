@@ -12,7 +12,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-func TestUtils(t *testing.T) {
+func TestUtilsVirtual(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Utils")
 }
