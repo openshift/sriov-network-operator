@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -257,7 +259,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 		ns.Namespace = namespace
 		j, _ := json.Marshal(ns)
 		logger.Info("SriovNetworkNodeState CR", "content", j)
-		if err := r.syncSriovNetworkNodeState(ctx, np, npl, ns, &node, found.GetResourceVersion()); err != nil {
+		if err := r.syncSriovNetworkNodeState(ctx, np, npl, ns, &node, utils.HashConfigMap(found)); err != nil {
 			logger.Error(err, "Fail to sync", "SriovNetworkNodeState", ns.Name)
 			return err
 		}
