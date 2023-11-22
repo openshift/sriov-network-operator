@@ -271,7 +271,8 @@ func needRebootIfVfio(state *sriovnetworkv1.SriovNetworkNodeState, driverMap Dri
 			glog.Errorf("generic-plugin needRebootNode():fail to enable iommu in kernel args: %v", err)
 		}
 		if needReboot {
-			glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for enabling iommu kernel args")
+			glog.V(2).Infof("generic-plugin needRebootNode(): need reboot for enabling iommu kernel args, enable kargs usr grubby only support intel iommu in fedora series, we edit kernel args manual ,no need reboot node")
+			needReboot = false
 		}
 	}
 	return needReboot
