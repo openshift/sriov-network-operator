@@ -1118,6 +1118,83 @@ var _ = Describe("[sriov] operator", func() {
 					}))
 				})
 
+				It("Should configure the mtu only for vfs which are part of the partition", func() {
+					defaultMtu := 1500
+					newMtu := 2000
+
+					node := sriovInfos.Nodes[0]
+					intf, err := sriovInfos.FindOneSriovDevice(node)
+					Expect(err).ToNot(HaveOccurred())
+
+					_, err = network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, intf.Name+"#0-1", node, 5, testResourceName, "netdevice", func(policy *sriovv1.SriovNetworkNodePolicy) {
+						policy.Spec.Mtu = newMtu
+					})
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(func() sriovv1.Interfaces {
+						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						return nodeState.Spec.Interfaces
+					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+						IgnoreExtras,
+						Fields{
+							"Name":   Equal(intf.Name),
+							"NumVfs": Equal(5),
+							"Mtu":    Equal(newMtu),
+							"VfGroups": ContainElement(
+								MatchFields(
+									IgnoreExtras,
+									Fields{
+										"ResourceName": Equal(testResourceName),
+										"DeviceType":   Equal("netdevice"),
+										"VfRange":      Equal("0-1"),
+									})),
+						})))
+
+					WaitForSRIOVStable()
+
+					Eventually(func() int64 {
+						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						resNum := testedNode.Status.Allocatable["openshift.io/testresource"]
+						capacity, _ := resNum.AsInt64()
+						return capacity
+					}, 3*time.Minute, time.Second).Should(Equal(int64(2)))
+
+					By(fmt.Sprintf("verifying that only VF 0 and 1 have mtu set to %d", newMtu))
+					Eventually(func() sriovv1.InterfaceExts {
+						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						return nodeState.Status.Interfaces
+					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+						IgnoreExtras,
+						Fields{
+							"VFs": SatisfyAll(
+								ContainElement(
+									MatchFields(
+										IgnoreExtras,
+										Fields{
+											"VfID": Equal(0),
+											"Mtu":  Equal(newMtu),
+										})),
+								ContainElement(
+									MatchFields(
+										IgnoreExtras,
+										Fields{
+											"VfID": Equal(1),
+											"Mtu":  Equal(newMtu),
+										})),
+								ContainElement(
+									MatchFields(
+										IgnoreExtras,
+										Fields{
+											"VfID": Equal(2),
+											"Mtu":  Equal(defaultMtu),
+										})),
+							),
+						})))
+				})
+
 				// 27630
 				It("Should not be possible to have overlapping pf ranges", func() {
 					node := sriovInfos.Nodes[0]
