@@ -202,6 +202,9 @@ test-e2e-conformance-virtual-ocp-cluster-ci:
 test-e2e-conformance-virtual-ocp-cluster:
 	SKIP_DELETE=TRUE ./hack/run-e2e-conformance-virtual-ocp.sh
 
+redeploy-operator-virtual-cluster:
+	./hack/virtual-cluster-redeploy.sh
+
 test-e2e-validation-only:
 	SUITE=./test/validation ./hack/run-e2e-conformance.sh
 

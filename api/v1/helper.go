@@ -121,7 +121,7 @@ func IsSupportedModel(vendorID, deviceID string) bool {
 			return true
 		}
 	}
-	log.Info("IsSupportedModel():", "Unsupported model:", "vendorId:", vendorID, "deviceId:", deviceID)
+	log.Info("IsSupportedModel(): found unsupported model", "vendorId:", vendorID, "deviceId:", deviceID)
 	return false
 }
 
@@ -483,8 +483,8 @@ func (s *SriovNetworkNodeState) GetDriverByPciAddress(addr string) string {
 
 // RenderNetAttDef renders a net-att-def for ib-sriov CNI
 func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
-	logger := log.WithName("renderNetAttDef")
-	logger.Info("Start to render IB SRIOV CNI NetworkAttachementDefinition")
+	logger := log.WithName("RenderNetAttDef")
+	logger.Info("Start to render IB SRIOV CNI NetworkAttachmentDefinition")
 
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
@@ -529,13 +529,17 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
 	}
 
+	// logLevel and logFile are currently not supports by the ip-sriov-cni -> hardcode them to false.
+	data.Data["LogLevelConfigured"] = false
+	data.Data["LogFileConfigured"] = false
+
 	objs, err := render.RenderDir(ManifestsPath, &data)
 	if err != nil {
 		return nil, err
 	}
 	for _, obj := range objs {
 		raw, _ := json.Marshal(obj)
-		logger.Info("render NetworkAttachementDefinition output", "raw", string(raw))
+		logger.Info("render NetworkAttachmentDefinition output", "raw", string(raw))
 	}
 	return objs[0], nil
 }
@@ -564,8 +568,8 @@ func (cr *SriovIBNetwork) DeleteNetAttDef(c client.Client) error {
 
 // RenderNetAttDef renders a net-att-def for sriov CNI
 func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
-	logger := log.WithName("renderNetAttDef")
-	logger.Info("Start to render SRIOV CNI NetworkAttachementDefinition")
+	logger := log.WithName("RenderNetAttDef")
+	logger.Info("Start to render SRIOV CNI NetworkAttachmentDefinition")
 
 	// render RawCNIConfig manifests
 	data := render.MakeRenderData()
@@ -659,13 +663,18 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
 	}
 
+	data.Data["LogLevelConfigured"] = (cr.Spec.LogLevel != "")
+	data.Data["LogLevel"] = cr.Spec.LogLevel
+	data.Data["LogFileConfigured"] = (cr.Spec.LogFile != "")
+	data.Data["LogFile"] = cr.Spec.LogFile
+
 	objs, err := render.RenderDir(ManifestsPath, &data)
 	if err != nil {
 		return nil, err
 	}
 	for _, obj := range objs {
 		raw, _ := json.Marshal(obj)
-		logger.Info("render NetworkAttachementDefinition output", "raw", string(raw))
+		logger.Info("render NetworkAttachmentDefinition output", "raw", string(raw))
 	}
 	return objs[0], nil
 }

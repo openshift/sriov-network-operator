@@ -49,7 +49,7 @@ spec:
   vdpaType: virtio
 ```
 
-### Create NetworkAttachementDefinition CRD with OVN-K CNI config
+### Create NetworkAttachmentDefinition CRD with OVN-K CNI config
 
 ```yaml
 apiVersion: "k8s.cni.cncf.io/v1"

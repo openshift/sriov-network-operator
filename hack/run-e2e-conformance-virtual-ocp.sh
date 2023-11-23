@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -xeo pipefail
 
+OCP_VERSION=${OCP_VERSION:-4.14.0-rc.6}
 cluster_name=${CLUSTER_NAME:-ocp-virt}
 domain_name=lab
 
@@ -8,6 +9,14 @@ api_ip=${API_IP:-192.168.123.253}
 virtual_router_id=${VIRTUAL_ROUTER_ID:-253}
 registry="default-route-openshift-image-registry.apps.${cluster_name}.${domain_name}"
 HOME="/root"
+
+NUM_OF_WORKERS=${NUM_OF_WORKERS:-3}
+total_number_of_nodes=$((1 + NUM_OF_WORKERS))
+
+if [ "$NUM_OF_WORKERS" -lt 3 ]; then
+    echo "Min number of workers is 3"
+    exit 1
+fi
 
 here="$(dirname "$(readlink --canonicalize "${BASH_SOURCE[0]}")")"
 root="$(readlink --canonicalize "$here/..")"
@@ -41,7 +50,7 @@ kcli create network -c 192.168.123.0/24 ocp
 kcli create network -c 192.168.${virtual_router_id}.0/24 --nodhcp -i $cluster_name
 
 cat <<EOF > ./${cluster_name}-plan.yaml
-tag: 4.14.0-rc.6
+tag: $OCP_VERSION
 ctlplane_memory: 32768
 worker_memory: 8192
 pool: default
@@ -51,7 +60,7 @@ api_ip: $api_ip
 virtual_router_id: $virtual_router_id
 domain: $domain_name
 ctlplanes: 1
-workers: 3
+workers: $NUM_OF_WORKERS
 machine: q35
 network_type: OVNKubernetes
 pull_secret: /root/openshift_pull.json
@@ -97,7 +106,7 @@ sleep_time=10
 until $ready || [ $ATTEMPTS -eq $MAX_ATTEMPTS ]
 do
     echo "waiting for cluster to be ready"
-    if [ `kubectl get node | grep Ready | wc -l` == 4 ]; then
+    if [ `kubectl get node | grep Ready | wc -l` == $total_number_of_nodes ]; then
         echo "cluster is ready"
         ready=true
     else
@@ -114,9 +123,10 @@ if ! $ready; then
 fi
 
 echo "## label cluster workers as sriov capable"
-kubectl label node $cluster_name-worker-0.$domain_name feature.node.kubernetes.io/network-sriov.capable=true --overwrite
-kubectl label node $cluster_name-worker-1.$domain_name feature.node.kubernetes.io/network-sriov.capable=true --overwrite
-kubectl label node $cluster_name-worker-2.$domain_name feature.node.kubernetes.io/network-sriov.capable=true --overwrite
+for ((num=0; num<NUM_OF_WORKERS; num++))
+do
+    kubectl label node $cluster_name-worker-$num.$domain_name feature.node.kubernetes.io/network-sriov.capable=true --overwrite
+done
 
 controller_ip=`kubectl get node -o wide | grep ctlp | awk '{print $6}'`
 
@@ -239,5 +249,14 @@ hack/deploy-wait.sh
 
 if [ -z $SKIP_TEST ]; then
   echo "## run sriov e2e conformance tests"
-  SUITE=./test/conformance JUNIT_OUTPUT=`pwd`/ocp-artifacts hack/run-e2e-conformance.sh
+
+  if [[ -v TEST_REPORT_PATH ]]; then
+    export JUNIT_OUTPUT="${root}/${TEST_REPORT_PATH}/conformance-test-report"
+  fi
+
+  SUITE=./test/conformance hack/run-e2e-conformance.sh
+
+  if [[ -v TEST_REPORT_PATH ]]; then
+    kubectl cluster-info dump --namespaces ${NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
+  fi
 fi

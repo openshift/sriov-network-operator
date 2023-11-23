@@ -153,7 +153,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 		return reconcile.Result{}, err
 	}
 	// Render and sync Daemon objects
-	if err = r.syncPluginDaemonObjs(ctx, defaultPolicy, policyList); err != nil {
+	if err = r.syncPluginDaemonObjs(ctx, defaultOpConf, defaultPolicy, policyList); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -350,7 +350,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 			}
 		}
 		newVersion.Spec.DpConfigVersion = cksum
-		if equality.Semantic.DeepDerivative(newVersion.Spec, found.Spec) {
+		if equality.Semantic.DeepEqual(newVersion.Spec, found.Spec) {
 			logger.Info("SriovNetworkNodeState did not change, not updating")
 			return nil
 		}
@@ -362,7 +362,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 	return nil
 }
 
-func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(ctx context.Context, dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
+func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(ctx context.Context, operatorConfig *sriovnetworkv1.SriovOperatorConfig, dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.Log.WithName("syncPluginDaemonObjs")
 	logger.Info("Start to sync sriov daemons objects")
 
@@ -374,6 +374,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncPluginDaemonObjs(ctx context.Cont
 	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
 	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
 	data.Data["NodeSelectorField"] = GetDefaultNodeSelector()
+	data.Data["UseCDI"] = operatorConfig.Spec.UseCDI
 
 	objs, err := renderDsForCR(constants.PluginPath, &data)
 	if err != nil {

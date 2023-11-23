@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang/glog"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -63,7 +63,7 @@ func (p *MellanoxPlugin) Spec() string {
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	glog.Info("mellanox-Plugin OnNodeStateChange()")
+	log.Log.Info("mellanox-Plugin OnNodeStateChange()")
 
 	needDrain = false
 	needReboot = false
@@ -99,10 +99,10 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 
 	if utils.IsKernelLockdownMode(false) {
 		if len(mellanoxNicsSpec) > 0 {
-			glog.Info("Lockdown mode detected, failing on interface update for mellanox devices")
+			log.Log.Info("Lockdown mode detected, failing on interface update for mellanox devices")
 			return false, false, fmt.Errorf("mellanox device detected when in lockdown mode")
 		}
-		glog.Info("Lockdown mode detected, skpping mellanox nic processing")
+		log.Log.Info("Lockdown mode detected, skpping mellanox nic processing")
 		return
 	}
 
@@ -131,7 +131,9 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 
 		// failing as we can't the fwTotalVf is lower than the request one on a nic with externallyManage configured
 		if ifaceSpec.ExternallyManaged && needReboot {
-			return true, true, fmt.Errorf("interface %s required a change in the TotalVfs but the policy is externally managed failing: firmware TotalVf %d requested TotalVf %d", ifaceSpec.PciAddress, fwCurrent.totalVfs, totalVfs)
+			return true, true, fmt.Errorf(
+				"interface %s required a change in the TotalVfs but the policy is externally managed failing: firmware TotalVf %d requested TotalVf %d",
+				ifaceSpec.PciAddress, fwCurrent.totalVfs, totalVfs)
 		}
 
 		needLinkChange, err := handleLinkType(pciPrefix, fwCurrent, attrs)
@@ -167,29 +169,29 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 
 		if fwNext.totalVfs > 0 || fwNext.enableSriov {
 			attributesToChange[pciAddress] = mlnxNic{totalVfs: 0}
-			glog.V(2).Infof("Changing TotalVfs %d to 0, doesn't require rebooting", fwNext.totalVfs)
+			log.Log.V(2).Info("Changing TotalVfs to 0, doesn't require rebooting", "fwNext.totalVfs", fwNext.totalVfs)
 		}
 	}
 
 	if needReboot {
 		needDrain = true
 	}
-	glog.V(2).Infof("mellanox-plugin needDrain %v needReboot %v", needDrain, needReboot)
+	log.Log.V(2).Info("mellanox-plugin", "need-drain", needDrain, "need-reboot", needReboot)
 	return
 }
 
 // Apply config change
 func (p *MellanoxPlugin) Apply() error {
 	if utils.IsKernelLockdownMode(false) {
-		glog.Info("mellanox-plugin Apply() - skipping due to lockdown mode")
+		log.Log.Info("mellanox-plugin Apply() - skipping due to lockdown mode")
 		return nil
 	}
-	glog.Info("mellanox-plugin Apply()")
+	log.Log.Info("mellanox-plugin Apply()")
 	return configFW()
 }
 
 func configFW() error {
-	glog.Info("mellanox-plugin configFW()")
+	log.Log.Info("mellanox-plugin configFW()")
 	for pciAddr, fwArgs := range attributesToChange {
 		cmdArgs := []string{"-d", pciAddr, "-y", "set"}
 		if fwArgs.enableSriov {
@@ -207,13 +209,13 @@ func configFW() error {
 			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=%s", LinkTypeP2, fwArgs.linkTypeP2))
 		}
 
-		glog.V(2).Infof("mellanox-plugin: configFW(): %v", cmdArgs)
+		log.Log.V(2).Info("mellanox-plugin: configFW()", "cmd-args", cmdArgs)
 		if len(cmdArgs) <= 4 {
 			continue
 		}
 		_, err := utils.RunCommand("mstconfig", cmdArgs...)
 		if err != nil {
-			glog.Errorf("mellanox-plugin configFW(): failed : %v", err)
+			log.Log.Error(err, "mellanox-plugin configFW(): failed")
 			return err
 		}
 	}
@@ -221,30 +223,30 @@ func configFW() error {
 }
 
 func getMlnxNicFwData(pciAddress string) (current, next *mlnxNic, err error) {
-	glog.Infof("mellanox-plugin getMlnxNicFwData(): device %s", pciAddress)
+	log.Log.Info("mellanox-plugin getMlnxNicFwData()", "device", pciAddress)
 	err = nil
 	attrs := []string{TotalVfs, EnableSriov, LinkTypeP1, LinkTypeP2}
 
 	out, err := utils.MstConfigReadData(pciAddress)
 	if err != nil {
-		glog.Errorf("mellanox-plugin getMlnxNicFwData(): failed %v", err)
+		log.Log.Error(err, "mellanox-plugin getMlnxNicFwData(): failed")
 		return
 	}
 	mstCurrentData, mstNextData := utils.ParseMstconfigOutput(out, attrs)
 	current, err = mlnxNicFromMap(mstCurrentData)
 	if err != nil {
-		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
+		log.Log.Error(err, "mellanox-plugin mlnxNicFromMap() for current mstconfig data failed")
 		return
 	}
 	next, err = mlnxNicFromMap(mstNextData)
 	if err != nil {
-		glog.Errorf("mellanox-plugin getMlnxNicFwData(): %v", err)
+		log.Log.Error(err, "mellanox-plugin mlnxNicFromMap() for next mstconfig data failed")
 	}
 	return
 }
 
 func mlnxNicFromMap(mstData map[string]string) (*mlnxNic, error) {
-	glog.Infof("mellanox-plugin mlnxNicFromMap() %v", mstData)
+	log.Log.Info("mellanox-plugin mlnxNicFromMap()", "data", mstData)
 	fwData := &mlnxNic{}
 	if strings.Contains(mstData[EnableSriov], "True") {
 		fwData.enableSriov = true
@@ -268,28 +270,29 @@ func getPciAddressPrefix(pciAddress string) string {
 }
 
 func isDualPort(pciAddress string) bool {
-	glog.Infof("mellanox-plugin isDualPort(): pciAddress %s", pciAddress)
+	log.Log.Info("mellanox-plugin isDualPort()", "address", pciAddress)
 	pciAddressPrefix := getPciAddressPrefix(pciAddress)
 	return len(mellanoxNicsStatus[pciAddressPrefix]) > 1
 }
 
 func getLinkType(linkType string) string {
-	glog.Infof("mellanox-plugin getLinkType(): linkType %s", linkType)
+	log.Log.Info("mellanox-plugin getLinkType()", "link-type", linkType)
 	if strings.Contains(linkType, constants.LinkTypeETH) {
 		return constants.LinkTypeETH
 	} else if strings.Contains(linkType, constants.LinkTypeIB) {
 		return constants.LinkTypeIB
 	} else if len(linkType) > 0 {
-		glog.Warningf("mellanox-plugin getLinkType(): link type %s is not one of [ETH, IB]", linkType)
+		log.Log.Error(nil, "mellanox-plugin getLinkType(): link type is not one of [ETH, IB], treating as unknown",
+			"link-type", linkType)
 		return UknownLinkType
 	} else {
-		glog.Warning("mellanox-plugin getLinkType(): LINK_TYPE_P* attribute was not found")
+		log.Log.Info("mellanox-plugin getLinkType(): LINK_TYPE_P* attribute was not found, treating as preconfigured link type")
 		return PreconfiguredLinkType
 	}
 }
 
 func isLinkTypeRequireChange(iface sriovnetworkv1.Interface, ifaceStatus sriovnetworkv1.InterfaceExt, fwLinkType string) (bool, error) {
-	glog.Infof("mellanox-plugin isLinkTypeRequireChange(): device %s", iface.PciAddress)
+	log.Log.Info("mellanox-plugin isLinkTypeRequireChange()", "device", iface.PciAddress)
 	if iface.LinkType != "" && !strings.EqualFold(ifaceStatus.LinkType, iface.LinkType) {
 		if !strings.EqualFold(iface.LinkType, constants.LinkTypeETH) && !strings.EqualFold(iface.LinkType, constants.LinkTypeIB) {
 			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Not supported link type: %s,"+
@@ -309,7 +312,7 @@ func isLinkTypeRequireChange(iface sriovnetworkv1.Interface, ifaceStatus sriovne
 }
 
 func getOtherPortSpec(pciAddress string) *sriovnetworkv1.Interface {
-	glog.Infof("mellanox-plugin getOtherPortSpec(): pciAddress %s", pciAddress)
+	log.Log.Info("mellanox-plugin getOtherPortSpec()", "pciAddress", pciAddress)
 	pciAddrPrefix := getPciAddressPrefix(pciAddress)
 	pciAddrSuffix := pciAddress[len(pciAddrPrefix):]
 
@@ -340,7 +343,8 @@ func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.
 	// the configured amount
 	if ifaceSpec.ExternallyManaged {
 		if totalVfs > fwCurrent.totalVfs {
-			glog.Errorf("The nic is externallyManaged and TotalVfs %d configured on the system is lower then requested %d, failing configuration", fwCurrent.totalVfs, totalVfs)
+			log.Log.Error(nil, "The nic is externallyManaged and TotalVfs configured on the system is lower then requested VFs, failing configuration",
+				"current", fwCurrent.totalVfs, "requested", totalVfs)
 			attrs.totalVfs = totalVfs
 			needReboot = true
 			changeWithoutReboot = false
@@ -349,14 +353,15 @@ func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.
 	}
 
 	if fwCurrent.totalVfs != totalVfs {
-		glog.V(2).Infof("Changing TotalVfs %d to %d, needs reboot", fwCurrent.totalVfs, totalVfs)
+		log.Log.V(2).Info("Changing TotalVfs, needs reboot", "current", fwCurrent.totalVfs, "requested", totalVfs)
 		attrs.totalVfs = totalVfs
 		needReboot = true
 	}
 
 	// Remove policy then re-apply it
 	if !needReboot && fwNext.totalVfs != totalVfs {
-		glog.V(2).Infof("Changing TotalVfs %d to same as Next Boot value, doesn't require rebooting", fwCurrent.totalVfs)
+		log.Log.V(2).Info("Changing TotalVfs to same as Next Boot value, doesn't require rebooting",
+			"current", fwCurrent.totalVfs, "next", fwNext.totalVfs, "requested", totalVfs)
 		attrs.totalVfs = totalVfs
 		changeWithoutReboot = true
 	}
@@ -368,11 +373,11 @@ func handleTotalVfs(fwCurrent, fwNext, attrs *mlnxNic, ifaceSpec sriovnetworkv1.
 // and need reboot if enableSriov will change
 func handleEnableSriov(totalVfs int, fwCurrent, fwNext, attrs *mlnxNic) (needReboot, changeWithoutReboot bool) {
 	if totalVfs == 0 && fwCurrent.enableSriov {
-		glog.V(2).Info("disabling Sriov, needs reboot")
+		log.Log.V(2).Info("disabling Sriov, needs reboot")
 		attrs.enableSriov = false
 		return true, false
 	} else if totalVfs > 0 && !fwCurrent.enableSriov {
-		glog.V(2).Info("enabling Sriov, needs reboot")
+		log.Log.V(2).Info("enabling Sriov, needs reboot")
 		attrs.enableSriov = true
 		return true, false
 	} else if totalVfs > 0 && !fwNext.enableSriov {
@@ -400,7 +405,8 @@ func handleLinkType(pciPrefix string, fwData, attr *mlnxNic) (bool, error) {
 		}
 
 		if needChange {
-			glog.V(2).Infof("Changing LinkTypeP1 %s to %s, needs reboot", fwData.linkTypeP1, firstPortSpec.LinkType)
+			log.Log.V(2).Info("Changing LinkTypeP1, needs reboot",
+				"from", fwData.linkTypeP1, "to", firstPortSpec.LinkType)
 			attr.linkTypeP1 = firstPortSpec.LinkType
 			needReboot = true
 		}
@@ -415,7 +421,8 @@ func handleLinkType(pciPrefix string, fwData, attr *mlnxNic) (bool, error) {
 		}
 
 		if needChange {
-			glog.V(2).Infof("Changing LinkTypeP2 %s to %s, needs reboot", fwData.linkTypeP2, secondPortSpec.LinkType)
+			log.Log.V(2).Info("Changing LinkTypeP2, needs reboot",
+				"from", fwData.linkTypeP2, "to", secondPortSpec.LinkType)
 			attr.linkTypeP2 = secondPortSpec.LinkType
 			needReboot = true
 		}

@@ -7,7 +7,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/golang/glog"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
@@ -103,7 +103,7 @@ func (s *StoreManager) ClearPCIAddressFolder() error {
 func (s *StoreManager) SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error {
 	data, err := json.Marshal(PfInfo)
 	if err != nil {
-		glog.Errorf("failed to marshal PF status %+v: %v", *PfInfo, err)
+		log.Log.Error(err, "failed to marshal PF status", "status", *PfInfo)
 		return err
 	}
 
@@ -124,13 +124,13 @@ func (s *StoreManager) LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interfa
 		if os.IsNotExist(err) {
 			return nil, false, nil
 		}
-		glog.Errorf("failed to read PF status from path %s: %v", pathFile, err)
+		log.Log.Error(err, "failed to read PF status", "path", pathFile)
 		return nil, false, err
 	}
 
 	err = json.Unmarshal(data, pfStatus)
 	if err != nil {
-		glog.Errorf("failed to unmarshal PF status %s: %v", data, err)
+		log.Log.Error(err, "failed to unmarshal PF status", "data", string(data))
 		return nil, false, err
 	}
 
