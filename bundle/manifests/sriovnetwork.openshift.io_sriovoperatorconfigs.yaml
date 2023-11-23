@@ -71,6 +71,10 @@ spec:
                 maximum: 2
                 minimum: 0
                 type: integer
+              useCDI:
+                description: Flag to enable Container Device Interface mode for SR-IOV
+                  Network Device Plugin
+                type: boolean
             type: object
           status:
             description: SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
