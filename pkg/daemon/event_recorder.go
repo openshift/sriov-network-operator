@@ -3,14 +3,13 @@ package daemon
 import (
 	"context"
 
-	"github.com/golang/glog"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	typedv1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 )
@@ -40,7 +39,7 @@ func NewEventRecorder(c snclientset.Interface, n string, kubeclient kubernetes.I
 func (e *EventRecorder) SendEvent(eventType string, msg string) {
 	nodeState, err := e.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), e.node, metav1.GetOptions{})
 	if err != nil {
-		glog.Warningf("SendEvent(): Failed to fetch node state %s (%v); skip SendEvent", e.node, err)
+		log.Log.V(2).Error(err, "SendEvent(): Failed to fetch node state, skip SendEvent", "name", e.node)
 		return
 	}
 	e.eventRecorder.Event(nodeState, corev1.EventTypeNormal, eventType, msg)

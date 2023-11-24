@@ -3,7 +3,7 @@ package virtual
 import (
 	"reflect"
 
-	"github.com/golang/glog"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -54,7 +54,7 @@ func (p *VirtualPlugin) Spec() string {
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *VirtualPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	glog.Info("virtual-plugin OnNodeStateChange()")
+	log.Log.Info("virtual-plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
 	err = nil
@@ -71,7 +71,7 @@ func (p *VirtualPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 
 // Apply config change
 func (p *VirtualPlugin) Apply() error {
-	glog.Infof("virtual-plugin Apply(): desiredState=%v", p.DesireState.Spec)
+	log.Log.Info("virtual-plugin Apply()", "desired-state", p.DesireState.Spec)
 
 	if p.LoadVfioDriver == loading {
 		// In virtual deployments of Kubernetes where the underlying virtualization platform does not support a virtualized iommu
@@ -80,21 +80,21 @@ func (p *VirtualPlugin) Apply() error {
 		// NOTE: if VFIO was already loaded for some reason, we will not try to load it again with the new options.
 		kernelArgs := "enable_unsafe_noiommu_mode=1"
 		if err := p.HostManager.LoadKernelModule("vfio", kernelArgs); err != nil {
-			glog.Errorf("virtual-plugin Apply(): fail to load vfio kmod: %v", err)
+			log.Log.Error(err, "virtual-plugin Apply(): fail to load vfio kmod")
 			return err
 		}
 
 		if err := p.HostManager.LoadKernelModule("vfio_pci"); err != nil {
-			glog.Errorf("virtual-plugin Apply(): fail to load vfio_pci kmod: %v", err)
+			log.Log.Error(err, "virtual-plugin Apply(): fail to load vfio_pci kmod")
 			return err
 		}
 		p.LoadVfioDriver = loaded
 	}
 
 	if p.LastState != nil {
-		glog.Infof("virtual-plugin Apply(): lastStat=%v", p.LastState.Spec)
+		log.Log.Info("virtual-plugin Apply()", "last-state", p.LastState.Spec)
 		if reflect.DeepEqual(p.LastState.Spec.Interfaces, p.DesireState.Spec.Interfaces) {
-			glog.Info("virtual-plugin Apply(): nothing to apply")
+			log.Log.Info("virtual-plugin Apply(): nothing to apply")
 			return nil
 		}
 	}

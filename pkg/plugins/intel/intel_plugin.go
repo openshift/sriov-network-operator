@@ -1,7 +1,7 @@
 package intel
 
 import (
-	"github.com/golang/glog"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
@@ -35,12 +35,12 @@ func (p *IntelPlugin) Spec() string {
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *IntelPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	glog.Info("intel-plugin OnNodeStateChange()")
+	log.Log.Info("intel-plugin OnNodeStateChange()")
 	return false, false, nil
 }
 
 // Apply config change
 func (p *IntelPlugin) Apply() error {
-	glog.Info("intel-plugin Apply()")
+	log.Log.Info("intel-plugin Apply()")
 	return nil
 }

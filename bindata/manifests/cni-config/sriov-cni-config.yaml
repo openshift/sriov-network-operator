@@ -41,6 +41,12 @@ spec:
 {{- if .StateConfigured -}}
   "link_state":"{{.SriovCniState}}",
 {{- end -}}
+{{- if .LogLevelConfigured -}}
+  "logLevel":"{{.LogLevel}}",
+{{- end -}}
+{{- if .LogFileConfigured -}}
+  "logFile":"{{.LogFile}}",
+{{- end -}}
   {{.SriovCniIpam}}
 }
 {{- if .MetaPluginsConfigured -}}

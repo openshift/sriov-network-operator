@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/golang/glog"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
@@ -75,7 +75,7 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 				var vfGroups []sriovnetworkv1.VfGroup = nil
 				ifc, err := findInterface(newState.Spec.Interfaces, iface.Name)
 				if err != nil {
-					glog.Errorf("WriteSwitchdevConfFile(): fail find interface: %v", err)
+					log.Log.Error(err, "WriteSwitchdevConfFile(): fail find interface")
 				} else {
 					vfGroups = ifc.VfGroups
 				}
@@ -107,15 +107,15 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 			if _, err := os.Stat("/host" + SriovConfBasePath); os.IsNotExist(err) {
 				err = os.Mkdir("/host"+SriovConfBasePath, os.ModeDir)
 				if err != nil {
-					glog.Errorf("WriteConfFile(): fail to create sriov-operator folder: %v", err)
+					log.Log.Error(err, "WriteConfFile(): failed to create sriov-operator folder")
 					return false, err
 				}
 			}
 
-			glog.V(2).Infof("WriteSwitchdevConfFile(): file not existed, create it")
+			log.Log.V(2).Info("WriteSwitchdevConfFile(): file not existed, create it")
 			_, err = os.Create(SriovHostSwitchDevConfPath)
 			if err != nil {
-				glog.Errorf("WriteSwitchdevConfFile(): fail to create file: %v", err)
+				log.Log.Error(err, "WriteSwitchdevConfFile(): failed to create file")
 				return
 			}
 		} else {
@@ -124,27 +124,27 @@ func WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (upd
 	}
 	oldContent, err := os.ReadFile(SriovHostSwitchDevConfPath)
 	if err != nil {
-		glog.Errorf("WriteSwitchdevConfFile(): fail to read file: %v", err)
+		log.Log.Error(err, "WriteSwitchdevConfFile(): failed to read file")
 		return
 	}
 	var newContent []byte
 	if len(cfg.Interfaces) != 0 {
 		newContent, err = json.Marshal(cfg)
 		if err != nil {
-			glog.Errorf("WriteSwitchdevConfFile(): fail to marshal config: %v", err)
+			log.Log.Error(err, "WriteSwitchdevConfFile(): fail to marshal config")
 			return
 		}
 	}
 
 	if bytes.Equal(newContent, oldContent) {
-		glog.V(2).Info("WriteSwitchdevConfFile(): no update")
+		log.Log.V(2).Info("WriteSwitchdevConfFile(): no update")
 		return
 	}
 	update = true
-	glog.V(2).Infof("WriteSwitchdevConfFile(): write '%s' to switchdev.conf", newContent)
+	log.Log.V(2).Info("WriteSwitchdevConfFile(): write to switchdev.conf", "content", newContent)
 	err = os.WriteFile(SriovHostSwitchDevConfPath, newContent, 0644)
 	if err != nil {
-		glog.Errorf("WriteSwitchdevConfFile(): fail to write file: %v", err)
+		log.Log.Error(err, "WriteSwitchdevConfFile(): failed to write file")
 		return
 	}
 	return

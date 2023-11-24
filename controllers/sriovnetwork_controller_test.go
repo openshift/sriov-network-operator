@@ -57,6 +57,12 @@ var _ = Describe("SriovNetwork Controller", func() {
 				ResourceName: "resource_1",
 				IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
 			},
+			"test-5": {
+				ResourceName: "resource_1",
+				IPAM:         `{"type":"host-local","subnet":"10.56.217.0/24","rangeStart":"10.56.217.171","rangeEnd":"10.56.217.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.56.217.1"}`,
+				LogLevel:     "debug",
+				LogFile:      "/tmp/tmpfile",
+			},
 		}
 		sriovnets := util.GenerateSriovNetworkCRs(testNamespace, specs)
 		DescribeTable("should be possible to create/delete net-att-def",
@@ -95,6 +101,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 			Entry("with networkNamespace flag", sriovnets["test-1"]),
 			Entry("with SpoofChk flag on", sriovnets["test-2"]),
 			Entry("with Trust flag on", sriovnets["test-3"]),
+			Entry("with LogLevel and LogFile", sriovnets["test-5"]),
 		)
 
 		newSpecs := map[string]sriovnetworkv1.SriovNetworkSpec{
@@ -274,6 +281,8 @@ func generateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 	spoofchk := ""
 	trust := ""
 	vlanProto := ""
+	logLevel := `"logLevel":"info",`
+	logFile := ""
 	ipam := emptyCurls
 
 	if cr.Spec.Trust == sriovnetworkv1.SriovCniStateOn {
@@ -298,9 +307,16 @@ func generateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 	if cr.Spec.VlanProto != "" {
 		vlanProto = fmt.Sprintf(`"vlanProto": "%s",`, cr.Spec.VlanProto)
 	}
+	if cr.Spec.LogLevel != "" {
+		logLevel = fmt.Sprintf(`"logLevel":"%s",`, cr.Spec.LogLevel)
+	}
+	if cr.Spec.LogFile != "" {
+		logFile = fmt.Sprintf(`"logFile":"%s",`, cr.Spec.LogFile)
+	}
 
-	configStr, err := formatJSON(fmt.Sprintf(`{ "cniVersion":"0.3.1", "name":"%s","type":"sriov","vlan":%d,%s%s"vlanQoS":%d,%s%s"ipam":%s }`,
-		cr.GetName(), cr.Spec.Vlan, spoofchk, trust, vlanQoS, vlanProto, state, ipam))
+	configStr, err := formatJSON(fmt.Sprintf(
+		`{ "cniVersion":"0.3.1", "name":"%s","type":"sriov","vlan":%d,%s%s"vlanQoS":%d,%s%s%s%s"ipam":%s }`,
+		cr.GetName(), cr.Spec.Vlan, spoofchk, trust, vlanQoS, vlanProto, state, logLevel, logFile, ipam))
 	if err != nil {
 		panic(err)
 	}

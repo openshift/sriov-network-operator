@@ -43,6 +43,8 @@ type SriovOperatorConfigSpec struct {
 	// Default mode: daemon
 	// +kubebuilder:validation:Enum=daemon;systemd
 	ConfigurationMode ConfigurationModeType `json:"configurationMode,omitempty"`
+	// Flag to enable Container Device Interface mode for SR-IOV Network Device Plugin
+	UseCDI bool `json:"useCDI,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig

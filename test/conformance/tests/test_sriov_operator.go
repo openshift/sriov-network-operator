@@ -113,6 +113,8 @@ var _ = Describe("[sriov] operator", func() {
 					Skip("Test unsuitable to be run in discovery mode")
 				}
 
+				testStartingTime := time.Now()
+
 				By("Checking that a daemon is scheduled on each worker node")
 				Eventually(func() bool {
 					return daemonsScheduledOnNodes("node-role.kubernetes.io/worker=")
@@ -168,6 +170,21 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() bool {
 					return daemonsScheduledOnNodes("node-role.kubernetes.io/worker")
 				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
+
+				By("Checking that a daemon is able to publish events")
+				Eventually(func() bool {
+					events, err := clients.Events(operatorNamespace).List(
+						context.Background(), metav1.ListOptions{TypeMeta: sriovv1.SriovNetworkNodeState{}.TypeMeta})
+					Expect(err).ToNot(HaveOccurred())
+
+					for _, e := range events.Items {
+						if e.Reason == "ConfigDaemonStart" &&
+							e.CreationTimestamp.Time.After(testStartingTime) {
+							return true
+						}
+					}
+					return false
+				}, 30*time.Second, 5*time.Second).Should(BeTrue(), "Config Daemon should record an event when starting")
 			})
 		})
 
@@ -913,6 +930,36 @@ var _ = Describe("[sriov] operator", func() {
 				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
 			})
 		})
+
+		Context("CNI Logging level", func() {
+			It("Debug logging should be visible in multus pod", func() {
+				sriovNetworkName := "test-log-level-debug-no-file"
+				err := network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName,
+					namespaces.Test, operatorNamespace, resourceName, ipamIpv4,
+					func(sn *sriovv1.SriovNetwork) {
+						sn.Spec.LogLevel = "debug"
+					})
+				Expect(err).ToNot(HaveOccurred())
+
+				podDeployTime := time.Now()
+
+				testPod := createTestPod(node, []string{sriovNetworkName})
+
+				recentMultusLogs := getMultusPodLogs(testPod.Spec.NodeName, podDeployTime)
+
+				Expect(recentMultusLogs).To(
+					ContainElement(
+						// Assert against multiple ContainSubstring condition because we can't make assumption on the order of the chunks
+						And(
+							ContainSubstring(`level="debug"`),
+							ContainSubstring(`msg="function called"`),
+							ContainSubstring(`func="cmdAdd"`),
+							ContainSubstring(`cniName="sriov-cni"`),
+							ContainSubstring(`ifname="net1"`),
+						),
+					))
+			})
+		})
 	})
 
 	Describe("Custom SriovNetworkNodePolicy", func() {
@@ -1069,6 +1116,83 @@ var _ = Describe("[sriov] operator", func() {
 						"openshift.io/testresource":  int64(3),
 						"openshift.io/testresource1": int64(2),
 					}))
+				})
+
+				It("Should configure the mtu only for vfs which are part of the partition", func() {
+					defaultMtu := 1500
+					newMtu := 2000
+
+					node := sriovInfos.Nodes[0]
+					intf, err := sriovInfos.FindOneSriovDevice(node)
+					Expect(err).ToNot(HaveOccurred())
+
+					_, err = network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, intf.Name+"#0-1", node, 5, testResourceName, "netdevice", func(policy *sriovv1.SriovNetworkNodePolicy) {
+						policy.Spec.Mtu = newMtu
+					})
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(func() sriovv1.Interfaces {
+						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						return nodeState.Spec.Interfaces
+					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+						IgnoreExtras,
+						Fields{
+							"Name":   Equal(intf.Name),
+							"NumVfs": Equal(5),
+							"Mtu":    Equal(newMtu),
+							"VfGroups": ContainElement(
+								MatchFields(
+									IgnoreExtras,
+									Fields{
+										"ResourceName": Equal(testResourceName),
+										"DeviceType":   Equal("netdevice"),
+										"VfRange":      Equal("0-1"),
+									})),
+						})))
+
+					WaitForSRIOVStable()
+
+					Eventually(func() int64 {
+						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						resNum := testedNode.Status.Allocatable["openshift.io/testresource"]
+						capacity, _ := resNum.AsInt64()
+						return capacity
+					}, 3*time.Minute, time.Second).Should(Equal(int64(2)))
+
+					By(fmt.Sprintf("verifying that only VF 0 and 1 have mtu set to %d", newMtu))
+					Eventually(func() sriovv1.InterfaceExts {
+						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						return nodeState.Status.Interfaces
+					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+						IgnoreExtras,
+						Fields{
+							"VFs": SatisfyAll(
+								ContainElement(
+									MatchFields(
+										IgnoreExtras,
+										Fields{
+											"VfID": Equal(0),
+											"Mtu":  Equal(newMtu),
+										})),
+								ContainElement(
+									MatchFields(
+										IgnoreExtras,
+										Fields{
+											"VfID": Equal(1),
+											"Mtu":  Equal(newMtu),
+										})),
+								ContainElement(
+									MatchFields(
+										IgnoreExtras,
+										Fields{
+											"VfID": Equal(2),
+											"Mtu":  Equal(defaultMtu),
+										})),
+							),
+						})))
 				})
 
 				// 27630
@@ -2409,4 +2533,25 @@ func assertDevicePluginConfigurationContains(node, configuration string) {
 	}, 30*time.Second, 2*time.Second).Should(
 		HaveKeyWithValue(node, ContainSubstring(configuration)),
 	)
+}
+
+func getMultusPodLogs(nodeName string, since time.Time) []string {
+	podList, err := clients.Pods("").List(context.Background(), metav1.ListOptions{
+		LabelSelector: "app=multus",
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
+	ExpectWithOffset(1, podList.Items).To(HaveLen(1), "One multus pod expected")
+
+	multusPod := podList.Items[0]
+	logStart := metav1.NewTime(since)
+	rawLogs, err := clients.Pods(multusPod.Namespace).
+		GetLogs(multusPod.Name, &corev1.PodLogOptions{
+			Container: multusPod.Spec.Containers[0].Name,
+			SinceTime: &logStart,
+		}).
+		DoRaw(context.Background())
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
+
+	return strings.Split(string(rawLogs), "\n")
 }
