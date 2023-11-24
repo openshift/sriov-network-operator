@@ -13,7 +13,7 @@ contents:
       exit
     fi
 
-    which jq 2>&1 >/dev/null || (echo "Required tool jq is not found in PATH." && exit 1)
+    which jq
 
     append_to_file(){
       content="$1"
