@@ -100,22 +100,42 @@ func main() {
 
 	le := leaderelection.GetLeaderElectionConfig(kubeClient, enableLeaderElection)
 
+	leaderElectionMgr, err := ctrl.NewManager(restConfig, ctrl.Options{
+		Scheme:                        scheme,
+		HealthProbeBindAddress:        probeAddr,
+		Metrics:                       server.Options{BindAddress: "0"},
+		LeaderElection:                enableLeaderElection,
+		LeaseDuration:                 &le.LeaseDuration,
+		LeaderElectionReleaseOnCancel: true,
+		RenewDeadline:                 &le.RenewDeadline,
+		RetryPeriod:                   &le.RetryPeriod,
+		LeaderElectionID:              "a56def2a.openshift.io",
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to start leader election manager")
+		os.Exit(1)
+	}
+
+	if err := leaderElectionMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := leaderElectionMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                server.Options{BindAddress: metricsAddr},
-		WebhookServer:          webhook.NewServer(webhook.Options{Port: 9443}),
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaseDuration:          &le.LeaseDuration,
-		RenewDeadline:          &le.RenewDeadline,
-		RetryPeriod:            &le.RetryPeriod,
-		LeaderElectionID:       "a56def2a.openshift.io",
-		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{vars.Namespace: {}}},
+		Scheme:        scheme,
+		Metrics:       server.Options{BindAddress: metricsAddr},
+		WebhookServer: webhook.NewServer(webhook.Options{Port: 9443}),
+		Cache:         cache.Options{DefaultNamespaces: map[string]cache.Config{vars.Namespace: {}}},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
 	mgrGlobal, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:  scheme,
 		Metrics: server.Options{BindAddress: "0"},
@@ -225,29 +245,86 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
-
-	stopCh := ctrl.SetupSignalHandler()
+	leaderElectionErr := make(chan error)
+	leaderElectionContext, cancelLeaderElection := context.WithCancel(context.Background())
 	go func() {
-		if err := mgrGlobal.Start(stopCh); err != nil {
-			setupLog.Error(err, "Manager Global exited non-zero")
-			os.Exit(1)
-		}
+		setupLog.Info("starting leader election manager")
+		leaderElectionErr <- leaderElectionMgr.Start(leaderElectionContext)
 	}()
 
-	// Remove all finalizers after controller is shut down
-	defer utils.Shutdown()
+	select {
+	case <-leaderElectionMgr.Elected():
+	case err := <-leaderElectionErr:
+		setupLog.Error(err, "Leader Election Manager error")
+		os.Exit(1)
+	}
 
-	setupLog.Info("starting manager")
-	if err := mgr.Start(stopCh); err != nil {
-		setupLog.Error(err, "problem running manager")
+	setupLog.Info("acquired lease")
+
+	stopSignalCh := ctrl.SetupSignalHandler()
+
+	globalManagerErr := make(chan error)
+	globalManagerCtx, globalManagerCancel := context.WithCancel(context.Background())
+	go func() {
+		setupLog.Info("starting global manager")
+		globalManagerErr <- mgrGlobal.Start(globalManagerCtx)
+	}()
+
+	namespacedManagerErr := make(chan error)
+	namespacedManagerCtx, namespacedManagerCancel := context.WithCancel(context.Background())
+	go func() {
+		setupLog.Info("starting namespaced manager")
+		namespacedManagerErr <- mgr.Start(namespacedManagerCtx)
+	}()
+
+	select {
+	// Wait for a stop signal
+	case <-stopSignalCh.Done():
+		setupLog.Info("Stop signal received")
+
+		globalManagerCancel()
+		namespacedManagerCancel()
+		<-globalManagerErr
+		<-namespacedManagerErr
+
+		utils.Shutdown()
+
+		cancelLeaderElection()
+		<-leaderElectionErr
+
+	case err := <-leaderElectionErr:
+		setupLog.Error(err, "Leader Election Manager error")
+		globalManagerCancel()
+		namespacedManagerCancel()
+		<-globalManagerErr
+		<-namespacedManagerErr
+
+		os.Exit(1)
+
+	case err := <-globalManagerErr:
+		setupLog.Error(err, "Global Manager error")
+
+		namespacedManagerCancel()
+		<-namespacedManagerErr
+
+		utils.Shutdown()
+
+		cancelLeaderElection()
+		<-leaderElectionErr
+
+		os.Exit(1)
+
+	case err := <-namespacedManagerErr:
+		setupLog.Error(err, "Namsepaced Manager error")
+
+		globalManagerCancel()
+		<-globalManagerErr
+
+		utils.Shutdown()
+
+		cancelLeaderElection()
+		<-leaderElectionErr
+
 		os.Exit(1)
 	}
 }
