@@ -315,6 +315,7 @@ done
 
 
 export ADMISSION_CONTROLLERS__ENABLED=true
+export ADMISSION_CONTROLLERS__CERTIFICATES__CERT_MANAGER__ENABLED=true
 export SKIP_VAR_SET=""
 export NAMESPACE="sriov-network-operator"
 export OPERATOR_NAMESPACE="sriov-network-operator"
@@ -341,7 +342,7 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: network-resources-injector-secret
+  name: network-resources-injector-cert
   namespace: ${NAMESPACE}
 spec:
   commonName: network-resources-injector-service.svc
@@ -351,12 +352,12 @@ spec:
   issuerRef:
     kind: Issuer
     name: selfsigned-issuer
-  secretName: network-resources-injector-secret
+  secretName: network-resources-injector-cert
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: operator-webhook-service
+  name: operator-webhook-cert
   namespace: ${NAMESPACE}
 spec:
   commonName: operator-webhook-service.svc
@@ -366,7 +367,7 @@ spec:
   issuerRef:
     kind: Issuer
     name: selfsigned-issuer
-  secretName: operator-webhook-service
+  secretName: operator-webhook-cert
 EOF
 
 
