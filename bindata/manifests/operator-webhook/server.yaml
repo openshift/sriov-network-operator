@@ -86,4 +86,4 @@ spec:
       volumes:
       - name: tls
         secret:
-          secretName: operator-webhook-service
+          secretName: {{.OperatorWebhookSecretName}}

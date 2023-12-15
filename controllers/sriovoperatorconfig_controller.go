@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -69,7 +70,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 
 	logger.Info("Reconciling SriovOperatorConfig")
 
-	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS__ENABLED") == "true"
+	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS__ENABLED") == trueString
 	if !enableAdmissionController {
 		logger.Info("SR-IOV Network Resource Injector and Operator Webhook are disabled.")
 	}
@@ -251,9 +252,13 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 		data.Data["SriovNetworkWebhookImage"] = os.Getenv("SRIOV_NETWORK_WEBHOOK_IMAGE")
 		data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 		data.Data["ClusterType"] = utils.ClusterType
-		data.Data["CaBundle"] = os.Getenv("WEBHOOK_CA_BUNDLE")
 		data.Data["DevMode"] = os.Getenv("DEV_MODE")
 		data.Data["ImagePullSecrets"] = GetImagePullSecrets()
+		data.Data["CertManagerEnabled"] = strings.ToLower(os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__CERT_MANAGER__ENABLED")) == trueString
+		data.Data["OperatorWebhookSecretName"] = os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__OPERATOR__SECRET_NAME")
+		data.Data["OperatorWebhookCA"] = os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__OPERATOR__CA_CRT")
+		data.Data["InjectorWebhookSecretName"] = os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__INJECTOR__SECRET_NAME")
+		data.Data["InjectorWebhookCA"] = os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__INJECTOR__CA_CRT")
 
 		data.Data["ExternalControlPlane"] = false
 		if r.OpenshiftContext.IsOpenshiftCluster() {
