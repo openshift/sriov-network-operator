@@ -36,6 +36,7 @@ const (
 	mutatingWebhookConfigurationCRDName   = "MutatingWebhookConfiguration"
 	validatingWebhookConfigurationCRDName = "ValidatingWebhookConfiguration"
 	machineConfigCRDName                  = "MachineConfig"
+	trueString                            = "true"
 )
 
 var namespace = os.Getenv("NAMESPACE")
