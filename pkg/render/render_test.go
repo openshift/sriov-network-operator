@@ -85,14 +85,35 @@ func TestTemplate(t *testing.T) {
 	g.Expect(o[0].Object["bar"]).To(Equal("myns"))
 }
 
+// TestTemplateWithEmptyObject tests the case where a file generates additional nil objects when rendered. An empty
+// object can also occur in the particular case shown in the testfile below when minus is missing at the end of the
+// first expression (i.e. {{- if .Enable }}).
+func TestTemplateWithEmptyObject(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	p := "testdata/manifests/template_with_empty_object.yaml"
+
+	d := MakeRenderData()
+	d.Data["Enable"] = true
+	o, err := RenderTemplate(p, &d)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	g.Expect(len(o)).To(Equal(2))
+	g.Expect(o[0].GetName()).To(Equal("pod1"))
+	g.Expect(o[0].GetNamespace()).To(Equal("namespace1"))
+	g.Expect(o[1].GetName()).To(Equal("pod2"))
+	g.Expect(o[1].GetNamespace()).To(Equal("namespace2"))
+}
+
 func TestRenderDir(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	d := MakeRenderData()
 	d.Funcs["fname"] = func(s string) string { return s }
 	d.Data["Namespace"] = "myns"
+	d.Data["Enable"] = true
 
 	o, err := RenderDir("testdata/manifests", &d)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(o).To(HaveLen(6))
+	g.Expect(o).To(HaveLen(8))
 }

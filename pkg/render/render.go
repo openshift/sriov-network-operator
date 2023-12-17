@@ -103,6 +103,11 @@ func RenderTemplate(path string, d *RenderData) ([]*unstructured.Unstructured, e
 			}
 			return nil, errors.Wrapf(err, "failed to unmarshal manifest %s", path)
 		}
+
+		if u.Object == nil {
+			continue
+		}
+
 		out = append(out, &u)
 	}
 
