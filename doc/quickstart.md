@@ -38,7 +38,7 @@ Webhooks are disabled when deploying on a Kubernetes cluster as per the instruct
    kubectl create ns sriov-network-operator
    kubectl -n sriov-network-operator create secret tls operator-webhook-service --cert=cert.pem --key=key.pem
    kubectl -n sriov-network-operator create secret tls network-resources-injector-secret --cert=cert.pem --key=key.pem
-   export ENABLE_ADMISSION_CONTROLLER=true
+   export ADMISSION_CONTROLLERS__ENABLED=true
    export WEBHOOK_CA_BUNDLE=$(base64 -w 0 < cacert.pem)
    make deploy-setup-k8s
    ```
@@ -88,7 +88,7 @@ Webhooks are disabled when deploying on a Kubernetes cluster as per the instruct
 
     And then deploy the operator:
     ```bash
-    export ENABLE_ADMISSION_CONTROLLER=true
+    export ADMISSION_CONTROLLERS__ENABLED=true
     make deploy-setup-k8s
     ```
 

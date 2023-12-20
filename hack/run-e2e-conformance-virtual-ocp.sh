@@ -177,7 +177,7 @@ EOF
 
 kubectl patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true,"storage":{"emptyDir": null,"pvc":{"claim":"registry-pv-claim"}},"topologySpreadConstraints":[],"rolloutStrategy":"Recreate","tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"},{"effect":"NoSchedule","key":"node-role.kubernetes.io/control-plane","operator":"Exists"}]}}' --type=merge
 
-export ENABLE_ADMISSION_CONTROLLER=true
+export ADMISSION_CONTROLLERS__ENABLED=true
 export SKIP_VAR_SET=""
 export NAMESPACE="openshift-sriov-network-operator"
 export OPERATOR_NAMESPACE=$NAMESPACE

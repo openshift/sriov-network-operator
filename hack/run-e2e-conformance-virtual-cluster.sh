@@ -314,7 +314,7 @@ do
 done
 
 
-export ENABLE_ADMISSION_CONTROLLER=true
+export ADMISSION_CONTROLLERS__ENABLED=true
 export SKIP_VAR_SET=""
 export NAMESPACE="sriov-network-operator"
 export OPERATOR_NAMESPACE="sriov-network-operator"

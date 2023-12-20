@@ -69,7 +69,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 
 	logger.Info("Reconciling SriovOperatorConfig")
 
-	enableAdmissionController := os.Getenv("ENABLE_ADMISSION_CONTROLLER") == "true"
+	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS__ENABLED") == "true"
 	if !enableAdmissionController {
 		logger.Info("SR-IOV Network Resource Injector and Operator Webhook are disabled.")
 	}
