@@ -19,7 +19,7 @@ fi
 export RELEASE_VERSION=4.7.0
 export OPERATOR_NAME=sriov-network-operator
 export RESOURCE_PREFIX=${RESOURCE_PREFIX:-openshift.io}
-export ENABLE_ADMISSION_CONTROLLER=${ENABLE_ADMISSION_CONTROLLER:-"true"}
+export ADMISSION_CONTROLLERS__ENABLED=${ADMISSION_CONTROLLERS__ENABLED:-"true"}
 export CLUSTER_TYPE=${CLUSTER_TYPE:-openshift}
 export NAMESPACE=${NAMESPACE:-"openshift-sriov-network-operator"}
 export WEBHOOK_CA_BUNDLE=${WEBHOOK_CA_BUNDLE:-""}
