@@ -70,7 +70,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 
 	logger.Info("Reconciling SriovOperatorConfig")
 
-	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS__ENABLED") == trueString
+	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS_ENABLED") == trueString
 	if !enableAdmissionController {
 		logger.Info("SR-IOV Network Resource Injector and Operator Webhook are disabled.")
 	}
@@ -254,11 +254,11 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 		data.Data["ClusterType"] = utils.ClusterType
 		data.Data["DevMode"] = os.Getenv("DEV_MODE")
 		data.Data["ImagePullSecrets"] = GetImagePullSecrets()
-		data.Data["CertManagerEnabled"] = strings.ToLower(os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__CERT_MANAGER__ENABLED")) == trueString
-		data.Data["OperatorWebhookSecretName"] = os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__OPERATOR__SECRET_NAME")
-		data.Data["OperatorWebhookCA"] = os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__OPERATOR__CA_CRT")
-		data.Data["InjectorWebhookSecretName"] = os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__INJECTOR__SECRET_NAME")
-		data.Data["InjectorWebhookCA"] = os.Getenv("ADMISSION_CONTROLLERS__CERTIFICATES__INJECTOR__CA_CRT")
+		data.Data["CertManagerEnabled"] = strings.ToLower(os.Getenv("ADMISSION_CONTROLLERS_CERTIFICATES_CERT_MANAGER_ENABLED")) == trueString
+		data.Data["OperatorWebhookSecretName"] = os.Getenv("ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME")
+		data.Data["OperatorWebhookCA"] = os.Getenv("ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_CA_CRT")
+		data.Data["InjectorWebhookSecretName"] = os.Getenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME")
+		data.Data["InjectorWebhookCA"] = os.Getenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT")
 
 		data.Data["ExternalControlPlane"] = false
 		if r.OpenshiftContext.IsOpenshiftCluster() {
