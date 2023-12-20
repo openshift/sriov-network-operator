@@ -145,7 +145,7 @@ var _ = BeforeSuite(func(done Done) {
 
 	os.Setenv("RESOURCE_PREFIX", "openshift.io")
 	os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
-	os.Setenv("ENABLE_ADMISSION_CONTROLLER", "true")
+	os.Setenv("ADMISSION_CONTROLLERS__ENABLED", "true")
 	os.Setenv("SRIOV_CNI_IMAGE", "mock-image")
 	os.Setenv("SRIOV_INFINIBAND_CNI_IMAGE", "mock-image")
 	os.Setenv("SRIOV_DEVICE_PLUGIN_IMAGE", "mock-image")
