@@ -88,23 +88,23 @@ spec:
               value: {{ .Values.operator.cniBinPath }}
             - name: CLUSTER_TYPE
               value: {{ .Values.operator.clusterType }}
-            - name: ADMISSION_CONTROLLERS__ENABLED
+            - name: ADMISSION_CONTROLLERS_ENABLED
               value: {{ .Values.operator.admissionControllers.enabled | quote }}
         {{- if .Values.operator.admissionControllers.enabled }}
-            - name: ADMISSION_CONTROLLERS__CERTIFICATES__OPERATOR__SECRET_NAME
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME
               value: {{ .Values.operator.admissionControllers.certificates.secretNames.operator }}
-            - name: ADMISSION_CONTROLLERS__CERTIFICATES__INJECTOR__SECRET_NAME
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME
               value: {{ .Values.operator.admissionControllers.certificates.secretNames.injector }}
         {{- if .Values.operator.admissionControllers.certificates.certManager.enabled }}
-            - name: ADMISSION_CONTROLLERS__CERTIFICATES__CERT_MANAGER__ENABLED
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_CERT_MANAGER_ENABLED
               value: {{ .Values.operator.admissionControllers.certificates.certManager.enabled | quote }}
         {{- else }}
-            - name: ADMISSION_CONTROLLERS__CERTIFICATES__OPERATOR__CA_CRT
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_CA_CRT
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.operator.admissionControllers.certificates.secretNames.operator }}
                   key: ca.crt
-            - name: ADMISSION_CONTROLLERS__CERTIFICATES__INJECTOR__CA_CRT
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.operator.admissionControllers.certificates.secretNames.injector }}
