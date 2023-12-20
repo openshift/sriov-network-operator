@@ -261,7 +261,7 @@ func createDefaultOperatorConfig(c client.Client) error {
 		return fmt.Errorf("couldn't get cluster single node status: %s", err)
 	}
 
-	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS__ENABLED") == "true"
+	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS_ENABLED") == "true"
 	config := &sriovnetworkv1.SriovOperatorConfig{
 		Spec: sriovnetworkv1.SriovOperatorConfigSpec{
 			EnableInjector:           func() *bool { b := enableAdmissionController; return &b }(),

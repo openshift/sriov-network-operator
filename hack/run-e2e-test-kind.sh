@@ -136,7 +136,7 @@ else
     export TEST_NETNS_PATH="${netns_path}"
 fi
 echo "## disabling webhooks"
-export ADMISSION_CONTROLLERS__ENABLED=false
+export ADMISSION_CONTROLLERS_ENABLED=false
 echo "## deploying SRIOV Network Operator"
 make --directory "${root}" deploy-setup-k8s
 echo "## wait for sriov-network-config-daemon to be ready"

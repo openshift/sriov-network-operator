@@ -171,7 +171,7 @@ skopeo:
 fakechroot:
 	if ! which fakechroot; then if [ -f /etc/redhat-release ]; then dnf -y install fakechroot; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install fakechroot; fi; fi
 
-deploy-setup: export ADMISSION_CONTROLLERS__ENABLED?=false
+deploy-setup: export ADMISSION_CONTROLLERS_ENABLED?=false
 deploy-setup: skopeo install
 	hack/deploy-setup.sh $(NAMESPACE)
 
@@ -215,7 +215,7 @@ test-%: generate vet manifests envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./$*/... -coverprofile cover-$*.out -coverpkg ./... -v
 
 # deploy-setup-k8s: export NAMESPACE=sriov-network-operator
-# deploy-setup-k8s: export ADMISSION_CONTROLLERS__ENABLED=false
+# deploy-setup-k8s: export ADMISSION_CONTROLLERS_ENABLED=false
 # deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 # test-e2e-k8s: test-e2e
 
