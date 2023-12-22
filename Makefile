@@ -155,7 +155,7 @@ kustomize: ## Download kustomize locally if necessary.
 
 ENVTEST = $(BIN_DIR)/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.
-	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.16)
 
 GOMOCK = $(shell pwd)/bin/mockgen
 gomock:
@@ -176,12 +176,11 @@ skopeo:
 fakechroot:
 	if ! which fakechroot; then if [ -f /etc/redhat-release ]; then dnf -y install fakechroot; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install fakechroot; fi; fi
 
-deploy-setup: export ENABLE_ADMISSION_CONTROLLER?=true
+deploy-setup: export ENABLE_ADMISSION_CONTROLLER?=false
 deploy-setup: skopeo install
 	hack/deploy-setup.sh $(NAMESPACE)
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
-deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER?=false
 deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 deploy-setup-k8s: export OPERATOR_EXEC=kubectl
 deploy-setup-k8s: export CLUSTER_TYPE=kubernetes

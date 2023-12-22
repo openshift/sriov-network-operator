@@ -1,0 +1,20 @@
+{{- if .Enable }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: namespace1
+  name: pod1
+spec:
+  containers:
+  - image: "busybox"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: namespace2
+  name: pod2
+spec:
+  containers:
+  - image: "busybox"
+{{- end }}

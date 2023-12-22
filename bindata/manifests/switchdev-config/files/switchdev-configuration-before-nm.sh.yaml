@@ -13,6 +13,8 @@ contents:
       exit
     fi
 
+    which jq
+
     append_to_file(){
       content="$1"
       file_name="$2"
