@@ -8,7 +8,7 @@ import (
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 )
 
-var PluginName = "intel_plugin"
+var PluginName = "intel"
 
 type IntelPlugin struct {
 	PluginName  string
@@ -36,12 +36,12 @@ func (p *IntelPlugin) Spec() string {
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *IntelPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	log.Log.Info("intel-plugin OnNodeStateChange()")
+	log.Log.Info("intel plugin OnNodeStateChange()")
 	return false, false, nil
 }
 
 // Apply config change
 func (p *IntelPlugin) Apply() error {
-	log.Log.Info("intel-plugin Apply()")
+	log.Log.Info("intel plugin Apply()")
 	return nil
 }
