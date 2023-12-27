@@ -16,7 +16,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
-var PluginName = "k8s_plugin"
+var PluginName = "k8s"
 
 type K8sPlugin struct {
 	PluginName                 string
@@ -118,7 +118,7 @@ func (p *K8sPlugin) Spec() string {
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	log.Log.Info("k8s-plugin OnNodeStateChange()")
+	log.Log.Info("k8s plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
 
@@ -133,7 +133,7 @@ func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState)
 		// Check services
 		err = p.switchDevServicesStateUpdate()
 		if err != nil {
-			log.Log.Error(err, "k8s-plugin OnNodeStateChange(): failed")
+			log.Log.Error(err, "k8s plugin OnNodeStateChange(): failed")
 			return
 		}
 	}
@@ -142,7 +142,7 @@ func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState)
 		// Check sriov service
 		err = p.sriovServiceStateUpdate()
 		if err != nil {
-			log.Log.Error(err, "k8s-plugin OnNodeStateChange(): failed")
+			log.Log.Error(err, "k8s plugin OnNodeStateChange(): failed")
 			return
 		}
 	}
@@ -151,9 +151,9 @@ func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState)
 		needDrain = true
 		if p.updateTarget.needReboot() {
 			needReboot = true
-			log.Log.Info("k8s-plugin OnNodeStateChange(): needReboot to update", "target", p.updateTarget)
+			log.Log.Info("k8s plugin OnNodeStateChange(): needReboot to update", "target", p.updateTarget)
 		} else {
-			log.Log.Info("k8s-plugin OnNodeStateChange(): needDrain to update", "target", p.updateTarget)
+			log.Log.Info("k8s plugin OnNodeStateChange(): needDrain to update", "target", p.updateTarget)
 		}
 	}
 
@@ -162,7 +162,7 @@ func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState)
 
 // Apply config change
 func (p *K8sPlugin) Apply() error {
-	log.Log.Info("k8s-plugin Apply()")
+	log.Log.Info("k8s plugin Apply()")
 	if err := p.updateSwitchdevService(); err != nil {
 		return err
 	}
@@ -369,14 +369,14 @@ func (p *K8sPlugin) isSystemServiceNeedUpdate(serviceObj *hostTypes.Service) boo
 	log.Log.Info("isSystemServiceNeedUpdate()")
 	systemService, err := p.hostHelper.ReadService(serviceObj.Path)
 	if err != nil {
-		log.Log.Error(err, "k8s-plugin isSystemServiceNeedUpdate(): failed to read sriov-config service file, ignoring",
+		log.Log.Error(err, "k8s plugin isSystemServiceNeedUpdate(): failed to read sriov-config service file, ignoring",
 			"path", serviceObj.Path)
 		return false
 	}
 	if systemService != nil {
 		needChange, err := p.hostHelper.CompareServices(systemService, serviceObj)
 		if err != nil {
-			log.Log.Error(err, "k8s-plugin isSystemServiceNeedUpdate(): failed to compare sriov-config service, ignoring")
+			log.Log.Error(err, "k8s plugin isSystemServiceNeedUpdate(): failed to compare sriov-config service, ignoring")
 			return false
 		}
 		return needChange
@@ -393,7 +393,7 @@ func (p *K8sPlugin) systemServicesStateUpdate() error {
 			return err
 		}
 		if !exist {
-			return fmt.Errorf("k8s-plugin systemServicesStateUpdate(): %q not found", systemService.Name)
+			return fmt.Errorf("k8s plugin systemServicesStateUpdate(): %q not found", systemService.Name)
 		}
 		if p.isSystemServiceNeedUpdate(systemService) {
 			services = append(services, systemService)

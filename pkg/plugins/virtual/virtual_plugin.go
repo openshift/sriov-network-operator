@@ -12,7 +12,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
-var PluginName = "virtual_plugin"
+var PluginName = "virtual"
 
 // VirtualPlugin Plugin type to use on a virtual platform
 type VirtualPlugin struct {
@@ -52,7 +52,7 @@ func (p *VirtualPlugin) Spec() string {
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *VirtualPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	log.Log.Info("virtual-plugin OnNodeStateChange()")
+	log.Log.Info("virtual plugin OnNodeStateChange()")
 	needDrain = false
 	needReboot = false
 	err = nil
@@ -69,7 +69,7 @@ func (p *VirtualPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 
 // Apply config change
 func (p *VirtualPlugin) Apply() error {
-	log.Log.Info("virtual-plugin Apply()", "desired-state", p.DesireState.Spec)
+	log.Log.Info("virtual plugin Apply()", "desired-state", p.DesireState.Spec)
 
 	if p.LoadVfioDriver == loading {
 		// In virtual deployments of Kubernetes where the underlying virtualization platform does not support a virtualized iommu
@@ -78,21 +78,21 @@ func (p *VirtualPlugin) Apply() error {
 		// NOTE: if VFIO was already loaded for some reason, we will not try to load it again with the new options.
 		kernelArgs := "enable_unsafe_noiommu_mode=1"
 		if err := p.helpers.LoadKernelModule("vfio", kernelArgs); err != nil {
-			log.Log.Error(err, "virtual-plugin Apply(): fail to load vfio kmod")
+			log.Log.Error(err, "virtual plugin Apply(): fail to load vfio kmod")
 			return err
 		}
 
 		if err := p.helpers.LoadKernelModule("vfio_pci"); err != nil {
-			log.Log.Error(err, "virtual-plugin Apply(): fail to load vfio_pci kmod")
+			log.Log.Error(err, "virtual plugin Apply(): fail to load vfio_pci kmod")
 			return err
 		}
 		p.LoadVfioDriver = loaded
 	}
 
 	if p.LastState != nil {
-		log.Log.Info("virtual-plugin Apply()", "last-state", p.LastState.Spec)
+		log.Log.Info("virtual plugin Apply()", "last-state", p.LastState.Spec)
 		if reflect.DeepEqual(p.LastState.Spec.Interfaces, p.DesireState.Spec.Interfaces) {
-			log.Log.Info("virtual-plugin Apply(): nothing to apply")
+			log.Log.Info("virtual plugin Apply(): nothing to apply")
 			return nil
 		}
 	}
