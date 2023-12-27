@@ -619,10 +619,10 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		// For BareMetal machines apply the generic plugin
 		selectedPlugin, ok := dn.enabledPlugins[GenericPluginName]
 		if ok {
-			// Apply generic_plugin last
+			// Apply generic plugin last
 			err = selectedPlugin.Apply()
 			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): generic_plugin fail to apply")
+				log.Log.Error(err, "nodeStateSyncHandler(): generic plugin fail to apply")
 				return err
 			}
 		}
@@ -630,10 +630,10 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		// For Virtual machines apply the virtual plugin
 		selectedPlugin, ok = dn.enabledPlugins[VirtualPluginName]
 		if ok {
-			// Apply virtual_plugin last
+			// Apply virtual plugin last
 			err = selectedPlugin.Apply()
 			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): virtual_plugin failed to apply")
+				log.Log.Error(err, "nodeStateSyncHandler(): virtual plugin failed to apply")
 				return err
 			}
 		}

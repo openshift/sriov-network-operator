@@ -11,7 +11,7 @@ import (
 	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
 
-var PluginName = "mellanox_plugin"
+var PluginName = "mellanox"
 
 type MellanoxPlugin struct {
 	PluginName  string
@@ -46,7 +46,7 @@ func (p *MellanoxPlugin) Spec() string {
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	log.Log.Info("mellanox-Plugin OnNodeStateChange()")
+	log.Log.Info("mellalnox plugin OnNodeStateChange()")
 
 	needDrain = false
 	needReboot = false
@@ -167,17 +167,17 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 	if needReboot {
 		needDrain = true
 	}
-	log.Log.V(2).Info("mellanox-plugin", "need-drain", needDrain, "need-reboot", needReboot)
+	log.Log.V(2).Info("mellalnox plugin", "need-drain", needDrain, "need-reboot", needReboot)
 	return
 }
 
 // Apply config change
 func (p *MellanoxPlugin) Apply() error {
 	if p.helpers.IsKernelLockdownMode() {
-		log.Log.Info("mellanox-plugin Apply() - skipping due to lockdown mode")
+		log.Log.Info("mellanox plugin Apply() - skipping due to lockdown mode")
 		return nil
 	}
-	log.Log.Info("mellanox-plugin Apply()")
+	log.Log.Info("mellanox plugin Apply()")
 	return p.helpers.MlxConfigFW(attributesToChange)
 }
 
