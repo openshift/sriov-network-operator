@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.20
+    - name: Set up Go 1.21
       uses: actions/setup-go@v3
       with:
-        go-version: 1.20.x
+        go-version: 1.21.x
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -32,10 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.20
+    - name: Set up Go 1.21
       uses: actions/setup-go@v2
       with:
-        go-version: 1.20.x
+        go-version: 1.21.x
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -53,10 +53,10 @@ jobs:
     name: Golangci-lint
     runs-on: ubuntu-latest
     steps:
-    - name: Set up Go 1.20
+    - name: Set up Go 1.21
       uses: actions/setup-go@v2
       with:
-        go-version: 1.20.x
+        go-version: 1.21.x
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
     - name: golangci-lint
@@ -70,10 +70,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.20
+    - name: Set up Go 1.21
       uses: actions/setup-go@v2
       with:
-        go-version: 1.20.x
+        go-version: 1.21.x
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -107,10 +107,10 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
-      - name: Set up Go 1.20
+      - name: Set up Go 1.21
         uses: actions/setup-go@v3
         with:
-          go-version: 1.20.x
+          go-version: 1.21.x
 
       - name: run test
         run: make test-e2e-conformance-virtual-k8s-cluster-ci
@@ -141,10 +141,10 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
-      - name: Set up Go 1.20
+      - name: Set up Go 1.21
         uses: actions/setup-go@v3
         with:
-          go-version: 1.20.x
+          go-version: 1.21.x
 
       - name: run test
         run: make test-e2e-conformance-virtual-ocp-cluster-ci
