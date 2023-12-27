@@ -40,7 +40,7 @@ func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operati
 	}
 
 	if operation == v1.Delete {
-		return false, warnings, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
+		warnings = append(warnings, "default SriovOperatorConfig shouldn't be deleted")
 	}
 
 	if cr.Spec.DisableDrain {
@@ -97,12 +97,11 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 
 	if cr.GetName() == constants.DefaultPolicyName && cr.GetNamespace() == os.Getenv("NAMESPACE") {
 		if operation == v1.Delete {
-			// reject deletion of default policy
-			return false, warnings, fmt.Errorf("default SriovNetworkNodePolicy shouldn't be deleted")
-		} else {
-			// skip validating default policy
-			return true, warnings, nil
+			warnings = append(warnings, "default SriovNetworkNodePolicy shouldn't be deleted")
 		}
+
+		// skip validating default policy
+		return true, warnings, nil
 	}
 
 	if cr.GetNamespace() != os.Getenv("NAMESPACE") {
@@ -110,7 +109,6 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 			fmt.Sprintf(" is created or updated but not used. Only policy in %s namespace is respected.", os.Getenv("NAMESPACE")))
 	}
 
-	// DELETE should always succeed unless it's for the default object
 	if operation == v1.Delete {
 		return true, warnings, nil
 	}
