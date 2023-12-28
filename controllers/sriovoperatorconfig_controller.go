@@ -193,6 +193,12 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 		logger.V(1).Info("New cni bin found", "CNIBinPath", envCniBinPath)
 		data.Data["CNIBinPath"] = envCniBinPath
 	}
+
+	if len(dc.Spec.DisablePlugins) > 0 {
+		logger.V(1).Info("DisablePlugins provided", "DisablePlugins", dc.Spec.DisablePlugins)
+		data.Data["DisablePlugins"] = strings.Join(dc.Spec.DisablePlugins.ToStringSlice(), ",")
+	}
+
 	objs, err := render.RenderDir(consts.ConfigDaemonPath, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render config daemon manifests")
