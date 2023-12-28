@@ -99,6 +99,9 @@ spec:
         {{- if .UsedSystemdMode}}
           - --use-systemd-service
         {{- end }}
+        {{- with index . "DisablePlugins" }}
+          - --disable-plugins={{.}}
+        {{- end }}
         env:
           - name: NODE_NAME
             valueFrom:

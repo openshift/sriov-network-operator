@@ -52,6 +52,15 @@ spec:
               disableDrain:
                 description: Flag to disable nodes drain during debugging
                 type: boolean
+              disablePlugins:
+                description: DisablePlugins is a list of sriov-network-config-daemon
+                  plugins to disable
+                items:
+                  description: PluginNameValue defines the plugin name
+                  enum:
+                  - mellanox
+                  type: string
+                type: array
               enableInjector:
                 description: Flag to control whether the network resource injector
                   webhook shall be deployed
