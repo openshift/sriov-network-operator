@@ -30,8 +30,8 @@ var (
 	K8sPlugin         = k8splugin.NewK8sPlugin
 )
 
-func loadPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, helpers helper.HostHelpersInterface) (map[string]plugin.VendorPlugin, error) {
-	log.Log.Info("enableVendorPlugins(): enabling plugins")
+func loadPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, helpers helper.HostHelpersInterface, disabledPlugins []string) (map[string]plugin.VendorPlugin, error) {
+	log.Log.Info("loadPlugins(): loading plugins")
 	loadedPlugins := map[string]plugin.VendorPlugin{}
 
 	if vars.PlatformType == consts.VirtualOpenStack {
@@ -40,9 +40,12 @@ func loadPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, helpers helper.HostHe
 			log.Log.Error(err, "loadPlugins(): failed to load the virtual plugin")
 			return nil, err
 		}
-		loadedPlugins[virtualPlugin.Name()] = virtualPlugin
+		pluginName := virtualPlugin.Name()
+		if !isPluginDisabled(pluginName, disabledPlugins) {
+			loadedPlugins[pluginName] = virtualPlugin
+		}
 	} else {
-		loadedVendorPlugins, err := loadVendorPlugins(ns, helpers)
+		loadedVendorPlugins, err := loadVendorPlugins(ns, helpers, disabledPlugins)
 		if err != nil {
 			return nil, err
 		}
@@ -54,14 +57,21 @@ func loadPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, helpers helper.HostHe
 				log.Log.Error(err, "loadPlugins(): failed to load the k8s plugin")
 				return nil, err
 			}
-			loadedPlugins[k8sPlugin.Name()] = k8sPlugin
+
+			pluginName := k8sPlugin.Name()
+			if !isPluginDisabled(pluginName, disabledPlugins) {
+				loadedPlugins[pluginName] = k8sPlugin
+			}
 		}
 		genericPlugin, err := GenericPlugin(helpers)
 		if err != nil {
 			log.Log.Error(err, "loadPlugins(): failed to load the generic plugin")
 			return nil, err
 		}
-		loadedPlugins[genericPlugin.Name()] = genericPlugin
+		pluginName := genericPlugin.Name()
+		if !isPluginDisabled(pluginName, disabledPlugins) {
+			loadedPlugins[pluginName] = genericPlugin
+		}
 	}
 
 	pluginList := make([]string, 0, len(loadedPlugins))
@@ -72,7 +82,7 @@ func loadPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, helpers helper.HostHe
 	return loadedPlugins, nil
 }
 
-func loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, helpers helper.HostHelpersInterface) (map[string]plugin.VendorPlugin, error) {
+func loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, helpers helper.HostHelpersInterface, disabledPlugins []string) (map[string]plugin.VendorPlugin, error) {
 	vendorPlugins := map[string]plugin.VendorPlugin{}
 
 	for _, iface := range ns.Status.Interfaces {
@@ -82,11 +92,25 @@ func loadVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, helpers helper.
 				log.Log.Error(err, "loadVendorPlugins(): failed to load plugin", "plugin-name", plug.Name())
 				return vendorPlugins, fmt.Errorf("loadVendorPlugins(): failed to load the %s plugin error: %v", plug.Name(), err)
 			}
-			if _, ok := vendorPlugins[plug.Name()]; !ok {
-				vendorPlugins[plug.Name()] = plug
+
+			pluginName := plug.Name()
+			if _, ok := vendorPlugins[pluginName]; !ok {
+				if !isPluginDisabled(pluginName, disabledPlugins) {
+					vendorPlugins[plug.Name()] = plug
+				}
 			}
 		}
 	}
 
 	return vendorPlugins, nil
+}
+
+func isPluginDisabled(pluginName string, disabledPlugins []string) bool {
+	for _, p := range disabledPlugins {
+		if p == pluginName {
+			log.Log.V(2).Info("plugin is disabled", "name", pluginName)
+			return true
+		}
+	}
+	return false
 }

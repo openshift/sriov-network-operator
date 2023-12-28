@@ -46,6 +46,29 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
+// stringList is a list of strings, implements pflag.Value interface
+type stringList []string
+
+func (sl *stringList) String() string {
+	return strings.Join(*sl, ",")
+}
+
+func (sl *stringList) Set(arg string) error {
+	elems := strings.Split(arg, ",")
+
+	for _, elem := range elems {
+		if len(elem) == 0 {
+			return fmt.Errorf("empty plugin name")
+		}
+		*sl = append(*sl, elem)
+	}
+	return nil
+}
+
+func (sl *stringList) Type() string {
+	return "CommaSeparatedString"
+}
+
 var (
 	startCmd = &cobra.Command{
 		Use:   "start",
@@ -55,9 +78,10 @@ var (
 	}
 
 	startOpts struct {
-		kubeconfig string
-		nodeName   string
-		systemd    bool
+		kubeconfig      string
+		nodeName        string
+		systemd         bool
+		disabledPlugins stringList
 	}
 )
 
@@ -66,6 +90,7 @@ func init() {
 	startCmd.PersistentFlags().StringVar(&startOpts.kubeconfig, "kubeconfig", "", "Kubeconfig file to access a remote cluster (testing only)")
 	startCmd.PersistentFlags().StringVar(&startOpts.nodeName, "node-name", "", "kubernetes node name daemon is managing")
 	startCmd.PersistentFlags().BoolVar(&startOpts.systemd, "use-systemd-service", false, "use config daemon in systemd mode")
+	startCmd.PersistentFlags().VarP(&startOpts.disabledPlugins, "disable-plugins", "", "comma-separated list of plugins to disable")
 }
 
 func runStartCmd(cmd *cobra.Command, args []string) error {
@@ -87,6 +112,12 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		startOpts.nodeName = name
 	}
 	vars.NodeName = startOpts.nodeName
+
+	for _, p := range startOpts.disabledPlugins {
+		if _, ok := vars.DisableablePlugins[p]; !ok {
+			return fmt.Errorf("%s plugin cannot be disabled", p)
+		}
+	}
 
 	// This channel is used to ensure all spawned goroutines exit when we exit.
 	stopCh := make(chan struct{})
@@ -243,6 +274,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		syncCh,
 		refreshCh,
 		eventRecorder,
+		startOpts.disabledPlugins,
 	).Run(stopCh, exitCh)
 	if err != nil {
 		setupLog.Error(err, "failed to run daemon")

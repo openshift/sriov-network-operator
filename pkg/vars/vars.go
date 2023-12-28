@@ -60,6 +60,9 @@ var (
 
 	// Namespace contains k8s namespace
 	Namespace = ""
+
+	// DisableablePlugins contains which plugins can be disabled in sriov config daemon
+	DisableablePlugins = map[string]struct{}{"mellanox": {}}
 )
 
 func init() {
