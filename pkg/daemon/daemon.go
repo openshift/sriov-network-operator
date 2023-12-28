@@ -69,6 +69,9 @@ type Daemon struct {
 
 	nodeState *sriovnetworkv1.SriovNetworkNodeState
 
+	// list of disabled plugins
+	disabledPlugins []string
+
 	loadedPlugins map[string]plugin.VendorPlugin
 
 	HostHelpers helper.HostHelpersInterface
@@ -133,6 +136,7 @@ func New(
 	syncCh <-chan struct{},
 	refreshCh chan<- Message,
 	er *EventRecorder,
+	disabledPlugins []string,
 ) *Daemon {
 	return &Daemon{
 		client:          client,
@@ -165,7 +169,8 @@ func New(
 		workqueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(updateDelay), 1)},
 			workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, maxUpdateBackoff)), "SriovNetworkNodeState"),
-		eventRecorder: er,
+		eventRecorder:   er,
+		disabledPlugins: disabledPlugins,
 	}
 }
 
@@ -509,7 +514,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 
 	// load plugins if it has not loaded
 	if len(dn.loadedPlugins) == 0 {
-		dn.loadedPlugins, err = loadPlugins(latestState, dn.HostHelpers)
+		dn.loadedPlugins, err = loadPlugins(latestState, dn.HostHelpers, dn.disabledPlugins)
 		if err != nil {
 			log.Log.Error(err, "nodeStateSyncHandler(): failed to enable vendor plugins")
 			return err
