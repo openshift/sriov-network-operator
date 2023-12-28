@@ -141,7 +141,7 @@ var _ = Describe("Config Daemon", func() {
 			nil,
 		)
 
-		sut.loadedPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{}}
+		sut.loadedPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{PluginName: "fake"}}
 
 		go func() {
 			defer GinkgoRecover()
