@@ -14,6 +14,7 @@ IMAGE_BUILDER?=docker
 IMAGE_BUILD_OPTS?=
 DOCKERFILE?=Dockerfile
 DOCKERFILE_CONFIG_DAEMON?=Dockerfile.sriov-network-config-daemon
+DOCKERFILE_WEBHOOK?=Dockerfile.webhook
 
 CRD_BASES=./config/crd/bases
 
@@ -21,7 +22,8 @@ export APP_NAME?=sriov-network-operator
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 IMAGE_REPO?=ghcr.io/k8snetworkplumbingwg
 IMAGE_TAG?=$(IMAGE_REPO)/$(APP_NAME):latest
-CONFIG_DAEMON_IMAGE_TAG?=$(IMAGE_REPO)/sriov-network-config-daemon:latest
+CONFIG_DAEMON_IMAGE_TAG?=$(IMAGE_REPO)/$(APP_NAME)-config-daemon:latest
+WEBHOOK_IMAGE_TAG?=$(IMAGE_REPO)/$(APP_NAME)-webhook:latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export WATCH_NAMESPACE?=openshift-sriov-network-operator
@@ -68,9 +70,10 @@ clean:
 update-codegen:
 	hack/update-codegen.sh
 
-image: ; $(info Building image...)
+image: ; $(info Building images...)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE) -t $(IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE_CONFIG_DAEMON) -t $(CONFIG_DAEMON_IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
+	$(IMAGE_BUILDER) build -f $(DOCKERFILE_WEBHOOK) -t $(WEBHOOK_IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
 
 # Run tests
 test: generate vet manifests envtest
