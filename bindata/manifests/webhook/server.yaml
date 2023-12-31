@@ -86,4 +86,4 @@ spec:
       volumes:
       - name: tls
         secret:
-          secretName: network-resources-injector-secret
+          secretName: {{.InjectorWebhookSecretName}}

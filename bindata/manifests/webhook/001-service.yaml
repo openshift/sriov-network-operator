@@ -6,7 +6,7 @@ metadata:
   namespace: {{.Namespace}}
   annotations:
     {{- if eq .ClusterType "openshift" }}
-    service.alpha.openshift.io/serving-cert-secret-name: network-resources-injector-secret
+    service.alpha.openshift.io/serving-cert-secret-name: {{.InjectorWebhookSecretName}}
     {{- end }}
 spec:
   ports:
