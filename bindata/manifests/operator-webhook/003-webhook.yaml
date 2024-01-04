@@ -6,8 +6,10 @@ metadata:
   annotations:
     {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
-    {{- else if and (not .CaBundle) (eq .ClusterType "kubernetes") }}
-    cert-manager.io/inject-ca-from: {{.Namespace}}/operator-webhook-service
+    {{- else if and (.CertManagerEnabled) (eq .ClusterType "kubernetes") }}
+    # Limitation: Certificate must be named as the secret it produces to avoid overcomplicating the logic with
+    # more variables.
+    cert-manager.io/inject-ca-from: {{.Namespace}}/{{.OperatorWebhookSecretName}}
     {{- end }}
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
@@ -19,9 +21,9 @@ webhooks:
         name: operator-webhook-service
         namespace: {{.Namespace}}
         path: "/mutating-custom-resource"
-      {{- if and (.CaBundle) (eq .ClusterType "kubernetes") }}
-      caBundle: "{{.CaBundle}}"
-      {{- end}}
+      {{- if and (not .CertManagerEnabled) (eq .ClusterType "kubernetes") }}
+      caBundle: "{{.OperatorWebhookCA}}"
+      {{- end }}
     rules:
       - operations: [ "CREATE", "UPDATE" ]
         apiGroups: ["sriovnetwork.openshift.io"]
@@ -36,8 +38,10 @@ metadata:
   annotations:
     {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
-    {{- else if and (not .CaBundle) (eq .ClusterType "kubernetes") }}
-    cert-manager.io/inject-ca-from: {{.Namespace}}/operator-webhook-service
+    {{- else if and (.CertManagerEnabled) (eq .ClusterType "kubernetes") }}
+    # Limitation: Certificate must be named as the secret it produces to avoid overcomplicating the logic with
+    # more variables.
+    cert-manager.io/inject-ca-from: {{.Namespace}}/{{.OperatorWebhookSecretName}}
     {{- end }}
 webhooks:
   - name: operator-webhook.sriovnetwork.openshift.io
@@ -49,8 +53,8 @@ webhooks:
         name: operator-webhook-service
         namespace: {{.Namespace}}
         path: "/validating-custom-resource"
-      {{- if and (.CaBundle) (eq .ClusterType "kubernetes") }}
-      caBundle: "{{.CaBundle}}"
+      {{- if and (not .CertManagerEnabled) (eq .ClusterType "kubernetes") }}
+      caBundle: "{{.OperatorWebhookCA}}"
       {{- end }}
     rules:
       - operations: [ "CREATE", "UPDATE", "DELETE" ]

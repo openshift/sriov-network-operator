@@ -40,7 +40,7 @@ else
   export SRIOV_NETWORK_WEBHOOK_IMAGE="$controller_ip:5000/sriov-network-operator-webhook:latest"
 fi
 
-export ENABLE_ADMISSION_CONTROLLER=true
+export ADMISSION_CONTROLLERS_ENABLED=true
 export SKIP_VAR_SET=""
 export OPERATOR_NAMESPACE=$NAMESPACE
 export OPERATOR_EXEC=kubectl
