@@ -6,11 +6,11 @@ metadata:
     capabilities: Basic Install
     categories: Networking
     certified: "false"
-    containerImage: quay.io/openshift/origin-sriov-network-operator:4.15
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.16
     createdAt: 2019/04/30
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
-    olm.skipRange: '>=4.3.0-0 <4.15.0'
+    olm.skipRange: '>=4.3.0-0 <4.16.0'
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
     operators.openshift.io/infrastructure-features: '["disconnected", "cni"]'
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
@@ -112,19 +112,19 @@ spec:
                     fieldRef:
                       fieldPath: metadata.namespace
                 - name: SRIOV_CNI_IMAGE
-                  value: quay.io/openshift/origin-sriov-cni:4.15
+                  value: quay.io/openshift/origin-sriov-cni:4.16
                 - name: SRIOV_DEVICE_PLUGIN_IMAGE
-                  value: quay.io/openshift/origin-sriov-network-device-plugin:4.15
+                  value: quay.io/openshift/origin-sriov-network-device-plugin:4.16
                 - name: NETWORK_RESOURCES_INJECTOR_IMAGE
-                  value: quay.io/openshift/origin-sriov-dp-admission-controller:4.15
+                  value: quay.io/openshift/origin-sriov-dp-admission-controller:4.16
                 - name: OPERATOR_NAME
                   value: sriov-network-operator
                 - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-                  value: quay.io/openshift/origin-sriov-network-config-daemon:4.15
+                  value: quay.io/openshift/origin-sriov-network-config-daemon:4.16
                 - name: SRIOV_NETWORK_WEBHOOK_IMAGE
-                  value: quay.io/openshift/origin-sriov-network-webhook:4.15
+                  value: quay.io/openshift/origin-sriov-network-webhook:4.16
                 - name: SRIOV_INFINIBAND_CNI_IMAGE
-                  value: quay.io/openshift/origin-sriov-infiniband-cni:4.15
+                  value: quay.io/openshift/origin-sriov-infiniband-cni:4.16
                 - name: RESOURCE_PREFIX
                   value: openshift.io
                 - name: ADMISSION_CONTROLLERS_ENABLED
@@ -142,8 +142,8 @@ spec:
                     fieldRef:
                       fieldPath: metadata.name
                 - name: RELEASE_VERSION
-                  value: 4.15.0
-                image: quay.io/openshift/origin-sriov-network-operator:4.15
+                  value: 4.16.0
+                image: quay.io/openshift/origin-sriov-network-operator:4.16
                 imagePullPolicy: IfNotPresent
                 name: sriov-network-operator
                 resources: {}
@@ -170,7 +170,7 @@ spec:
   - sriov
   labels:
     olm-owner-enterprise-app: sriov-network-operator
-    olm-status-descriptors: sriov-network-operator.v4.15.0
+    olm-status-descriptors: sriov-network-operator.v4.16.0
   links:
   - name: Source Code
     url: https://github.com/k8snetworkplumbingwg/sriov-network-operator
@@ -179,4 +179,4 @@ spec:
     name: Red Hat
   provider:
     name: Red Hat
-  version: 4.15.0
+  version: 4.16.0
