@@ -33,7 +33,7 @@ spec:
         operator: Exists
       containers:
       - name: sriov-network-operator
-        image: quay.io/openshift/origin-sriov-network-operator:4.15
+        image: quay.io/openshift/origin-sriov-network-operator:4.16
         command:
         - sriov-network-operator
         args:
@@ -57,19 +57,19 @@ spec:
               fieldRef:
                 fieldPath: metadata.namespace
           - name: SRIOV_CNI_IMAGE
-            value: quay.io/openshift/origin-sriov-cni:4.15
+            value: quay.io/openshift/origin-sriov-cni:4.16
           - name: SRIOV_DEVICE_PLUGIN_IMAGE
-            value: quay.io/openshift/origin-sriov-network-device-plugin:4.15
+            value: quay.io/openshift/origin-sriov-network-device-plugin:4.16
           - name: NETWORK_RESOURCES_INJECTOR_IMAGE
-            value: quay.io/openshift/origin-sriov-dp-admission-controller:4.15
+            value: quay.io/openshift/origin-sriov-dp-admission-controller:4.16
           - name: OPERATOR_NAME
             value: sriov-network-operator
           - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-            value: quay.io/openshift/origin-sriov-network-config-daemon:4.15
+            value: quay.io/openshift/origin-sriov-network-config-daemon:4.16
           - name: SRIOV_NETWORK_WEBHOOK_IMAGE
-            value: quay.io/openshift/origin-sriov-network-webhook:4.15
+            value: quay.io/openshift/origin-sriov-network-webhook:4.16
           - name: SRIOV_INFINIBAND_CNI_IMAGE
-            value: quay.io/openshift/origin-sriov-infiniband-cni:4.15
+            value: quay.io/openshift/origin-sriov-infiniband-cni:4.16
           - name: RESOURCE_PREFIX
             value: openshift.io
           - name: ADMISSION_CONTROLLERS_ENABLED
@@ -91,4 +91,4 @@ spec:
               fieldRef:
                 fieldPath: metadata.name
           - name: RELEASE_VERSION
-            value: 4.15.0
+            value: 4.16.0
