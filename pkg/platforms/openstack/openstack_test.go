@@ -1,4 +1,4 @@
-package utils
+package openstack
 
 import (
 	"testing"
@@ -6,10 +6,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"k8s.io/utils/pointer"
+
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/net"
 	"github.com/jaypipes/ghw/pkg/option"
-	"k8s.io/utils/pointer"
 )
 
 func TestUtilsVirtual(t *testing.T) {
@@ -44,7 +45,7 @@ var _ = Describe("Virtual", func() {
 				ghw.Network = net.New
 			})
 
-			metaData, _, err := GetOpenstackData(false)
+			metaData, _, err := getOpenstackData(false)
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(metaData.Devices).To(HaveLen(2))
