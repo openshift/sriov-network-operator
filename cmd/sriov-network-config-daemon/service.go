@@ -24,15 +24,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
+	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/generic"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/virtual"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/systemd"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/version"
-
-	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 )
 
 var (
@@ -57,11 +58,16 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 	setupLog.V(2).Info("sriov-config-service", "version", version.Version)
 
 	setupLog.V(0).Info("Starting sriov-config-service")
+
+	// Mark that we are running on host
+	vars.UsingSystemdMode = true
+	vars.InChroot = true
+
 	supportedNicIds, err := systemd.ReadSriovSupportedNics()
 	if err != nil {
 		setupLog.Error(err, "failed to read list of supported nic ids")
 		sriovResult := &systemd.SriovResult{
-			SyncStatus:    "Failed",
+			SyncStatus:    consts.SyncStatusFailed,
 			LastSyncError: fmt.Sprintf("failed to read list of supported nic ids: %v", err),
 		}
 		err = systemd.WriteSriovResult(sriovResult)
@@ -78,7 +84,7 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 		if _, err := os.Stat(systemd.SriovSystemdConfigPath); !errors.Is(err, os.ErrNotExist) {
 			setupLog.Error(err, "failed to read the sriov configuration file", "path", systemd.SriovSystemdConfigPath)
 			sriovResult := &systemd.SriovResult{
-				SyncStatus:    "Failed",
+				SyncStatus:    consts.SyncStatusFailed,
 				LastSyncError: fmt.Sprintf("failed to read the sriov configuration file in path %s: %v", systemd.SriovSystemdConfigPath, err),
 			}
 			err = systemd.WriteSriovResult(sriovResult)
@@ -91,67 +97,64 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 		nodeStateSpec = &systemd.SriovConfig{
 			Spec:            sriovv1.SriovNetworkNodeStateSpec{},
 			UnsupportedNics: false,
-			PlatformType:    utils.Baremetal,
+			PlatformType:    consts.Baremetal,
 		}
 	}
 
 	setupLog.V(2).Info("sriov-config-service", "config", nodeStateSpec)
-
-	storeManager, err := utils.NewStoreManager(true)
+	hostHelpers, err := helper.NewDefaultHostHelpers()
 	if err != nil {
-		setupLog.Error(err, "failed to create store manager")
-		return err
+		setupLog.Error(err, "failed to create hostHelpers")
+		return updateSriovResultErr("failed to create hostHelpers")
 	}
-	// Load kernel modules
-	hostManager := host.NewHostManager(true)
-	_, err = hostManager.TryEnableRdma()
+	platformHelper, err := platforms.NewDefaultPlatformHelper()
+	if err != nil {
+		setupLog.Error(err, "failed to create platformHelpers")
+		return updateSriovResultErr("failed to create platformHelpers")
+	}
+
+	_, err = hostHelpers.TryEnableRdma()
 	if err != nil {
 		setupLog.Error(err, "warning, failed to enable RDMA")
 	}
-	hostManager.TryEnableTun()
-	hostManager.TryEnableVhostNet()
+	hostHelpers.TryEnableTun()
+	hostHelpers.TryEnableVhostNet()
 
 	var configPlugin plugin.VendorPlugin
 	var ifaceStatuses []sriovv1.InterfaceExt
-	if nodeStateSpec.PlatformType == utils.Baremetal {
+	if nodeStateSpec.PlatformType == consts.Baremetal {
 		// Bare metal support
-		ifaceStatuses, err = utils.DiscoverSriovDevices(nodeStateSpec.UnsupportedNics, storeManager)
+		vars.DevMode = nodeStateSpec.UnsupportedNics
+		ifaceStatuses, err = hostHelpers.DiscoverSriovDevices(hostHelpers)
 		if err != nil {
 			setupLog.Error(err, "failed to discover sriov devices on the host")
-			return fmt.Errorf("sriov-config-service: failed to discover sriov devices on the host:  %v", err)
+			return updateSriovResultErr(fmt.Sprintf("sriov-config-service: failed to discover sriov devices on the host:  %v", err))
 		}
 
 		// Create the generic plugin
-		configPlugin, err = generic.NewGenericPlugin(true, hostManager, storeManager)
+		configPlugin, err = generic.NewGenericPlugin(hostHelpers)
 		if err != nil {
 			setupLog.Error(err, "failed to create generic plugin")
-			return fmt.Errorf("sriov-config-service failed to create generic plugin %v", err)
+			return updateSriovResultErr(fmt.Sprintf("sriov-config-service failed to create generic plugin %v", err))
 		}
-	} else if nodeStateSpec.PlatformType == utils.VirtualOpenStack {
-		// Openstack support
-		metaData, networkData, err := utils.GetOpenstackData(false)
+	} else if nodeStateSpec.PlatformType == consts.VirtualOpenStack {
+		err = platformHelper.CreateOpenstackDevicesInfo()
 		if err != nil {
 			setupLog.Error(err, "failed to read OpenStack data")
-			return fmt.Errorf("sriov-config-service failed to read OpenStack data: %v", err)
-		}
-
-		openStackDevicesInfo, err := utils.CreateOpenstackDevicesInfo(metaData, networkData)
-		if err != nil {
-			setupLog.Error(err, "failed to read OpenStack data")
-			return fmt.Errorf("sriov-config-service failed to read OpenStack data: %v", err)
+			return updateSriovResultErr(fmt.Sprintf("sriov-config-service failed to read OpenStack data: %v", err))
 		}
 
-		ifaceStatuses, err = utils.DiscoverSriovDevicesVirtual(openStackDevicesInfo)
+		ifaceStatuses, err = platformHelper.DiscoverSriovDevicesVirtual()
 		if err != nil {
 			setupLog.Error(err, "failed to read OpenStack data")
-			return fmt.Errorf("sriov-config-service: failed to read OpenStack data: %v", err)
+			return updateSriovResultErr(fmt.Sprintf("sriov-config-service: failed to read OpenStack data: %v", err))
 		}
 
 		// Create the virtual plugin
-		configPlugin, err = virtual.NewVirtualPlugin(true)
+		configPlugin, err = virtual.NewVirtualPlugin(hostHelpers)
 		if err != nil {
 			setupLog.Error(err, "failed to create virtual plugin")
-			return fmt.Errorf("sriov-config-service: failed to create virtual plugin %v", err)
+			return updateSriovResultErr(fmt.Sprintf("sriov-config-service: failed to create virtual plugin %v", err))
 		}
 	}
 
@@ -163,18 +166,18 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 	_, _, err = configPlugin.OnNodeStateChange(nodeState)
 	if err != nil {
 		setupLog.Error(err, "failed to run OnNodeStateChange to update the generic plugin status")
-		return fmt.Errorf("sriov-config-service: failed to run OnNodeStateChange to update the generic plugin status %v", err)
+		return updateSriovResultErr(fmt.Sprintf("sriov-config-service: failed to run OnNodeStateChange to update the generic plugin status %v", err))
 	}
 
 	sriovResult := &systemd.SriovResult{
-		SyncStatus:    "Succeeded",
+		SyncStatus:    consts.SyncStatusSucceeded,
 		LastSyncError: "",
 	}
 
 	err = configPlugin.Apply()
 	if err != nil {
 		setupLog.Error(err, "failed to run apply node configuration")
-		sriovResult.SyncStatus = "Failed"
+		sriovResult.SyncStatus = consts.SyncStatusFailed
 		sriovResult.LastSyncError = err.Error()
 	}
 
@@ -185,5 +188,19 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	setupLog.V(0).Info("shutting down sriov-config-service")
+	return nil
+}
+
+func updateSriovResultErr(errMsg string) error {
+	sriovResult := &systemd.SriovResult{
+		SyncStatus:    consts.SyncStatusFailed,
+		LastSyncError: errMsg,
+	}
+
+	err := systemd.WriteSriovResult(sriovResult)
+	if err != nil {
+		log.Log.Error(err, "failed to write sriov result file", "content", *sriovResult)
+		return fmt.Errorf("sriov-config-service failed to write sriov result file with content %v error: %v", *sriovResult, err)
+	}
 	return nil
 }
