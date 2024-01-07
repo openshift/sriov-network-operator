@@ -16,8 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 const (
@@ -35,7 +35,7 @@ func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operati
 	log.Log.V(2).Info("validateSriovOperatorConfig", "object", cr)
 	var warnings []string
 
-	if cr.GetName() != constants.DefaultConfigName {
+	if cr.GetName() != consts.DefaultConfigName {
 		return false, warnings, fmt.Errorf("only default SriovOperatorConfig is used")
 	}
 
@@ -95,7 +95,7 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 	log.Log.V(2).Info("validateSriovNetworkNodePolicy", "object", cr)
 	var warnings []string
 
-	if cr.GetName() == constants.DefaultPolicyName && cr.GetNamespace() == os.Getenv("NAMESPACE") {
+	if cr.GetName() == consts.DefaultPolicyName && cr.GetNamespace() == os.Getenv("NAMESPACE") {
 		if operation == v1.Delete {
 			// reject deletion of default policy
 			return false, warnings, fmt.Errorf("default SriovNetworkNodePolicy shouldn't be deleted")
@@ -193,19 +193,19 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	// To configure RoCE on baremetal or virtual machine:
 	// BM: DeviceType = netdevice && isRdma = true
 	// VM: DeviceType = vfio-pci && isRdma = false
-	if cr.Spec.DeviceType == constants.DeviceTypeVfioPci && cr.Spec.IsRdma {
+	if cr.Spec.DeviceType == consts.DeviceTypeVfioPci && cr.Spec.IsRdma {
 		return false, fmt.Errorf("'deviceType: vfio-pci' conflicts with 'isRdma: true'; Set 'deviceType' to (string)'netdevice' Or Set 'isRdma' to (bool)'false'")
 	}
-	if strings.EqualFold(cr.Spec.LinkType, constants.LinkTypeIB) && !cr.Spec.IsRdma {
+	if strings.EqualFold(cr.Spec.LinkType, consts.LinkTypeIB) && !cr.Spec.IsRdma {
 		return false, fmt.Errorf("'linkType: ib or IB' requires 'isRdma: true'; Set 'isRdma' to (bool)'true'")
 	}
 
 	// vdpa: deviceType must be set to 'netdevice'
-	if cr.Spec.DeviceType != constants.DeviceTypeNetDevice && (cr.Spec.VdpaType == constants.VdpaTypeVirtio || cr.Spec.VdpaType == constants.VdpaTypeVhost) {
+	if cr.Spec.DeviceType != consts.DeviceTypeNetDevice && (cr.Spec.VdpaType == consts.VdpaTypeVirtio || cr.Spec.VdpaType == consts.VdpaTypeVhost) {
 		return false, fmt.Errorf("'deviceType: %s' conflicts with '%s'; Set 'deviceType' to (string)'netdevice' Or Remove 'vdpaType'", cr.Spec.DeviceType, cr.Spec.VdpaType)
 	}
 	// vdpa: device must be configured in switchdev mode
-	if (cr.Spec.VdpaType == constants.VdpaTypeVirtio || cr.Spec.VdpaType == constants.VdpaTypeVhost) && cr.Spec.EswitchMode != sriovnetworkv1.ESwithModeSwitchDev {
+	if (cr.Spec.VdpaType == consts.VdpaTypeVirtio || cr.Spec.VdpaType == consts.VdpaTypeVhost) && cr.Spec.EswitchMode != sriovnetworkv1.ESwithModeSwitchDev {
 		return false, fmt.Errorf("vdpa requires the device to be configured in switchdev mode")
 	}
 
@@ -297,7 +297,7 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 		if err == nil {
 			interfaceSelected = true
 			interfaceSelectedForNode = true
-			if policy.GetName() != constants.DefaultPolicyName && policy.Spec.NumVfs == 0 {
+			if policy.GetName() != consts.DefaultPolicyName && policy.Spec.NumVfs == 0 {
 				return nil, fmt.Errorf("numVfs(%d) in CR %s is not allowed", policy.Spec.NumVfs, policy.GetName())
 			}
 			if policy.Spec.NumVfs > iface.TotalVfs && iface.Vendor == IntelID {
@@ -322,7 +322,7 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 				}
 			}
 			// vdpa: only mellanox cards are supported
-			if (policy.Spec.VdpaType == constants.VdpaTypeVirtio || policy.Spec.VdpaType == constants.VdpaTypeVhost) && iface.Vendor != MellanoxID {
+			if (policy.Spec.VdpaType == consts.VdpaTypeVirtio || policy.Spec.VdpaType == consts.VdpaTypeVhost) && iface.Vendor != MellanoxID {
 				return nil, fmt.Errorf("vendor(%s) in CR %s not supported for vdpa interface(%s)", iface.Vendor, policy.GetName(), iface.Name)
 			}
 		} else {
@@ -440,7 +440,7 @@ func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *s
 	}
 
 	// Check the vendor and device ID of the VF only if we are on a virtual environment
-	for key := range utils.PlatformMap {
+	for key := range vars.PlatformsMap {
 		if strings.Contains(strings.ToLower(node.Spec.ProviderID), strings.ToLower(key)) &&
 			selector.NetFilter != "" && selector.NetFilter == iface.NetFilter &&
 			sriovnetworkv1.IsVfSupportedModel(iface.Vendor, iface.DeviceID) {

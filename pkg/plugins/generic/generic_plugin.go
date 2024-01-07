@@ -3,6 +3,7 @@ package generic
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os/exec"
 	"reflect"
 	"strconv"
@@ -12,10 +13,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
+	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
 
 var PluginName = "generic_plugin"
@@ -54,34 +57,33 @@ type GenericPlugin struct {
 	LastState         *sriovnetworkv1.SriovNetworkNodeState
 	DriverStateMap    DriverStateMapType
 	DesiredKernelArgs map[string]bool
-	RunningOnHost     bool
-	HostManager       host.HostManagerInterface
-	StoreManager      utils.StoreManagerInterface
+	pfsToSkip         map[string]bool
+	helpers           helper.HostHelpersInterface
 }
 
 const scriptsPath = "bindata/scripts/enable-kargs.sh"
 
 // Initialize our plugin and set up initial values
-func NewGenericPlugin(runningOnHost bool, hostManager host.HostManagerInterface, storeManager utils.StoreManagerInterface) (plugin.VendorPlugin, error) {
+func NewGenericPlugin(helpers helper.HostHelpersInterface) (plugin.VendorPlugin, error) {
 	driverStateMap := make(map[uint]*DriverState)
 	driverStateMap[Vfio] = &DriverState{
 		DriverName:     vfioPciDriver,
-		DeviceType:     constants.DeviceTypeVfioPci,
+		DeviceType:     consts.DeviceTypeVfioPci,
 		VdpaType:       "",
 		NeedDriverFunc: needDriverCheckDeviceType,
 		DriverLoaded:   false,
 	}
 	driverStateMap[VirtioVdpa] = &DriverState{
 		DriverName:     virtioVdpaDriver,
-		DeviceType:     constants.DeviceTypeNetDevice,
-		VdpaType:       constants.VdpaTypeVirtio,
+		DeviceType:     consts.DeviceTypeNetDevice,
+		VdpaType:       consts.VdpaTypeVirtio,
 		NeedDriverFunc: needDriverCheckVdpaType,
 		DriverLoaded:   false,
 	}
 	driverStateMap[VhostVdpa] = &DriverState{
 		DriverName:     vhostVdpaDriver,
-		DeviceType:     constants.DeviceTypeNetDevice,
-		VdpaType:       constants.VdpaTypeVhost,
+		DeviceType:     consts.DeviceTypeNetDevice,
+		VdpaType:       consts.VdpaTypeVhost,
 		NeedDriverFunc: needDriverCheckVdpaType,
 		DriverLoaded:   false,
 	}
@@ -90,9 +92,8 @@ func NewGenericPlugin(runningOnHost bool, hostManager host.HostManagerInterface,
 		SpecVersion:       "1.0",
 		DriverStateMap:    driverStateMap,
 		DesiredKernelArgs: make(map[string]bool),
-		RunningOnHost:     runningOnHost,
-		HostManager:       hostManager,
-		StoreManager:      storeManager,
+		pfsToSkip:         make(map[string]bool),
+		helpers:           helpers,
 	}, nil
 }
 
@@ -109,9 +110,6 @@ func (p *GenericPlugin) Spec() string {
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need drain and/or reboot node
 func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	log.Log.Info("generic-plugin OnNodeStateChange()")
-	needDrain = false
-	needReboot = false
-	err = nil
 	p.DesireState = new
 
 	needDrain = p.needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
@@ -130,7 +128,7 @@ func (p *GenericPlugin) syncDriverState() error {
 	for _, driverState := range p.DriverStateMap {
 		if !driverState.DriverLoaded && driverState.NeedDriverFunc(p.DesireState, driverState) {
 			log.Log.V(2).Info("loading driver", "name", driverState.DriverName)
-			if err := p.HostManager.LoadKernelModule(driverState.DriverName); err != nil {
+			if err := p.helpers.LoadKernelModule(driverState.DriverName); err != nil {
 				log.Log.Error(err, "generic-plugin syncDriverState(): fail to load kmod", "name", driverState.DriverName)
 				return err
 			}
@@ -156,27 +154,19 @@ func (p *GenericPlugin) Apply() error {
 		return err
 	}
 
-	// Create a map with all the PFs we will need to configure
-	// we need to create it here before we access the host file system using the chroot function
-	// because the skipConfigVf needs the mstconfig package that exist only inside the sriov-config-daemon file system
-	pfsToSkip, err := utils.GetPfsToSkip(p.DesireState)
-	if err != nil {
-		return err
-	}
-
 	// When calling from systemd do not try to chroot
-	if !p.RunningOnHost {
-		exit, err := utils.Chroot("/host")
+	if !vars.UsingSystemdMode {
+		exit, err := p.helpers.Chroot(consts.Host)
 		if err != nil {
 			return err
 		}
 		defer exit()
 	}
 
-	if err := utils.SyncNodeState(p.DesireState, pfsToSkip); err != nil {
+	if err := p.helpers.ConfigSriovInterfaces(p.helpers, p.DesireState.Spec.Interfaces, p.DesireState.Status.Interfaces, p.pfsToSkip); err != nil {
 		// Catch the "cannot allocate memory" error and try to use PCI realloc
 		if errors.Is(err, syscall.ENOMEM) {
-			p.addToDesiredKernelArgs(utils.KernelArgPciRealloc)
+			p.addToDesiredKernelArgs(consts.KernelArgPciRealloc)
 		}
 		return err
 	}
@@ -217,7 +207,7 @@ func setKernelArg(karg string) (bool, error) {
 
 	if err := cmd.Run(); err != nil {
 		// if grubby is not there log and assume kernel args are set correctly.
-		if isCommandNotFound(err) {
+		if utils.IsCommandNotFound(err) {
 			log.Log.Error(err, "generic-plugin setKernelArg(): grubby or ostree command not found. Please ensure that kernel arg are set",
 				"kargs", karg)
 			return false, nil
@@ -236,15 +226,6 @@ func setKernelArg(karg string) (bool, error) {
 	return false, err
 }
 
-func isCommandNotFound(err error) bool {
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.ExitStatus() == 127 {
-			return true
-		}
-	}
-	return false
-}
-
 // addToDesiredKernelArgs Should be called to queue a kernel arg to be added to the node.
 func (p *GenericPlugin) addToDesiredKernelArgs(karg string) {
 	if _, ok := p.DesiredKernelArgs[karg]; !ok {
@@ -259,12 +240,12 @@ func (p *GenericPlugin) syncDesiredKernelArgs() (bool, error) {
 	if len(p.DesiredKernelArgs) == 0 {
 		return false, nil
 	}
-	kargs, err := utils.GetCurrentKernelArgs(false)
+	kargs, err := p.helpers.GetCurrentKernelArgs()
 	if err != nil {
 		return false, err
 	}
 	for desiredKarg, attempted := range p.DesiredKernelArgs {
-		set := utils.IsKernelArgsSet(kargs, desiredKarg)
+		set := p.helpers.IsKernelArgsSet(kargs, desiredKarg)
 		if !set {
 			if attempted {
 				log.Log.V(2).Info("generic-plugin syncDesiredKernelArgs(): previously attempted to set kernel arg",
@@ -302,7 +283,7 @@ func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current
 						"address", iface.PciAddress)
 					break
 				}
-				if utils.NeedUpdate(&iface, &ifaceStatus) {
+				if sriovnetworkv1.NeedToUpdateSriov(&iface, &ifaceStatus) {
 					log.Log.V(2).Info("generic-plugin needDrainNode(): need drain, for PCI address request update",
 						"address", iface.PciAddress)
 					needDrain = true
@@ -314,7 +295,7 @@ func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current
 		}
 		if !configured && ifaceStatus.NumVfs > 0 {
 			// load the PF info
-			pfStatus, exist, err := p.StoreManager.LoadPfsStatus(ifaceStatus.PciAddress)
+			pfStatus, exist, err := p.helpers.LoadPfsStatus(ifaceStatus.PciAddress)
 			if err != nil {
 				log.Log.Error(err, "generic-plugin needDrainNode(): failed to load info about PF status for pci device",
 					"address", ifaceStatus.PciAddress)
@@ -347,8 +328,8 @@ func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current
 func (p *GenericPlugin) addVfioDesiredKernelArg(state *sriovnetworkv1.SriovNetworkNodeState) {
 	driverState := p.DriverStateMap[Vfio]
 	if !driverState.DriverLoaded && driverState.NeedDriverFunc(state, driverState) {
-		p.addToDesiredKernelArgs(utils.KernelArgIntelIommu)
-		p.addToDesiredKernelArgs(utils.KernelArgIommuPt)
+		p.addToDesiredKernelArgs(consts.KernelArgIntelIommu)
+		p.addToDesiredKernelArgs(consts.KernelArgIommuPt)
 	}
 }
 
@@ -366,7 +347,16 @@ func (p *GenericPlugin) needRebootNode(state *sriovnetworkv1.SriovNetworkNodeSta
 		needReboot = true
 	}
 
-	updateNode, err = utils.WriteSwitchdevConfFile(state)
+	// Create a map with all the PFs we will need to configure
+	// we need to create it here before we access the host file system using the chroot function
+	// because the skipConfigVf needs the mstconfig package that exist only inside the sriov-config-daemon file system
+	pfsToSkip, err := getPfsToSkip(p.DesireState, p.helpers)
+	if err != nil {
+		return false, err
+	}
+	p.pfsToSkip = pfsToSkip
+
+	updateNode, err = p.helpers.WriteSwitchdevConfFile(state, p.pfsToSkip)
 	if err != nil {
 		log.Log.Error(err, "generic-plugin needRebootNode(): fail to write switchdev device config file")
 		return false, err
@@ -377,6 +367,53 @@ func (p *GenericPlugin) needRebootNode(state *sriovnetworkv1.SriovNetworkNodeSta
 	}
 
 	return needReboot, nil
+}
+
+// getPfsToSkip return a map of devices pci addresses to should be configured via systemd instead if the legacy mode
+// we skip devices in switchdev mode and Bluefield card in ConnectX mode
+func getPfsToSkip(ns *sriovnetworkv1.SriovNetworkNodeState, mlxHelper mlx.MellanoxInterface) (map[string]bool, error) {
+	pfsToSkip := map[string]bool{}
+	for _, ifaceStatus := range ns.Status.Interfaces {
+		for _, iface := range ns.Spec.Interfaces {
+			if iface.PciAddress == ifaceStatus.PciAddress {
+				skip, err := skipConfigVf(iface, ifaceStatus, mlxHelper)
+				if err != nil {
+					log.Log.Error(err, "GetPfsToSkip(): fail to check for skip VFs", "device", iface.PciAddress)
+					return pfsToSkip, err
+				}
+				pfsToSkip[iface.PciAddress] = skip
+				break
+			}
+		}
+	}
+
+	return pfsToSkip, nil
+}
+
+// skipConfigVf Use systemd service to configure switchdev mode or BF-2 NICs in OpenShift
+func skipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.InterfaceExt, mlxHelper mlx.MellanoxInterface) (bool, error) {
+	if ifSpec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
+		log.Log.V(2).Info("skipConfigVf(): skip config VF for switchdev device")
+		return true, nil
+	}
+
+	//  NVIDIA BlueField 2 and BlueField3 in OpenShift
+	if vars.ClusterType == consts.ClusterTypeOpenshift && ifStatus.Vendor == mlx.VendorMellanox && (ifStatus.DeviceID == mlx.DeviceBF2 || ifStatus.DeviceID == mlx.DeviceBF3) {
+		// TODO: remove this when switch to the systemd configuration support.
+		mode, err := mlxHelper.GetMellanoxBlueFieldMode(ifStatus.PciAddress)
+		if err != nil {
+			return false, fmt.Errorf("failed to read Mellanox Bluefield card mode for %s,%v", ifStatus.PciAddress, err)
+		}
+
+		if mode == mlx.BluefieldConnectXMode {
+			return false, nil
+		}
+
+		log.Log.V(2).Info("skipConfigVf(): skip config VF for Bluefiled card on DPU mode")
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // ////////////// for testing purposes only ///////////////////////
