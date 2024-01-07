@@ -1,12 +1,10 @@
-package utils
+package openstack
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -18,35 +16,8 @@ import (
 	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-)
-
-// PlatformType ...
-type PlatformType int
-
-const (
-	// Baremetal platform
-	Baremetal PlatformType = iota
-	// VirtualOpenStack ...
-	VirtualOpenStack
-)
-
-func (e PlatformType) String() string {
-	switch e {
-	case Baremetal:
-		return "Baremetal"
-	case VirtualOpenStack:
-		return "Virtual/Openstack"
-	default:
-		return fmt.Sprintf("%d", int(e))
-	}
-}
-
-var (
-	// PlatformMap contains supported platforms for virtual VF
-	PlatformMap = map[string]PlatformType{
-		"openstack": VirtualOpenStack,
-	}
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
 )
 
 const (
@@ -63,6 +34,18 @@ var (
 	ospNetworkDataFile = ospMetaDataDir + "/network_data.json"
 	ospMetaDataFile    = ospMetaDataDir + "/meta_data.json"
 )
+
+//go:generate ../../../bin/mockgen -destination mock/mock_openstack.go -source openstack.go
+type OpenstackInterface interface {
+	CreateOpenstackDevicesInfo() error
+	CreateOpenstackDevicesInfoFromNodeStatus(*sriovnetworkv1.SriovNetworkNodeState)
+	DiscoverSriovDevicesVirtual() ([]sriovnetworkv1.InterfaceExt, error)
+}
+
+type openstackContext struct {
+	hostManager          host.HostManagerInterface
+	openStackDevicesInfo OSPDevicesInfo
+}
 
 // OSPMetaDataDevice -- Device structure within meta_data.json
 type OSPMetaDataDevice struct {
@@ -117,8 +100,12 @@ type OSPDeviceInfo struct {
 	NetworkID  string
 }
 
+func New() OpenstackInterface {
+	return &openstackContext{}
+}
+
 // GetOpenstackData gets the metadata and network_data
-func GetOpenstackData(useHostPath bool) (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
+func getOpenstackData(useHostPath bool) (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
 	metaData, networkData, err = getOpenstackDataFromConfigDrive(useHostPath)
 	if err != nil {
 		metaData, networkData, err = getOpenstackDataFromMetadataService()
@@ -267,11 +254,19 @@ func getPCIAddressFromMACAddress(macAddress string, nics []*net.NIC) (string, er
 }
 
 // CreateOpenstackDevicesInfo create the openstack device info map
-func CreateOpenstackDevicesInfo(metaData *OSPMetaData, networkData *OSPNetworkData) (OSPDevicesInfo, error) {
+func (o *openstackContext) CreateOpenstackDevicesInfo() error {
 	log.Log.Info("CreateOpenstackDevicesInfo()")
 	devicesInfo := make(OSPDevicesInfo)
+
+	metaData, networkData, err := getOpenstackData(true)
+	if err != nil {
+		log.Log.Error(err, "failed to read OpenStack data")
+		return err
+	}
+
 	if metaData == nil || networkData == nil {
-		return nil, nil
+		o.openStackDevicesInfo = make(OSPDevicesInfo)
+		return nil
 	}
 
 	// use this for hw pass throw interfaces
@@ -291,12 +286,12 @@ func CreateOpenstackDevicesInfo(metaData *OSPMetaData, networkData *OSPNetworkDa
 	// for vhostuser interface type we check the interfaces on the node
 	pci, err := ghw.PCI()
 	if err != nil {
-		return nil, fmt.Errorf("CreateOpenstackDevicesInfo(): error getting PCI info: %v", err)
+		return fmt.Errorf("CreateOpenstackDevicesInfo(): error getting PCI info: %v", err)
 	}
 
 	devices := pci.ListDevices()
 	if len(devices) == 0 {
-		return nil, fmt.Errorf("CreateOpenstackDevicesInfo(): could not retrieve PCI devices")
+		return fmt.Errorf("CreateOpenstackDevicesInfo(): could not retrieve PCI devices")
 	}
 
 	for _, device := range devices {
@@ -311,14 +306,14 @@ func CreateOpenstackDevicesInfo(metaData *OSPMetaData, networkData *OSPNetworkDa
 				"device", device)
 			continue
 		}
-		if devClass != netClass {
+		if devClass != consts.NetClass {
 			// Not network device
 			continue
 		}
 
 		macAddress := ""
-		if name := tryToGetVirtualInterfaceName(device.Address); name != "" {
-			if mac := getNetDevMac(name); mac != "" {
+		if name := o.hostManager.TryToGetVirtualInterfaceName(device.Address); name != "" {
+			if mac := o.hostManager.GetNetDevMac(name); mac != "" {
 				macAddress = mac
 			}
 		}
@@ -339,11 +334,12 @@ func CreateOpenstackDevicesInfo(metaData *OSPMetaData, networkData *OSPNetworkDa
 		}
 	}
 
-	return devicesInfo, err
+	o.openStackDevicesInfo = devicesInfo
+	return nil
 }
 
 // DiscoverSriovDevicesVirtual discovers VFs on a virtual platform
-func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.InterfaceExt, error) {
+func (o *openstackContext) DiscoverSriovDevicesVirtual() ([]sriovnetworkv1.InterfaceExt, error) {
 	log.Log.V(2).Info("DiscoverSriovDevicesVirtual()")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
@@ -364,12 +360,12 @@ func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.I
 				"device", device)
 			continue
 		}
-		if devClass != netClass {
+		if devClass != consts.NetClass {
 			// Not network device
 			continue
 		}
 
-		deviceInfo, exist := devicesInfo[device.Address]
+		deviceInfo, exist := o.openStackDevicesInfo[device.Address]
 		if !exist {
 			log.Log.Error(nil, "DiscoverSriovDevicesVirtual(): unable to find device in devicesInfo list, skipping",
 				"device", device.Address)
@@ -391,17 +387,17 @@ func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.I
 			DeviceID:   device.Product.ID,
 			NetFilter:  netFilter,
 		}
-		if mtu := getNetdevMTU(device.Address); mtu > 0 {
+		if mtu := o.hostManager.GetNetdevMTU(device.Address); mtu > 0 {
 			iface.Mtu = mtu
 		}
-		if name := tryToGetVirtualInterfaceName(device.Address); name != "" {
+		if name := o.hostManager.TryToGetVirtualInterfaceName(device.Address); name != "" {
 			iface.Name = name
-			if iface.Mac = getNetDevMac(name); iface.Mac == "" {
+			if iface.Mac = o.hostManager.GetNetDevMac(name); iface.Mac == "" {
 				iface.Mac = metaMac
 			}
-			iface.LinkSpeed = getNetDevLinkSpeed(name)
+			iface.LinkSpeed = o.hostManager.GetNetDevLinkSpeed(name)
 		}
-		iface.LinkType = getLinkType(iface)
+		iface.LinkType = o.hostManager.GetLinkType(iface)
 
 		iface.TotalVfs = 1
 		iface.NumVfs = 1
@@ -422,147 +418,11 @@ func DiscoverSriovDevicesVirtual(devicesInfo OSPDevicesInfo) ([]sriovnetworkv1.I
 	return pfList, nil
 }
 
-func CreateOpenstackDevicesInfoFromNodeStatus(networkState *sriovnetworkv1.SriovNetworkNodeState) OSPDevicesInfo {
+func (o *openstackContext) CreateOpenstackDevicesInfoFromNodeStatus(networkState *sriovnetworkv1.SriovNetworkNodeState) {
 	devicesInfo := make(OSPDevicesInfo)
 	for _, iface := range networkState.Status.Interfaces {
 		devicesInfo[iface.PciAddress] = &OSPDeviceInfo{MacAddress: iface.Mac, NetworkID: iface.NetFilter}
 	}
 
-	return devicesInfo
-}
-
-// tryToGetVirtualInterfaceName get the interface name of a virtio interface
-func tryToGetVirtualInterfaceName(pciAddr string) string {
-	log.Log.Info("tryToGetVirtualInterfaceName() get interface name for device", "device", pciAddr)
-
-	// To support different driver that is not virtio-pci like mlx
-	name := tryGetInterfaceName(pciAddr)
-	if name != "" {
-		return name
-	}
-
-	netDir, err := filepath.Glob(filepath.Join(sysBusPciDevices, pciAddr, "virtio*", "net"))
-	if err != nil || len(netDir) < 1 {
-		return ""
-	}
-
-	fInfos, err := os.ReadDir(netDir[0])
-	if err != nil {
-		log.Log.Error(err, "tryToGetVirtualInterfaceName(): failed to read net directory", "dir", netDir[0])
-		return ""
-	}
-
-	names := make([]string, 0)
-	for _, f := range fInfos {
-		names = append(names, f.Name())
-	}
-
-	if len(names) < 1 {
-		return ""
-	}
-
-	return names[0]
-}
-
-// SyncNodeStateVirtual attempt to update the node state to match the desired state
-//
-//	in virtual platforms
-func SyncNodeStateVirtual(newState *sriovnetworkv1.SriovNetworkNodeState) error {
-	var err error
-	for _, ifaceStatus := range newState.Status.Interfaces {
-		for _, iface := range newState.Spec.Interfaces {
-			if iface.PciAddress == ifaceStatus.PciAddress {
-				if !needUpdateVirtual(&iface, &ifaceStatus) {
-					log.Log.V(2).Info("SyncNodeStateVirtual(): no need update interface", "address", iface.PciAddress)
-					break
-				}
-				if err = configSriovDeviceVirtual(&iface, &ifaceStatus); err != nil {
-					log.Log.Error(err, "SyncNodeStateVirtual(): fail to config sriov interface", "address", iface.PciAddress)
-					return err
-				}
-				break
-			}
-		}
-	}
-	return nil
-}
-
-func needUpdateVirtual(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) bool {
-	// The device MTU is set by the platorm
-	// The NumVfs is always 1
-	if iface.NumVfs > 0 {
-		for _, vf := range ifaceStatus.VFs {
-			ingroup := false
-			for _, group := range iface.VfGroups {
-				if sriovnetworkv1.IndexInRange(vf.VfID, group.VfRange) {
-					ingroup = true
-					if group.DeviceType != constants.DeviceTypeNetDevice {
-						if group.DeviceType != vf.Driver {
-							log.Log.V(2).Info("needUpdateVirtual(): Driver needs update",
-								"desired", group.DeviceType, "current", vf.Driver)
-							return true
-						}
-					} else {
-						if sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
-							log.Log.V(2).Info("needUpdateVirtual(): Driver needs update",
-								"desired", group.DeviceType, "current", vf.Driver)
-							return true
-						}
-					}
-					break
-				}
-			}
-			if !ingroup && sriovnetworkv1.StringInArray(vf.Driver, DpdkDrivers) {
-				// VF which has DPDK driver loaded but not in any group, needs to be reset to default driver.
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func configSriovDeviceVirtual(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) error {
-	log.Log.V(2).Info("configSriovDeviceVirtual(): config interface", "address", iface.PciAddress, "config", iface)
-	// Config VFs
-	if iface.NumVfs > 0 {
-		if iface.NumVfs > 1 {
-			log.Log.Error(nil, "configSriovDeviceVirtual(): in a virtual environment, only one VF per interface",
-				"numVfs", iface.NumVfs)
-			return errors.New("NumVfs > 1")
-		}
-		if len(iface.VfGroups) != 1 {
-			log.Log.Error(nil, "configSriovDeviceVirtual(): missing VFGroup")
-			return errors.New("NumVfs != 1")
-		}
-		addr := iface.PciAddress
-		log.Log.V(2).Info("configSriovDeviceVirtual()", "address", addr)
-		driver := ""
-		vfID := 0
-		for _, group := range iface.VfGroups {
-			log.Log.V(2).Info("configSriovDeviceVirtual()", "group", group)
-			if sriovnetworkv1.IndexInRange(vfID, group.VfRange) {
-				log.Log.V(2).Info("configSriovDeviceVirtual()", "indexInRange", vfID)
-				if sriovnetworkv1.StringInArray(group.DeviceType, DpdkDrivers) {
-					log.Log.V(2).Info("configSriovDeviceVirtual()", "driver", group.DeviceType)
-					driver = group.DeviceType
-				}
-				break
-			}
-		}
-		if driver == "" {
-			log.Log.V(2).Info("configSriovDeviceVirtual(): bind default")
-			if err := BindDefaultDriver(addr); err != nil {
-				log.Log.Error(err, "configSriovDeviceVirtual(): fail to bind default driver", "device", addr)
-				return err
-			}
-		} else {
-			log.Log.V(2).Info("configSriovDeviceVirtual(): bind driver", "driver", driver)
-			if err := BindDpdkDriver(addr, driver); err != nil {
-				log.Log.Error(err, "configSriovDeviceVirtual(): fail to bind driver for device",
-					"driver", driver, "device", addr)
-				return err
-			}
-		}
-	}
-	return nil
+	o.openStackDevicesInfo = devicesInfo
 }
