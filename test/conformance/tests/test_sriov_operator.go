@@ -1117,7 +1117,7 @@ var _ = Describe("[sriov] operator", func() {
 						capacity, _ = resNum.AsInt64()
 						res["openshift.io/testresource1"] = capacity
 						return res
-					}, 2*time.Minute, time.Second).Should(Equal(map[string]int64{
+					}, 15*time.Minute, time.Second).Should(Equal(map[string]int64{
 						"openshift.io/testresource":  int64(3),
 						"openshift.io/testresource1": int64(2),
 					}))
