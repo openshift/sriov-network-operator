@@ -5,6 +5,7 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -12,14 +13,18 @@ import (
 	fakek8s "k8s.io/client-go/kubernetes/fake"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
 
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	mock_helper "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/fake"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/generic"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 var FakeSupportedNicIDs corev1.ConfigMap = corev1.ConfigMap{
@@ -95,8 +100,12 @@ var _ = Describe("Config Daemon", func() {
 		}
 
 		var err error
-		utils.FilesystemRoot, cleanFakeFs, err = fakeFs.Use()
+		vars.FilesystemRoot, cleanFakeFs, err = fakeFs.Use()
 		Expect(err).ToNot(HaveOccurred())
+
+		vars.UsingSystemdMode = false
+		vars.NodeName = "test-node"
+		vars.PlatformType = consts.Baremetal
 
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
 		client := fakesnclientset.NewSimpleClientset()
@@ -104,20 +113,31 @@ var _ = Describe("Config Daemon", func() {
 		err = sriovnetworkv1.InitNicIDMapFromConfigMap(kubeClient, namespace)
 		Expect(err).ToNot(HaveOccurred())
 
-		er := NewEventRecorder(client, "test-node", kubeClient)
+		er := NewEventRecorder(client, kubeClient)
 
-		sut = New("test-node",
+		t := GinkgoT()
+		mockCtrl := gomock.NewController(t)
+		platformHelper := mock_platforms.NewMockInterface(mockCtrl)
+		platformHelper.EXPECT().GetFlavor().Return(openshift.OpenshiftFlavorDefault).AnyTimes()
+		platformHelper.EXPECT().IsOpenshiftCluster().Return(false).AnyTimes()
+		platformHelper.EXPECT().IsHypershift().Return(false).AnyTimes()
+
+		vendorHelper := mock_helper.NewMockHostHelpersInterface(mockCtrl)
+		vendorHelper.EXPECT().TryEnableRdma().Return(true, nil).AnyTimes()
+		vendorHelper.EXPECT().TryEnableVhostNet().AnyTimes()
+		vendorHelper.EXPECT().TryEnableTun().AnyTimes()
+		vendorHelper.EXPECT().PrepareNMUdevRule([]string{"0x1014", "0x154c"}).Return(nil).AnyTimes()
+
+		sut = New(
 			client,
 			kubeClient,
-			&utils.OpenshiftContext{IsOpenShiftCluster: false, OpenshiftFlavor: ""},
+			vendorHelper,
+			platformHelper,
 			exitCh,
 			stopCh,
 			syncCh,
 			refreshCh,
-			utils.Baremetal,
-			false,
 			er,
-			false,
 		)
 
 		sut.enabledPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{}}
@@ -234,66 +254,6 @@ var _ = Describe("Config Daemon", func() {
 			Expect(msg.syncStatus).To(Equal("Succeeded"))
 
 			Expect(sut.nodeState.GetGeneration()).To(BeNumerically("==", 777))
-		})
-	})
-
-	Context("isNodeDraining", func() {
-
-		It("for a non-Openshift cluster", func() {
-			sut.openshiftContext = &utils.OpenshiftContext{IsOpenShiftCluster: false}
-
-			sut.node = &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-node",
-					Annotations: map[string]string{}}}
-
-			Expect(sut.isNodeDraining()).To(BeFalse())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-		})
-
-		It("for an Openshift cluster", func() {
-			sut.openshiftContext = &utils.OpenshiftContext{
-				IsOpenShiftCluster: true,
-				OpenshiftFlavor:    utils.OpenshiftFlavorDefault,
-			}
-
-			sut.node = &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-node",
-					Annotations: map[string]string{}}}
-
-			Expect(sut.isNodeDraining()).To(BeFalse())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-		})
-
-		It("for an Openshift Hypershift cluster", func() {
-			sut.openshiftContext = &utils.OpenshiftContext{
-				IsOpenShiftCluster: true,
-				OpenshiftFlavor:    utils.OpenshiftFlavorHypershift,
-			}
-
-			sut.node = &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-node",
-					Annotations: map[string]string{}}}
-
-			Expect(sut.isNodeDraining()).To(BeFalse())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
-			Expect(sut.isNodeDraining()).To(BeTrue())
 		})
 	})
 })

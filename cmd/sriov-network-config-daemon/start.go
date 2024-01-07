@@ -24,8 +24,6 @@ import (
 	"strings"
 	"time"
 
-	configv1 "github.com/openshift/api/config/v1"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -35,12 +33,17 @@ import (
 	"k8s.io/client-go/util/connrotation"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	configv1 "github.com/openshift/api/config/v1"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/version"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 var (
@@ -70,8 +73,11 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 	snolog.InitLog()
 	setupLog := log.Log.WithName("sriov-network-config-daemon")
 
-	// To help debugging, immediately log version
-	setupLog.V(2).Info("sriov-network-config-daemon", "version", version.Version)
+	// Mark that we are running inside a container
+	vars.UsingSystemdMode = false
+	if startOpts.systemd {
+		vars.UsingSystemdMode = true
+	}
 
 	if startOpts.nodeName == "" {
 		name, ok := os.LookupEnv("NODE_NAME")
@@ -80,6 +86,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		}
 		startOpts.nodeName = name
 	}
+	vars.NodeName = startOpts.nodeName
 
 	// This channel is used to ensure all spawned goroutines exit when we exit.
 	stopCh := make(chan struct{})
@@ -102,7 +109,9 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 	var config *rest.Config
 	var err error
 
-	if os.Getenv("CLUSTER_TYPE") == utils.ClusterTypeOpenshift {
+	// On openshift we use the kubeconfig from kubelet on the node where the daemon is running
+	// this allow us to improve security as every daemon has access only to its own node
+	if vars.ClusterType == consts.ClusterTypeOpenshift {
 		kubeconfig, err := clientcmd.LoadFromFile("/host/etc/kubernetes/kubeconfig")
 		if err != nil {
 			setupLog.Error(err, "failed to load kubelet kubeconfig")
@@ -110,7 +119,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		clusterName := kubeconfig.Contexts[kubeconfig.CurrentContext].Cluster
 		apiURL := kubeconfig.Clusters[clusterName].Server
 
-		url, err := url.Parse(apiURL)
+		urlPath, err := url.Parse(apiURL)
 		if err != nil {
 			setupLog.Error(err, "failed to parse api url from kubelet kubeconfig")
 		}
@@ -118,8 +127,14 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		// The kubernetes in-cluster functions don't let you override the apiserver
 		// directly; gotta "pass" it via environment vars.
 		setupLog.V(0).Info("overriding kubernetes api", "new-url", apiURL)
-		os.Setenv("KUBERNETES_SERVICE_HOST", url.Hostname())
-		os.Setenv("KUBERNETES_SERVICE_PORT", url.Port())
+		err = os.Setenv("KUBERNETES_SERVICE_HOST", urlPath.Hostname())
+		if err != nil {
+			setupLog.Error(err, "failed to set KUBERNETES_SERVICE_HOST environment variable")
+		}
+		err = os.Setenv("KUBERNETES_SERVICE_PORT", urlPath.Port())
+		if err != nil {
+			setupLog.Error(err, "failed to set KUBERNETES_SERVICE_PORT environment variable")
+		}
 	}
 
 	kubeconfig := os.Getenv("KUBECONFIG")
@@ -134,57 +149,72 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	vars.Config = config
+	vars.Scheme = scheme.Scheme
+
 	closeAllConns, err := updateDialer(config)
 	if err != nil {
 		return err
 	}
 
-	sriovnetworkv1.AddToScheme(scheme.Scheme)
-	mcfgv1.AddToScheme(scheme.Scheme)
-	configv1.Install(scheme.Scheme)
+	err = sriovnetworkv1.AddToScheme(scheme.Scheme)
+	if err != nil {
+		setupLog.Error(err, "failed to load sriov network CRDs to scheme")
+		return err
+	}
+
+	err = mcfgv1.AddToScheme(scheme.Scheme)
+	if err != nil {
+		setupLog.Error(err, "failed to load machine config CRDs to scheme")
+		return err
+	}
+
+	err = configv1.Install(scheme.Scheme)
+	if err != nil {
+		setupLog.Error(err, "failed to load openshift config CRDs to scheme")
+		return err
+	}
 
 	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
-	openshiftContext, err := utils.NewOpenshiftContext(config, scheme.Scheme)
+
+	hostHelpers, err := helper.NewDefaultHostHelpers()
 	if err != nil {
+		setupLog.Error(err, "failed to create hostHelpers")
+		return err
+	}
+
+	platformHelper, err := platforms.NewDefaultPlatformHelper()
+	if err != nil {
+		setupLog.Error(err, "failed to create platformHelper")
 		return err
 	}
 
 	config.Timeout = 5 * time.Second
 	writerclient := snclientset.NewForConfigOrDie(config)
 
-	mode := os.Getenv("DEV_MODE")
-	devMode := false
-	if mode == "TRUE" {
-		devMode = true
-		setupLog.V(0).Info("dev mode enabled")
-	}
-
-	eventRecorder := daemon.NewEventRecorder(writerclient, startOpts.nodeName, kubeclient)
+	eventRecorder := daemon.NewEventRecorder(writerclient, kubeclient)
 	defer eventRecorder.Shutdown()
 
 	setupLog.V(0).Info("starting node writer")
-	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient, startOpts.nodeName, closeAllConns, eventRecorder, devMode)
-
-	destdir := os.Getenv("DEST_DIR")
-	if destdir == "" {
-		destdir = "/host/tmp"
-	}
-
-	platformType := utils.Baremetal
+	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient,
+		closeAllConns,
+		eventRecorder,
+		hostHelpers,
+		platformHelper)
 
 	nodeInfo, err := kubeclient.CoreV1().Nodes().Get(context.Background(), startOpts.nodeName, v1.GetOptions{})
 	if err == nil {
-		for key, pType := range utils.PlatformMap {
+		for key, pType := range vars.PlatformsMap {
 			if strings.Contains(strings.ToLower(nodeInfo.Spec.ProviderID), strings.ToLower(key)) {
-				platformType = pType
+				vars.PlatformType = pType
 			}
 		}
 	} else {
 		setupLog.Error(err, "failed to fetch node state, exiting", "node-name", startOpts.nodeName)
 		return err
 	}
-	setupLog.Info("Running on", "platform", platformType.String())
+	setupLog.Info("Running on", "platform", vars.PlatformType.String())
 
 	var namespace = os.Getenv("NAMESPACE")
 	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, namespace); err != nil {
@@ -195,27 +225,24 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 	eventRecorder.SendEvent("ConfigDaemonStart", "Config Daemon starting")
 
 	// block the deamon process until nodeWriter finish first its run
-	err = nodeWriter.RunOnce(destdir, platformType)
+	err = nodeWriter.RunOnce()
 	if err != nil {
 		setupLog.Error(err, "failed to run writer")
 		return err
 	}
-	go nodeWriter.Run(stopCh, refreshCh, syncCh, platformType)
+	go nodeWriter.Run(stopCh, refreshCh, syncCh)
 
 	setupLog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(
-		startOpts.nodeName,
 		snclient,
 		kubeclient,
-		openshiftContext,
+		hostHelpers,
+		platformHelper,
 		exitCh,
 		stopCh,
 		syncCh,
 		refreshCh,
-		platformType,
-		startOpts.systemd,
 		eventRecorder,
-		devMode,
 	).Run(stopCh, exitCh)
 	if err != nil {
 		setupLog.Error(err, "failed to run daemon")

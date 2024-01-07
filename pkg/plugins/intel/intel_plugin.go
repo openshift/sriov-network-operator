@@ -4,6 +4,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 )
 
@@ -16,7 +17,7 @@ type IntelPlugin struct {
 	LastState   *sriovnetworkv1.SriovNetworkNodeState
 }
 
-func NewIntelPlugin() (plugin.VendorPlugin, error) {
+func NewIntelPlugin(helpers helper.HostHelpersInterface) (plugin.VendorPlugin, error) {
 	return &IntelPlugin{
 		PluginName:  PluginName,
 		SpecVersion: "1.0",
