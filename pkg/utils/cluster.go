@@ -11,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 
 const (
@@ -35,7 +37,7 @@ func getNodeRole(node corev1.Node) string {
 }
 
 func IsSingleNodeCluster(c client.Client) (bool, error) {
-	if os.Getenv("CLUSTER_TYPE") == ClusterTypeOpenshift {
+	if os.Getenv("CLUSTER_TYPE") == consts.ClusterTypeOpenshift {
 		topo, err := openshiftControlPlaneTopologyStatus(c)
 		if err != nil {
 			return false, err
@@ -53,7 +55,7 @@ func IsSingleNodeCluster(c client.Client) (bool, error) {
 // On kubernetes, it is determined by which node the sriov operator is scheduled on. If operator
 // pod is schedule on worker node, it is considered as external control plane.
 func IsExternalControlPlaneCluster(c client.Client) (bool, error) {
-	if os.Getenv("CLUSTER_TYPE") == ClusterTypeOpenshift {
+	if os.Getenv("CLUSTER_TYPE") == consts.ClusterTypeOpenshift {
 		topo, err := openshiftControlPlaneTopologyStatus(c)
 		if err != nil {
 			return false, err
@@ -61,7 +63,7 @@ func IsExternalControlPlaneCluster(c client.Client) (bool, error) {
 		if topo == "External" {
 			return true, nil
 		}
-	} else if os.Getenv("CLUSTER_TYPE") == ClusterTypeKubernetes {
+	} else if os.Getenv("CLUSTER_TYPE") == consts.ClusterTypeKubernetes {
 		role, err := operatorNodeRole(c)
 		if err != nil {
 			return false, err
