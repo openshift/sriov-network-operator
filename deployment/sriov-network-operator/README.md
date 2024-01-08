@@ -64,10 +64,45 @@ We have introduced the following Chart parameters.
 
 | Name | Type | Default | description |
 | ---- | ---- | ------- | ----------- |
+| `operator.tolerations` | list | `[{"key":"node-role.kubernetes.io/master","operator":"Exists","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}]` | Operator's tolerations |
+| `operator.nodeSelector` | object | {} | Operator's node selector |
+| `operator.affinity` | object | `{"nodeAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"weight":1,"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/master","operator":"In","values":[""]}]}},{"weight":1,"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/control-plane","operator":"In","values":[""]}]}}]}}` | Operator's afffinity configuration |
+| `operator.nameOverride` | string | `` | Operator's resource name override |
+| `operator.fullnameOverride` | string | `` | Operator's resource full name override |
 | `operator.resourcePrefix` | string | `openshift.io` | Device plugin resource prefix |
-| `operator.enableAdmissionController` | bool | `false` | Enable SR-IOV network resource injector and operator webhook |
 | `operator.cniBinPath` | string | `/opt/cni/bin` | Path for CNI binary |
-| `operator.clusterType` | string | `kubernetes` | Cluster environment type |
+| `operator.clustertype` | string | `kubernetes` | Cluster environment type |
+
+#### Admission Controllers parameters
+
+The admission controllers can be enabled by switching on a single parameter `operator.admissionControllers.enabled`. By
+default, the user needs to pre-create Kubernetes Secrets that match the names provided in
+`operator.admissionControllers.certificates.secretNames`. The secrets should have 3 fields populated with the relevant
+content:
+* `ca.crt` (value needs to be base64 encoded twice)
+* `tls.crt`
+* `tls.key`
+
+Aside from the aforementioned mode, the chart supports 3 more modes for certificate consumption by the admission
+controllers, which can be found in the table below. In a nutshell, the modes that are supported are:
+* Consume pre-created Certificates managed by cert-manager
+* Generate self signed Certificates managed by cert-manager
+* Specify the content of the certificates as Helm values
+
+| Name | Type | Default | description |
+| ---- | ---- | ------- | ----------- |
+| `operator.admissionControllers.enabled` | bool | false | Flag that switches on the admission controllers |
+| `operator.admissionControllers.certificates.secretNames.operator` | string | `operator-webhook-cert` | Secret that stores the certificate for the Operator's admission controller |
+| `operator.admissionControllers.certificates.secretNames.injector` | string | `network-resources-injector-cert` | Secret that stores the certificate for the Network Resources Injector's admission controller  |
+| `operator.admissionControllers.certificates.certManager.enabled` | bool | false | Flag that switches on consumption of certificates managed by cert-manager |
+| `operator.admissionControllers.certificates.certManager.generateSelfSigned` | bool | false | Flag that switches on generation of self signed certificates managed by cert-manager. The secrets in which the certificates are stored will have the names provided in `operator.admissionControllers.certificates.secretNames` |
+| `operator.admissionControllers.certificates.custom.enabled` | bool | false | Flag that switches on consumption of user provided certificates that are part of `operator.admissionControllers.certificates.custom.operator` and `operator.admissionControllers.certificates.custom.injector` objects |
+| `operator.admissionControllers.certificates.custom.operator.caCrt` | string | `` | The CA certificate to be used by the Operator's admission controller |
+| `operator.admissionControllers.certificates.custom.operator.tlsCrt` | string | `` | The public part of the certificate to be used by the Operator's admission controller |
+| `operator.admissionControllers.certificates.custom.operator.tlsKey` | string | `` | The private part of the certificate to be used by the Operator's admission controller |
+| `operator.admissionControllers.certificates.custom.injector.caCrt` | string | `` | The CA certificate to be used by the Network Resources Injector's admission controller |
+| `operator.admissionControllers.certificates.custom.injector.tlsCrt` | string | `` | The public part of the certificate to be used by the Network Resources Injector's admission controller |
+| `operator.admissionControllers.certificates.custom.injector.tlsKey` | string | `` | The private part of the certificate to be used by the Network Resources Injector's admission controller |
 
 ### Images parameters
 
