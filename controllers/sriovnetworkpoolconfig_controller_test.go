@@ -85,7 +85,7 @@ var _ = Describe("SriovNetworkPoolConfig controller", Ordered, func() {
 			config := &sriovnetworkv1.SriovNetworkPoolConfig{}
 			config.SetNamespace(testNamespace)
 			config.SetName("ovs-hw-offload-config")
-			mcpName := "worker"
+			mcpName := "worker-hwoffload"
 			mc := &mcfgv1.MachineConfig{}
 			mcName := "00-" + mcpName + "-" + constants.OVSHWOLMachineConfigNameSuffix
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: testNamespace}, mc)

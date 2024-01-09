@@ -29,6 +29,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -44,6 +45,9 @@ import (
 
 	//+kubebuilder:scaffold:imports
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
@@ -90,7 +94,36 @@ var _ = BeforeSuite(func() {
 		}))
 
 	// Go to project root directory
-	os.Chdir("..")
+	err = os.Chdir("..")
+
+	By("setting up env variables for tests")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("RESOURCE_PREFIX", "openshift.io")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("ADMISSION_CONTROLLERS_ENABLED", "true")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME", "operator-webhook-cert")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME", "network-resources-injector-cert")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("SRIOV_CNI_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("SRIOV_INFINIBAND_CNI_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("SRIOV_DEVICE_PLUGIN_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("NETWORK_RESOURCES_INJECTOR_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("SRIOV_NETWORK_WEBHOOK_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("RELEASE_VERSION", "4.7.0")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("OPERATOR_NAME", "sriov-network-operator")
+	Expect(err).NotTo(HaveOccurred())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -119,19 +152,6 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	By("setting up env variables for tests")
-	os.Setenv("RESOURCE_PREFIX", "openshift.io")
-	os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
-	os.Setenv("ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME", "operator-webhook-cert")
-	os.Setenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME", "network-resources-injector-cert")
-	os.Setenv("SRIOV_CNI_IMAGE", "mock-image")
-	os.Setenv("SRIOV_INFINIBAND_CNI_IMAGE", "mock-image")
-	os.Setenv("SRIOV_DEVICE_PLUGIN_IMAGE", "mock-image")
-	os.Setenv("NETWORK_RESOURCES_INJECTOR_IMAGE", "mock-image")
-	os.Setenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE", "mock-image")
-	os.Setenv("SRIOV_NETWORK_WEBHOOK_IMAGE", "mock-image")
-	os.Setenv("RELEASE_VERSION", "4.7.0")
-	os.Setenv("OPERATOR_NAME", "sriov-network-operator")
 
 	By("creating default/common k8s objects for tests")
 	// Create test namespace

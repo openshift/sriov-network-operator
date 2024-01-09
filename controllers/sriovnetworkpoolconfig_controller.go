@@ -7,9 +7,12 @@ import (
 	"reflect"
 
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -57,11 +60,25 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 	}
 	logger.Info("Reconciling")
 
-	// // Fetch SriovNetworkPoolConfig
+	// Fetch SriovNetworkPoolConfig
 	instance := &sriovnetworkv1.SriovNetworkPoolConfig{}
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			// looks like someone remove the default pool lets recreate it...
+			if req.Name == constants.DefaultConfigName {
+				config := &sriovnetworkv1.SriovNetworkPoolConfig{}
+				config.Namespace = vars.Namespace
+				config.Name = constants.DefaultConfigName
+				maxUnv := intstr.Parse("1")
+				config.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{
+					MaxUnavailable: &maxUnv,
+					NodeSelector:   &metav1.LabelSelector{},
+				}
+				err = r.Create(context.TODO(), config)
+				return reconcile.Result{}, err
+			}
+
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -70,6 +87,11 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 		}
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
+	}
+
+	// we don't need a finalizer for pools that doesn't use the ovs hardware offload feature
+	if instance.Spec.OvsHardwareOffloadConfig.Name == "" {
+		return ctrl.Result{}, nil
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
