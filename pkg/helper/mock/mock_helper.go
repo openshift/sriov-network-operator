@@ -81,6 +81,20 @@ func (mr *MockHostHelpersInterfaceMockRecorder) BindDpdkDriver(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BindDpdkDriver", reflect.TypeOf((*MockHostHelpersInterface)(nil).BindDpdkDriver), arg0, arg1)
 }
 
+// BindDriverByBusAndDevice mocks base method.
+func (m *MockHostHelpersInterface) BindDriverByBusAndDevice(arg0, arg1, arg2 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BindDriverByBusAndDevice", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BindDriverByBusAndDevice indicates an expected call of BindDriverByBusAndDevice.
+func (mr *MockHostHelpersInterfaceMockRecorder) BindDriverByBusAndDevice(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BindDriverByBusAndDevice", reflect.TypeOf((*MockHostHelpersInterface)(nil).BindDriverByBusAndDevice), arg0, arg1, arg2)
+}
+
 // Chroot mocks base method.
 func (m *MockHostHelpersInterface) Chroot(arg0 string) (func() error, error) {
 	m.ctrl.T.Helper()
@@ -992,6 +1006,20 @@ func (m *MockHostHelpersInterface) Unbind(arg0 string) error {
 func (mr *MockHostHelpersInterfaceMockRecorder) Unbind(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unbind", reflect.TypeOf((*MockHostHelpersInterface)(nil).Unbind), arg0)
+}
+
+// UnbindDriverByBusAndDevice mocks base method.
+func (m *MockHostHelpersInterface) UnbindDriverByBusAndDevice(bus, device string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnbindDriverByBusAndDevice", bus, device)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnbindDriverByBusAndDevice indicates an expected call of UnbindDriverByBusAndDevice.
+func (mr *MockHostHelpersInterfaceMockRecorder) UnbindDriverByBusAndDevice(bus, device interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnbindDriverByBusAndDevice", reflect.TypeOf((*MockHostHelpersInterface)(nil).UnbindDriverByBusAndDevice), bus, device)
 }
 
 // UnbindDriverIfNeeded mocks base method.
