@@ -1,12 +1,12 @@
 package host
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -36,12 +36,21 @@ type KernelInterface interface {
 	BindDpdkDriver(string, string) error
 	// BindDefaultDriver binds the virtual function to is default driver
 	BindDefaultDriver(string) error
+	// BindDriverByBusAndDevice binds device to the provided driver
+	// bus - the bus path in the sysfs, e.g. "pci" or "vdpa"
+	// device - the name of the device on the bus, e.g. 0000:85:1e.5 for PCI or vpda1 for VDPA
+	// driver - the name of the driver, e.g. vfio-pci or vhost_vdpa.
+	BindDriverByBusAndDevice(bus, device, driver string) error
 	// HasDriver returns try if the virtual function is bind to a driver
 	HasDriver(string) (bool, string)
 	// RebindVfToDefaultDriver rebinds the virtual function to is default driver
 	RebindVfToDefaultDriver(string) error
 	// UnbindDriverIfNeeded unbinds the virtual function from a driver if needed
 	UnbindDriverIfNeeded(string, bool) error
+	// UnbindDriverByBusAndDevice unbind device identified by bus and device ID from the driver
+	// bus - the bus path in the sysfs, e.g. "pci" or "vdpa"
+	// device - the name of the device on the bus, e.g. 0000:85:1e.5 for PCI or vpda1 for VDPA
+	UnbindDriverByBusAndDevice(bus, device string) error
 	// LoadKernelModule loads a kernel module to the host
 	LoadKernelModule(name string, args ...string) error
 	// IsKernelModuleLoaded returns try if the requested kernel module is loaded
@@ -165,18 +174,7 @@ func (k *kernel) IsKernelArgsSet(cmdLine string, karg string) bool {
 // Unbind unbind driver for one device
 func (k *kernel) Unbind(pciAddr string) error {
 	log.Log.V(2).Info("Unbind(): unbind device driver for device", "device", pciAddr)
-	yes, driver := k.HasDriver(pciAddr)
-	if !yes {
-		return nil
-	}
-
-	filePath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDrivers, driver, "unbind")
-	err := os.WriteFile(filePath, []byte(pciAddr), os.ModeAppend)
-	if err != nil {
-		log.Log.Error(err, "Unbind(): fail to unbind driver for device", "device", pciAddr)
-		return err
-	}
-	return nil
+	return k.UnbindDriverByBusAndDevice(consts.BusPci, pciAddr)
 }
 
 // BindDpdkDriver bind dpdk driver for one device
@@ -184,45 +182,15 @@ func (k *kernel) Unbind(pciAddr string) error {
 func (k *kernel) BindDpdkDriver(pciAddr, driver string) error {
 	log.Log.V(2).Info("BindDpdkDriver(): bind device to driver",
 		"device", pciAddr, "driver", driver)
-
-	if yes, d := k.HasDriver(pciAddr); yes {
-		if driver == d {
-			log.Log.V(2).Info("BindDpdkDriver(): device already bound to driver",
-				"device", pciAddr, "driver", driver)
-			return nil
-		}
-
-		if err := k.Unbind(pciAddr); err != nil {
-			return err
-		}
-	}
-
-	driverOverridePath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, "driver_override")
-	err := os.WriteFile(driverOverridePath, []byte(driver), os.ModeAppend)
-	if err != nil {
-		log.Log.Error(err, "BindDpdkDriver(): fail to write driver_override for device",
-			"device", pciAddr, "driver", driver)
-		return err
-	}
-	bindPath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDrivers, driver, "bind")
-	err = os.WriteFile(bindPath, []byte(pciAddr), os.ModeAppend)
-	if err != nil {
-		log.Log.Error(err, "BindDpdkDriver(): fail to bind driver for device",
-			"driver", driver, "device", pciAddr)
-		_, err := os.Readlink(filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, "iommu_group"))
-		if err != nil {
+	if err := k.BindDriverByBusAndDevice(consts.BusPci, pciAddr, driver); err != nil {
+		_, innerErr := os.Readlink(filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, "iommu_group"))
+		if innerErr != nil {
 			log.Log.Error(err, "Could not read IOMMU group for device", "device", pciAddr)
 			return fmt.Errorf(
-				"cannot bind driver %s to device %s, make sure IOMMU is enabled in BIOS. %w", driver, pciAddr, err)
+				"cannot bind driver %s to device %s, make sure IOMMU is enabled in BIOS. %w", driver, pciAddr, innerErr)
 		}
 		return err
 	}
-	err = os.WriteFile(driverOverridePath, []byte(""), os.ModeAppend)
-	if err != nil {
-		log.Log.Error(err, "BindDpdkDriver(): failed to clear driver_override for device", "device", pciAddr)
-		return err
-	}
-
 	return nil
 }
 
@@ -231,32 +199,58 @@ func (k *kernel) BindDpdkDriver(pciAddr, driver string) error {
 func (k *kernel) BindDefaultDriver(pciAddr string) error {
 	log.Log.V(2).Info("BindDefaultDriver(): bind device to default driver", "device", pciAddr)
 
-	if yes, d := k.HasDriver(pciAddr); yes {
-		if !sriovnetworkv1.StringInArray(d, vars.DpdkDrivers) {
+	curDriver, err := getDriverByBusAndDevice(consts.BusPci, pciAddr)
+	if err != nil {
+		return err
+	}
+	if curDriver != "" {
+		if !sriovnetworkv1.StringInArray(curDriver, vars.DpdkDrivers) {
 			log.Log.V(2).Info("BindDefaultDriver(): device already bound to default driver",
-				"device", pciAddr, "driver", d)
+				"device", pciAddr, "driver", curDriver)
 			return nil
 		}
-		if err := k.Unbind(pciAddr); err != nil {
+		if err := k.UnbindDriverByBusAndDevice(consts.BusPci, pciAddr); err != nil {
 			return err
 		}
 	}
-
-	driverOverridePath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, "driver_override")
-	err := os.WriteFile(driverOverridePath, []byte("\x00"), os.ModeAppend)
-	if err != nil {
-		log.Log.Error(err, "BindDefaultDriver(): failed to write driver_override for device", "device", pciAddr)
+	if err := setDriverOverride(consts.BusPci, pciAddr, ""); err != nil {
 		return err
 	}
-
-	pciDriversProbe := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDriversProbe)
-	err = os.WriteFile(pciDriversProbe, []byte(pciAddr), os.ModeAppend)
-	if err != nil {
-		log.Log.Error(err, "BindDefaultDriver(): failed to bind driver for device", "device", pciAddr)
+	if err := probeDriver(consts.BusPci, pciAddr); err != nil {
 		return err
 	}
-
 	return nil
+}
+
+// BindDriverByBusAndDevice binds device to the provided driver
+// bus - the bus path in the sysfs, e.g. "pci" or "vdpa"
+// device - the name of the device on the bus, e.g. 0000:85:1e.5 for PCI or vpda1 for VDPA
+// driver - the name of the driver, e.g. vfio-pci or vhost_vdpa.
+func (k *kernel) BindDriverByBusAndDevice(bus, device, driver string) error {
+	log.Log.V(2).Info("BindDriverByBusAndDevice(): bind device to driver",
+		"bus", bus, "device", device, "driver", driver)
+
+	curDriver, err := getDriverByBusAndDevice(bus, device)
+	if err != nil {
+		return err
+	}
+	if curDriver != "" {
+		if curDriver == driver {
+			log.Log.V(2).Info("BindDriverByBusAndDevice(): device already bound to driver",
+				"bus", bus, "device", device, "driver", driver)
+			return nil
+		}
+		if err := k.UnbindDriverByBusAndDevice(bus, device); err != nil {
+			return err
+		}
+	}
+	if err := setDriverOverride(bus, device, driver); err != nil {
+		return err
+	}
+	if err := bindDriver(bus, device, driver); err != nil {
+		return err
+	}
+	return setDriverOverride(bus, device, "")
 }
 
 // Workaround function to handle a case where the vf default driver is stuck and not able to create the vf kernel interface.
@@ -287,14 +281,33 @@ func (k *kernel) UnbindDriverIfNeeded(vfAddr string, isRdma bool) error {
 	return nil
 }
 
+// UnbindDriverByBusAndDevice unbind device identified by bus and device ID from the driver
+// bus - the bus path in the sysfs, e.g. "pci" or "vdpa"
+// device - the name of the device on the bus, e.g. 0000:85:1e.5 for PCI or vpda1 for VDPA
+func (k *kernel) UnbindDriverByBusAndDevice(bus, device string) error {
+	log.Log.V(2).Info("UnbindDriverByBusAndDevice(): unbind device driver for device", "bus", bus, "device", device)
+	driver, err := getDriverByBusAndDevice(bus, device)
+	if err != nil {
+		return err
+	}
+	if driver == "" {
+		log.Log.V(2).Info("UnbindDriverByBusAndDevice(): device has no driver", "bus", bus, "device", device)
+		return nil
+	}
+	return unbindDriver(bus, device, driver)
+}
+
 func (k *kernel) HasDriver(pciAddr string) (bool, string) {
-	driver, err := dputils.GetDriverName(pciAddr)
+	driver, err := getDriverByBusAndDevice(consts.BusPci, pciAddr)
 	if err != nil {
 		log.Log.V(2).Info("HasDriver(): device driver is empty for device", "device", pciAddr)
 		return false, ""
 	}
-	log.Log.V(2).Info("HasDriver(): device driver for device", "device", pciAddr, "driver", driver)
-	return true, driver
+	if driver != "" {
+		log.Log.V(2).Info("HasDriver(): device driver for device", "device", pciAddr, "driver", driver)
+		return true, driver
+	}
+	return false, ""
 }
 
 func (k *kernel) TryEnableRdma() (bool, error) {
@@ -624,4 +637,85 @@ func (k *kernel) IsKernelLockdownMode() bool {
 		return false
 	}
 	return strings.Contains(stdout, "[integrity]") || strings.Contains(stdout, "[confidentiality]")
+}
+
+// returns driver for device on the bus
+func getDriverByBusAndDevice(bus, device string) (string, error) {
+	driverLink := filepath.Join(vars.FilesystemRoot, consts.SysBus, bus, "devices", device, "driver")
+	driverInfo, err := os.Readlink(driverLink)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			log.Log.V(2).Info("getDriverByBusAndDevice(): driver path for device not exist", "bus", bus, "device", device, "driver", driverInfo)
+			return "", nil
+		}
+		log.Log.Error(err, "getDriverByBusAndDevice(): error getting driver info for device", "bus", bus, "device", device)
+		return "", err
+	}
+	log.Log.V(2).Info("getDriverByBusAndDevice(): driver for device", "bus", bus, "device", device, "driver", driverInfo)
+	return filepath.Base(driverInfo), nil
+}
+
+// binds device to the provide driver
+func bindDriver(bus, device, driver string) error {
+	log.Log.V(2).Info("bindDriver(): bind to driver", "bus", bus, "device", device, "driver", driver)
+	bindPath := filepath.Join(vars.FilesystemRoot, consts.SysBus, bus, "drivers", driver, "bind")
+	err := os.WriteFile(bindPath, []byte(device), os.ModeAppend)
+	if err != nil {
+		log.Log.Error(err, "bindDriver(): failed to bind driver", "bus", bus, "device", device, "driver", driver)
+		return err
+	}
+	return nil
+}
+
+// unbind device from the driver
+func unbindDriver(bus, device, driver string) error {
+	log.Log.V(2).Info("unbindDriver(): unbind from driver", "bus", bus, "device", device, "driver", driver)
+	unbindPath := filepath.Join(vars.FilesystemRoot, consts.SysBus, bus, "drivers", driver, "unbind")
+	err := os.WriteFile(unbindPath, []byte(device), os.ModeAppend)
+	if err != nil {
+		log.Log.Error(err, "unbindDriver(): failed to unbind driver", "bus", bus, "device", device, "driver", driver)
+		return err
+	}
+	return nil
+}
+
+// probes driver for device on the bus
+func probeDriver(bus, device string) error {
+	log.Log.V(2).Info("probeDriver(): drivers probe", "bus", bus, "device", device)
+	probePath := filepath.Join(vars.FilesystemRoot, consts.SysBus, bus, "drivers_probe")
+	err := os.WriteFile(probePath, []byte(device), os.ModeAppend)
+	if err != nil {
+		log.Log.Error(err, "probeDriver(): failed to trigger driver probe", "bus", bus, "device", device)
+		return err
+	}
+	return nil
+}
+
+// set driver override for the bus/device,
+// resets override if override arg is "",
+// if device doesn't support overriding (has no driver_override path), does nothing
+func setDriverOverride(bus, device, override string) error {
+	driverOverridePath := filepath.Join(vars.FilesystemRoot, consts.SysBus, bus, "devices", device, "driver_override")
+	if _, err := os.Stat(driverOverridePath); err != nil {
+		if os.IsNotExist(err) {
+			log.Log.V(2).Info("setDriverOverride(): device doesn't support driver override, skip", "bus", bus, "device", device)
+			return nil
+		}
+		return err
+	}
+	var overrideData []byte
+	if override != "" {
+		log.Log.V(2).Info("setDriverOverride(): configure driver override for device", "bus", bus, "device", device, "driver", override)
+		overrideData = []byte(override)
+	} else {
+		log.Log.V(2).Info("setDriverOverride(): reset driver override for device", "bus", bus, "device", device)
+		overrideData = []byte("\x00")
+	}
+	err := os.WriteFile(driverOverridePath, overrideData, os.ModeAppend)
+	if err != nil {
+		log.Log.Error(err, "setDriverOverride(): fail to write driver_override for device",
+			"bus", bus, "device", device, "driver", override)
+		return err
+	}
+	return nil
 }
