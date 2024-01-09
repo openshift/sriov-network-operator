@@ -42,10 +42,7 @@ spec:
       initContainers:
         - name: sriov-cni
           image: {{.SRIOVCNIImage}}
-          command:
-            - /bin/sh
-            - -c
-            - cp /usr/bin/sriov /host/opt/cni/bin/
+          args: ["--no-sleep"]
           securityContext:
             privileged: true
           resources:
@@ -55,12 +52,12 @@ spec:
           volumeMounts:
             - name: cnibin
               mountPath: /host/opt/cni/bin
+            - name: os-release
+              mountPath: /host/etc/os-release
+              readOnly: true
         - name: sriov-infiniband-cni
           image: {{.SRIOVInfiniBandCNIImage}}
-          command:
-            - /bin/sh
-            - -c
-            - cp /usr/bin/ib-sriov /host/opt/cni/bin/
+          args: ["--no-sleep"]
           securityContext:
             privileged: true
           resources:
@@ -70,6 +67,9 @@ spec:
           volumeMounts:
             - name: cnibin
               mountPath: /host/opt/cni/bin
+            - name: os-release
+              mountPath: /host/etc/os-release
+              readOnly: true
       {{- if .UsedSystemdMode}}
         - name: sriov-service-copy
           image: {{.Image}}
@@ -133,3 +133,7 @@ spec:
       - name: cnibin
         hostPath:
           path: {{.CNIBinPath}}
+      - name: os-release
+        hostPath:
+          path: /etc/os-release
+          type: File
