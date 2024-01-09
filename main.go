@@ -22,20 +22,23 @@ import (
 	"fmt"
 	"os"
 
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// to ensure that exec-entrypoint and run can make use of them.
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	openshiftconfigv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -49,10 +52,13 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/leaderelection"
+
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -95,7 +101,6 @@ func main() {
 
 	le := leaderelection.GetLeaderElectionConfig(kubeClient, enableLeaderElection)
 
-	namespace := os.Getenv("NAMESPACE")
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                server.Options{BindAddress: metricsAddr},
@@ -106,7 +111,7 @@ func main() {
 		RenewDeadline:          &le.RenewDeadline,
 		RetryPeriod:            &le.RetryPeriod,
 		LeaderElectionID:       "a56def2a.openshift.io",
-		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{namespace: {}}},
+		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{vars.Namespace: {}}},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -121,13 +126,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	mgrGlobal.GetCache().IndexField(context.Background(), &sriovnetworkv1.SriovNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
+	err = mgrGlobal.GetCache().IndexField(context.Background(), &sriovnetworkv1.SriovNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
 		return []string{o.(*sriovnetworkv1.SriovNetwork).Spec.NetworkNamespace}
 	})
+	if err != nil {
+		setupLog.Error(err, "unable to create index field for cache")
+		os.Exit(1)
+	}
 
-	mgrGlobal.GetCache().IndexField(context.Background(), &sriovnetworkv1.SriovIBNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
+	err = mgrGlobal.GetCache().IndexField(context.Background(), &sriovnetworkv1.SriovIBNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
 		return []string{o.(*sriovnetworkv1.SriovIBNetwork).Spec.NetworkNamespace}
 	})
+	if err != nil {
+		setupLog.Error(err, "unable to create index field for cache")
+		os.Exit(1)
+	}
 
 	if err := initNicIDMap(); err != nil {
 		setupLog.Error(err, "unable to init NicIdMap")
@@ -181,6 +194,36 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovNetworkPoolConfig")
 		os.Exit(1)
 	}
+
+	// we need a client that doesn't use the local cache for the objects
+	drainKClient, err := client.New(restConfig, client.Options{
+		Scheme: scheme,
+		Cache: &client.CacheOptions{
+			DisableFor: []client.Object{
+				&sriovnetworkv1.SriovNetworkNodeState{},
+				&corev1.Node{},
+				&mcfgv1.MachineConfigPool{},
+			},
+		},
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create drain kubernetes client")
+		os.Exit(1)
+	}
+
+	drainController, err := controllers.NewDrainReconcileController(drainKClient,
+		mgr.GetScheme(),
+		mgr.GetEventRecorderFor("SR-IOV operator"),
+		platformsHelper)
+	if err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DrainReconcile")
+		os.Exit(1)
+	}
+
+	if err = drainController.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to setup controller with manager", "controller", "DrainReconcile")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	// Create a default SriovNetworkNodePolicy
@@ -194,6 +237,12 @@ func main() {
 	err = createDefaultOperatorConfig(kubeClient)
 	if err != nil {
 		setupLog.Error(err, "unable to create default SriovOperatorConfig")
+		os.Exit(1)
+	}
+
+	err = createDefaultPoolConfig(kubeClient)
+	if err != nil {
+		setupLog.Error(err, "unable to create default SriovNetworkPoolConfig")
 		os.Exit(1)
 	}
 
@@ -225,9 +274,35 @@ func main() {
 }
 
 func initNicIDMap() error {
-	namespace := os.Getenv("NAMESPACE")
 	kubeclient := kubernetes.NewForConfigOrDie(ctrl.GetConfigOrDie())
-	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, namespace); err != nil {
+	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, vars.Namespace); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createDefaultPoolConfig(c client.Client) error {
+	logger := setupLog.WithName("createDefaultOperatorConfig")
+
+	config := &sriovnetworkv1.SriovNetworkPoolConfig{}
+	err := c.Get(context.TODO(), types.NamespacedName{Name: consts.DefaultConfigName, Namespace: vars.Namespace}, config)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("Create default SriovNetworkPoolConfig")
+			config.Namespace = vars.Namespace
+			config.Name = consts.DefaultConfigName
+			maxun := intstr.Parse("1")
+			config.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{
+				MaxUnavailable: &maxun,
+				NodeSelector:   &metav1.LabelSelector{},
+			}
+			err = c.Create(context.TODO(), config)
+			if err != nil {
+				return err
+			}
+		}
+		// Error reading the object - requeue the request.
 		return err
 	}
 
@@ -244,12 +319,12 @@ func createDefaultPolicy(c client.Client) error {
 		},
 	}
 	namespace := os.Getenv("NAMESPACE")
-	err := c.Get(context.TODO(), types.NamespacedName{Name: constants.DefaultPolicyName, Namespace: namespace}, policy)
+	err := c.Get(context.TODO(), types.NamespacedName{Name: consts.DefaultPolicyName, Namespace: namespace}, policy)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("Create a default SriovNetworkNodePolicy")
 			policy.Namespace = namespace
-			policy.Name = constants.DefaultPolicyName
+			policy.Name = consts.DefaultPolicyName
 			err = c.Create(context.TODO(), policy)
 			if err != nil {
 				return err
@@ -279,12 +354,12 @@ func createDefaultOperatorConfig(c client.Client) error {
 		},
 	}
 	namespace := os.Getenv("NAMESPACE")
-	err = c.Get(context.TODO(), types.NamespacedName{Name: constants.DefaultConfigName, Namespace: namespace}, config)
+	err = c.Get(context.TODO(), types.NamespacedName{Name: consts.DefaultConfigName, Namespace: namespace}, config)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("Create default SriovOperatorConfig")
 			config.Namespace = namespace
-			config.Name = constants.DefaultConfigName
+			config.Name = consts.DefaultConfigName
 			err = c.Create(context.TODO(), config)
 			if err != nil {
 				return err
