@@ -82,6 +82,21 @@ func ValidateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
 				Reason: metav1.StatusReason(err.Error()),
 			}
 		}
+
+	case "SriovNetworkPoolConfig":
+		config := sriovnetworkv1.SriovNetworkPoolConfig{}
+
+		err = json.Unmarshal(raw, &config)
+		if err != nil {
+			log.Log.Error(err, "failed to unmarshal object")
+			return toV1AdmissionResponse(err)
+		}
+
+		if reviewResponse.Allowed, reviewResponse.Warnings, err = validateSriovNetworkPoolConfig(&config, ar.Request.Operation); err != nil {
+			reviewResponse.Result = &metav1.Status{
+				Reason: metav1.StatusReason(err.Error()),
+			}
+		}
 	}
 
 	return &reviewResponse
