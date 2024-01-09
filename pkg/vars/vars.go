@@ -11,6 +11,8 @@ import (
 )
 
 var (
+	Namespace string
+
 	// ClusterType used by the operator to specify the platform it's running on
 	// supported values [kubernetes,openshift]
 	ClusterType string
@@ -69,6 +71,8 @@ var (
 )
 
 func init() {
+	Namespace = os.Getenv("NAMESPACE")
+
 	ClusterType = os.Getenv("CLUSTER_TYPE")
 
 	DevMode = false

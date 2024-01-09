@@ -9,6 +9,7 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -109,4 +110,55 @@ func openshiftControlPlaneTopologyStatus(c client.Client) (configv1.TopologyMode
 		return "", fmt.Errorf("openshiftControlPlaneTopologyStatus(): Failed to get Infrastructure (name: %s): %v", infraResourceName, err)
 	}
 	return infra.Status.ControlPlaneTopology, nil
+}
+
+func ObjectHasAnnotationKey(obj metav1.Object, annoKey string) bool {
+	// Check if node already contains annotation
+	if _, ok := obj.GetAnnotations()[annoKey]; ok {
+		return true
+	}
+	return false
+}
+
+func ObjectHasAnnotation(obj metav1.Object, annoKey string, value string) bool {
+	// Check if node already contains annotation
+	if anno, ok := obj.GetAnnotations()[annoKey]; ok && (anno == value) {
+		return true
+	}
+	return false
+}
+
+func AnnotateObject(obj client.Object, key, value string, c client.Client) error {
+	log.Log.V(2).Info("AnnotateObject(): Annotate object",
+		"objectName", obj.GetName(),
+		"objectKind", obj.GetObjectKind(),
+		"annotation", value)
+	newObj := obj.DeepCopyObject().(client.Object)
+	if newObj.GetAnnotations() == nil {
+		newObj.SetAnnotations(map[string]string{})
+	}
+
+	patch := client.MergeFrom(obj)
+
+	if newObj.GetAnnotations()[key] != value {
+		newObj.GetAnnotations()[key] = value
+		err := c.Patch(context.Background(),
+			newObj, patch)
+		if err != nil {
+			log.Log.Error(err, "annotateObject(): Failed to patch object")
+			return err
+		}
+	}
+
+	return nil
+}
+
+func AnnotateNode(nodeName string, key, value string, c client.Client) error {
+	node := &corev1.Node{}
+	err := c.Get(context.TODO(), client.ObjectKey{Name: nodeName}, node)
+	if err != nil {
+		return err
+	}
+
+	return AnnotateObject(node, key, value, c)
 }
