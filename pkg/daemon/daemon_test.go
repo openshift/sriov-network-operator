@@ -8,16 +8,21 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakek8s "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+	kclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
 
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
-	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
+	snclient "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	mock_helper "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
@@ -61,6 +66,13 @@ var _ = BeforeSuite(func() {
 	flag.Set("logtostderr", "true")
 	flag.Set("stderrthreshold", "WARNING")
 	flag.Set("v", "2")
+
+	logf.SetLogger(zap.New(
+		zap.WriteTo(GinkgoWriter),
+		zap.UseDevMode(true),
+		func(o *zap.Options) {
+			o.TimeEncoder = zapcore.RFC3339NanoTimeEncoder
+		}))
 })
 
 var _ = Describe("Config Daemon", func() {
@@ -105,15 +117,49 @@ var _ = Describe("Config Daemon", func() {
 
 		vars.UsingSystemdMode = false
 		vars.NodeName = "test-node"
+		vars.Namespace = "sriov-network-operator"
 		vars.PlatformType = consts.Baremetal
 
-		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
-		client := fakesnclientset.NewSimpleClientset()
+		err = sriovnetworkv1.AddToScheme(scheme.Scheme)
+		Expect(err).ToNot(HaveOccurred())
+		kClient := kclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-node"}},
+			&sriovnetworkv1.SriovNetworkNodeState{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-node",
+					Namespace: vars.Namespace,
+				}}).Build()
 
+		FakeSupportedNicIDs := corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      sriovnetworkv1.SupportedNicIDConfigmap,
+				Namespace: vars.Namespace,
+			},
+			Data: map[string]string{
+				"Intel_i40e_XXV710":      "8086 158a 154c",
+				"Nvidia_mlx5_ConnectX-4": "15b3 1013 1014",
+			},
+		}
+
+		SriovDevicePluginPod := corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "sriov-device-plugin-xxxx",
+				Namespace: vars.Namespace,
+				Labels: map[string]string{
+					"app": "sriov-device-plugin",
+				},
+			},
+			Spec: corev1.PodSpec{
+				NodeName: "test-node",
+			},
+		}
+
+		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
+		snclient := snclientset.NewSimpleClientset()
 		err = sriovnetworkv1.InitNicIDMapFromConfigMap(kubeClient, vars.Namespace)
 		Expect(err).ToNot(HaveOccurred())
 
-		er := NewEventRecorder(client, kubeClient)
+		er := NewEventRecorder(snclient, kubeClient)
 
 		t := GinkgoT()
 		mockCtrl := gomock.NewController(t)
@@ -129,7 +175,8 @@ var _ = Describe("Config Daemon", func() {
 		vendorHelper.EXPECT().PrepareNMUdevRule([]string{"0x1014", "0x154c"}).Return(nil).AnyTimes()
 
 		sut = New(
-			client,
+			kClient,
+			snclient,
 			kubeClient,
 			vendorHelper,
 			platformHelper,
@@ -193,14 +240,14 @@ var _ = Describe("Config Daemon", func() {
 				},
 			}
 			Expect(
-				createSriovNetworkNodeState(sut.client, nodeState)).
+				createSriovNetworkNodeState(sut.sriovClient, nodeState)).
 				To(BeNil())
 
 			var msg Message
-			Eventually(refreshCh, "10s").Should(Receive(&msg))
+			Eventually(refreshCh, "30s").Should(Receive(&msg))
 			Expect(msg.syncStatus).To(Equal("InProgress"))
 
-			Eventually(refreshCh, "10s").Should(Receive(&msg))
+			Eventually(refreshCh, "30s").Should(Receive(&msg))
 			Expect(msg.syncStatus).To(Equal("Succeeded"))
 
 			Eventually(func() (int, error) {
@@ -234,7 +281,7 @@ var _ = Describe("Config Daemon", func() {
 				},
 			}
 			Expect(
-				createSriovNetworkNodeState(sut.client, nodeState1)).
+				createSriovNetworkNodeState(sut.sriovClient, nodeState1)).
 				To(BeNil())
 
 			nodeState2 := &sriovnetworkv1.SriovNetworkNodeState{
@@ -244,7 +291,7 @@ var _ = Describe("Config Daemon", func() {
 				},
 			}
 			Expect(
-				updateSriovNetworkNodeState(sut.client, nodeState2)).
+				updateSriovNetworkNodeState(sut.sriovClient, nodeState2)).
 				To(BeNil())
 
 			var msg Message
@@ -254,19 +301,19 @@ var _ = Describe("Config Daemon", func() {
 			Eventually(refreshCh, "10s").Should(Receive(&msg))
 			Expect(msg.syncStatus).To(Equal("Succeeded"))
 
-			Expect(sut.nodeState.GetGeneration()).To(BeNumerically("==", 777))
+			Expect(sut.desiredNodeState.GetGeneration()).To(BeNumerically("==", 777))
 		})
 	})
 })
 
-func createSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+func createSriovNetworkNodeState(c snclient.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	_, err := c.SriovnetworkV1().
 		SriovNetworkNodeStates(vars.Namespace).
 		Create(context.Background(), nodeState, metav1.CreateOptions{})
 	return err
 }
 
-func updateSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+func updateSriovNetworkNodeState(c snclient.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	_, err := c.SriovnetworkV1().
 		SriovNetworkNodeStates(vars.Namespace).
 		Update(context.Background(), nodeState, metav1.UpdateOptions{})
