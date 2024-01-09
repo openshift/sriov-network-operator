@@ -178,6 +178,7 @@ spec:
 EOF
 
 kubectl patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"defaultRoute":true,"storage":{"emptyDir": null,"pvc":{"claim":"registry-pv-claim"}},"topologySpreadConstraints":[],"rolloutStrategy":"Recreate","tolerations":[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"},{"effect":"NoSchedule","key":"node-role.kubernetes.io/control-plane","operator":"Exists"}]}}' --type=merge
+kubectl patch ingresscontrollers.operator.openshift.io/default -n openshift-ingress-operator --patch '{"spec":{"replicas": 1}}' --type=merge
 
 export ADMISSION_CONTROLLERS_ENABLED=true
 export SKIP_VAR_SET=""
