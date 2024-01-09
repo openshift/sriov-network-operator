@@ -214,7 +214,7 @@ var _ = Describe("[sriov] operator", func() {
 				setOperatorConfigLogLevel(2)
 
 				By("Flip DisableDrain to trigger operator activity")
-				since := time.Now()
+				since := time.Now().Add(-10 * time.Second)
 				Eventually(func() error {
 					return cluster.SetDisableNodeDrainState(clients, operatorNamespace, !initialDisableDrain)
 				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
@@ -240,7 +240,7 @@ var _ = Describe("[sriov] operator", func() {
 				setOperatorConfigLogLevel(0)
 
 				By("Flip DisableDrain again to trigger operator activity")
-				since = time.Now()
+				since = time.Now().Add(-10 * time.Second)
 				Eventually(func() error {
 					return cluster.SetDisableNodeDrainState(clients, operatorNamespace, initialDisableDrain)
 				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
@@ -248,20 +248,32 @@ var _ = Describe("[sriov] operator", func() {
 				By("Assert logs contains less operator activity")
 				Eventually(func(g Gomega) {
 					logs := getOperatorLogs(since)
-					g.Expect(logs).To(
+
+					// time only contains sec, but we can have race here that in the same sec there was a sync
+					afterLogs := []string{}
+					found := false
+					for _, log := range logs {
+						if found {
+							afterLogs = append(afterLogs, log)
+						}
+						if strings.Contains(log, "{\"new-level\": 0, \"current-level\": 2}") {
+							found = true
+						}
+					}
+					g.Expect(found).To(BeTrue())
+					g.Expect(afterLogs).To(
 						ContainElement(And(
 							ContainSubstring("Reconciling SriovOperatorConfig"),
 						)),
 					)
 
 					// Should not contain verbose logging
-					g.Expect(logs).ToNot(
+					g.Expect(afterLogs).ToNot(
 						ContainElement(
 							ContainSubstring("Start to sync webhook objects"),
 						),
 					)
-				}, 1*time.Minute, 5*time.Second).Should(Succeed())
-
+				}, 3*time.Minute, 5*time.Second).Should(Succeed())
 			})
 		})
 	})
