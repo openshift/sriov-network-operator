@@ -162,7 +162,7 @@ envtest: ## Download envtest-setup locally if necessary.
 
 GOMOCK = $(shell pwd)/bin/mockgen
 gomock:
-	$(call go-get-tool,$(GOMOCK),github.com/golang/mock/mockgen@v1.6.0)
+	$(call go-install-tool,$(GOMOCK),github.com/golang/mock/mockgen@v1.6.0)
 
 # go-install-tool will 'go install' any package $2 and install it to $1.
 define go-install-tool
