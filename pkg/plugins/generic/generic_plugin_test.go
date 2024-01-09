@@ -8,9 +8,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	mock_host "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/mock"
+	mock_helper "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
-	mock_utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils/mock"
 )
 
 func TestGenericPlugin(t *testing.T) {
@@ -24,16 +23,16 @@ var _ = Describe("Generic plugin", func() {
 		genericPlugin plugin.VendorPlugin
 		err           error
 		ctrl          *gomock.Controller
-		mockHost      *mock_host.MockHostManagerInterface
-		mockStore     *mock_utils.MockStoreManagerInterface
+		hostHelper    *mock_helper.MockHostHelpersInterface
 	)
 
 	BeforeEach(func() {
 		t = GinkgoT()
 		ctrl = gomock.NewController(t)
-		mockHost = mock_host.NewMockHostManagerInterface(ctrl)
-		mockStore = mock_utils.NewMockStoreManagerInterface(ctrl)
-		genericPlugin, err = NewGenericPlugin(false, mockHost, mockStore)
+
+		hostHelper = mock_helper.NewMockHostHelpersInterface(ctrl)
+
+		genericPlugin, err = NewGenericPlugin(hostHelper)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -79,6 +78,7 @@ var _ = Describe("Generic plugin", func() {
 				},
 			}
 
+			hostHelper.EXPECT().WriteSwitchdevConfFile(networkNodeState, map[string]bool{"0000:00:00.0": false}).Return(false, nil)
 			needDrain, needReboot, err := genericPlugin.OnNodeStateChange(networkNodeState)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(needReboot).To(BeFalse())
@@ -134,6 +134,7 @@ var _ = Describe("Generic plugin", func() {
 				},
 			}
 
+			hostHelper.EXPECT().WriteSwitchdevConfFile(networkNodeState, map[string]bool{"0000:00:00.0": false}).Return(false, nil)
 			needDrain, needReboot, err := genericPlugin.OnNodeStateChange(networkNodeState)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(needReboot).To(BeFalse())

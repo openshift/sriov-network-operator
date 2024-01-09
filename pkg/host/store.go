@@ -1,20 +1,17 @@
-package utils
+package host
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-)
-
-const (
-	SriovConfBasePath = "/etc/sriov-operator"
-	PfAppliedConfig   = SriovConfBasePath + "/pci"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 // Contains all the file storing on the host
@@ -24,27 +21,29 @@ type StoreManagerInterface interface {
 	ClearPCIAddressFolder() error
 	SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error
 	LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interface, bool, error)
+
+	GetCheckPointNodeState() (*sriovnetworkv1.SriovNetworkNodeState, error)
+	WriteCheckpointFile(*sriovnetworkv1.SriovNetworkNodeState) error
 }
 
-type StoreManager struct {
-	RunOnHost bool
+type storeManager struct {
 }
 
 // NewStoreManager: create the initial folders needed to store the info about the PF
 // and return a storeManager struct that implements the StoreManagerInterface interface
-func NewStoreManager(runOnHost bool) (StoreManagerInterface, error) {
-	if err := createOperatorConfigFolderIfNeeded(runOnHost); err != nil {
+func NewStoreManager() (StoreManagerInterface, error) {
+	if err := createOperatorConfigFolderIfNeeded(); err != nil {
 		return nil, err
 	}
 
-	return &StoreManager{runOnHost}, nil
+	return &storeManager{}, nil
 }
 
 // createOperatorConfigFolderIfNeeded: create the operator base folder on the host
 // together with the pci folder to save the PF status objects as json files
-func createOperatorConfigFolderIfNeeded(runOnHost bool) error {
-	hostExtension := getHostExtension(runOnHost)
-	SriovConfBasePathUse := filepath.Join(hostExtension, SriovConfBasePath)
+func createOperatorConfigFolderIfNeeded() error {
+	hostExtension := utils.GetHostExtension()
+	SriovConfBasePathUse := filepath.Join(hostExtension, consts.SriovConfBasePath)
 	_, err := os.Stat(SriovConfBasePathUse)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -57,7 +56,7 @@ func createOperatorConfigFolderIfNeeded(runOnHost bool) error {
 		}
 	}
 
-	PfAppliedConfigUse := filepath.Join(hostExtension, PfAppliedConfig)
+	PfAppliedConfigUse := filepath.Join(hostExtension, consts.PfAppliedConfig)
 	_, err = os.Stat(PfAppliedConfigUse)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -74,9 +73,9 @@ func createOperatorConfigFolderIfNeeded(runOnHost bool) error {
 }
 
 // ClearPCIAddressFolder: removes all the PFs storage information
-func (s *StoreManager) ClearPCIAddressFolder() error {
-	hostExtension := getHostExtension(s.RunOnHost)
-	PfAppliedConfigUse := filepath.Join(hostExtension, PfAppliedConfig)
+func (s *storeManager) ClearPCIAddressFolder() error {
+	hostExtension := utils.GetHostExtension()
+	PfAppliedConfigUse := filepath.Join(hostExtension, consts.PfAppliedConfig)
 	_, err := os.Stat(PfAppliedConfigUse)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -100,24 +99,24 @@ func (s *StoreManager) ClearPCIAddressFolder() error {
 
 // SaveLastPfAppliedStatus will save the PF object as a json into the /etc/sriov-operator/pci/<pci-address>
 // this function must be called after running the chroot function
-func (s *StoreManager) SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error {
+func (s *storeManager) SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error {
 	data, err := json.Marshal(PfInfo)
 	if err != nil {
 		log.Log.Error(err, "failed to marshal PF status", "status", *PfInfo)
 		return err
 	}
 
-	hostExtension := getHostExtension(s.RunOnHost)
-	pathFile := filepath.Join(hostExtension, PfAppliedConfig, PfInfo.PciAddress)
+	hostExtension := utils.GetHostExtension()
+	pathFile := filepath.Join(hostExtension, consts.PfAppliedConfig, PfInfo.PciAddress)
 	err = os.WriteFile(pathFile, data, 0644)
 	return err
 }
 
 // LoadPfsStatus convert the /etc/sriov-operator/pci/<pci-address> json to pfstatus
 // returns false if the file doesn't exist.
-func (s *StoreManager) LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interface, bool, error) {
-	hostExtension := getHostExtension(s.RunOnHost)
-	pathFile := filepath.Join(hostExtension, PfAppliedConfig, pciAddress)
+func (s *storeManager) LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interface, bool, error) {
+	hostExtension := utils.GetHostExtension()
+	pathFile := filepath.Join(hostExtension, consts.PfAppliedConfig, pciAddress)
 	pfStatus := &sriovnetworkv1.Interface{}
 	data, err := os.ReadFile(pathFile)
 	if err != nil {
@@ -137,9 +136,45 @@ func (s *StoreManager) LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interfa
 	return pfStatus, true, nil
 }
 
-func getHostExtension(runOnHost bool) string {
-	if !runOnHost {
-		return path.Join(FilesystemRoot, "/host")
+func (s *storeManager) GetCheckPointNodeState() (*sriovnetworkv1.SriovNetworkNodeState, error) {
+	log.Log.Info("getCheckPointNodeState()")
+	configdir := filepath.Join(vars.Destdir, consts.CheckpointFileName)
+	file, err := os.OpenFile(configdir, os.O_RDONLY, 0644)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	return FilesystemRoot
+	defer file.Close()
+	if err = json.NewDecoder(file).Decode(&sriovnetworkv1.InitialState); err != nil {
+		return nil, err
+	}
+
+	return &sriovnetworkv1.InitialState, nil
+}
+
+func (s *storeManager) WriteCheckpointFile(ns *sriovnetworkv1.SriovNetworkNodeState) error {
+	configdir := filepath.Join(vars.Destdir, consts.CheckpointFileName)
+	file, err := os.OpenFile(configdir, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	log.Log.Info("WriteCheckpointFile(): try to decode the checkpoint file")
+	if err = json.NewDecoder(file).Decode(&sriovnetworkv1.InitialState); err != nil {
+		log.Log.V(2).Error(err, "WriteCheckpointFile(): fail to decode, writing new file instead")
+		log.Log.Info("WriteCheckpointFile(): write checkpoint file")
+		if err = file.Truncate(0); err != nil {
+			return err
+		}
+		if _, err = file.Seek(0, 0); err != nil {
+			return err
+		}
+		if err = json.NewEncoder(file).Encode(*ns); err != nil {
+			return err
+		}
+		sriovnetworkv1.InitialState = *ns
+	}
+	return nil
 }

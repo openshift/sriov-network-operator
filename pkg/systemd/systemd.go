@@ -25,30 +25,33 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 const (
-	SriovSystemdConfigPath        = utils.SriovConfBasePath + "/sriov-interface-config.yaml"
-	SriovSystemdResultPath        = utils.SriovConfBasePath + "/sriov-interface-result.yaml"
-	sriovSystemdSupportedNicPath  = utils.SriovConfBasePath + "/sriov-supported-nics-ids.yaml"
+	SriovSystemdConfigPath        = consts.SriovConfBasePath + "/sriov-interface-config.yaml"
+	SriovSystemdResultPath        = consts.SriovConfBasePath + "/sriov-interface-result.yaml"
+	sriovSystemdSupportedNicPath  = consts.SriovConfBasePath + "/sriov-supported-nics-ids.yaml"
 	sriovSystemdServiceBinaryPath = "/var/lib/sriov/sriov-network-config-daemon"
 
-	SriovHostSystemdConfigPath        = "/host" + SriovSystemdConfigPath
-	SriovHostSystemdResultPath        = "/host" + SriovSystemdResultPath
-	sriovHostSystemdSupportedNicPath  = "/host" + sriovSystemdSupportedNicPath
-	sriovHostSystemdServiceBinaryPath = "/host" + sriovSystemdServiceBinaryPath
+	SriovHostSystemdConfigPath        = consts.Host + SriovSystemdConfigPath
+	SriovHostSystemdResultPath        = consts.Host + SriovSystemdResultPath
+	sriovHostSystemdSupportedNicPath  = consts.Host + sriovSystemdSupportedNicPath
+	sriovHostSystemdServiceBinaryPath = consts.Host + sriovSystemdServiceBinaryPath
 
 	SriovServicePath     = "/etc/systemd/system/sriov-config.service"
-	SriovHostServicePath = "/host" + SriovServicePath
+	SriovHostServicePath = consts.Host + SriovServicePath
 
-	HostSriovConfBasePath = "/host" + utils.SriovConfBasePath
+	HostSriovConfBasePath = consts.Host + consts.SriovConfBasePath
 )
+
+// TODO: move this to the host interface also
 
 type SriovConfig struct {
 	Spec            sriovnetworkv1.SriovNetworkNodeStateSpec `yaml:"spec"`
 	UnsupportedNics bool                                     `yaml:"unsupportedNics"`
-	PlatformType    utils.PlatformType                       `yaml:"platformType"`
+	PlatformType    consts.PlatformTypes                     `yaml:"platformType"`
 }
 
 type SriovResult struct {
@@ -67,15 +70,15 @@ func ReadConfFile() (spec *SriovConfig, err error) {
 	return spec, err
 }
 
-func WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, unsupportedNics bool, platformType utils.PlatformType) (bool, error) {
+func WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	newFile := false
 	// remove the device plugin revision as we don't need it here
 	newState.Spec.DpConfigVersion = ""
 
 	sriovConfig := &SriovConfig{
 		newState.Spec,
-		unsupportedNics,
-		platformType,
+		vars.DevMode,
+		vars.PlatformType,
 	}
 
 	_, err := os.Stat(SriovHostSystemdConfigPath)
