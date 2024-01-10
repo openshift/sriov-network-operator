@@ -82,6 +82,7 @@ type VirtualFunction struct {
 	Vlan       int    `json:"Vlan,omitempty"`
 	Mtu        int    `json:"mtu,omitempty"`
 	VfID       int    `json:"vfID"`
+	VdpaType   string `json:"vdpaType,omitempty"`
 }
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
