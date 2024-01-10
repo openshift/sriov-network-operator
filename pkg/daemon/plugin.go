@@ -82,7 +82,9 @@ func registerVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, helpers hel
 				log.Log.Error(err, "registerVendorPlugins(): failed to load plugin", "plugin-name", plug.Name())
 				return vendorPlugins, fmt.Errorf("registerVendorPlugins(): failed to load the %s plugin error: %v", plug.Name(), err)
 			}
-			vendorPlugins[plug.Name()] = plug
+			if _, ok := vendorPlugins[plug.Name()]; !ok {
+				vendorPlugins[plug.Name()] = plug
+			}
 		}
 	}
 

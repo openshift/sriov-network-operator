@@ -52,22 +52,21 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 	needReboot = false
 	err = nil
 	attributesToChange = map[string]mlx.MlxNic{}
+	mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}
 	mellanoxNicsSpec = map[string]sriovnetworkv1.Interface{}
 	processedNics := map[string]bool{}
 
-	// Read mellanox NIC status once
-	if len(mellanoxNicsStatus) == 0 {
-		for _, iface := range new.Status.Interfaces {
-			if iface.Vendor != mlx.MellanoxVendorID {
-				continue
-			}
+	// fill mellanoxNicsStatus
+	for _, iface := range new.Status.Interfaces {
+		if iface.Vendor != mlx.MellanoxVendorID {
+			continue
+		}
 
-			pciPrefix := mlx.GetPciAddressPrefix(iface.PciAddress)
-			if ifaces, ok := mellanoxNicsStatus[pciPrefix]; ok {
-				ifaces[iface.PciAddress] = iface
-			} else {
-				mellanoxNicsStatus[pciPrefix] = map[string]sriovnetworkv1.InterfaceExt{iface.PciAddress: iface}
-			}
+		pciPrefix := mlx.GetPciAddressPrefix(iface.PciAddress)
+		if ifaces, ok := mellanoxNicsStatus[pciPrefix]; ok {
+			ifaces[iface.PciAddress] = iface
+		} else {
+			mellanoxNicsStatus[pciPrefix] = map[string]sriovnetworkv1.InterfaceExt{iface.PciAddress: iface}
 		}
 	}
 
@@ -106,25 +105,29 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 		attrs := &mlx.MlxNic{TotalVfs: -1}
 		var changeWithoutReboot bool
 
-		var totalVfs int
-		totalVfs, needReboot, changeWithoutReboot = mlx.HandleTotalVfs(fwCurrent, fwNext, attrs, ifaceSpec, isDualPort, mellanoxNicsSpec)
+		totalVfs, totalVfsNeedReboot, totalVfsChangeWithoutReboot := mlx.HandleTotalVfs(fwCurrent, fwNext, attrs, ifaceSpec, isDualPort, mellanoxNicsSpec)
 		sriovEnNeedReboot, sriovEnChangeWithoutReboot := mlx.HandleEnableSriov(totalVfs, fwCurrent, fwNext, attrs)
-		needReboot = needReboot || sriovEnNeedReboot
-		changeWithoutReboot = changeWithoutReboot || sriovEnChangeWithoutReboot
-
-		// failing as we can't the fwTotalVf is lower than the request one on a nic with externallyManage configured
-		if ifaceSpec.ExternallyManaged && needReboot {
-			return true, true, fmt.Errorf(
-				"interface %s required a change in the TotalVfs but the policy is externally managed failing: firmware TotalVf %d requested TotalVf %d",
-				ifaceSpec.PciAddress, fwCurrent.TotalVfs, totalVfs)
-		}
+		needReboot = totalVfsNeedReboot || sriovEnNeedReboot
+		changeWithoutReboot = totalVfsChangeWithoutReboot || sriovEnChangeWithoutReboot
 
 		needLinkChange, err := mlx.HandleLinkType(pciPrefix, fwCurrent, attrs, mellanoxNicsSpec, mellanoxNicsStatus)
 		if err != nil {
 			return false, false, err
 		}
-
 		needReboot = needReboot || needLinkChange
+
+		// no FW changes allowed when NIC is externally managed
+		if ifaceSpec.ExternallyManaged {
+			if totalVfsNeedReboot || totalVfsChangeWithoutReboot {
+				return false, false, fmt.Errorf(
+					"interface %s required a change in the TotalVfs but the policy is externally managed failing: firmware TotalVf %d requested TotalVf %d",
+					ifaceSpec.PciAddress, fwCurrent.TotalVfs, totalVfs)
+			}
+			if needLinkChange {
+				return false, false, fmt.Errorf("change required for link type but the policy is externally managed, failing")
+			}
+		}
+
 		if needReboot || changeWithoutReboot {
 			attributesToChange[ifaceSpec.PciAddress] = *attrs
 		}
@@ -139,6 +142,11 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 		// Add the nic to processed Nics to not repeat the process for dual nic ports
 		processedNics[pciPrefix] = true
 		pciAddress := pciPrefix + "0"
+
+		// Skip externally managed NICs
+		if p.nicHasExternallyManagedPFs(portsMap) {
+			continue
+		}
 
 		// Skip unsupported devices
 		if id := sriovnetworkv1.GetVfDeviceID(portsMap[pciAddress].DeviceID); id == "" {
@@ -171,4 +179,24 @@ func (p *MellanoxPlugin) Apply() error {
 	}
 	log.Log.Info("mellanox-plugin Apply()")
 	return p.helpers.MlxConfigFW(attributesToChange)
+}
+
+// nicHasExternallyManagedPFs returns true if one of the ports(interface) of the NIC is marked as externally managed
+// in StoreManagerInterface.
+func (p *MellanoxPlugin) nicHasExternallyManagedPFs(nicPortsMap map[string]sriovnetworkv1.InterfaceExt) bool {
+	for _, iface := range nicPortsMap {
+		pfStatus, exist, err := p.helpers.LoadPfsStatus(iface.PciAddress)
+		if err != nil {
+			log.Log.Error(err, "failed to load PF status from disk", "address", iface.PciAddress)
+			continue
+		}
+		if !exist {
+			continue
+		}
+		if pfStatus.ExternallyManaged {
+			log.Log.V(2).Info("PF is extenally managed, skip FW TotalVfs reset")
+			return true
+		}
+	}
+	return false
 }

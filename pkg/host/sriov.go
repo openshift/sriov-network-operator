@@ -343,6 +343,12 @@ func (s *sriov) ConfigSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *
 	}
 	// set PF mtu
 	if iface.Mtu > 0 && iface.Mtu > ifaceStatus.Mtu {
+		if iface.ExternallyManaged {
+			err := fmt.Errorf("ConfigSriovDevice(): requested MTU(%d) is greater than configured MTU(%d) for device %s. cannot change MTU as policy is configured as ExternallyManaged",
+				iface.Mtu, ifaceStatus.Mtu, iface.PciAddress)
+			log.Log.Error(nil, err.Error())
+			return err
+		}
 		err = s.networkHelper.SetNetdevMTU(iface.PciAddress, iface.Mtu)
 		if err != nil {
 			log.Log.Error(err, "configSriovDevice(): fail to set mtu for PF", "device", iface.PciAddress)
