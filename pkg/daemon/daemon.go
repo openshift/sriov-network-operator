@@ -206,12 +206,13 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	}
 
 	var timeout int64 = 5
+	var metadataKey = "metadata.name"
 	dn.mu = &sync.Mutex{}
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
 		time.Second*15,
 		namespace,
 		func(lo *metav1.ListOptions) {
-			lo.FieldSelector = "metadata.name=" + vars.NodeName
+			lo.FieldSelector = metadataKey + "=" + vars.NodeName
 			lo.TimeoutSeconds = &timeout
 		},
 	)
@@ -228,7 +229,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 		time.Second*30,
 		namespace,
 		func(lo *metav1.ListOptions) {
-			lo.FieldSelector = "metadata.name=" + "default"
+			lo.FieldSelector = metadataKey + "=" + "default"
 		},
 	)
 

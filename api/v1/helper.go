@@ -37,7 +37,8 @@ const (
 	SriovCniStateAuto    = "auto"
 	SriovCniStateOff     = "off"
 	SriovCniStateOn      = "on"
-	SriovCniIpamEmpty    = "\"ipam\":{}"
+	SriovCniIpam         = "\"ipam\""
+	SriovCniIpamEmpty    = SriovCniIpam + ":{}"
 )
 
 const invalidVfIndex = -1
@@ -595,7 +596,7 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	}
 
 	if cr.Spec.IPAM != "" {
-		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
+		data.Data["SriovCniIpam"] = SriovCniIpam + ":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 	} else {
 		data.Data["SriovCniIpam"] = SriovCniIpamEmpty
 	}
@@ -730,7 +731,7 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	}
 
 	if cr.Spec.IPAM != "" {
-		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
+		data.Data["SriovCniIpam"] = SriovCniIpam + ":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 	} else {
 		data.Data["SriovCniIpam"] = SriovCniIpamEmpty
 	}
