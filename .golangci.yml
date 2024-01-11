@@ -25,6 +25,7 @@ linters-settings:
   goconst:
     min-len: 2
     min-occurrences: 2
+    ignore-tests: true
   gocritic:
     enabled-tags:
       - diagnostic
@@ -117,5 +118,8 @@ issues:
         - dupl
         - lll
         - stylecheck
+        - goconst
+    - path: test/conformance/tests
+      linters:
         - goconst
 
