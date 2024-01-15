@@ -142,15 +142,18 @@ func (n *network) IsSwitchdev(name string) bool {
 	return true
 }
 
+func mtuFilePath(ifaceName string, pciAddr string) string {
+	mtuFile := "net/" + ifaceName + "/mtu"
+	return filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, mtuFile)
+}
+
 func (n *network) GetNetdevMTU(pciAddr string) int {
 	log.Log.V(2).Info("GetNetdevMTU(): get MTU", "device", pciAddr)
 	ifaceName := n.TryGetInterfaceName(pciAddr)
 	if ifaceName == "" {
 		return 0
 	}
-	mtuFile := "net/" + ifaceName + "/mtu"
-	mtuFilePath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, mtuFile)
-	data, err := os.ReadFile(mtuFilePath)
+	data, err := os.ReadFile(mtuFilePath(ifaceName, pciAddr))
 	if err != nil {
 		log.Log.Error(err, "GetNetdevMTU(): fail to read mtu file", "path", mtuFilePath)
 		return 0
@@ -179,8 +182,7 @@ func (n *network) SetNetdevMTU(pciAddr string, mtu int) error {
 		if len(ifaceName) < 1 {
 			return fmt.Errorf("SetNetdevMTU(): interface name is empty")
 		}
-		mtuFile := "net/" + ifaceName[0] + "/mtu"
-		mtuFilePath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, mtuFile)
+		mtuFilePath := mtuFilePath(ifaceName[0], pciAddr)
 		return os.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
 	}, backoff.WithMaxRetries(b, 10))
 	if err != nil {

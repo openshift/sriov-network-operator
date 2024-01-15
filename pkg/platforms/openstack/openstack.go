@@ -24,15 +24,17 @@ const (
 	ospHostMetaDataDir     = "/host/var/config/openstack/2018-08-27"
 	ospMetaDataDir         = "/var/config/openstack/2018-08-27"
 	ospMetaDataBaseURL     = "http://169.254.169.254/openstack/2018-08-27"
-	ospHostNetworkDataFile = ospHostMetaDataDir + "/network_data.json"
-	ospHostMetaDataFile    = ospHostMetaDataDir + "/meta_data.json"
-	ospNetworkDataURL      = ospMetaDataBaseURL + "/network_data.json"
-	ospMetaDataURL         = ospMetaDataBaseURL + "/meta_data.json"
+	ospNetworkDataJSON     = "network_data.json"
+	ospMetaDataJSON        = "meta_data.json"
+	ospHostNetworkDataFile = ospHostMetaDataDir + "/" + ospNetworkDataJSON
+	ospHostMetaDataFile    = ospHostMetaDataDir + "/" + ospMetaDataJSON
+	ospNetworkDataURL      = ospMetaDataBaseURL + "/" + ospNetworkDataJSON
+	ospMetaDataURL         = ospMetaDataBaseURL + "/" + ospMetaDataJSON
 )
 
 var (
-	ospNetworkDataFile = ospMetaDataDir + "/network_data.json"
-	ospMetaDataFile    = ospMetaDataDir + "/meta_data.json"
+	ospNetworkDataFile = ospMetaDataDir + "/" + ospNetworkDataJSON
+	ospMetaDataFile    = ospMetaDataDir + "/" + ospMetaDataJSON
 )
 
 //go:generate ../../../bin/mockgen -destination mock/mock_openstack.go -source openstack.go
