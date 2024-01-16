@@ -757,6 +757,20 @@ func (mr *MockHostManagerInterfaceMockRecorder) SetNetdevMTU(pciAddr, mtu interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNetdevMTU", reflect.TypeOf((*MockHostManagerInterface)(nil).SetNetdevMTU), pciAddr, mtu)
 }
 
+// SetNicSriovMode mocks base method.
+func (m *MockHostManagerInterface) SetNicSriovMode(pciAddr, mode string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetNicSriovMode", pciAddr, mode)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetNicSriovMode indicates an expected call of SetNicSriovMode.
+func (mr *MockHostManagerInterfaceMockRecorder) SetNicSriovMode(pciAddr, mode interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNicSriovMode", reflect.TypeOf((*MockHostManagerInterface)(nil).SetNicSriovMode), pciAddr, mode)
+}
+
 // SetSriovNumVfs mocks base method.
 func (m *MockHostManagerInterface) SetSriovNumVfs(pciAddr string, numVfs int) error {
 	m.ctrl.T.Helper()
