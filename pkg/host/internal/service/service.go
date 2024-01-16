@@ -1,4 +1,4 @@
-package host
+package service
 
 import (
 	"fmt"
@@ -13,56 +13,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
 // TODO: handle this to support unit-tests
 const systemdDir = "/usr/lib/systemd/system/"
 
-var (
-	// Remove run condition form the service
-	ConditionOpt = &unit.UnitOption{
-		Section: "Unit",
-		Name:    "ConditionPathExists",
-		Value:   "!/etc/ignition-machine-config-encapsulated.json",
-	}
-)
-
-type ServiceInterface interface {
-	// IsServiceExist checks if the requested systemd service exist on the system
-	IsServiceExist(string) (bool, error)
-	// IsServiceEnabled checks if the requested systemd service is enabled on the system
-	IsServiceEnabled(string) (bool, error)
-	// ReadService reads a systemd servers and return it as a struct
-	ReadService(string) (*Service, error)
-	// EnableService enables a systemd server on the host
-	EnableService(service *Service) error
-	// ReadServiceManifestFile reads the systemd manifest for a specific service
-	ReadServiceManifestFile(path string) (*Service, error)
-	// RemoveFromService removes a systemd service from the host
-	RemoveFromService(service *Service, options ...*unit.UnitOption) (*Service, error)
-	// ReadScriptManifestFile reads the script manifest from a systemd service
-	ReadScriptManifestFile(path string) (*ScriptManifestFile, error)
-	// ReadServiceInjectionManifestFile reads the injection manifest file for the systemd service
-	ReadServiceInjectionManifestFile(path string) (*Service, error)
-	// CompareServices compare two servers and return true if they are equal
-	CompareServices(serviceA, serviceB *Service) (bool, error)
-	// UpdateSystemService updates a system service on the host
-	UpdateSystemService(serviceObj *Service) error
-}
-
 type service struct {
 	utilsHelper utils.CmdInterface
 }
 
-func newServiceInterface(utilsHelper utils.CmdInterface) ServiceInterface {
+func New(utilsHelper utils.CmdInterface) types.ServiceInterface {
 	return &service{utilsHelper: utilsHelper}
-}
-
-type Service struct {
-	Name    string
-	Path    string
-	Content string
 }
 
 // ServiceInjectionManifestFile service injection manifest file structure
@@ -70,20 +33,6 @@ type ServiceInjectionManifestFile struct {
 	Name    string
 	Dropins []struct {
 		Contents string
-	}
-}
-
-// ServiceManifestFile service manifest file structure
-type ServiceManifestFile struct {
-	Name     string
-	Contents string
-}
-
-// ScriptManifestFile script manifest file structure
-type ScriptManifestFile struct {
-	Path     string
-	Contents struct {
-		Inline string
 	}
 }
 
@@ -120,13 +69,13 @@ func (s *service) IsServiceEnabled(servicePath string) (bool, error) {
 }
 
 // ReadService read service from given path
-func (s *service) ReadService(servicePath string) (*Service, error) {
+func (s *service) ReadService(servicePath string) (*types.Service, error) {
 	data, err := os.ReadFile(path.Join(consts.Chroot, servicePath))
 	if err != nil {
 		return nil, err
 	}
 
-	return &Service{
+	return &types.Service{
 		Name:    filepath.Base(servicePath),
 		Path:    servicePath,
 		Content: string(data),
@@ -134,7 +83,7 @@ func (s *service) ReadService(servicePath string) (*Service, error) {
 }
 
 // EnableService creates service file and enables it with systemctl enable
-func (s *service) EnableService(service *Service) error {
+func (s *service) EnableService(service *types.Service) error {
 	// Write service file
 	err := os.WriteFile(path.Join(consts.Chroot, service.Path), []byte(service.Content), 0644)
 	if err != nil {
@@ -154,7 +103,7 @@ func (s *service) EnableService(service *Service) error {
 }
 
 // CompareServices compare 2 service and return true if serviceA has all the fields of serviceB
-func (s *service) CompareServices(serviceA, serviceB *Service) (bool, error) {
+func (s *service) CompareServices(serviceA, serviceB *types.Service) (bool, error) {
 	optsA, err := unit.Deserialize(strings.NewReader(serviceA.Content))
 	if err != nil {
 		return false, err
@@ -179,7 +128,7 @@ OUTER:
 }
 
 // RemoveFromService removes given fields from service
-func (s *service) RemoveFromService(service *Service, options ...*unit.UnitOption) (*Service, error) {
+func (s *service) RemoveFromService(service *types.Service, options ...*unit.UnitOption) (*types.Service, error) {
 	opts, err := unit.Deserialize(strings.NewReader(service.Content))
 	if err != nil {
 		return nil, err
@@ -202,7 +151,7 @@ OUTER:
 		return nil, err
 	}
 
-	return &Service{
+	return &types.Service{
 		Name:    service.Name,
 		Path:    service.Path,
 		Content: string(data),
@@ -210,7 +159,7 @@ OUTER:
 }
 
 // ReadServiceInjectionManifestFile reads service injection file
-func (s *service) ReadServiceInjectionManifestFile(path string) (*Service, error) {
+func (s *service) ReadServiceInjectionManifestFile(path string) (*types.Service, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -221,7 +170,7 @@ func (s *service) ReadServiceInjectionManifestFile(path string) (*Service, error
 		return nil, err
 	}
 
-	return &Service{
+	return &types.Service{
 		Name:    serviceContent.Name,
 		Path:    systemdDir + serviceContent.Name,
 		Content: serviceContent.Dropins[0].Contents,
@@ -229,18 +178,18 @@ func (s *service) ReadServiceInjectionManifestFile(path string) (*Service, error
 }
 
 // ReadServiceManifestFile reads service file
-func (s *service) ReadServiceManifestFile(path string) (*Service, error) {
+func (s *service) ReadServiceManifestFile(path string) (*types.Service, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var serviceFile *ServiceManifestFile
+	var serviceFile *types.ServiceManifestFile
 	if err := yaml.Unmarshal(data, &serviceFile); err != nil {
 		return nil, err
 	}
 
-	return &Service{
+	return &types.Service{
 		Name:    serviceFile.Name,
 		Path:    "/etc/systemd/system/" + serviceFile.Name,
 		Content: serviceFile.Contents,
@@ -248,13 +197,13 @@ func (s *service) ReadServiceManifestFile(path string) (*Service, error) {
 }
 
 // ReadScriptManifestFile reads script file
-func (s *service) ReadScriptManifestFile(path string) (*ScriptManifestFile, error) {
+func (s *service) ReadScriptManifestFile(path string) (*types.ScriptManifestFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var scriptFile *ScriptManifestFile
+	var scriptFile *types.ScriptManifestFile
 	if err := yaml.Unmarshal(data, &scriptFile); err != nil {
 		return nil, err
 	}
@@ -262,7 +211,7 @@ func (s *service) ReadScriptManifestFile(path string) (*ScriptManifestFile, erro
 	return scriptFile, nil
 }
 
-func (s *service) UpdateSystemService(serviceObj *Service) error {
+func (s *service) UpdateSystemService(serviceObj *types.Service) error {
 	systemService, err := s.ReadService(serviceObj.Path)
 	if err != nil {
 		return err
@@ -284,7 +233,7 @@ func (s *service) UpdateSystemService(serviceObj *Service) error {
 }
 
 // appendToService appends given fields to service
-func appendToService(service *Service, options ...*unit.UnitOption) (*Service, error) {
+func appendToService(service *types.Service, options ...*unit.UnitOption) (*types.Service, error) {
 	serviceOptions, err := unit.Deserialize(strings.NewReader(service.Content))
 	if err != nil {
 		return nil, err
@@ -305,7 +254,7 @@ OUTER:
 		return nil, err
 	}
 
-	return &Service{
+	return &types.Service{
 		Name:    service.Name,
 		Path:    service.Path,
 		Content: string(data),

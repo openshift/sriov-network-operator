@@ -1,4 +1,4 @@
-package host
+package kernel
 
 import (
 	"os"
@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
 )
@@ -21,7 +22,7 @@ func assertFileContentsEquals(path, expectedContent string) {
 var _ = Describe("Kernel", func() {
 	Context("Drivers", func() {
 		var (
-			k KernelInterface
+			k types.KernelInterface
 		)
 		configureFS := func(f *fakefilesystem.FS) {
 			var (
@@ -33,7 +34,7 @@ var _ = Describe("Kernel", func() {
 			DeferCleanup(cleanFakeFs)
 		}
 		BeforeEach(func() {
-			k = newKernelInterface(nil)
+			k = New(nil)
 		})
 		Context("Unbind, UnbindDriverByBusAndDevice", func() {
 			It("unknown device", func() {

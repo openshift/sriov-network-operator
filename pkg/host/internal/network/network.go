@@ -1,4 +1,4 @@
-package host
+package network
 
 import (
 	"fmt"
@@ -14,38 +14,16 @@ import (
 	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
-
-type NetworkInterface interface {
-	// TryToGetVirtualInterfaceName tries to find the virtio interface name base on pci address
-	// used for virtual environment where we pass SR-IOV virtual function into the system
-	// supported platform openstack
-	TryToGetVirtualInterfaceName(string) string
-	// TryGetInterfaceName tries to find the SR-IOV virtual interface name base on pci address
-	TryGetInterfaceName(string) string
-	// GetPhysSwitchID returns the physical switch ID for a specific pci address
-	GetPhysSwitchID(string) (string, error)
-	// GetPhysPortName returns the physical port name for a specific pci address
-	GetPhysPortName(string) (string, error)
-	// IsSwitchdev returns true of the pci address is on switchdev mode
-	IsSwitchdev(string) bool
-	// GetNetdevMTU returns the interface MTU for devices attached to kernel drivers
-	GetNetdevMTU(string) int
-	// SetNetdevMTU sets the MTU for a request interface
-	SetNetdevMTU(string, int) error
-	// GetNetDevMac returns the network interface mac address
-	GetNetDevMac(string) string
-	// GetNetDevLinkSpeed returns the network interface link speed
-	GetNetDevLinkSpeed(string) string
-}
 
 type network struct {
 	utilsHelper utils.CmdInterface
 }
 
-func newNetworkInterface(utilsHelper utils.CmdInterface) NetworkInterface {
+func New(utilsHelper utils.CmdInterface) types.NetworkInterface {
 	return &network{utilsHelper: utilsHelper}
 }
 
