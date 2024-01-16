@@ -11,6 +11,8 @@ import (
 )
 
 // Contains all the host manipulation functions
+//
+//go:generate ../../bin/mockgen -destination mock/mock_host.go -source manager.go
 type HostManagerInterface interface {
 	types.KernelInterface
 	types.NetworkInterface
