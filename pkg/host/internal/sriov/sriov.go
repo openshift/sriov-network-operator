@@ -19,6 +19,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	netlinkPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/store"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
@@ -31,13 +32,20 @@ type sriov struct {
 	kernelHelper  types.KernelInterface
 	networkHelper types.NetworkInterface
 	udevHelper    types.UdevInterface
+	netlinkLib    netlinkPkg.NetlinkLib
 }
 
 func New(utilsHelper utils.CmdInterface,
 	kernelHelper types.KernelInterface,
 	networkHelper types.NetworkInterface,
-	udevHelper types.UdevInterface) types.SriovInterface {
-	return &sriov{utilsHelper: utilsHelper, kernelHelper: kernelHelper, networkHelper: networkHelper, udevHelper: udevHelper}
+	udevHelper types.UdevInterface,
+	netlinkLib netlinkPkg.NetlinkLib) types.SriovInterface {
+	return &sriov{utilsHelper: utilsHelper,
+		kernelHelper:  kernelHelper,
+		networkHelper: networkHelper,
+		udevHelper:    udevHelper,
+		netlinkLib:    netlinkLib,
+	}
 }
 
 func (s *sriov) SetSriovNumVfs(pciAddr string, numVfs int) error {
@@ -124,10 +132,10 @@ func (s *sriov) SetVfGUID(vfAddr string, pfLink netlink.Link) error {
 		return err
 	}
 	guid := utils.GenerateRandomGUID()
-	if err := netlink.LinkSetVfNodeGUID(pfLink, vfID, guid); err != nil {
+	if err := s.netlinkLib.LinkSetVfNodeGUID(pfLink, vfID, guid); err != nil {
 		return err
 	}
-	if err := netlink.LinkSetVfPortGUID(pfLink, vfID, guid); err != nil {
+	if err := s.netlinkLib.LinkSetVfPortGUID(pfLink, vfID, guid); err != nil {
 		return err
 	}
 	if err = s.kernelHelper.Unbind(vfAddr); err != nil {
@@ -143,7 +151,7 @@ func (s *sriov) VFIsReady(pciAddr string) (netlink.Link, error) {
 	var vfLink netlink.Link
 	err = wait.PollImmediate(time.Second, 10*time.Second, func() (bool, error) {
 		vfName := s.networkHelper.TryGetInterfaceName(pciAddr)
-		vfLink, err = netlink.LinkByName(vfName)
+		vfLink, err = s.netlinkLib.LinkByName(vfName)
 		if err != nil {
 			log.Log.Error(err, "VFIsReady(): unable to get VF link", "device", pciAddr)
 		}
@@ -164,7 +172,7 @@ func (s *sriov) SetVfAdminMac(vfAddr string, pfLink, vfLink netlink.Link) error 
 		return err
 	}
 
-	if err := netlink.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
+	if err := s.netlinkLib.LinkSetVfHardwareAddr(pfLink, vfID, vfLink.Attrs().HardwareAddr); err != nil {
 		return err
 	}
 
@@ -333,7 +341,7 @@ func (s *sriov) ConfigSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *
 		if err != nil {
 			log.Log.Error(err, "configSriovDevice(): unable to parse VFs for device", "device", iface.PciAddress)
 		}
-		pfLink, err := netlink.LinkByName(iface.Name)
+		pfLink, err := s.netlinkLib.LinkByName(iface.Name)
 		if err != nil {
 			log.Log.Error(err, "configSriovDevice(): unable to get PF link for device", "device", iface)
 			return err
@@ -424,12 +432,12 @@ func (s *sriov) ConfigSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *
 		}
 	}
 	// Set PF link up
-	pfLink, err := netlink.LinkByName(ifaceStatus.Name)
+	pfLink, err := s.netlinkLib.LinkByName(ifaceStatus.Name)
 	if err != nil {
 		return err
 	}
 	if pfLink.Attrs().OperState != netlink.OperUp {
-		err = netlink.LinkSetUp(pfLink)
+		err = s.netlinkLib.LinkSetUp(pfLink)
 		if err != nil {
 			return err
 		}
@@ -576,7 +584,7 @@ func (s *sriov) ConfigSriovDeviceVirtual(iface *sriovnetworkv1.Interface) error 
 func (s *sriov) GetNicSriovMode(pciAddress string) (string, error) {
 	log.Log.V(2).Info("GetNicSriovMode()", "device", pciAddress)
 
-	devLink, err := netlink.DevLinkGetDeviceByName("pci", pciAddress)
+	devLink, err := s.netlinkLib.DevLinkGetDeviceByName("pci", pciAddress)
 	if err != nil {
 		if errors.Is(err, syscall.ENODEV) {
 			// the device doesn't support devlink
@@ -591,7 +599,7 @@ func (s *sriov) GetNicSriovMode(pciAddress string) (string, error) {
 func (s *sriov) GetLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
 	log.Log.V(2).Info("GetLinkType()", "device", ifaceStatus.PciAddress)
 	if ifaceStatus.Name != "" {
-		link, err := netlink.LinkByName(ifaceStatus.Name)
+		link, err := s.netlinkLib.LinkByName(ifaceStatus.Name)
 		if err != nil {
 			log.Log.Error(err, "GetLinkType(): failed to get link", "device", ifaceStatus.Name)
 			return ""
