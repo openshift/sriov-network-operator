@@ -1,4 +1,4 @@
-package host
+package kernel
 
 import (
 	"errors"
@@ -11,77 +11,17 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
-
-type KernelInterface interface {
-	// TryEnableTun load the tun kernel module
-	TryEnableTun()
-	// TryEnableVhostNet load the vhost-net kernel module
-	TryEnableVhostNet()
-	// TryEnableRdma tries to enable RDMA on the machine base on the operating system
-	// if the package doesn't exist it will also will try to install it
-	// supported operating systems are RHEL RHCOS and ubuntu
-	TryEnableRdma() (bool, error)
-	// TriggerUdevEvent triggers a udev event
-	TriggerUdevEvent() error
-	// GetCurrentKernelArgs reads the /proc/cmdline to check the current kernel arguments
-	GetCurrentKernelArgs() (string, error)
-	// IsKernelArgsSet check is the requested kernel arguments are set
-	IsKernelArgsSet(string, string) bool
-	// Unbind unbinds a virtual function from is current driver
-	Unbind(string) error
-	// BindDpdkDriver binds the virtual function to a DPDK driver
-	BindDpdkDriver(string, string) error
-	// BindDefaultDriver binds the virtual function to is default driver
-	BindDefaultDriver(string) error
-	// BindDriverByBusAndDevice binds device to the provided driver
-	// bus - the bus path in the sysfs, e.g. "pci" or "vdpa"
-	// device - the name of the device on the bus, e.g. 0000:85:1e.5 for PCI or vpda1 for VDPA
-	// driver - the name of the driver, e.g. vfio-pci or vhost_vdpa.
-	BindDriverByBusAndDevice(bus, device, driver string) error
-	// HasDriver returns try if the virtual function is bind to a driver
-	HasDriver(string) (bool, string)
-	// RebindVfToDefaultDriver rebinds the virtual function to is default driver
-	RebindVfToDefaultDriver(string) error
-	// UnbindDriverIfNeeded unbinds the virtual function from a driver if needed
-	UnbindDriverIfNeeded(string, bool) error
-	// UnbindDriverByBusAndDevice unbind device identified by bus and device ID from the driver
-	// bus - the bus path in the sysfs, e.g. "pci" or "vdpa"
-	// device - the name of the device on the bus, e.g. 0000:85:1e.5 for PCI or vpda1 for VDPA
-	UnbindDriverByBusAndDevice(bus, device string) error
-	// LoadKernelModule loads a kernel module to the host
-	LoadKernelModule(name string, args ...string) error
-	// IsKernelModuleLoaded returns try if the requested kernel module is loaded
-	IsKernelModuleLoaded(string) (bool, error)
-	// ReloadDriver reloads a requested driver
-	ReloadDriver(string) error
-	// IsKernelLockdownMode returns true if the kernel is in lockdown mode
-	IsKernelLockdownMode() bool
-	// IsRHELSystem returns try if the system is a RHEL base
-	IsRHELSystem() (bool, error)
-	// IsUbuntuSystem returns try if the system is an ubuntu base
-	IsUbuntuSystem() (bool, error)
-	// IsCoreOS returns true if the system is a CoreOS or RHCOS base
-	IsCoreOS() (bool, error)
-	// RdmaIsLoaded returns try if RDMA kernel modules are loaded
-	RdmaIsLoaded() (bool, error)
-	// EnableRDMA enable RDMA on the system
-	EnableRDMA(string, string, string) (bool, error)
-	// InstallRDMA install RDMA packages on the system
-	InstallRDMA(string) error
-	// EnableRDMAOnRHELMachine enable RDMA on a RHEL base system
-	EnableRDMAOnRHELMachine() (bool, error)
-	// GetOSPrettyName returns OS name
-	GetOSPrettyName() (string, error)
-}
 
 type kernel struct {
 	utilsHelper utils.CmdInterface
 }
 
-func newKernelInterface(utilsHelper utils.CmdInterface) KernelInterface {
+func New(utilsHelper utils.CmdInterface) types.KernelInterface {
 	return &kernel{utilsHelper: utilsHelper}
 }
 
@@ -384,7 +324,7 @@ func (k *kernel) EnableRDMAOnRHELMachine() (bool, error) {
 
 	// RHEL
 	log.Log.Info("EnableRDMAOnRHELMachine(): enabling RDMA on RHEL machine")
-	isRDMAEnable, err := k.EnableRDMA(rhelRDMAConditionFile, rhelRDMAServiceName, rhelPackageManager)
+	isRDMAEnable, err := k.EnableRDMA(internal.RhelRDMAConditionFile, internal.RhelRDMAServiceName, internal.RhelPackageManager)
 	if err != nil {
 		log.Log.Error(err, "EnableRDMAOnRHELMachine(): failed to enable RDMA on RHEL machine")
 		return false, err
@@ -413,7 +353,7 @@ func (k *kernel) EnableRDMAOnRHELMachine() (bool, error) {
 
 func (k *kernel) EnableRDMAOnUbuntuMachine() (bool, error) {
 	log.Log.Info("EnableRDMAOnUbuntuMachine(): enabling RDMA on RHEL machine")
-	isRDMAEnable, err := k.EnableRDMA(ubuntuRDMAConditionFile, ubuntuRDMAServiceName, ubuntuPackageManager)
+	isRDMAEnable, err := k.EnableRDMA(internal.UbuntuRDMAConditionFile, internal.UbuntuRDMAServiceName, internal.UbuntuPackageManager)
 	if err != nil {
 		log.Log.Error(err, "EnableRDMAOnUbuntuMachine(): failed to enable RDMA on Ubuntu machine")
 		return false, err
@@ -442,9 +382,9 @@ func (k *kernel) EnableRDMAOnUbuntuMachine() (bool, error) {
 
 func (k *kernel) IsRHELSystem() (bool, error) {
 	log.Log.Info("IsRHELSystem(): checking for RHEL machine")
-	path := redhatReleaseFile
+	path := internal.RedhatReleaseFile
 	if !vars.UsingSystemdMode {
-		path = filepath.Join(hostPathFromDaemon, path)
+		path = filepath.Join(internal.HostPathFromDaemon, path)
 	}
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
@@ -461,9 +401,9 @@ func (k *kernel) IsRHELSystem() (bool, error) {
 
 func (k *kernel) IsCoreOS() (bool, error) {
 	log.Log.Info("IsCoreOS(): checking for CoreOS machine")
-	path := redhatReleaseFile
+	path := internal.RedhatReleaseFile
 	if !vars.UsingSystemdMode {
-		path = filepath.Join(hostPathFromDaemon, path)
+		path = filepath.Join(internal.HostPathFromDaemon, path)
 	}
 
 	data, err := os.ReadFile(path)
@@ -481,9 +421,9 @@ func (k *kernel) IsCoreOS() (bool, error) {
 
 func (k *kernel) IsUbuntuSystem() (bool, error) {
 	log.Log.Info("IsUbuntuSystem(): checking for Ubuntu machine")
-	path := genericOSReleaseFile
+	path := internal.GenericOSReleaseFile
 	if !vars.UsingSystemdMode {
-		path = filepath.Join(hostPathFromDaemon, path)
+		path = filepath.Join(internal.HostPathFromDaemon, path)
 	}
 
 	if _, err := os.Stat(path); err != nil {
@@ -530,7 +470,7 @@ func (k *kernel) RdmaIsLoaded() (bool, error) {
 func (k *kernel) EnableRDMA(conditionFilePath, serviceName, packageManager string) (bool, error) {
 	path := conditionFilePath
 	if !vars.UsingSystemdMode {
-		path = filepath.Join(hostPathFromDaemon, path)
+		path = filepath.Join(internal.HostPathFromDaemon, path)
 	}
 	log.Log.Info("EnableRDMA(): checking for service file", "path", path)
 
@@ -604,9 +544,9 @@ func (k *kernel) ReloadDriver(driverName string) error {
 }
 
 func (k *kernel) GetOSPrettyName() (string, error) {
-	path := genericOSReleaseFile
+	path := internal.GenericOSReleaseFile
 	if !vars.UsingSystemdMode {
-		path = filepath.Join(hostPathFromDaemon, path)
+		path = filepath.Join(internal.HostPathFromDaemon, path)
 	}
 
 	log.Log.Info("GetOSPrettyName(): getting os name from os-release file")

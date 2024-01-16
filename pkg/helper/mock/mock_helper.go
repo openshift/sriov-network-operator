@@ -11,7 +11,8 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	ghw "github.com/jaypipes/ghw"
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	host "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
+	store "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/store"
+	types "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	mlxutils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 	netlink "github.com/vishvananda/netlink"
 )
@@ -82,17 +83,17 @@ func (mr *MockHostHelpersInterfaceMockRecorder) BindDpdkDriver(arg0, arg1 interf
 }
 
 // BindDriverByBusAndDevice mocks base method.
-func (m *MockHostHelpersInterface) BindDriverByBusAndDevice(arg0, arg1, arg2 string) error {
+func (m *MockHostHelpersInterface) BindDriverByBusAndDevice(bus, device, driver string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BindDriverByBusAndDevice", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "BindDriverByBusAndDevice", bus, device, driver)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // BindDriverByBusAndDevice indicates an expected call of BindDriverByBusAndDevice.
-func (mr *MockHostHelpersInterfaceMockRecorder) BindDriverByBusAndDevice(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockHostHelpersInterfaceMockRecorder) BindDriverByBusAndDevice(bus, device, driver interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BindDriverByBusAndDevice", reflect.TypeOf((*MockHostHelpersInterface)(nil).BindDriverByBusAndDevice), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BindDriverByBusAndDevice", reflect.TypeOf((*MockHostHelpersInterface)(nil).BindDriverByBusAndDevice), bus, device, driver)
 }
 
 // Chroot mocks base method.
@@ -125,7 +126,7 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ClearPCIAddressFolder() *gomock.
 }
 
 // CompareServices mocks base method.
-func (m *MockHostHelpersInterface) CompareServices(serviceA, serviceB *host.Service) (bool, error) {
+func (m *MockHostHelpersInterface) CompareServices(serviceA, serviceB *types.Service) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CompareServices", serviceA, serviceB)
 	ret0, _ := ret[0].(bool)
@@ -168,7 +169,7 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ConfigSriovDeviceVirtual(iface i
 }
 
 // ConfigSriovInterfaces mocks base method.
-func (m *MockHostHelpersInterface) ConfigSriovInterfaces(arg0 host.StoreManagerInterface, arg1 []v1.Interface, arg2 []v1.InterfaceExt, arg3 map[string]bool) error {
+func (m *MockHostHelpersInterface) ConfigSriovInterfaces(arg0 store.ManagerInterface, arg1 []v1.Interface, arg2 []v1.InterfaceExt, arg3 map[string]bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ConfigSriovInterfaces", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -182,7 +183,7 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ConfigSriovInterfaces(arg0, arg1
 }
 
 // DiscoverSriovDevices mocks base method.
-func (m *MockHostHelpersInterface) DiscoverSriovDevices(arg0 host.StoreManagerInterface) ([]v1.InterfaceExt, error) {
+func (m *MockHostHelpersInterface) DiscoverSriovDevices(arg0 store.ManagerInterface) ([]v1.InterfaceExt, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DiscoverSriovDevices", arg0)
 	ret0, _ := ret[0].([]v1.InterfaceExt)
@@ -227,7 +228,7 @@ func (mr *MockHostHelpersInterfaceMockRecorder) EnableRDMAOnRHELMachine() *gomoc
 }
 
 // EnableService mocks base method.
-func (m *MockHostHelpersInterface) EnableService(service *host.Service) error {
+func (m *MockHostHelpersInterface) EnableService(service *types.Service) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "EnableService", service)
 	ret0, _ := ret[0].(error)
@@ -687,10 +688,10 @@ func (mr *MockHostHelpersInterfaceMockRecorder) RdmaIsLoaded() *gomock.Call {
 }
 
 // ReadScriptManifestFile mocks base method.
-func (m *MockHostHelpersInterface) ReadScriptManifestFile(path string) (*host.ScriptManifestFile, error) {
+func (m *MockHostHelpersInterface) ReadScriptManifestFile(path string) (*types.ScriptManifestFile, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadScriptManifestFile", path)
-	ret0, _ := ret[0].(*host.ScriptManifestFile)
+	ret0, _ := ret[0].(*types.ScriptManifestFile)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -702,10 +703,10 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ReadScriptManifestFile(path inte
 }
 
 // ReadService mocks base method.
-func (m *MockHostHelpersInterface) ReadService(arg0 string) (*host.Service, error) {
+func (m *MockHostHelpersInterface) ReadService(arg0 string) (*types.Service, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadService", arg0)
-	ret0, _ := ret[0].(*host.Service)
+	ret0, _ := ret[0].(*types.Service)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -717,10 +718,10 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ReadService(arg0 interface{}) *g
 }
 
 // ReadServiceInjectionManifestFile mocks base method.
-func (m *MockHostHelpersInterface) ReadServiceInjectionManifestFile(path string) (*host.Service, error) {
+func (m *MockHostHelpersInterface) ReadServiceInjectionManifestFile(path string) (*types.Service, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadServiceInjectionManifestFile", path)
-	ret0, _ := ret[0].(*host.Service)
+	ret0, _ := ret[0].(*types.Service)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -732,10 +733,10 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ReadServiceInjectionManifestFile
 }
 
 // ReadServiceManifestFile mocks base method.
-func (m *MockHostHelpersInterface) ReadServiceManifestFile(path string) (*host.Service, error) {
+func (m *MockHostHelpersInterface) ReadServiceManifestFile(path string) (*types.Service, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadServiceManifestFile", path)
-	ret0, _ := ret[0].(*host.Service)
+	ret0, _ := ret[0].(*types.Service)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -775,14 +776,14 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ReloadDriver(arg0 interface{}) *
 }
 
 // RemoveFromService mocks base method.
-func (m *MockHostHelpersInterface) RemoveFromService(service *host.Service, options ...*unit.UnitOption) (*host.Service, error) {
+func (m *MockHostHelpersInterface) RemoveFromService(service *types.Service, options ...*unit.UnitOption) (*types.Service, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{service}
 	for _, a := range options {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "RemoveFromService", varargs...)
-	ret0, _ := ret[0].(*host.Service)
+	ret0, _ := ret[0].(*types.Service)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1037,7 +1038,7 @@ func (mr *MockHostHelpersInterfaceMockRecorder) UnbindDriverIfNeeded(arg0, arg1 
 }
 
 // UpdateSystemService mocks base method.
-func (m *MockHostHelpersInterface) UpdateSystemService(serviceObj *host.Service) error {
+func (m *MockHostHelpersInterface) UpdateSystemService(serviceObj *types.Service) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateSystemService", serviceObj)
 	ret0, _ := ret[0].(error)
