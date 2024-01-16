@@ -132,6 +132,9 @@ type SriovInterface interface {
 	// GetNicSriovMode returns the interface mode
 	// supported modes SR-IOV legacy and switchdev
 	GetNicSriovMode(pciAddr string) (string, error)
+	// SetNicSriovMode configure the interface mode
+	// supported modes SR-IOV legacy and switchdev
+	SetNicSriovMode(pciAddr, mode string) error
 	// GetLinkType return the link type
 	// supported types are ethernet and infiniband
 	GetLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string
