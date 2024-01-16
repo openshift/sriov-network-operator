@@ -57,6 +57,9 @@ func (s *sriov) SetSriovNumVfs(pciAddr string, numVfs int) error {
 		log.Log.Error(err, "SetSriovNumVfs(): fail to reset NumVfs file", "path", numVfsFilePath)
 		return err
 	}
+	if numVfs == 0 {
+		return nil
+	}
 	err = os.WriteFile(numVfsFilePath, bs, os.ModeAppend)
 	if err != nil {
 		log.Log.Error(err, "SetSriovNumVfs(): fail to set NumVfs file", "path", numVfsFilePath)
