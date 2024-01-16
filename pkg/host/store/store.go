@@ -1,4 +1,4 @@
-package host
+package store
 
 import (
 	"encoding/json"
@@ -16,8 +16,8 @@ import (
 
 // Contains all the file storing on the host
 //
-//go:generate ../../bin/mockgen -destination mock/mock_store.go -source store.go
-type StoreManagerInterface interface {
+//go:generate ../../../bin/mockgen -destination mock/mock_store.go -source store.go
+type ManagerInterface interface {
 	ClearPCIAddressFolder() error
 	SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error
 	LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interface, bool, error)
@@ -26,17 +26,16 @@ type StoreManagerInterface interface {
 	WriteCheckpointFile(*sriovnetworkv1.SriovNetworkNodeState) error
 }
 
-type storeManager struct {
-}
+type manager struct{}
 
-// NewStoreManager: create the initial folders needed to store the info about the PF
-// and return a storeManager struct that implements the StoreManagerInterface interface
-func NewStoreManager() (StoreManagerInterface, error) {
+// NewManager: create the initial folders needed to store the info about the PF
+// and return a manager struct that implements the ManagerInterface interface
+func NewManager() (ManagerInterface, error) {
 	if err := createOperatorConfigFolderIfNeeded(); err != nil {
 		return nil, err
 	}
 
-	return &storeManager{}, nil
+	return &manager{}, nil
 }
 
 // createOperatorConfigFolderIfNeeded: create the operator base folder on the host
@@ -73,7 +72,7 @@ func createOperatorConfigFolderIfNeeded() error {
 }
 
 // ClearPCIAddressFolder: removes all the PFs storage information
-func (s *storeManager) ClearPCIAddressFolder() error {
+func (s *manager) ClearPCIAddressFolder() error {
 	hostExtension := utils.GetHostExtension()
 	PfAppliedConfigUse := filepath.Join(hostExtension, consts.PfAppliedConfig)
 	_, err := os.Stat(PfAppliedConfigUse)
@@ -99,7 +98,7 @@ func (s *storeManager) ClearPCIAddressFolder() error {
 
 // SaveLastPfAppliedStatus will save the PF object as a json into the /etc/sriov-operator/pci/<pci-address>
 // this function must be called after running the chroot function
-func (s *storeManager) SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error {
+func (s *manager) SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error {
 	data, err := json.Marshal(PfInfo)
 	if err != nil {
 		log.Log.Error(err, "failed to marshal PF status", "status", *PfInfo)
@@ -114,7 +113,7 @@ func (s *storeManager) SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface)
 
 // LoadPfsStatus convert the /etc/sriov-operator/pci/<pci-address> json to pfstatus
 // returns false if the file doesn't exist.
-func (s *storeManager) LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interface, bool, error) {
+func (s *manager) LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interface, bool, error) {
 	hostExtension := utils.GetHostExtension()
 	pathFile := filepath.Join(hostExtension, consts.PfAppliedConfig, pciAddress)
 	pfStatus := &sriovnetworkv1.Interface{}
@@ -136,7 +135,7 @@ func (s *storeManager) LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interfa
 	return pfStatus, true, nil
 }
 
-func (s *storeManager) GetCheckPointNodeState() (*sriovnetworkv1.SriovNetworkNodeState, error) {
+func (s *manager) GetCheckPointNodeState() (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	log.Log.Info("getCheckPointNodeState()")
 	configdir := filepath.Join(vars.Destdir, consts.CheckpointFileName)
 	file, err := os.OpenFile(configdir, os.O_RDONLY, 0644)
@@ -154,7 +153,7 @@ func (s *storeManager) GetCheckPointNodeState() (*sriovnetworkv1.SriovNetworkNod
 	return &sriovnetworkv1.InitialState, nil
 }
 
-func (s *storeManager) WriteCheckpointFile(ns *sriovnetworkv1.SriovNetworkNodeState) error {
+func (s *manager) WriteCheckpointFile(ns *sriovnetworkv1.SriovNetworkNodeState) error {
 	configdir := filepath.Join(vars.Destdir, consts.CheckpointFileName)
 	file, err := os.OpenFile(configdir, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {

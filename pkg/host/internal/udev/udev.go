@@ -1,4 +1,4 @@
-package host
+package udev
 
 import (
 	"bytes"
@@ -13,27 +13,16 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
-
-type UdevInterface interface {
-	// WriteSwitchdevConfFile writes the needed switchdev configuration files for HW offload support
-	WriteSwitchdevConfFile(*sriovnetworkv1.SriovNetworkNodeState, map[string]bool) (bool, error)
-	// PrepareNMUdevRule creates the needed udev rules to disable NetworkManager from
-	// our managed SR-IOV virtual functions
-	PrepareNMUdevRule([]string) error
-	// AddUdevRule adds a specific udev rule to the system
-	AddUdevRule(string) error
-	// RemoveUdevRule removes a udev rule from the system
-	RemoveUdevRule(string) error
-}
 
 type udev struct {
 	utilsHelper utils.CmdInterface
 }
 
-func newUdevInterface(utilsHelper utils.CmdInterface) UdevInterface {
+func New(utilsHelper utils.CmdInterface) types.UdevInterface {
 	return &udev{utilsHelper: utilsHelper}
 }
 

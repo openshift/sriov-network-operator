@@ -1,4 +1,4 @@
-package host
+package sriov
 
 import (
 	"errors"
@@ -19,52 +19,24 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/store"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
 
-type SriovInterface interface {
-	// SetSriovNumVfs changes the number of virtual functions allocated for a specific
-	// physical function base on pci address
-	SetSriovNumVfs(string, int) error
-	// GetVfInfo returns the virtual function information is the operator struct from the host information
-	GetVfInfo(string, []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction
-	// SetVfGUID sets the GUID for a virtual function
-	SetVfGUID(string, netlink.Link) error
-	// VFIsReady returns the interface virtual function if the device is ready
-	VFIsReady(string) (netlink.Link, error)
-	// SetVfAdminMac sets the virtual function administrative mac address via the physical function
-	SetVfAdminMac(string, netlink.Link, netlink.Link) error
-	// GetNicSriovMode returns the interface mode
-	// supported modes SR-IOV legacy and switchdev
-	GetNicSriovMode(string) (string, error)
-	// GetLinkType return the link type
-	// supported types are ethernet and infiniband
-	GetLinkType(sriovnetworkv1.InterfaceExt) string
-	// ResetSriovDevice resets the number of virtual function for the specific physical function to zero
-	ResetSriovDevice(sriovnetworkv1.InterfaceExt) error
-	// DiscoverSriovDevices returns a list of all the available SR-IOV capable network interfaces on the system
-	DiscoverSriovDevices(StoreManagerInterface) ([]sriovnetworkv1.InterfaceExt, error)
-	// ConfigSriovDevice configure the request SR-IOV device with the desired configuration
-	ConfigSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) error
-	// ConfigSriovInterfaces configure multiple SR-IOV devices with the desired configuration
-	ConfigSriovInterfaces(StoreManagerInterface, []sriovnetworkv1.Interface, []sriovnetworkv1.InterfaceExt, map[string]bool) error
-	// ConfigSriovInterfaces configure virtual functions for virtual environments with the desired configuration
-	ConfigSriovDeviceVirtual(iface *sriovnetworkv1.Interface) error
-}
-
 type sriov struct {
 	utilsHelper   utils.CmdInterface
-	kernelHelper  KernelInterface
-	networkHelper NetworkInterface
-	udevHelper    UdevInterface
+	kernelHelper  types.KernelInterface
+	networkHelper types.NetworkInterface
+	udevHelper    types.UdevInterface
 }
 
-func newSriovInterface(utilsHelper utils.CmdInterface,
-	kernelHelper KernelInterface,
-	networkHelper NetworkInterface,
-	udevHelper UdevInterface) SriovInterface {
+func New(utilsHelper utils.CmdInterface,
+	kernelHelper types.KernelInterface,
+	networkHelper types.NetworkInterface,
+	udevHelper types.UdevInterface) types.SriovInterface {
 	return &sriov{utilsHelper: utilsHelper, kernelHelper: kernelHelper, networkHelper: networkHelper, udevHelper: udevHelper}
 }
 
@@ -199,7 +171,7 @@ func (s *sriov) SetVfAdminMac(vfAddr string, pfLink, vfLink netlink.Link) error 
 	return nil
 }
 
-func (s *sriov) DiscoverSriovDevices(storeManager StoreManagerInterface) ([]sriovnetworkv1.InterfaceExt, error) {
+func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sriovnetworkv1.InterfaceExt, error) {
 	log.Log.V(2).Info("DiscoverSriovDevices")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
@@ -465,7 +437,8 @@ func (s *sriov) ConfigSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *
 	return nil
 }
 
-func (s *sriov) ConfigSriovInterfaces(storeManager StoreManagerInterface, interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool) error {
+func (s *sriov) ConfigSriovInterfaces(storeManager store.ManagerInterface,
+	interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool) error {
 	if s.kernelHelper.IsKernelLockdownMode() && mlx.HasMellanoxInterfacesInSpec(ifaceStatuses, interfaces) {
 		log.Log.Error(nil, "cannot use mellanox devices when in kernel lockdown mode")
 		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
