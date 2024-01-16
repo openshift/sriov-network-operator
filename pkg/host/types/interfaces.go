@@ -159,3 +159,13 @@ type UdevInterface interface {
 	// RemoveUdevRule removes a udev rule from the system
 	RemoveUdevRule(pfPciAddress string) error
 }
+
+type VdpaInterface interface {
+	// CreateVDPADevice creates VDPA device for VF with required type
+	CreateVDPADevice(pciAddr, vdpaType string) error
+	// DeleteVDPADevice removes VDPA device for provided pci address
+	DeleteVDPADevice(pciAddr string) error
+	// DiscoverVDPAType returns type of existing VDPA device for VF,
+	// returns empty string if VDPA device not found or unknown driver is in use
+	DiscoverVDPAType(pciAddr string) string
+}
