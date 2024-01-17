@@ -23,34 +23,34 @@ type KernelInterface interface {
 	// GetCurrentKernelArgs reads the /proc/cmdline to check the current kernel arguments
 	GetCurrentKernelArgs() (string, error)
 	// IsKernelArgsSet check is the requested kernel arguments are set
-	IsKernelArgsSet(string, string) bool
+	IsKernelArgsSet(cmdLine, karg string) bool
 	// Unbind unbinds a virtual function from is current driver
-	Unbind(string) error
+	Unbind(pciAddr string) error
 	// BindDpdkDriver binds the virtual function to a DPDK driver
-	BindDpdkDriver(string, string) error
+	BindDpdkDriver(pciAddr, driver string) error
 	// BindDefaultDriver binds the virtual function to is default driver
-	BindDefaultDriver(string) error
+	BindDefaultDriver(pciAddr string) error
 	// BindDriverByBusAndDevice binds device to the provided driver
 	// bus - the bus path in the sysfs, e.g. "pci" or "vdpa"
 	// device - the name of the device on the bus, e.g. 0000:85:1e.5 for PCI or vpda1 for VDPA
 	// driver - the name of the driver, e.g. vfio-pci or vhost_vdpa.
 	BindDriverByBusAndDevice(bus, device, driver string) error
 	// HasDriver returns try if the virtual function is bind to a driver
-	HasDriver(string) (bool, string)
+	HasDriver(pciAddr string) (bool, string)
 	// RebindVfToDefaultDriver rebinds the virtual function to is default driver
-	RebindVfToDefaultDriver(string) error
+	RebindVfToDefaultDriver(pciAddr string) error
 	// UnbindDriverByBusAndDevice unbind device identified by bus and device ID from the driver
 	// bus - the bus path in the sysfs, e.g. "pci" or "vdpa"
 	// device - the name of the device on the bus, e.g. 0000:85:1e.5 for PCI or vpda1 for VDPA
 	UnbindDriverByBusAndDevice(bus, device string) error
 	// UnbindDriverIfNeeded unbinds the virtual function from a driver if needed
-	UnbindDriverIfNeeded(string, bool) error
+	UnbindDriverIfNeeded(pciAddr string, isRdma bool) error
 	// LoadKernelModule loads a kernel module to the host
 	LoadKernelModule(name string, args ...string) error
 	// IsKernelModuleLoaded returns try if the requested kernel module is loaded
-	IsKernelModuleLoaded(string) (bool, error)
+	IsKernelModuleLoaded(name string) (bool, error)
 	// ReloadDriver reloads a requested driver
-	ReloadDriver(string) error
+	ReloadDriver(driver string) error
 	// IsKernelLockdownMode returns true if the kernel is in lockdown mode
 	IsKernelLockdownMode() bool
 	// IsRHELSystem returns try if the system is a RHEL base
@@ -62,9 +62,9 @@ type KernelInterface interface {
 	// RdmaIsLoaded returns try if RDMA kernel modules are loaded
 	RdmaIsLoaded() (bool, error)
 	// EnableRDMA enable RDMA on the system
-	EnableRDMA(string, string, string) (bool, error)
+	EnableRDMA(conditionFilePath, serviceName, packageManager string) (bool, error)
 	// InstallRDMA install RDMA packages on the system
-	InstallRDMA(string) error
+	InstallRDMA(packageManager string) error
 	// EnableRDMAOnRHELMachine enable RDMA on a RHEL base system
 	EnableRDMAOnRHELMachine() (bool, error)
 	// GetOSPrettyName returns OS name
@@ -75,32 +75,32 @@ type NetworkInterface interface {
 	// TryToGetVirtualInterfaceName tries to find the virtio interface name base on pci address
 	// used for virtual environment where we pass SR-IOV virtual function into the system
 	// supported platform openstack
-	TryToGetVirtualInterfaceName(string) string
+	TryToGetVirtualInterfaceName(pciAddr string) string
 	// TryGetInterfaceName tries to find the SR-IOV virtual interface name base on pci address
-	TryGetInterfaceName(string) string
+	TryGetInterfaceName(pciAddr string) string
 	// GetPhysSwitchID returns the physical switch ID for a specific pci address
-	GetPhysSwitchID(string) (string, error)
+	GetPhysSwitchID(name string) (string, error)
 	// GetPhysPortName returns the physical port name for a specific pci address
-	GetPhysPortName(string) (string, error)
+	GetPhysPortName(name string) (string, error)
 	// IsSwitchdev returns true of the pci address is on switchdev mode
-	IsSwitchdev(string) bool
+	IsSwitchdev(name string) bool
 	// GetNetdevMTU returns the interface MTU for devices attached to kernel drivers
-	GetNetdevMTU(string) int
+	GetNetdevMTU(pciAddr string) int
 	// SetNetdevMTU sets the MTU for a request interface
-	SetNetdevMTU(string, int) error
+	SetNetdevMTU(pciAddr string, mtu int) error
 	// GetNetDevMac returns the network interface mac address
-	GetNetDevMac(string) string
+	GetNetDevMac(name string) string
 	// GetNetDevLinkSpeed returns the network interface link speed
-	GetNetDevLinkSpeed(string) string
+	GetNetDevLinkSpeed(name string) string
 }
 
 type ServiceInterface interface {
 	// IsServiceExist checks if the requested systemd service exist on the system
-	IsServiceExist(string) (bool, error)
+	IsServiceExist(servicePath string) (bool, error)
 	// IsServiceEnabled checks if the requested systemd service is enabled on the system
-	IsServiceEnabled(string) (bool, error)
+	IsServiceEnabled(servicePath string) (bool, error)
 	// ReadService reads a systemd servers and return it as a struct
-	ReadService(string) (*Service, error)
+	ReadService(servicePath string) (*Service, error)
 	// EnableService enables a systemd server on the host
 	EnableService(service *Service) error
 	// ReadServiceManifestFile reads the systemd manifest for a specific service
@@ -120,41 +120,42 @@ type ServiceInterface interface {
 type SriovInterface interface {
 	// SetSriovNumVfs changes the number of virtual functions allocated for a specific
 	// physical function base on pci address
-	SetSriovNumVfs(string, int) error
+	SetSriovNumVfs(pciAddr string, numVfs int) error
 	// GetVfInfo returns the virtual function information is the operator struct from the host information
-	GetVfInfo(string, []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction
+	GetVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction
 	// SetVfGUID sets the GUID for a virtual function
-	SetVfGUID(string, netlink.Link) error
+	SetVfGUID(vfAddr string, pfLink netlink.Link) error
 	// VFIsReady returns the interface virtual function if the device is ready
-	VFIsReady(string) (netlink.Link, error)
+	VFIsReady(pciAddr string) (netlink.Link, error)
 	// SetVfAdminMac sets the virtual function administrative mac address via the physical function
-	SetVfAdminMac(string, netlink.Link, netlink.Link) error
+	SetVfAdminMac(vfAddr string, pfLink netlink.Link, vfLink netlink.Link) error
 	// GetNicSriovMode returns the interface mode
 	// supported modes SR-IOV legacy and switchdev
-	GetNicSriovMode(string) (string, error)
+	GetNicSriovMode(pciAddr string) (string, error)
 	// GetLinkType return the link type
 	// supported types are ethernet and infiniband
-	GetLinkType(sriovnetworkv1.InterfaceExt) string
+	GetLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string
 	// ResetSriovDevice resets the number of virtual function for the specific physical function to zero
-	ResetSriovDevice(sriovnetworkv1.InterfaceExt) error
+	ResetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error
 	// DiscoverSriovDevices returns a list of all the available SR-IOV capable network interfaces on the system
-	DiscoverSriovDevices(store.ManagerInterface) ([]sriovnetworkv1.InterfaceExt, error)
+	DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sriovnetworkv1.InterfaceExt, error)
 	// ConfigSriovDevice configure the request SR-IOV device with the desired configuration
 	ConfigSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt) error
 	// ConfigSriovInterfaces configure multiple SR-IOV devices with the desired configuration
-	ConfigSriovInterfaces(store.ManagerInterface, []sriovnetworkv1.Interface, []sriovnetworkv1.InterfaceExt, map[string]bool) error
+	ConfigSriovInterfaces(storeManager store.ManagerInterface, interfaces []sriovnetworkv1.Interface,
+		ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool) error
 	// ConfigSriovInterfaces configure virtual functions for virtual environments with the desired configuration
 	ConfigSriovDeviceVirtual(iface *sriovnetworkv1.Interface) error
 }
 
 type UdevInterface interface {
 	// WriteSwitchdevConfFile writes the needed switchdev configuration files for HW offload support
-	WriteSwitchdevConfFile(*sriovnetworkv1.SriovNetworkNodeState, map[string]bool) (bool, error)
+	WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToSkip map[string]bool) (bool, error)
 	// PrepareNMUdevRule creates the needed udev rules to disable NetworkManager from
 	// our managed SR-IOV virtual functions
-	PrepareNMUdevRule([]string) error
+	PrepareNMUdevRule(supportedVfIds []string) error
 	// AddUdevRule adds a specific udev rule to the system
-	AddUdevRule(string) error
+	AddUdevRule(pfPciAddress string) error
 	// RemoveUdevRule removes a udev rule from the system
-	RemoveUdevRule(string) error
+	RemoveUdevRule(pfPciAddress string) error
 }
