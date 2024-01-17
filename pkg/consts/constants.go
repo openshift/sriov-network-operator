@@ -77,13 +77,16 @@ const (
 	CheckpointFileName = "sno-initial-node-state.json"
 	Unknown            = "Unknown"
 
-	SysBusPciDevices      = "/sys/bus/pci/devices"
-	SysBusPciDrivers      = "/sys/bus/pci/drivers"
-	SysBusPciDriversProbe = "/sys/bus/pci/drivers_probe"
+	SysBus                = "/sys/bus"
+	SysBusPciDevices      = SysBus + "/pci/devices"
+	SysBusPciDrivers      = SysBus + "/pci/drivers"
+	SysBusPciDriversProbe = SysBus + "/pci/drivers_probe"
 	SysClassNet           = "/sys/class/net"
 	ProcKernelCmdLine     = "/proc/cmdline"
 	NetClass              = 0x02
 	NumVfsFile            = "sriov_numvfs"
+	BusPci                = "pci"
+	BusVdpa               = "vdpa"
 
 	UdevFolder          = "/etc/udev"
 	UdevRulesFolder     = UdevFolder + "/rules.d"
