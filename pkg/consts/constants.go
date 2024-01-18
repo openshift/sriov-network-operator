@@ -92,7 +92,18 @@ const (
 	UdevRulesFolder     = UdevFolder + "/rules.d"
 	HostUdevRulesFolder = Host + UdevRulesFolder
 	UdevDisableNM       = "/bindata/scripts/udev-find-sriov-pf.sh"
-	NMUdevRule          = "SUBSYSTEM==\"net\", ACTION==\"add|change|move\", ATTRS{device}==\"%s\", IMPORT{program}=\"/etc/udev/disable-nm-sriov.sh $env{INTERFACE} %s\""
+	// nolint:goconst
+	NMUdevRule = `SUBSYSTEM=="net", ` +
+		`ACTION=="add|change|move", ` +
+		`ATTRS{device}=="%s", ` +
+		`IMPORT{program}="/etc/udev/disable-nm-sriov.sh $env{INTERFACE} %s"`
+	// nolint:goconst
+	SwitchdevUdevRule = `SUBSYSTEM=="net", ` +
+		`ACTION=="add|move", ` +
+		`ATTRS{phys_switch_id}=="%s", ` +
+		`ATTR{phys_port_name}=="pf%svf*", ` +
+		`IMPORT{program}="/etc/udev/switchdev-vf-link-name.sh $attr{phys_port_name}", ` +
+		`NAME="%s_$env{NUMBER}"`
 
 	KernelArgPciRealloc = "pci=realloc"
 	KernelArgIntelIommu = "intel_iommu=on"
