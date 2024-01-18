@@ -1,4 +1,4 @@
-package host
+package kernel
 
 import (
 	"testing"
@@ -11,11 +11,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-func TestHostManager(t *testing.T) {
+func TestKernel(t *testing.T) {
 	log.SetLogger(zap.New(
 		zap.WriteTo(GinkgoWriter),
 		zap.Level(zapcore.Level(-2)),
 		zap.UseDevMode(true)))
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Package Host Suite")
+	RunSpecs(t, "Package Kernel Suite")
 }

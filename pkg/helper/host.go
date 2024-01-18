@@ -4,6 +4,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/store"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
@@ -12,21 +13,21 @@ import (
 type HostHelpersInterface interface {
 	utils.CmdInterface
 	host.HostManagerInterface
-	host.StoreManagerInterface
+	store.ManagerInterface
 	mlx.MellanoxInterface
 }
 
 type hostHelpers struct {
 	utils.CmdInterface
 	host.HostManagerInterface
-	host.StoreManagerInterface
+	store.ManagerInterface
 	mlx.MellanoxInterface
 }
 
 // Use for unit tests
 func NewHostHelpers(utilsHelper utils.CmdInterface,
 	hostManager host.HostManagerInterface,
-	storeManager host.StoreManagerInterface,
+	storeManager store.ManagerInterface,
 	mlxHelper mlx.MellanoxInterface) HostHelpersInterface {
 	return &hostHelpers{utilsHelper, hostManager, storeManager, mlxHelper}
 }
@@ -35,7 +36,7 @@ func NewDefaultHostHelpers() (HostHelpersInterface, error) {
 	utilsHelper := utils.New()
 	mlxHelper := mlx.New(utilsHelper)
 	hostManager := host.NewHostManager(utilsHelper)
-	storeManager, err := host.NewStoreManager()
+	storeManager, err := store.NewManager()
 	if err != nil {
 		log.Log.Error(err, "failed to create store manager")
 		return nil, err
