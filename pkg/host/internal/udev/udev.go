@@ -146,34 +146,64 @@ func (u *udev) WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeS
 	return true, nil
 }
 
+// AddUdevRule adds a udev rule that disables network-manager for VFs on the concrete PF
 func (u *udev) AddUdevRule(pfPciAddress string) error {
 	log.Log.V(2).Info("AddUdevRule()", "device", pfPciAddress)
-	pathFile := filepath.Join(vars.FilesystemRoot, consts.UdevRulesFolder)
 	udevRuleContent := fmt.Sprintf(consts.NMUdevRule, strings.Join(vars.SupportedVfIds, "|"), pfPciAddress)
+	return u.addUdevRule(pfPciAddress, "10-nm-disable", udevRuleContent)
+}
 
-	err := os.MkdirAll(pathFile, os.ModePerm)
+// RemoveUdevRule removes a udev rule that disables network-manager for VFs on the concrete PF
+func (u *udev) RemoveUdevRule(pfPciAddress string) error {
+	log.Log.V(2).Info("RemoveUdevRule()", "device", pfPciAddress)
+	return u.removeUdevRule(pfPciAddress, "10-nm-disable")
+}
+
+// AddVfRepresentorUdevRule adds udev rule that renames VF representors on the concrete PF
+func (u *udev) AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwitchPort string) error {
+	log.Log.V(2).Info("AddVfRepresentorUdevRule()",
+		"device", pfPciAddress, "name", pfName, "switch", pfSwitchID, "port", pfSwitchPort)
+	udevRuleContent := fmt.Sprintf(consts.SwitchdevUdevRule, pfSwitchID, strings.TrimPrefix(pfSwitchPort, "p"), pfName)
+	return u.addUdevRule(pfPciAddress, "20-switchdev", udevRuleContent)
+}
+
+// RemoveVfRepresentorUdevRule removes udev rule that renames VF representors on the concrete PF
+func (u *udev) RemoveVfRepresentorUdevRule(pfPciAddress string) error {
+	log.Log.V(2).Info("RemoveVfRepresentorUdevRule()", "device", pfPciAddress)
+	return u.removeUdevRule(pfPciAddress, "20-switchdev")
+}
+
+func (u *udev) addUdevRule(pfPciAddress, ruleName, ruleContent string) error {
+	log.Log.V(2).Info("addUdevRule()", "device", pfPciAddress, "rule", ruleName)
+	rulePath := u.getRuleFolderPath()
+	err := os.MkdirAll(rulePath, os.ModePerm)
 	if err != nil && !os.IsExist(err) {
-		log.Log.Error(err, "AddUdevRule(): failed to create dir", "path", pathFile)
+		log.Log.Error(err, "ensureUdevRulePathExist(): failed to create dir", "path", rulePath)
 		return err
 	}
-
-	filePath := path.Join(pathFile, fmt.Sprintf("10-nm-disable-%s.rules", pfPciAddress))
-	// if the file does not exist or if oldContent != newContent
-	// write to file and create it if it doesn't exist
-	err = os.WriteFile(filePath, []byte(udevRuleContent), 0666)
-	if err != nil {
-		log.Log.Error(err, "AddUdevRule(): fail to write file", "path", filePath)
+	filePath := u.getRulePathForPF(ruleName, pfPciAddress)
+	if err := os.WriteFile(filePath, []byte(ruleContent), 0666); err != nil {
+		log.Log.Error(err, "addUdevRule(): fail to write file", "path", filePath)
 		return err
 	}
 	return nil
 }
 
-func (u *udev) RemoveUdevRule(pfPciAddress string) error {
-	pathFile := filepath.Join(vars.FilesystemRoot, consts.UdevRulesFolder)
-	filePath := path.Join(pathFile, fmt.Sprintf("10-nm-disable-%s.rules", pfPciAddress))
-	err := os.Remove(filePath)
+func (u *udev) removeUdevRule(pfPciAddress, ruleName string) error {
+	log.Log.V(2).Info("removeUdevRule()", "device", pfPciAddress, "rule", ruleName)
+	rulePath := u.getRulePathForPF(ruleName, pfPciAddress)
+	err := os.Remove(rulePath)
 	if err != nil && !os.IsNotExist(err) {
+		log.Log.Error(err, "removeUdevRule(): fail to remove rule file", "path", rulePath)
 		return err
 	}
 	return nil
+}
+
+func (u *udev) getRuleFolderPath() string {
+	return filepath.Join(vars.FilesystemRoot, consts.UdevRulesFolder)
+}
+
+func (u *udev) getRulePathForPF(ruleName, pfPciAddress string) string {
+	return path.Join(u.getRuleFolderPath(), fmt.Sprintf("%s-%s.rules", ruleName, pfPciAddress))
 }

@@ -53,6 +53,20 @@ func (mr *MockHostManagerInterfaceMockRecorder) AddUdevRule(pfPciAddress interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).AddUdevRule), pfPciAddress)
 }
 
+// AddVfRepresentorUdevRule mocks base method.
+func (m *MockHostManagerInterface) AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwitchPort string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddVfRepresentorUdevRule", pfPciAddress, pfName, pfSwitchID, pfSwitchPort)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddVfRepresentorUdevRule indicates an expected call of AddVfRepresentorUdevRule.
+func (mr *MockHostManagerInterfaceMockRecorder) AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwitchPort interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddVfRepresentorUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).AddVfRepresentorUdevRule), pfPciAddress, pfName, pfSwitchID, pfSwitchPort)
+}
+
 // BindDefaultDriver mocks base method.
 func (m *MockHostManagerInterface) BindDefaultDriver(pciAddr string) error {
 	m.ctrl.T.Helper()
@@ -727,6 +741,20 @@ func (m *MockHostManagerInterface) RemoveUdevRule(pfPciAddress string) error {
 func (mr *MockHostManagerInterfaceMockRecorder) RemoveUdevRule(pfPciAddress interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).RemoveUdevRule), pfPciAddress)
+}
+
+// RemoveVfRepresentorUdevRule mocks base method.
+func (m *MockHostManagerInterface) RemoveVfRepresentorUdevRule(pfPciAddress string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveVfRepresentorUdevRule", pfPciAddress)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveVfRepresentorUdevRule indicates an expected call of RemoveVfRepresentorUdevRule.
+func (mr *MockHostManagerInterfaceMockRecorder) RemoveVfRepresentorUdevRule(pfPciAddress interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveVfRepresentorUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).RemoveVfRepresentorUdevRule), pfPciAddress)
 }
 
 // ResetSriovDevice mocks base method.
