@@ -41,8 +41,8 @@ func (p *IntelPlugin) OnNodeStateChange(*sriovnetworkv1.SriovNetworkNodeState) (
 }
 
 // OnNodeStatusChange verify whether SriovNetworkNodeState CR status present changes on configured VFs.
-func (p *IntelPlugin) CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) bool {
-	return false
+func (p *IntelPlugin) CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+	return false, nil
 }
 
 // Apply config change

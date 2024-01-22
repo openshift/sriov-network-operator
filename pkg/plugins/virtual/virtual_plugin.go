@@ -68,8 +68,8 @@ func (p *VirtualPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 }
 
 // OnNodeStatusChange verify whether SriovNetworkNodeState CR status present changes on configured VFs.
-func (p *VirtualPlugin) CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) bool {
-	return false
+func (p *VirtualPlugin) CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+	return false, nil
 }
 
 // Apply config change

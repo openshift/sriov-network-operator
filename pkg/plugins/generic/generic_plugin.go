@@ -140,28 +140,34 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 }
 
 // CheckStatusChanges verify whether SriovNetworkNodeState CR status present changes on configured VFs.
-func (p *GenericPlugin) CheckStatusChanges(new *sriovnetworkv1.SriovNetworkNodeState) bool {
+func (p *GenericPlugin) CheckStatusChanges(current *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	log.Log.Info("generic-plugin CheckStatusChanges()")
 
-	changed := false
-	for _, iface := range new.Spec.Interfaces {
+	for _, iface := range current.Spec.Interfaces {
 		found := false
-		for _, ifaceStatus := range new.Status.Interfaces {
+		for _, ifaceStatus := range current.Status.Interfaces {
+			// TODO: remove the check for ExternallyManaged - https://github.com/k8snetworkplumbingwg/sriov-network-operator/issues/632
 			if iface.PciAddress == ifaceStatus.PciAddress && !iface.ExternallyManaged {
 				found = true
 				if sriovnetworkv1.NeedToUpdateSriov(&iface, &ifaceStatus) {
-					changed = true
 					log.Log.Info("CheckStatusChanges(): status changed for interface", "address", iface.PciAddress)
+					return true, nil
 				}
 				break
 			}
 		}
-
 		if !found {
 			log.Log.Info("CheckStatusChanges(): no status found for interface", "address", iface.PciAddress)
 		}
 	}
-	return changed
+
+	missingKernelArgs, err := p.getMissingKernelArgs()
+	if err != nil {
+		log.Log.Error(err, "generic-plugin CheckStatusChanges(): failed to verify missing kernel arguments")
+		return false, err
+	}
+
+	return len(missingKernelArgs) != 0, nil
 }
 
 func (p *GenericPlugin) syncDriverState() error {
@@ -266,37 +272,48 @@ func (p *GenericPlugin) addToDesiredKernelArgs(karg string) {
 	}
 }
 
-// syncDesiredKernelArgs Should be called to set all the kernel arguments. Returns bool if node update is needed.
-func (p *GenericPlugin) syncDesiredKernelArgs() (bool, error) {
-	needReboot := false
+// getMissingKernelArgs gets Kernel arguments that have not been set.
+func (p *GenericPlugin) getMissingKernelArgs() ([]string, error) {
+	missingArgs := make([]string, 0, len(p.DesiredKernelArgs))
 	if len(p.DesiredKernelArgs) == 0 {
-		return false, nil
+		return nil, nil
 	}
+
 	kargs, err := p.helpers.GetCurrentKernelArgs()
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	for desiredKarg, attempted := range p.DesiredKernelArgs {
-		set := p.helpers.IsKernelArgsSet(kargs, desiredKarg)
-		if !set {
-			if attempted {
-				log.Log.V(2).Info("generic plugin syncDesiredKernelArgs(): previously attempted to set kernel arg",
-					"karg", desiredKarg)
-			}
-			// There is a case when we try to set the kernel argument here, the daemon could decide to not reboot because
-			// the daemon encountered a potentially one-time error. However we always want to make sure that the kernel
-			// argument is set once the daemon goes through node state sync again.
-			update, err := setKernelArg(desiredKarg)
-			if err != nil {
-				log.Log.Error(err, "generic plugin syncDesiredKernelArgs(): fail to set kernel arg", "karg", desiredKarg)
-				return false, err
-			}
-			if update {
-				needReboot = true
-				log.Log.V(2).Info("generic plugin syncDesiredKernelArgs(): need reboot for setting kernel arg", "karg", desiredKarg)
-			}
-			p.DesiredKernelArgs[desiredKarg] = true
+
+	for desiredKarg := range p.DesiredKernelArgs {
+		if !p.helpers.IsKernelArgsSet(kargs, desiredKarg) {
+			missingArgs = append(missingArgs, desiredKarg)
 		}
+	}
+	return missingArgs, nil
+}
+
+// syncDesiredKernelArgs should be called to set all the kernel arguments. Returns bool if node update is needed.
+func (p *GenericPlugin) syncDesiredKernelArgs(kargs []string) (bool, error) {
+	needReboot := false
+
+	for _, karg := range kargs {
+		if p.DesiredKernelArgs[karg] {
+			log.Log.V(2).Info("generic-plugin syncDesiredKernelArgs(): previously attempted to set kernel arg",
+				"karg", karg)
+		}
+		// There is a case when we try to set the kernel argument here, the daemon could decide to not reboot because
+		// the daemon encountered a potentially one-time error. However we always want to make sure that the kernel
+		// argument is set once the daemon goes through node state sync again.
+		update, err := setKernelArg(karg)
+		if err != nil {
+			log.Log.Error(err, "generic-plugin syncDesiredKernelArgs(): fail to set kernel arg", "karg", karg)
+			return false, err
+		}
+		if update {
+			needReboot = true
+			log.Log.V(2).Info("generic-plugin syncDesiredKernelArgs(): need reboot for setting kernel arg", "karg", karg)
+		}
+		p.DesiredKernelArgs[karg] = true
 	}
 	return needReboot, nil
 }
@@ -365,19 +382,28 @@ func (p *GenericPlugin) addVfioDesiredKernelArg(state *sriovnetworkv1.SriovNetwo
 	}
 }
 
-func (p *GenericPlugin) needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState) (needReboot bool, err error) {
-	needReboot = false
+func (p *GenericPlugin) needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+	needReboot := false
+
 	p.addVfioDesiredKernelArg(state)
 
-	updateNode, err := p.syncDesiredKernelArgs()
+	missingKernelArgs, err := p.getMissingKernelArgs()
 	if err != nil {
-		log.Log.Error(err, "generic plugin needRebootNode(): failed to set the desired kernel arguments")
+		log.Log.Error(err, "generic-plugin needRebootNode(): failed to verify missing kernel arguments")
 		return false, err
 	}
-	if updateNode {
-		log.Log.V(2).Info("generic plugin needRebootNode(): need reboot for updating kernel arguments")
-		needReboot = true
+
+	if len(missingKernelArgs) != 0 {
+		needReboot, err = p.syncDesiredKernelArgs(missingKernelArgs)
+		if err != nil {
+			log.Log.Error(err, "generic-plugin needRebootNode(): failed to set the desired kernel arguments")
+			return false, err
+		}
+		if needReboot {
+			log.Log.V(2).Info("generic-plugin needRebootNode(): need reboot for updating kernel arguments")
+		}
 	}
+
 	return needReboot, nil
 }
 

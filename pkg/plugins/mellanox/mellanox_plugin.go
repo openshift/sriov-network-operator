@@ -173,8 +173,8 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 
 // TODO: implement - https://github.com/k8snetworkplumbingwg/sriov-network-operator/issues/631
 // OnNodeStatusChange verify whether SriovNetworkNodeState CR status present changes on configured VFs.
-func (p *MellanoxPlugin) CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) bool {
-	return false
+func (p *MellanoxPlugin) CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+	return false, nil
 }
 
 // Apply config change
