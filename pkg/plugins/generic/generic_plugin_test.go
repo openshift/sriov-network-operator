@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	mock_helper "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 )
@@ -178,12 +179,12 @@ var _ = Describe("Generic plugin", func() {
 				},
 			}
 
-			changed := genericPlugin.CheckStatusChanges(networkNodeState)
+			changed, err := genericPlugin.CheckStatusChanges(networkNodeState)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(changed).To(BeFalse())
 		})
 
-		It("should detect changes on status", func() {
+		It("should detect changes on status due to spec mismatch", func() {
 			networkNodeState := &sriovnetworkv1.SriovNetworkNodeState{
 				Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{
 					Interfaces: sriovnetworkv1.Interfaces{{
@@ -232,7 +233,65 @@ var _ = Describe("Generic plugin", func() {
 				},
 			}
 
-			changed := genericPlugin.CheckStatusChanges(networkNodeState)
+			changed, err := genericPlugin.CheckStatusChanges(networkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(changed).To(BeTrue())
+		})
+
+		It("should detect changes on status due to missing kernel args", func() {
+			networkNodeState := &sriovnetworkv1.SriovNetworkNodeState{
+				Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{
+					Interfaces: sriovnetworkv1.Interfaces{{
+						PciAddress: "0000:00:00.0",
+						NumVfs:     2,
+						Mtu:        1500,
+						VfGroups: []sriovnetworkv1.VfGroup{{
+							DeviceType:   "vfio-pci",
+							PolicyName:   "policy-1",
+							ResourceName: "resource-1",
+							VfRange:      "0-1",
+							Mtu:          1500,
+						}}}},
+				},
+				Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
+					Interfaces: sriovnetworkv1.InterfaceExts{{
+						PciAddress:  "0000:00:00.0",
+						NumVfs:      2,
+						TotalVfs:    2,
+						DeviceID:    "159b",
+						Vendor:      "8086",
+						Name:        "sriovif1",
+						Mtu:         1500,
+						Mac:         "0c:42:a1:55:ee:46",
+						Driver:      "ice",
+						EswitchMode: "legacy",
+						LinkSpeed:   "25000 Mb/s",
+						LinkType:    "ETH",
+						VFs: []sriovnetworkv1.VirtualFunction{{
+							PciAddress: "0000:00:00.1",
+							DeviceID:   "1889",
+							Vendor:     "8086",
+							VfID:       0,
+							Driver:     "vfio-pci",
+						}, {
+							PciAddress: "0000:00:00.2",
+							DeviceID:   "1889",
+							Vendor:     "8086",
+							VfID:       1,
+							Driver:     "vfio-pci",
+						}},
+					}},
+				},
+			}
+
+			// Load required kernel args.
+			genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(networkNodeState)
+
+			hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil)
+			hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIntelIommu).Return(false)
+			hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPt).Return(false)
+
+			changed, err := genericPlugin.CheckStatusChanges(networkNodeState)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(changed).To(BeTrue())
 		})

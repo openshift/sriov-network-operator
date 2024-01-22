@@ -565,10 +565,13 @@ func (dn *Daemon) shouldSkipReconciliation(latestState *sriovnetworkv1.SriovNetw
 
 	// Verify changes in the spec of the SriovNetworkNodeState CR.
 	if dn.currentNodeState.GetGeneration() == latestState.GetGeneration() && !dn.isDrainCompleted() {
-		genericPlugin, ok := dn.loadedPlugins[GenericPluginName]
-		if ok {
+		for _, p := range dn.loadedPlugins {
 			// Verify changes in the status of the SriovNetworkNodeState CR.
-			if genericPlugin.CheckStatusChanges(latestState) {
+			changed, err := p.CheckStatusChanges(latestState)
+			if err != nil {
+				return false, err
+			}
+			if changed {
 				return false, nil
 			}
 		}
