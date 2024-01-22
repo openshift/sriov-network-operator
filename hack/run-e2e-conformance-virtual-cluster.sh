@@ -271,8 +271,11 @@ echo "## build webhook image"
 podman build -t "${SRIOV_NETWORK_WEBHOOK_IMAGE}" -f "${root}/Dockerfile.webhook" "${root}"
 
 podman push --tls-verify=false "${SRIOV_NETWORK_OPERATOR_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_OPERATOR_IMAGE}
 podman push --tls-verify=false "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}
 podman push --tls-verify=false "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_WEBHOOK_IMAGE}
 
 # remove the crio bridge and let flannel to recreate
 kcli ssh $cluster_name-ctlplane-0 << EOF

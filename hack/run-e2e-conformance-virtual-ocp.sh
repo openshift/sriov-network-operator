@@ -215,8 +215,11 @@ pass=$( jq .\"$internal_registry\".password registry-login.conf )
 podman login -u serviceaccount -p ${pass:1:-1} $registry --tls-verify=false
 
 podman push --tls-verify=false "${SRIOV_NETWORK_OPERATOR_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_OPERATOR_IMAGE}
 podman push --tls-verify=false "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}
 podman push --tls-verify=false "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_WEBHOOK_IMAGE}
 
 podman logout $registry
 
