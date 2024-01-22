@@ -15,5 +15,5 @@ type VendorPlugin interface {
 	// Apply config change
 	Apply() error
 	// CheckStatusChanges checks status changes on the SriovNetworkNodeState CR for configured VFs.
-	CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) bool
+	CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) (bool, error)
 }

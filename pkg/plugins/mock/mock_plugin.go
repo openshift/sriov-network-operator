@@ -49,11 +49,12 @@ func (mr *MockVendorPluginMockRecorder) Apply() *gomock.Call {
 }
 
 // CheckStatusChanges mocks base method.
-func (m *MockVendorPlugin) CheckStatusChanges(arg0 *v1.SriovNetworkNodeState) bool {
+func (m *MockVendorPlugin) CheckStatusChanges(arg0 *v1.SriovNetworkNodeState) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CheckStatusChanges", arg0)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // CheckStatusChanges indicates an expected call of CheckStatusChanges.
