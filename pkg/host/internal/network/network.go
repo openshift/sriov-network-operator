@@ -11,9 +11,8 @@ import (
 	"github.com/cenkalti/backoff"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
-
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	dputilsPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
@@ -21,10 +20,14 @@ import (
 
 type network struct {
 	utilsHelper utils.CmdInterface
+	dputilsLib  dputilsPkg.DPUtilsLib
 }
 
-func New(utilsHelper utils.CmdInterface) types.NetworkInterface {
-	return &network{utilsHelper: utilsHelper}
+func New(utilsHelper utils.CmdInterface, dputilsLib dputilsPkg.DPUtilsLib) types.NetworkInterface {
+	return &network{
+		utilsHelper: utilsHelper,
+		dputilsLib:  dputilsLib,
+	}
 }
 
 // TryToGetVirtualInterfaceName get the interface name of a virtio interface
@@ -61,7 +64,7 @@ func (n *network) TryToGetVirtualInterfaceName(pciAddr string) string {
 }
 
 func (n *network) TryGetInterfaceName(pciAddr string) string {
-	names, err := dputils.GetNetNames(pciAddr)
+	names, err := n.dputilsLib.GetNetNames(pciAddr)
 	if err != nil || len(names) < 1 {
 		return ""
 	}
@@ -152,7 +155,7 @@ func (n *network) SetNetdevMTU(pciAddr string, mtu int) error {
 	}
 	b := backoff.NewConstantBackOff(1 * time.Second)
 	err := backoff.Retry(func() error {
-		ifaceName, err := dputils.GetNetNames(pciAddr)
+		ifaceName, err := n.dputilsLib.GetNetNames(pciAddr)
 		if err != nil {
 			log.Log.Error(err, "SetNetdevMTU(): fail to get interface name", "device", pciAddr)
 			return err
