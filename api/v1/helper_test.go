@@ -802,3 +802,67 @@ func TestVhostVdpaNodePolicyApply(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEswitchModeFromSpec(t *testing.T) {
+	testtable := []struct {
+		tname          string
+		spec           *v1.Interface
+		expectedResult string
+	}{
+		{
+			tname:          "set to legacy",
+			spec:           &v1.Interface{EswitchMode: v1.ESwithModeLegacy},
+			expectedResult: v1.ESwithModeLegacy,
+		},
+		{
+			tname:          "set to switchdev",
+			spec:           &v1.Interface{EswitchMode: v1.ESwithModeSwitchDev},
+			expectedResult: v1.ESwithModeSwitchDev,
+		},
+		{
+			tname:          "not set",
+			spec:           &v1.Interface{},
+			expectedResult: v1.ESwithModeLegacy,
+		},
+	}
+	for _, tc := range testtable {
+		t.Run(tc.tname, func(t *testing.T) {
+			result := v1.GetEswitchModeFromSpec(tc.spec)
+			if diff := cmp.Diff(tc.expectedResult, result); diff != "" {
+				t.Errorf("unexpected result (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGetEswitchModeFromStatus(t *testing.T) {
+	testtable := []struct {
+		tname          string
+		spec           *v1.InterfaceExt
+		expectedResult string
+	}{
+		{
+			tname:          "set to legacy",
+			spec:           &v1.InterfaceExt{EswitchMode: v1.ESwithModeLegacy},
+			expectedResult: v1.ESwithModeLegacy,
+		},
+		{
+			tname:          "set to switchdev",
+			spec:           &v1.InterfaceExt{EswitchMode: v1.ESwithModeSwitchDev},
+			expectedResult: v1.ESwithModeSwitchDev,
+		},
+		{
+			tname:          "not set",
+			spec:           &v1.InterfaceExt{},
+			expectedResult: v1.ESwithModeLegacy,
+		},
+	}
+	for _, tc := range testtable {
+		t.Run(tc.tname, func(t *testing.T) {
+			result := v1.GetEswitchModeFromStatus(tc.spec)
+			if diff := cmp.Diff(tc.expectedResult, result); diff != "" {
+				t.Errorf("unexpected result (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
