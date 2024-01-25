@@ -166,6 +166,23 @@ method=disabled
 [proxy]' > /etc/NetworkManager/system-connections/multi.nmconnection
 
 chmod 600 /etc/NetworkManager/system-connections/multi.nmconnection
+
+echo '[Unit]
+Description=disable checksum offload to avoid vf bug
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash -c "ethtool --offload  eth1  rx off  tx off && ethtool -K eth1 gso off"
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=default.target' > /etc/systemd/system/disable-offload.service
+
+systemctl daemon-reload
+systemctl enable --now disable-offload
+
 systemctl restart NetworkManager
 
 EOF
