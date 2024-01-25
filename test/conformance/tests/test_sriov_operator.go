@@ -297,6 +297,7 @@ var _ = Describe("[sriov] operator", func() {
 				WaitForSRIOVStable()
 				sriovDevice, err = sriovInfos.FindOneSriovDevice(node)
 				Expect(err).ToNot(HaveOccurred())
+				By("Using device " + sriovDevice.Name + " on node " + node)
 
 				Eventually(func() int64 {
 					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
@@ -946,6 +947,8 @@ var _ = Describe("[sriov] operator", func() {
 				By("Create first Pod which consumes all available VFs")
 				sriovDevice, err := sriovInfos.FindOneSriovDevice(node)
 				Expect(err).ToNot(HaveOccurred())
+				By("Using device " + sriovDevice.Name + " on node " + node)
+
 				ipam := ipamIpv6
 				err = network.CreateSriovNetwork(clients, sriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 				Expect(err).ToNot(HaveOccurred())
@@ -1057,6 +1060,7 @@ var _ = Describe("[sriov] operator", func() {
 
 					vfioNode, vfioNic = sriovInfos.FindOneVfioSriovDevice()
 					Expect(vfioNode).ToNot(Equal(""))
+					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 				})
 
 				It("Should be possible to create a vfio-pci resource", func() {
@@ -1102,6 +1106,7 @@ var _ = Describe("[sriov] operator", func() {
 					}
 					vfioNode, vfioNic = sriovInfos.FindOneVfioSriovDevice()
 					Expect(vfioNode).ToNot(Equal(""))
+					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 				})
 
 				It("Should be possible to partition the pf's vfs", func() {
@@ -1201,6 +1206,7 @@ var _ = Describe("[sriov] operator", func() {
 					node := sriovInfos.Nodes[0]
 					intf, err := sriovInfos.FindOneSriovDevice(node)
 					Expect(err).ToNot(HaveOccurred())
+					By("Using device " + intf.Name + " on node " + node)
 
 					_, err = network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, intf.Name+"#0-1", node, 5, testResourceName, "netdevice", func(policy *sriovv1.SriovNetworkNodePolicy) {
 						policy.Spec.Mtu = newMtu
@@ -1276,6 +1282,7 @@ var _ = Describe("[sriov] operator", func() {
 					node := sriovInfos.Nodes[0]
 					intf, err := sriovInfos.FindOneSriovDevice(node)
 					Expect(err).ToNot(HaveOccurred())
+					By("Using device " + intf.Name + " on node " + node)
 
 					firstConfig := &sriovv1.SriovNetworkNodePolicy{
 						ObjectMeta: metav1.ObjectMeta{
@@ -1348,6 +1355,8 @@ var _ = Describe("[sriov] operator", func() {
 						if mainDeviceForNode == nil {
 							Skip("Could not find pf used as gateway")
 						}
+						By("Using device " + mainDeviceForNode.Name + " on node " + testNode)
+
 						createSriovPolicy(mainDeviceForNode.Name, testNode, 2, resourceName)
 					}
 
@@ -1389,6 +1398,9 @@ var _ = Describe("[sriov] operator", func() {
 						Skip(err.Error())
 					}
 					unusedSriovDevice = unusedSriovDevices[0]
+
+					By("Using device " + unusedSriovDevice.Name + " on node " + testNode)
+
 					defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
 					Expect(err).ToNot(HaveOccurred())
 					createSriovPolicy(unusedSriovDevice.Name, testNode, 2, resourceName)
@@ -1477,6 +1489,7 @@ var _ = Describe("[sriov] operator", func() {
 							Skip(err.Error())
 						}
 						intf = unusedSriovDevices[0]
+						By("Using device " + intf.Name + " on node " + node)
 
 						mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
 							ObjectMeta: metav1.ObjectMeta{
@@ -1603,6 +1616,7 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					intf = unusedSriovDevices[0]
+					By("Using device " + intf.Name + " on node " + node)
 
 					excludeTopologyTrueResourceXXX = &sriovv1.SriovNetworkNodePolicy{
 						ObjectMeta: metav1.ObjectMeta{
@@ -1900,6 +1914,7 @@ var _ = Describe("[sriov] operator", func() {
 						Skip(err.Error())
 					}
 					intf = unusedSriovDevices[0]
+					By("Using device " + intf.Name + " on node " + node)
 
 					mtuPolicy := &sriovv1.SriovNetworkNodePolicy{
 						ObjectMeta: metav1.ObjectMeta{
@@ -2011,6 +2026,7 @@ var _ = Describe("[sriov] operator", func() {
 			execute.BeforeAll(func() {
 				node, nic = sriovInfos.FindOneVfioSriovDevice()
 				Expect(node).ToNot(Equal(""))
+				By("Using device " + nic.Name + " on node " + node)
 			})
 
 			It("Should not allow to create a policy if there are no vfs configured", func() {

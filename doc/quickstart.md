@@ -16,7 +16,7 @@ Clone this GitHub repository.
 go get github.com/k8snetworkplumbingwg/sriov-network-operator
 ```
 
-Deploy the operator. 
+Deploy the operator.
 
 If you are running an Openshift cluster:
 
@@ -36,10 +36,11 @@ Webhooks are disabled when deploying on a Kubernetes cluster as per the instruct
    For example, given `cacert.pem`, `key.pem` and `cert.pem`:
    ```bash
    kubectl create ns sriov-network-operator
-   kubectl -n sriov-network-operator create secret tls operator-webhook-service --cert=cert.pem --key=key.pem
-   kubectl -n sriov-network-operator create secret tls network-resources-injector-secret --cert=cert.pem --key=key.pem
-   export ENABLE_ADMISSION_CONTROLLER=true
-   export WEBHOOK_CA_BUNDLE=$(base64 -w 0 < cacert.pem)
+   kubectl -n sriov-network-operator create secret tls operator-webhook-cert --cert=cert.pem --key=key.pem
+   kubectl -n sriov-network-operator create secret tls network-resources-injector-cert --cert=cert.pem --key=key.pem
+   export ADMISSION_CONTROLLERS_ENABLED=true
+   export ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_CA_CRT=$(base64 -w 0 < cacert.pem)
+   export ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT=$(base64 -w 0 < cacert.pem)
    make deploy-setup-k8s
    ```
 
@@ -63,10 +64,10 @@ Webhooks are disabled when deploying on a Kubernetes cluster as per the instruct
    apiVersion: cert-manager.io/v1
    kind: Certificate
    metadata:
-     name: operator-webhook-service
+     name: operator-webhook-cert
      namespace: sriov-network-operator
    spec:
-     secretName: operator-webhook-service
+     secretName: operator-webhook-cert
      dnsNames:
      - operator-webhook-service.sriov-network-operator.svc
      issuerRef:
@@ -75,10 +76,10 @@ Webhooks are disabled when deploying on a Kubernetes cluster as per the instruct
    apiVersion: cert-manager.io/v1
    kind: Certificate
    metadata:
-     name: network-resources-injector-service
+     name: network-resources-injector-cert
      namespace: sriov-network-operator
    spec:
-     secretName: network-resources-injector-secret
+     secretName: network-resources-injector-cert
      dnsNames:
      - network-resources-injector-service.sriov-network-operator.svc
      issuerRef:
@@ -88,7 +89,8 @@ Webhooks are disabled when deploying on a Kubernetes cluster as per the instruct
 
     And then deploy the operator:
     ```bash
-    export ENABLE_ADMISSION_CONTROLLER=true
+    export ADMISSION_CONTROLLERS_ENABLED=true
+    export ADMISSION_CONTROLLERS_CERTIFICATES_CERT_MANAGER_ENABLED=true
     make deploy-setup-k8s
     ```
 
@@ -229,7 +231,7 @@ metadata:
   name: example-sriovnetwork
   namespace: sriov-network-operator
 spec:
-  ipam: | 
+  ipam: |
     {
       "type": "host-local",
       "subnet": "10.56.217.0/24",
