@@ -1446,10 +1446,6 @@ var _ = Describe("[sriov] operator", func() {
 
 			Context("MTU", func() {
 				BeforeEach(func() {
-					if cluster.VirtualCluster() {
-						// https://bugzilla.redhat.com/show_bug.cgi?id=2214977
-						Skip("Bug in IGB driver")
-					}
 
 					var node string
 					resourceName := "mturesource"
