@@ -53,6 +53,20 @@ func (mr *MockHostManagerInterfaceMockRecorder) AddUdevRule(pfPciAddress interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).AddUdevRule), pfPciAddress)
 }
 
+// AddVfRepresentorUdevRule mocks base method.
+func (m *MockHostManagerInterface) AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwitchPort string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddVfRepresentorUdevRule", pfPciAddress, pfName, pfSwitchID, pfSwitchPort)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddVfRepresentorUdevRule indicates an expected call of AddVfRepresentorUdevRule.
+func (mr *MockHostManagerInterfaceMockRecorder) AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwitchPort interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddVfRepresentorUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).AddVfRepresentorUdevRule), pfPciAddress, pfName, pfSwitchID, pfSwitchPort)
+}
+
 // BindDefaultDriver mocks base method.
 func (m *MockHostManagerInterface) BindDefaultDriver(pciAddr string) error {
 	m.ctrl.T.Helper()
@@ -152,6 +166,34 @@ func (mr *MockHostManagerInterfaceMockRecorder) ConfigSriovInterfaces(storeManag
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovInterfaces", reflect.TypeOf((*MockHostManagerInterface)(nil).ConfigSriovInterfaces), storeManager, interfaces, ifaceStatuses, pfsToConfig)
 }
 
+// CreateVDPADevice mocks base method.
+func (m *MockHostManagerInterface) CreateVDPADevice(pciAddr, vdpaType string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateVDPADevice", pciAddr, vdpaType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateVDPADevice indicates an expected call of CreateVDPADevice.
+func (mr *MockHostManagerInterfaceMockRecorder) CreateVDPADevice(pciAddr, vdpaType interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVDPADevice", reflect.TypeOf((*MockHostManagerInterface)(nil).CreateVDPADevice), pciAddr, vdpaType)
+}
+
+// DeleteVDPADevice mocks base method.
+func (m *MockHostManagerInterface) DeleteVDPADevice(pciAddr string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteVDPADevice", pciAddr)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteVDPADevice indicates an expected call of DeleteVDPADevice.
+func (mr *MockHostManagerInterfaceMockRecorder) DeleteVDPADevice(pciAddr interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVDPADevice", reflect.TypeOf((*MockHostManagerInterface)(nil).DeleteVDPADevice), pciAddr)
+}
+
 // DiscoverSriovDevices mocks base method.
 func (m *MockHostManagerInterface) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]v1.InterfaceExt, error) {
 	m.ctrl.T.Helper()
@@ -165,6 +207,20 @@ func (m *MockHostManagerInterface) DiscoverSriovDevices(storeManager store.Manag
 func (mr *MockHostManagerInterfaceMockRecorder) DiscoverSriovDevices(storeManager interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverSriovDevices", reflect.TypeOf((*MockHostManagerInterface)(nil).DiscoverSriovDevices), storeManager)
+}
+
+// DiscoverVDPAType mocks base method.
+func (m *MockHostManagerInterface) DiscoverVDPAType(pciAddr string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DiscoverVDPAType", pciAddr)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// DiscoverVDPAType indicates an expected call of DiscoverVDPAType.
+func (mr *MockHostManagerInterfaceMockRecorder) DiscoverVDPAType(pciAddr interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverVDPAType", reflect.TypeOf((*MockHostManagerInterface)(nil).DiscoverVDPAType), pciAddr)
 }
 
 // EnableRDMA mocks base method.
@@ -687,6 +743,20 @@ func (mr *MockHostManagerInterfaceMockRecorder) RemoveUdevRule(pfPciAddress inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).RemoveUdevRule), pfPciAddress)
 }
 
+// RemoveVfRepresentorUdevRule mocks base method.
+func (m *MockHostManagerInterface) RemoveVfRepresentorUdevRule(pfPciAddress string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveVfRepresentorUdevRule", pfPciAddress)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveVfRepresentorUdevRule indicates an expected call of RemoveVfRepresentorUdevRule.
+func (mr *MockHostManagerInterfaceMockRecorder) RemoveVfRepresentorUdevRule(pfPciAddress interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveVfRepresentorUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).RemoveVfRepresentorUdevRule), pfPciAddress)
+}
+
 // ResetSriovDevice mocks base method.
 func (m *MockHostManagerInterface) ResetSriovDevice(ifaceStatus v1.InterfaceExt) error {
 	m.ctrl.T.Helper()
@@ -713,6 +783,20 @@ func (m *MockHostManagerInterface) SetNetdevMTU(pciAddr string, mtu int) error {
 func (mr *MockHostManagerInterfaceMockRecorder) SetNetdevMTU(pciAddr, mtu interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNetdevMTU", reflect.TypeOf((*MockHostManagerInterface)(nil).SetNetdevMTU), pciAddr, mtu)
+}
+
+// SetNicSriovMode mocks base method.
+func (m *MockHostManagerInterface) SetNicSriovMode(pciAddr, mode string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetNicSriovMode", pciAddr, mode)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetNicSriovMode indicates an expected call of SetNicSriovMode.
+func (mr *MockHostManagerInterfaceMockRecorder) SetNicSriovMode(pciAddr, mode interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNicSriovMode", reflect.TypeOf((*MockHostManagerInterface)(nil).SetNicSriovMode), pciAddr, mode)
 }
 
 // SetSriovNumVfs mocks base method.

@@ -132,6 +132,9 @@ type SriovInterface interface {
 	// GetNicSriovMode returns the interface mode
 	// supported modes SR-IOV legacy and switchdev
 	GetNicSriovMode(pciAddr string) (string, error)
+	// SetNicSriovMode configure the interface mode
+	// supported modes SR-IOV legacy and switchdev
+	SetNicSriovMode(pciAddr, mode string) error
 	// GetLinkType return the link type
 	// supported types are ethernet and infiniband
 	GetLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string
@@ -154,8 +157,22 @@ type UdevInterface interface {
 	// PrepareNMUdevRule creates the needed udev rules to disable NetworkManager from
 	// our managed SR-IOV virtual functions
 	PrepareNMUdevRule(supportedVfIds []string) error
-	// AddUdevRule adds a specific udev rule to the system
+	// AddUdevRule adds a udev rule that disables network-manager for VFs on the concrete PF
 	AddUdevRule(pfPciAddress string) error
-	// RemoveUdevRule removes a udev rule from the system
+	// RemoveUdevRule removes a udev rule that disables network-manager for VFs on the concrete PF
 	RemoveUdevRule(pfPciAddress string) error
+	// AddVfRepresentorUdevRule adds udev rule that renames VF representors on the concrete PF
+	AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwitchPort string) error
+	// RemoveVfRepresentorUdevRule removes udev rule that renames VF representors on the concrete PF
+	RemoveVfRepresentorUdevRule(pfPciAddress string) error
+}
+
+type VdpaInterface interface {
+	// CreateVDPADevice creates VDPA device for VF with required type
+	CreateVDPADevice(pciAddr, vdpaType string) error
+	// DeleteVDPADevice removes VDPA device for provided pci address
+	DeleteVDPADevice(pciAddr string) error
+	// DiscoverVDPAType returns type of existing VDPA device for VF,
+	// returns empty string if VDPA device not found or unknown driver is in use
+	DiscoverVDPAType(pciAddr string) string
 }
