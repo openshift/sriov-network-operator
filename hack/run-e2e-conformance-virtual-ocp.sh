@@ -214,11 +214,30 @@ internal_registry="image-registry.openshift-image-registry.svc:5000"
 pass=$( jq .\"$internal_registry\".password registry-login.conf )
 podman login -u serviceaccount -p ${pass:1:-1} $registry --tls-verify=false
 
-podman push --tls-verify=false "${SRIOV_NETWORK_OPERATOR_IMAGE}"
+MAX_RETRIES=20
+DELAY_SECONDS=10
+retry_push() {
+  local command="podman push --tls-verify=false $@"
+  local retries=0
+
+  until [ $retries -ge $MAX_RETRIES ]; do
+    $command && break
+    retries=$((retries+1))
+    echo "Command failed. Retrying... (Attempt $retries/$MAX_RETRIES)"
+    sleep $DELAY_SECONDS
+  done
+
+  if [ $retries -eq $MAX_RETRIES ]; then
+    echo "Max retries reached. Exiting..."
+    exit 1
+  fi
+}
+
+retry_push "${SRIOV_NETWORK_OPERATOR_IMAGE}"
 podman rmi -fi ${SRIOV_NETWORK_OPERATOR_IMAGE}
-podman push --tls-verify=false "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
+retry_push "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
 podman rmi -fi ${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}
-podman push --tls-verify=false "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
+retry_push "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
 podman rmi -fi ${SRIOV_NETWORK_WEBHOOK_IMAGE}
 
 podman logout $registry
