@@ -34,8 +34,8 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -96,6 +96,11 @@ func main() {
 	kubeClient, err := client.New(restConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "couldn't create client")
+		os.Exit(1)
+	}
+
+	if vars.ResourcePrefix == "" {
+		setupLog.Error(nil, "RESOURCE_PREFIX environment variable can't be empty")
 		os.Exit(1)
 	}
 

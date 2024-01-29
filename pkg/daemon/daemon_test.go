@@ -32,30 +32,6 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
-var FakeSupportedNicIDs corev1.ConfigMap = corev1.ConfigMap{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      sriovnetworkv1.SupportedNicIDConfigmap,
-		Namespace: vars.Namespace,
-	},
-	Data: map[string]string{
-		"Intel_i40e_XXV710":      "8086 158a 154c",
-		"Nvidia_mlx5_ConnectX-4": "15b3 1013 1014",
-	},
-}
-
-var SriovDevicePluginPod corev1.Pod = corev1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "sriov-device-plugin-xxxx",
-		Namespace: vars.Namespace,
-		Labels: map[string]string{
-			"app": "sriov-device-plugin",
-		},
-	},
-	Spec: corev1.PodSpec{
-		NodeName: "test-node",
-	},
-}
-
 func TestConfigDaemon(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Config Daemon Suite")
@@ -120,16 +96,6 @@ var _ = Describe("Config Daemon", func() {
 		vars.Namespace = "sriov-network-operator"
 		vars.PlatformType = consts.Baremetal
 
-		err = sriovnetworkv1.AddToScheme(scheme.Scheme)
-		Expect(err).ToNot(HaveOccurred())
-		kClient := kclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-node"}},
-			&sriovnetworkv1.SriovNetworkNodeState{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-node",
-					Namespace: vars.Namespace,
-				}}).Build()
-
 		FakeSupportedNicIDs := corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      sriovnetworkv1.SupportedNicIDConfigmap,
@@ -153,6 +119,16 @@ var _ = Describe("Config Daemon", func() {
 				NodeName: "test-node",
 			},
 		}
+
+		err = sriovnetworkv1.AddToScheme(scheme.Scheme)
+		Expect(err).ToNot(HaveOccurred())
+		kClient := kclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-node"}},
+			&sriovnetworkv1.SriovNetworkNodeState{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-node",
+					Namespace: vars.Namespace,
+				}}).Build()
 
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
 		snclient := snclientset.NewSimpleClientset()

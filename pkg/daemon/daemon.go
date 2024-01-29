@@ -327,7 +327,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	latest := dn.desiredNodeState.GetGeneration()
 	log.Log.V(0).Info("nodeStateSyncHandler(): new generation", "generation", latest)
 
-	if dn.currentNodeState.GetGeneration() == latest && !utils.ObjectHasAnnotation(dn.desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainComplete) {
+	if dn.currentNodeState.GetGeneration() == latest && !dn.isDrainCompleted() {
 		if vars.UsingSystemdMode {
 			serviceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovServicePath)
 			if err != nil {
@@ -494,44 +494,13 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		}
 	}
 
-	if reqDrain ||
-		(utils.ObjectHasAnnotationKey(dn.desiredNodeState, consts.NodeStateDrainAnnotationCurrent) &&
-			!utils.ObjectHasAnnotation(dn.desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainIdle)) {
-		if utils.ObjectHasAnnotation(dn.desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainComplete) {
-			log.Log.Info("nodeStateSyncHandler(): the node complete the draining")
-		} else if !dn.isNodeDraining() {
-			if !dn.disableDrain {
-				if reqReboot {
-					log.Log.Info("nodeStateSyncHandler(): apply 'Reboot_Required' label for node")
-					if err := dn.applyRequirement(consts.RebootRequired); err != nil {
-						return err
-					}
-
-					log.Log.Info("nodeStateSyncHandler(): apply 'Reboot_Required' label for nodeState")
-					if err := utils.AnnotateObject(dn.desiredNodeState,
-						consts.NodeStateDrainAnnotation,
-						consts.RebootRequired, dn.client); err != nil {
-						return err
-					}
-
-					return nil
-				}
-				log.Log.Info("nodeStateSyncHandler(): apply 'Drain_Required' label for node")
-				if err := dn.applyRequirement(consts.DrainRequired); err != nil {
-					return err
-				}
-
-				log.Log.Info("nodeStateSyncHandler(): apply 'Drain_Required' label for nodeState")
-				if err := utils.AnnotateObject(dn.desiredNodeState,
-					consts.NodeStateDrainAnnotation,
-					consts.DrainRequired, dn.client); err != nil {
-					return err
-				}
-				return nil
-			}
-		} else {
-			log.Log.Info("nodeStateSyncHandler(): the node is still draining waiting")
-			return nil
+	// handle drain only if the plugin request drain, or we are already in a draining request state
+	if reqDrain || !utils.ObjectHasAnnotation(dn.desiredNodeState,
+		consts.NodeStateDrainAnnotationCurrent,
+		consts.DrainIdle) {
+		if err := dn.handleDrain(reqReboot); err != nil {
+			log.Log.Error(err, "failed to handle drain")
+			return err
 		}
 	}
 
@@ -573,14 +542,15 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		return err
 	}
 
-	log.Log.Info("nodeStateSyncHandler(): apply 'Idle' label for node")
-	if err := dn.applyRequirement(consts.DrainIdle); err != nil {
-		log.Log.Error(err, "nodeStateSyncHandler(): failed to annotate node")
+	log.Log.Info("nodeStateSyncHandler(): apply 'Idle' annotation for node")
+	err = utils.AnnotateNode(context.Background(), vars.NodeName, consts.NodeDrainAnnotation, consts.DrainIdle, dn.client)
+	if err != nil {
+		log.Log.Error(err, "nodeStateSyncHandler(): Failed to annotate node")
 		return err
 	}
 
-	log.Log.Info("nodeStateSyncHandler(): apply 'Idle' label for nodeState")
-	if err := utils.AnnotateObject(dn.desiredNodeState,
+	log.Log.Info("nodeStateSyncHandler(): apply 'Idle' annotation for nodeState")
+	if err := utils.AnnotateObject(context.Background(), dn.desiredNodeState,
 		consts.NodeStateDrainAnnotation,
 		consts.DrainIdle, dn.client); err != nil {
 		return err
@@ -604,24 +574,53 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	return nil
 }
 
-// isNodeDraining: check if the node is draining
-// both Draining and MCP paused labels will return true
-func (dn *Daemon) isNodeDraining() bool {
-	anno, ok := dn.desiredNodeState.Labels[consts.NodeStateDrainAnnotationCurrent]
-	if !ok {
-		return false
+func (dn *Daemon) handleDrain(reqReboot bool) error {
+	if utils.ObjectHasAnnotation(dn.desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainComplete) {
+		log.Log.Info("handleDrain(): the node complete the draining")
+		return nil
 	}
 
-	return anno == consts.Draining
-}
+	if utils.ObjectHasAnnotation(dn.desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.Draining) {
+		log.Log.Info("handleDrain(): the node is still draining")
+		return nil
+	}
 
-func (dn *Daemon) applyRequirement(label string) error {
-	log.Log.Info("applyDrainRequired(): no other node is draining")
-	err := utils.AnnotateNode(vars.NodeName, consts.NodeDrainAnnotation, label, dn.client)
+	if dn.disableDrain {
+		log.Log.Info("handleDrain(): drain is disabled in sriovOperatorConfig")
+		return nil
+	}
+
+	if reqReboot {
+		log.Log.Info("handleDrain(): apply 'Reboot_Required' annotation for node")
+		err := utils.AnnotateNode(context.Background(), vars.NodeName, consts.NodeDrainAnnotation, consts.RebootRequired, dn.client)
+		if err != nil {
+			log.Log.Error(err, "applyDrainRequired(): Failed to annotate node")
+			return err
+		}
+
+		log.Log.Info("handleDrain(): apply 'Reboot_Required' annotation for nodeState")
+		if err := utils.AnnotateObject(context.Background(), dn.desiredNodeState,
+			consts.NodeStateDrainAnnotation,
+			consts.RebootRequired, dn.client); err != nil {
+			return err
+		}
+
+		return nil
+	}
+	log.Log.Info("handleDrain(): apply 'Drain_Required' annotation for node")
+	err := utils.AnnotateNode(context.Background(), vars.NodeName, consts.NodeDrainAnnotation, consts.DrainRequired, dn.client)
 	if err != nil {
-		log.Log.Error(err, "applyDrainRequired(): Failed to annotate node")
+		log.Log.Error(err, "handleDrain(): Failed to annotate node")
 		return err
 	}
+
+	log.Log.Info("handleDrain(): apply 'Drain_Required' annotation for nodeState")
+	if err := utils.AnnotateObject(context.Background(), dn.desiredNodeState,
+		consts.NodeStateDrainAnnotation,
+		consts.DrainRequired, dn.client); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -787,4 +786,9 @@ func (dn *Daemon) prepareNMUdevRule() error {
 	}
 
 	return dn.HostHelpers.PrepareNMUdevRule(supportedVfIds)
+}
+
+// isDrainCompleted returns true if the current-state annotation is drain completed
+func (dn *Daemon) isDrainCompleted() bool {
+	return utils.ObjectHasAnnotation(dn.desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainComplete)
 }

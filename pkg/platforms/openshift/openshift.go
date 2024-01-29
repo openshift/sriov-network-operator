@@ -35,8 +35,8 @@ type OpenshiftContextInterface interface {
 	IsOpenshiftCluster() bool
 	IsHypershift() bool
 
-	OpenshiftDrainNode(context.Context, *corev1.Node) (bool, error)
-	OpenshiftCompleteDrainNode(context.Context, *corev1.Node) (bool, error)
+	OpenshiftBeforeDrainNode(context.Context, *corev1.Node) (bool, error)
+	OpenshiftAfterCompleteDrainNode(context.Context, *corev1.Node) (bool, error)
 
 	GetNodeMachinePoolName(context.Context, *corev1.Node) (string, error)
 	ChangeMachineConfigPoolPause(context.Context, *mcv1.MachineConfigPool, bool) error
@@ -98,7 +98,7 @@ func (c *openshiftContext) IsHypershift() bool {
 	return c.openshiftFlavor == OpenshiftFlavorHypershift
 }
 
-func (c *openshiftContext) OpenshiftDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
+func (c *openshiftContext) OpenshiftBeforeDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
 	// if it's not an openshift cluster we just return true that the operator manage to drain the node
 	if !c.IsOpenshiftCluster() {
 		return true, nil
@@ -158,7 +158,7 @@ func (c *openshiftContext) OpenshiftDrainNode(ctx context.Context, node *corev1.
 
 	// now we are going to label the machine config with paused and then pause the machine config
 	// we do it in that order to avoid any edge cases where we pause but didn't add our label
-	err = utils.AnnotateObject(mcp,
+	err = utils.AnnotateObject(ctx, mcp,
 		consts.MachineConfigPoolPausedAnnotation,
 		consts.MachineConfigPoolPausedAnnotationPaused,
 		c.kubeClient)
@@ -186,7 +186,7 @@ func (c *openshiftContext) OpenshiftDrainNode(ctx context.Context, node *corev1.
 		}
 
 		// after we remove the pause we change the label
-		err = utils.AnnotateObject(mcp, consts.MachineConfigPoolPausedAnnotation, consts.MachineConfigPoolPausedAnnotationIdle, c.kubeClient)
+		err = utils.AnnotateObject(ctx, mcp, consts.MachineConfigPoolPausedAnnotation, consts.MachineConfigPoolPausedAnnotationIdle, c.kubeClient)
 		if err != nil {
 			return false, err
 		}
@@ -198,7 +198,7 @@ func (c *openshiftContext) OpenshiftDrainNode(ctx context.Context, node *corev1.
 	return true, nil
 }
 
-func (c *openshiftContext) OpenshiftCompleteDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
+func (c *openshiftContext) OpenshiftAfterCompleteDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
 	// if it's not an openshift cluster we just return true that the operator manage to drain the node
 	if !c.IsOpenshiftCluster() {
 		return true, nil
@@ -264,7 +264,7 @@ func (c *openshiftContext) OpenshiftCompleteDrainNode(ctx context.Context, node 
 	}
 
 	// remove the label now that we unpause the machine config pool
-	err = utils.AnnotateObject(mcp, consts.MachineConfigPoolPausedAnnotation, consts.MachineConfigPoolPausedAnnotationIdle, c.kubeClient)
+	err = utils.AnnotateObject(ctx, mcp, consts.MachineConfigPoolPausedAnnotation, consts.MachineConfigPoolPausedAnnotationIdle, c.kubeClient)
 	if err != nil {
 		return false, err
 	}
