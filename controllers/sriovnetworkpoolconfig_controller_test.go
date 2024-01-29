@@ -13,12 +13,18 @@ import (
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 var _ = Describe("Operator", func() {
 	Context("When is up", func() {
 		It("should be able to create machine config for MachineConfigPool specified in sriov pool config", func() {
+			if vars.ClusterType != consts.ClusterTypeOpenshift {
+				Skip("test should only be executed with openshift cluster type")
+			}
+
 			config := &sriovnetworkv1.SriovNetworkPoolConfig{}
 			config.SetNamespace(testNamespace)
 			config.SetName("ovs-hw-offload-config")
