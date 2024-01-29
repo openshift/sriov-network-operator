@@ -65,9 +65,8 @@ const (
 	DrainIdle                       = "Idle"
 	DrainRequired                   = "Drain_Required"
 	RebootRequired                  = "Reboot_Required"
-	//DrainMcpPaused                  = "Draining_MCP_Paused"
-	Draining      = "Draining"
-	DrainComplete = "DrainComplete"
+	Draining                        = "Draining"
+	DrainComplete                   = "DrainComplete"
 
 	SyncStatusSucceeded  = "Succeeded"
 	SyncStatusFailed     = "Failed"

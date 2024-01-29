@@ -112,23 +112,22 @@ func openshiftControlPlaneTopologyStatus(c client.Client) (configv1.TopologyMode
 	return infra.Status.ControlPlaneTopology, nil
 }
 
+// ObjectHasAnnotationKey checks if a kubernetes object already contains annotation
 func ObjectHasAnnotationKey(obj metav1.Object, annoKey string) bool {
-	// Check if node already contains annotation
-	if _, ok := obj.GetAnnotations()[annoKey]; ok {
-		return true
-	}
-	return false
+	_, hasKey := obj.GetAnnotations()[annoKey]
+	return hasKey
 }
 
+// ObjectHasAnnotation checks if a kubernetes object already contains annotation
 func ObjectHasAnnotation(obj metav1.Object, annoKey string, value string) bool {
-	// Check if node already contains annotation
 	if anno, ok := obj.GetAnnotations()[annoKey]; ok && (anno == value) {
 		return true
 	}
 	return false
 }
 
-func AnnotateObject(obj client.Object, key, value string, c client.Client) error {
+// AnnotateObject adds annotation to a kubernetes object
+func AnnotateObject(ctx context.Context, obj client.Object, key, value string, c client.Client) error {
 	log.Log.V(2).Info("AnnotateObject(): Annotate object",
 		"objectName", obj.GetName(),
 		"objectKind", obj.GetObjectKind(),
@@ -138,11 +137,10 @@ func AnnotateObject(obj client.Object, key, value string, c client.Client) error
 		newObj.SetAnnotations(map[string]string{})
 	}
 
-	patch := client.MergeFrom(obj)
-
 	if newObj.GetAnnotations()[key] != value {
 		newObj.GetAnnotations()[key] = value
-		err := c.Patch(context.Background(),
+		patch := client.MergeFrom(obj)
+		err := c.Patch(ctx,
 			newObj, patch)
 		if err != nil {
 			log.Log.Error(err, "annotateObject(): Failed to patch object")
@@ -153,12 +151,13 @@ func AnnotateObject(obj client.Object, key, value string, c client.Client) error
 	return nil
 }
 
-func AnnotateNode(nodeName string, key, value string, c client.Client) error {
+// AnnotateNode add annotation to a node
+func AnnotateNode(ctx context.Context, nodeName string, key, value string, c client.Client) error {
 	node := &corev1.Node{}
 	err := c.Get(context.TODO(), client.ObjectKey{Name: nodeName}, node)
 	if err != nil {
 		return err
 	}
 
-	return AnnotateObject(node, key, value, c)
+	return AnnotateObject(ctx, node, key, value, c)
 }

@@ -44,6 +44,7 @@ import (
 
 	//+kubebuilder:scaffold:imports
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
@@ -143,11 +144,14 @@ var _ = BeforeSuite(func() {
 	err = openshiftconfigv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	vars.Config = cfg
+	vars.Scheme = scheme.Scheme
+	vars.Namespace = testNamespace
+
 	By("creating K8s client")
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
-
 
 	By("creating default/common k8s objects for tests")
 	// Create test namespace
