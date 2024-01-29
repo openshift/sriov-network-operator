@@ -987,7 +987,6 @@ var _ = Describe("[sriov] operator", func() {
 						Skip("skip test as no vfio-pci capable PF was found")
 					}
 					By("Using device " + vfioNic.Name + " on node " + vfioNode)
-					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 				})
 
 				It("Should be possible to create a vfio-pci resource", func() {
@@ -1951,7 +1950,6 @@ var _ = Describe("[sriov] operator", func() {
 				node, nic, err = sriovInfos.FindOneSriovNodeAndDevice()
 				Expect(err).ToNot(HaveOccurred())
 
-				By("Using device " + nic.Name + " on node " + node)
 				By("Using device " + nic.Name + " on node " + node)
 			})
 
