@@ -983,7 +983,9 @@ var _ = Describe("[sriov] operator", func() {
 					}
 
 					vfioNode, vfioNic = sriovInfos.FindOneVfioSriovDevice()
-					Expect(vfioNode).ToNot(Equal(""))
+					if vfioNode == "" {
+						Skip("skip test as no vfio-pci capable PF was found")
+					}
 					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 				})
 
@@ -1020,20 +1022,20 @@ var _ = Describe("[sriov] operator", func() {
 			})
 
 			Context("PF Partitioning", func() {
-				var vfioNode string
-				var vfioNic sriovv1.InterfaceExt
-
 				// 27633
 				BeforeEach(func() {
 					if discovery.Enabled() {
 						Skip("Test unsuitable to be run in discovery mode")
 					}
-					vfioNode, vfioNic = sriovInfos.FindOneVfioSriovDevice()
-					Expect(vfioNode).ToNot(Equal(""))
-					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 				})
 
 				It("Should be possible to partition the pf's vfs", func() {
+					vfioNode, vfioNic := sriovInfos.FindOneVfioSriovDevice()
+					if vfioNode == "" {
+						Skip("skip test as no vfio-pci capable PF was found")
+					}
+					By("Using device " + vfioNic.Name + " on node " + vfioNode)
+
 					_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name+"#2-4", vfioNode, 5, testResourceName, "netdevice")
 					Expect(err).ToNot(HaveOccurred())
 
@@ -1938,14 +1940,16 @@ var _ = Describe("[sriov] operator", func() {
 		Context("ExternallyManaged Validation", func() {
 			numVfs := 5
 			var node string
-			var nic sriovv1.InterfaceExt
+			var nic *sriovv1.InterfaceExt
 			externallyManage := func(policy *sriovv1.SriovNetworkNodePolicy) {
 				policy.Spec.ExternallyManaged = true
 			}
 
 			execute.BeforeAll(func() {
-				node, nic = sriovInfos.FindOneVfioSriovDevice()
-				Expect(node).ToNot(Equal(""))
+				var err error
+				node, nic, err = sriovInfos.FindOneSriovNodeAndDevice()
+				Expect(err).ToNot(HaveOccurred())
+
 				By("Using device " + nic.Name + " on node " + node)
 			})
 
