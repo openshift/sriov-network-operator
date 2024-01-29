@@ -108,32 +108,32 @@ func (mr *MockOpenshiftContextInterfaceMockRecorder) IsOpenshiftCluster() *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOpenshiftCluster", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).IsOpenshiftCluster))
 }
 
-// OpenshiftCompleteDrainNode mocks base method.
-func (m *MockOpenshiftContextInterface) OpenshiftCompleteDrainNode(arg0 context.Context, arg1 *v10.Node) (bool, error) {
+// OpenshiftAfterCompleteDrainNode mocks base method.
+func (m *MockOpenshiftContextInterface) OpenshiftAfterCompleteDrainNode(arg0 context.Context, arg1 *v10.Node) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OpenshiftCompleteDrainNode", arg0, arg1)
+	ret := m.ctrl.Call(m, "OpenshiftAfterCompleteDrainNode", arg0, arg1)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// OpenshiftCompleteDrainNode indicates an expected call of OpenshiftCompleteDrainNode.
-func (mr *MockOpenshiftContextInterfaceMockRecorder) OpenshiftCompleteDrainNode(arg0, arg1 interface{}) *gomock.Call {
+// OpenshiftAfterCompleteDrainNode indicates an expected call of OpenshiftAfterCompleteDrainNode.
+func (mr *MockOpenshiftContextInterfaceMockRecorder) OpenshiftAfterCompleteDrainNode(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenshiftCompleteDrainNode", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).OpenshiftCompleteDrainNode), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenshiftAfterCompleteDrainNode", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).OpenshiftAfterCompleteDrainNode), arg0, arg1)
 }
 
-// OpenshiftDrainNode mocks base method.
-func (m *MockOpenshiftContextInterface) OpenshiftDrainNode(arg0 context.Context, arg1 *v10.Node) (bool, error) {
+// OpenshiftBeforeDrainNode mocks base method.
+func (m *MockOpenshiftContextInterface) OpenshiftBeforeDrainNode(arg0 context.Context, arg1 *v10.Node) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OpenshiftDrainNode", arg0, arg1)
+	ret := m.ctrl.Call(m, "OpenshiftBeforeDrainNode", arg0, arg1)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// OpenshiftDrainNode indicates an expected call of OpenshiftDrainNode.
-func (mr *MockOpenshiftContextInterfaceMockRecorder) OpenshiftDrainNode(arg0, arg1 interface{}) *gomock.Call {
+// OpenshiftBeforeDrainNode indicates an expected call of OpenshiftBeforeDrainNode.
+func (mr *MockOpenshiftContextInterfaceMockRecorder) OpenshiftBeforeDrainNode(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenshiftDrainNode", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).OpenshiftDrainNode), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenshiftBeforeDrainNode", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).OpenshiftBeforeDrainNode), arg0, arg1)
 }

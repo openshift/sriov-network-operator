@@ -16,7 +16,7 @@ rules:
   resources: ["daemonsets"]
   verbs: ["get"]
 - apiGroups: [""]
-  resources: [namespaces, serviceaccounts]
+  resources: ["namespaces", "serviceaccounts"]
   verbs: ["*"]
 - apiGroups: ["k8s.cni.cncf.io"]
   resources: ["network-attachment-definitions"]

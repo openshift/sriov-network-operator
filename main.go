@@ -33,11 +33,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -57,7 +53,6 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -95,6 +90,11 @@ func main() {
 	kubeClient, err := client.New(restConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "couldn't create client")
+		os.Exit(1)
+	}
+
+	if vars.ResourcePrefix == "" {
+		setupLog.Error(nil, "RESOURCE_PREFIX environment variable can't be empty")
 		os.Exit(1)
 	}
 
@@ -225,12 +225,6 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
-	err = createDefaultPoolConfig(kubeClient)
-	if err != nil {
-		setupLog.Error(err, "unable to create default SriovNetworkPoolConfig")
-		os.Exit(1)
-	}
-
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
@@ -264,31 +258,5 @@ func initNicIDMap() error {
 		return err
 	}
 
-	return nil
-}
-
-func createDefaultPoolConfig(c client.Client) error {
-	logger := setupLog.WithName("createDefaultOperatorConfig")
-
-	config := &sriovnetworkv1.SriovNetworkPoolConfig{}
-	err := c.Get(context.TODO(), types.NamespacedName{Name: consts.DefaultConfigName, Namespace: vars.Namespace}, config)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Create default SriovNetworkPoolConfig")
-			config.Namespace = vars.Namespace
-			config.Name = consts.DefaultConfigName
-			maxun := intstr.Parse("1")
-			config.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{
-				MaxUnavailable: &maxun,
-				NodeSelector:   &metav1.LabelSelector{},
-			}
-			err = c.Create(context.TODO(), config)
-			if err != nil {
-				return err
-			}
-		}
-		// Error reading the object - requeue the request.
-		return err
-	}
 	return nil
 }

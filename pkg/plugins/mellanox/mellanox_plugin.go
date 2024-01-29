@@ -47,6 +47,10 @@ func (p *MellanoxPlugin) Spec() string {
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	log.Log.Info("mellanox plugin OnNodeStateChange()")
+
+	needDrain = false
+	needReboot = false
+	err = nil
 	attributesToChange = map[string]mlx.MlxNic{}
 	mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}
 	mellanoxNicsSpec = map[string]sriovnetworkv1.Interface{}

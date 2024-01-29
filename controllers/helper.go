@@ -33,8 +33,8 @@ import (
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -63,27 +63,21 @@ type DrainAnnotationPredicate struct {
 }
 
 func (DrainAnnotationPredicate) Create(e event.CreateEvent) bool {
-	logger := log.FromContext(context.TODO())
 	if e.Object == nil {
-		logger.Info("Create event: node has no drain annotation", "node", e.Object.GetName())
 		return false
 	}
 
 	if _, hasAnno := e.Object.GetAnnotations()[constants.NodeDrainAnnotation]; hasAnno {
-		logger.Info("Create event: node has no drain annotation", "node", e.Object.GetName())
 		return true
 	}
 	return false
 }
 
 func (DrainAnnotationPredicate) Update(e event.UpdateEvent) bool {
-	logger := log.FromContext(context.TODO())
 	if e.ObjectOld == nil {
-		logger.Info("Update event has no old object to update", "node", e.ObjectOld.GetName())
 		return false
 	}
 	if e.ObjectNew == nil {
-		logger.Info("Update event has no new object for update", "node", e.ObjectNew.GetName())
 		return false
 	}
 
@@ -106,27 +100,21 @@ type DrainStateAnnotationPredicate struct {
 }
 
 func (DrainStateAnnotationPredicate) Create(e event.CreateEvent) bool {
-	logger := log.FromContext(context.TODO())
 	if e.Object == nil {
-		logger.Info("Create event: node has no drain annotation", "node", e.Object.GetName())
 		return false
 	}
 
 	if _, hasAnno := e.Object.GetLabels()[constants.NodeStateDrainAnnotationCurrent]; hasAnno {
-		logger.Info("Create event: node has no drain annotation", "node", e.Object.GetName())
 		return true
 	}
 	return false
 }
 
 func (DrainStateAnnotationPredicate) Update(e event.UpdateEvent) bool {
-	logger := log.FromContext(context.TODO())
 	if e.ObjectOld == nil {
-		logger.Info("Update event has no old object to update", "node", e.ObjectOld.GetName())
 		return false
 	}
 	if e.ObjectNew == nil {
-		logger.Info("Update event has no new object for update", "node", e.ObjectNew.GetName())
 		return false
 	}
 
@@ -192,7 +180,7 @@ func syncPluginDaemonObjs(ctx context.Context,
 	data.Data["Namespace"] = vars.Namespace
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
+	data.Data["ResourcePrefix"] = vars.ResourcePrefix
 	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
 	data.Data["NodeSelectorField"] = GetDefaultNodeSelector()
 	data.Data["UseCDI"] = dc.Spec.UseCDI
