@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -178,6 +179,24 @@ func (n *EnabledNodes) FindSriovDevicesIgnoreFilters(node string) ([]*sriovv1.In
 		}
 	}
 	return devices, nil
+}
+
+// FindOneSriovNodeAndDevice finds a cluster node with one SR-IOV devices respecting the `SRIOV_NODE_AND_DEVICE_NAME_FILTER` filter.
+func (n *EnabledNodes) FindOneSriovNodeAndDevice() (string, *sriovv1.InterfaceExt, error) {
+	errs := []error{}
+	for _, node := range n.Nodes {
+		devices, err := n.FindSriovDevices(node)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if len(devices) > 0 {
+			return node, devices[0], nil
+		}
+	}
+
+	return "", nil, fmt.Errorf("can't find any SR-IOV devices in cluster's nodes: %w", errors.Join(errs...))
 }
 
 // FindOneVfioSriovDevice retrieves a node with a valid sriov device for vfio
