@@ -29,7 +29,11 @@ func GetDefinition() *corev1.Pod {
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: pointer.Int64Ptr(0),
 			Containers: []corev1.Container{{Name: "test",
-				Image:   images.Test(),
+				Image: images.Test(),
+				SecurityContext: &corev1.SecurityContext{
+					Capabilities: &corev1.Capabilities{
+						Add: []corev1.Capability{"NET_RAW"},
+					}},
 				Command: []string{"/bin/bash", "-c", "sleep INF"}}}}}
 
 	return podObject
