@@ -67,7 +67,7 @@ const (
 	interval = time.Millisecond * 250
 )
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(
 		zap.WriteTo(GinkgoWriter),
 		zap.UseDevMode(true),
@@ -213,15 +213,16 @@ var _ = BeforeSuite(func(done Done) {
 	poolConfig.SetName(constants.DefaultConfigName)
 	poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{}
 	Expect(k8sClient.Create(context.TODO(), poolConfig)).Should(Succeed())
-	close(done)
 })
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	cancel()
-	Eventually(func() error {
-		return testEnv.Stop()
-	}, timeout, time.Second).ShouldNot(HaveOccurred())
+	if testEnv != nil {
+		Eventually(func() error {
+			return testEnv.Stop()
+		}, timeout, time.Second).ShouldNot(HaveOccurred())
+	}
 })
 
 func TestAPIs(t *testing.T) {
