@@ -18,4 +18,7 @@ func init() {
 	}
 
 	clients = testclient.New("")
+	if clients == nil {
+		panic("failed package init, failed to create ClientSet")
+	}
 }

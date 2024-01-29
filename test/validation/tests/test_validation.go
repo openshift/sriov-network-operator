@@ -24,15 +24,6 @@ var (
 	operatorNamespace string
 )
 
-func init() {
-	operatorNamespace = os.Getenv("OPERATOR_NAMESPACE")
-	if operatorNamespace == "" {
-		operatorNamespace = "openshift-sriov-network-operator"
-	}
-
-	clients = testclient.New("")
-}
-
 const (
 	sriovOperatorDeploymentName = "sriov-network-operator"
 	// SriovNetworkNodePolicies contains the name of the sriov network node policies CRD
@@ -44,6 +35,16 @@ const (
 	// sriovOperatorConfigs contains the name of the sriov Operator config CRD
 	sriovOperatorConfigs = "sriovoperatorconfigs.sriovnetwork.openshift.io"
 )
+
+var _ = BeforeSuite(func() {
+	operatorNamespace = os.Getenv("OPERATOR_NAMESPACE")
+	if operatorNamespace == "" {
+		operatorNamespace = "openshift-sriov-network-operator"
+	}
+
+	clients = testclient.New("")
+	Expect(clients).ToNot(BeNil())
+})
 
 var _ = Describe("validation", func() {
 
