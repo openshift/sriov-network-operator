@@ -30,6 +30,7 @@ export WATCH_NAMESPACE?=openshift-sriov-network-operator
 export GOFLAGS+=-mod=vendor
 export GO111MODULE=on
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
+TESTPKGS?=./...
 
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
@@ -62,7 +63,7 @@ GOLANGCI_LINT_VER = v1.46.1
 
 .PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests update-codegen
 
-all: generate vet build
+all: generate lint build
 
 build: manager _build-sriov-network-config-daemon _build-webhook
 
@@ -82,14 +83,14 @@ image: ; $(info Building images...)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE_WEBHOOK) -t $(WEBHOOK_IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
 
 # Run tests
-test: generate vet manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./... -coverprofile cover.out -v
+test: generate lint manifests envtest
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test -coverprofile cover.out -v ${TESTPKGS}
 
 # Build manager binary
-manager: generate vet _build-manager
+manager: generate _build-manager
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: vet skopeo install
+run: skopeo install
 	hack/run-locally.sh
 
 # Install CRDs into a cluster
@@ -136,10 +137,6 @@ fmt: ## Go fmt your code
 # Run go fmt against code
 fmt-code:
 	go fmt ./...
-
-# Run go vet against code
-vet:
-	go vet ./...
 
 # Generate code
 generate: controller-gen
@@ -210,7 +207,7 @@ redeploy-operator-virtual-cluster:
 test-e2e-validation-only:
 	SUITE=./test/validation ./hack/run-e2e-conformance.sh
 
-test-e2e: generate vet manifests skopeo envtest
+test-e2e: generate manifests skopeo envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
 
 test-e2e-k8s: export NAMESPACE=sriov-network-operator
@@ -219,13 +216,8 @@ test-e2e-k8s: test-e2e
 test-bindata-scripts: fakechroot
 	fakechroot ./test/scripts/enable-kargs_test.sh
 
-test-%: generate vet manifests envtest
+test-%: generate manifests envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./$*/... -coverprofile cover-$*.out -coverpkg ./... -v
-
-# deploy-setup-k8s: export NAMESPACE=sriov-network-operator
-# deploy-setup-k8s: export ADMISSION_CONTROLLERS_ENABLED=false
-# deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
-# test-e2e-k8s: test-e2e
 
 GOCOVMERGE = $(BIN_DIR)/gocovmerge
 gocovmerge: ## Download gocovmerge locally if necessary.
