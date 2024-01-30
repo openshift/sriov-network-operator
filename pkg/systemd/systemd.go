@@ -36,7 +36,8 @@ const (
 	sriovSystemdSupportedNicPath  = consts.SriovConfBasePath + "/sriov-supported-nics-ids.yaml"
 	sriovSystemdServiceBinaryPath = "/var/lib/sriov/sriov-network-config-daemon"
 
-	SriovServicePath = "/etc/systemd/system/sriov-config.service"
+	SriovServicePath            = "/etc/systemd/system/sriov-config.service"
+	SriovPostNetworkServicePath = "/etc/systemd/system/sriov-config-post-network.service"
 )
 
 // TODO: move this to the host interface also
@@ -297,6 +298,10 @@ func CleanSriovFilesFromHost(isOpenShift bool) error {
 	// in openshift we should not remove the systemd service it will be done by the machine config operator
 	if !isOpenShift {
 		err = os.Remove(utils.GetHostExtensionPath(SriovServicePath))
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		err = os.Remove(utils.GetHostExtensionPath(SriovPostNetworkServicePath))
 		if err != nil && !os.IsNotExist(err) {
 			return err
 		}

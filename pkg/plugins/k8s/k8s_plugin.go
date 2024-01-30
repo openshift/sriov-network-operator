@@ -29,6 +29,7 @@ type K8sPlugin struct {
 	openVSwitchService         *hostTypes.Service
 	networkManagerService      *hostTypes.Service
 	sriovService               *hostTypes.Service
+	sriovPostNetworkService    *hostTypes.Service
 	updateTarget               *k8sUpdateTarget
 	hostHelper                 helper.HostHelpersInterface
 }
@@ -40,15 +41,29 @@ type k8sUpdateTarget struct {
 	switchdevAfterNMRunScript  bool
 	switchdevUdevScript        bool
 	sriovScript                bool
+	sriovPostNetworkScript     bool
 	systemServices             []*hostTypes.Service
 }
 
 func (u *k8sUpdateTarget) needUpdate() bool {
-	return u.switchdevBeforeNMService || u.switchdevAfterNMService || u.switchdevBeforeNMRunScript || u.switchdevAfterNMRunScript || u.switchdevUdevScript || u.sriovScript || len(u.systemServices) > 0
+	return u.switchdevBeforeNMService ||
+		u.switchdevAfterNMService ||
+		u.switchdevBeforeNMRunScript ||
+		u.switchdevAfterNMRunScript ||
+		u.switchdevUdevScript ||
+		u.sriovScript ||
+		u.sriovPostNetworkScript ||
+		len(u.systemServices) > 0
 }
 
 func (u *k8sUpdateTarget) needReboot() bool {
-	return u.switchdevBeforeNMService || u.switchdevAfterNMService || u.switchdevBeforeNMRunScript || u.switchdevAfterNMRunScript || u.switchdevUdevScript || u.sriovScript
+	return u.switchdevBeforeNMService ||
+		u.switchdevAfterNMService ||
+		u.switchdevBeforeNMRunScript ||
+		u.switchdevAfterNMRunScript ||
+		u.switchdevUdevScript ||
+		u.sriovScript ||
+		u.sriovPostNetworkScript
 }
 
 func (u *k8sUpdateTarget) reset() {
@@ -58,6 +73,7 @@ func (u *k8sUpdateTarget) reset() {
 	u.switchdevAfterNMRunScript = false
 	u.switchdevUdevScript = false
 	u.sriovScript = false
+	u.sriovPostNetworkScript = false
 	u.systemServices = []*hostTypes.Service{}
 }
 
@@ -85,6 +101,7 @@ const (
 	switchdevUnits                    = switchdevManifestPath + "switchdev-units/"
 	sriovUnits                        = bindataManifestPath + "sriov-config-service/kubernetes/"
 	sriovUnitFile                     = sriovUnits + "sriov-config-service.yaml"
+	sriovPostNetworkUnitFile          = sriovUnits + "sriov-config-post-network-service.yaml"
 	switchdevBeforeNMUnitFile         = switchdevUnits + "switchdev-configuration-before-nm.yaml"
 	switchdevAfterNMUnitFile          = switchdevUnits + "switchdev-configuration-after-nm.yaml"
 	networkManagerUnitFile            = switchdevUnits + "NetworkManager.service.yaml"
@@ -140,7 +157,7 @@ func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState)
 
 	if vars.UsingSystemdMode {
 		// Check sriov service
-		err = p.sriovServiceStateUpdate()
+		err = p.sriovServicesStateUpdate()
 		if err != nil {
 			log.Log.Error(err, "k8s-plugin OnNodeStateChange(): failed")
 			return
@@ -168,7 +185,7 @@ func (p *K8sPlugin) Apply() error {
 	}
 
 	if vars.UsingSystemdMode {
-		if err := p.updateSriovService(); err != nil {
+		if err := p.updateSriovServices(); err != nil {
 			return err
 		}
 	}
@@ -256,6 +273,16 @@ func (p *K8sPlugin) readSriovServiceManifest() error {
 	return nil
 }
 
+func (p *K8sPlugin) readSriovPostNetworkServiceManifest() error {
+	sriovService, err := p.hostHelper.ReadServiceManifestFile(sriovPostNetworkUnitFile)
+	if err != nil {
+		return err
+	}
+
+	p.sriovPostNetworkService = sriovService
+	return nil
+}
+
 func (p *K8sPlugin) readManifestFiles() error {
 	if err := p.readSwitchdevManifest(); err != nil {
 		return err
@@ -270,6 +297,10 @@ func (p *K8sPlugin) readManifestFiles() error {
 	}
 
 	if err := p.readSriovServiceManifest(); err != nil {
+		return err
+	}
+
+	if err := p.readSriovPostNetworkServiceManifest(); err != nil {
 		return err
 	}
 
@@ -311,23 +342,31 @@ func (p *K8sPlugin) switchdevServiceStateUpdate() error {
 	return nil
 }
 
-func (p *K8sPlugin) sriovServiceStateUpdate() error {
-	log.Log.Info("sriovServiceStateUpdate()")
-	isServiceEnabled, err := p.hostHelper.IsServiceEnabled(p.sriovService.Path)
-	if err != nil {
-		return err
+func (p *K8sPlugin) sriovServicesStateUpdate() error {
+	log.Log.Info("sriovServicesStateUpdate()")
+
+	for _, s := range []struct {
+		srv    *hostTypes.Service
+		update *bool
+	}{
+		{srv: p.sriovService, update: &p.updateTarget.sriovScript},
+		{srv: p.sriovPostNetworkService, update: &p.updateTarget.sriovPostNetworkScript},
+	} {
+		isServiceEnabled, err := p.hostHelper.IsServiceEnabled(s.srv.Path)
+		if err != nil {
+			return err
+		}
+		// create and enable the service if it doesn't exist or is not enabled
+		if !isServiceEnabled {
+			*s.update = true
+		} else {
+			*s.update = p.isSystemServiceNeedUpdate(s.srv)
+		}
+		if *s.update {
+			p.updateTarget.systemServices = append(p.updateTarget.systemServices, s.srv)
+		}
 	}
 
-	// create and enable the service if it doesn't exist or is not enabled
-	if !isServiceEnabled {
-		p.updateTarget.sriovScript = true
-	} else {
-		p.updateTarget.sriovScript = p.isSystemServiceNeedUpdate(p.sriovService)
-	}
-
-	if p.updateTarget.sriovScript {
-		p.updateTarget.systemServices = append(p.updateTarget.systemServices, p.sriovService)
-	}
 	return nil
 }
 
@@ -420,11 +459,19 @@ func (p *K8sPlugin) switchDevServicesStateUpdate() error {
 	return nil
 }
 
-func (p *K8sPlugin) updateSriovService() error {
-	if p.updateTarget.sriovScript {
-		err := p.hostHelper.EnableService(p.sriovService)
-		if err != nil {
-			return err
+func (p *K8sPlugin) updateSriovServices() error {
+	for _, s := range []struct {
+		srv    *hostTypes.Service
+		update bool
+	}{
+		{srv: p.sriovService, update: p.updateTarget.sriovScript},
+		{srv: p.sriovPostNetworkService, update: p.updateTarget.sriovPostNetworkScript},
+	} {
+		if s.update {
+			err := p.hostHelper.EnableService(s.srv)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
