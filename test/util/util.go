@@ -26,7 +26,7 @@ import (
 
 var (
 	RetryInterval        = time.Second * 1
-	APITimeout           = time.Second * 10
+	APITimeout           = time.Second * 20
 	Timeout              = time.Second * 60
 	CleanupRetryInterval = time.Second * 1
 	CleanupTimeout       = time.Second * 5

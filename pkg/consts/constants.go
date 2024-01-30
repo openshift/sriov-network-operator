@@ -30,6 +30,8 @@ const (
 	DefaultPolicyName                  = "default"
 	ConfigMapName                      = "device-plugin-config"
 	DaemonSet                          = "DaemonSet"
+	Role                               = "Role"
+	RoleBinding                        = "RoleBinding"
 	ServiceAccount                     = "ServiceAccount"
 	DPConfigFileName                   = "config.json"
 	OVSHWOLMachineConfigNameSuffix     = "ovs-hw-offload"

@@ -11,11 +11,29 @@ import (
 	. "github.com/onsi/gomega"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
 var _ = Describe("Operator", func() {
 	var config *sriovnetworkv1.SriovOperatorConfig
+	BeforeEach(func() {
+		defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
+		defaultPolicy.SetNamespace(namespace)
+		defaultPolicy.SetName(constants.DefaultPolicyName)
+		defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+			NumVfs:       0,
+			NodeSelector: make(map[string]string),
+			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
+		}
+		Expect(k8sClient.Create(goctx.TODO(), defaultPolicy)).Should(Succeed())
+	})
+	AfterEach(func() {
+		defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
+		defaultPolicy.SetNamespace(namespace)
+		defaultPolicy.SetName(constants.DefaultPolicyName)
+		Expect(k8sClient.Delete(goctx.TODO(), defaultPolicy)).Should(Succeed())
+	})
 	// BeforeEach(func() {
 	// 	config = &sriovnetworkv1.SriovOperatorConfig{}
 	// 	config.SetNamespace(testNamespace)
