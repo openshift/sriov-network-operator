@@ -732,8 +732,9 @@ func (dn *Daemon) restartDevicePluginPod() error {
 
 	var podToDelete string
 	pods, err := dn.kubeClient.CoreV1().Pods(vars.Namespace).List(context.Background(), metav1.ListOptions{
-		LabelSelector: "app=sriov-device-plugin",
-		FieldSelector: "spec.nodeName=" + vars.NodeName,
+		LabelSelector:   "app=sriov-device-plugin",
+		FieldSelector:   "spec.nodeName=" + vars.NodeName,
+		ResourceVersion: "0",
 	})
 	if err != nil {
 		if errors.IsNotFound(err) {
