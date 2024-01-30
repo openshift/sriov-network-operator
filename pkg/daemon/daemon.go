@@ -112,8 +112,6 @@ const (
 	annoMcpPaused   = "Draining_MCP_Paused"
 )
 
-var namespace = os.Getenv("NAMESPACE")
-
 // writer implements io.Writer interface as a pass-through for log.Log.
 type writer struct {
 	logFunc func(msg string, keysAndValues ...interface{})
@@ -210,7 +208,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	dn.mu = &sync.Mutex{}
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
 		time.Second*15,
-		namespace,
+		vars.Namespace,
 		func(lo *metav1.ListOptions) {
 			lo.FieldSelector = metadataKey + "=" + vars.NodeName
 			lo.TimeoutSeconds = &timeout
@@ -227,7 +225,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 
 	cfgInformerFactory := sninformer.NewFilteredSharedInformerFactory(dn.client,
 		time.Second*30,
-		namespace,
+		vars.Namespace,
 		func(lo *metav1.ListOptions) {
 			lo.FieldSelector = metadataKey + "=" + "default"
 		},
@@ -410,7 +408,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	// Get the latest NodeState
 	var latestState *sriovnetworkv1.SriovNetworkNodeState
 	var sriovResult = &systemd.SriovResult{SyncStatus: consts.SyncStatusSucceeded, LastSyncError: ""}
-	latestState, err = dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), vars.NodeName, metav1.GetOptions{})
+	latestState, err = dn.client.SriovnetworkV1().SriovNetworkNodeStates(vars.Namespace).Get(context.Background(), vars.NodeName, metav1.GetOptions{})
 	if err != nil {
 		log.Log.Error(err, "nodeStateSyncHandler(): Failed to fetch node state", "name", vars.NodeName)
 		return err
@@ -502,7 +500,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	// we need to load the latest status to our object
 	// if we don't do it we can have a race here where the user remove the virtual functions but the operator didn't
 	// trigger the refresh
-	updatedState, err := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), vars.NodeName, metav1.GetOptions{})
+	updatedState, err := dn.client.SriovnetworkV1().SriovNetworkNodeStates(vars.Namespace).Get(context.Background(), vars.NodeName, metav1.GetOptions{})
 	if err != nil {
 		log.Log.Error(err, "nodeStateSyncHandler(): Failed to fetch node state", "name", vars.NodeName)
 		return err
@@ -733,7 +731,7 @@ func (dn *Daemon) restartDevicePluginPod() error {
 	log.Log.V(2).Info("restartDevicePluginPod(): try to restart device plugin pod")
 
 	var podToDelete string
-	pods, err := dn.kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
+	pods, err := dn.kubeClient.CoreV1().Pods(vars.Namespace).List(context.Background(), metav1.ListOptions{
 		LabelSelector: "app=sriov-device-plugin",
 		FieldSelector: "spec.nodeName=" + vars.NodeName,
 	})
@@ -753,7 +751,7 @@ func (dn *Daemon) restartDevicePluginPod() error {
 	podToDelete = pods.Items[0].Name
 
 	log.Log.V(2).Info("restartDevicePluginPod(): Found device plugin pod, deleting it", "pod-name", podToDelete)
-	err = dn.kubeClient.CoreV1().Pods(namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
+	err = dn.kubeClient.CoreV1().Pods(vars.Namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
 	if errors.IsNotFound(err) {
 		log.Log.Info("restartDevicePluginPod(): pod to delete not found")
 		return nil
@@ -764,7 +762,7 @@ func (dn *Daemon) restartDevicePluginPod() error {
 	}
 
 	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
-		_, err := dn.kubeClient.CoreV1().Pods(namespace).Get(context.Background(), podToDelete, metav1.GetOptions{})
+		_, err := dn.kubeClient.CoreV1().Pods(vars.Namespace).Get(context.Background(), podToDelete, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
 			log.Log.Info("restartDevicePluginPod(): device plugin pod exited")
 			return true, nil
@@ -875,7 +873,7 @@ func (dn *Daemon) getDrainLock(ctx context.Context, done chan bool) {
 	lock := &resourcelock.LeaseLock{
 		LeaseMeta: metav1.ObjectMeta{
 			Name:      "config-daemon-draining-lock",
-			Namespace: namespace,
+			Namespace: vars.Namespace,
 		},
 		Client: dn.kubeClient.CoordinationV1(),
 		LockConfig: resourcelock.ResourceLockConfig{
@@ -1052,7 +1050,7 @@ func (dn *Daemon) drainNode() error {
 // TODO: move this to host interface
 func (dn *Daemon) tryCreateSwitchdevUdevRule() error {
 	log.Log.V(2).Info("tryCreateSwitchdevUdevRule()")
-	nodeState, nodeStateErr := dn.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(
+	nodeState, nodeStateErr := dn.client.SriovnetworkV1().SriovNetworkNodeStates(vars.Namespace).Get(
 		context.Background(),
 		vars.NodeName,
 		metav1.GetOptions{},

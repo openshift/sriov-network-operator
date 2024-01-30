@@ -57,6 +57,9 @@ var (
 
 	// PfPhysPortNameRe regex to find switchdev devices on the host
 	PfPhysPortNameRe = regexp.MustCompile(`p\d+`)
+
+	// Namespace contains k8s namespace
+	Namespace = ""
 )
 
 func init() {
@@ -79,4 +82,6 @@ func init() {
 	if enableAdmissionController == "True" {
 		EnableAdmissionController = true
 	}
+
+	Namespace = os.Getenv("NAMESPACE")
 }

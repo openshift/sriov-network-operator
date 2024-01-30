@@ -36,7 +36,7 @@ func NewEventRecorder(c snclientset.Interface, kubeclient kubernetes.Interface) 
 
 // SendEvent Send an Event on the NodeState object
 func (e *EventRecorder) SendEvent(eventType string, msg string) {
-	nodeState, err := e.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), vars.NodeName, metav1.GetOptions{})
+	nodeState, err := e.client.SriovnetworkV1().SriovNetworkNodeStates(vars.Namespace).Get(context.Background(), vars.NodeName, metav1.GetOptions{})
 	if err != nil {
 		log.Log.V(2).Error(err, "SendEvent(): Failed to fetch node state, skip SendEvent", "name", vars.NodeName)
 		return
