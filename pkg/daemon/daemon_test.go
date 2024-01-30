@@ -30,7 +30,7 @@ import (
 var FakeSupportedNicIDs corev1.ConfigMap = corev1.ConfigMap{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      sriovnetworkv1.SupportedNicIDConfigmap,
-		Namespace: namespace,
+		Namespace: vars.Namespace,
 	},
 	Data: map[string]string{
 		"Intel_i40e_XXV710":      "8086 158a 154c",
@@ -41,7 +41,7 @@ var FakeSupportedNicIDs corev1.ConfigMap = corev1.ConfigMap{
 var SriovDevicePluginPod corev1.Pod = corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
 		Name:      "sriov-device-plugin-xxxx",
-		Namespace: namespace,
+		Namespace: vars.Namespace,
 		Labels: map[string]string{
 			"app": "sriov-device-plugin",
 		},
@@ -110,7 +110,7 @@ var _ = Describe("Config Daemon", func() {
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
 		client := fakesnclientset.NewSimpleClientset()
 
-		err = sriovnetworkv1.InitNicIDMapFromConfigMap(kubeClient, namespace)
+		err = sriovnetworkv1.InitNicIDMapFromConfigMap(kubeClient, vars.Namespace)
 		Expect(err).ToNot(HaveOccurred())
 
 		er := NewEventRecorder(client, kubeClient)
@@ -203,7 +203,7 @@ var _ = Describe("Config Daemon", func() {
 			Expect(msg.syncStatus).To(Equal("Succeeded"))
 
 			Eventually(func() (int, error) {
-				podList, err := sut.kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
+				podList, err := sut.kubeClient.CoreV1().Pods(vars.Namespace).List(context.Background(), metav1.ListOptions{
 					LabelSelector: "app=sriov-device-plugin",
 					FieldSelector: "spec.nodeName=test-node",
 				})
@@ -260,14 +260,14 @@ var _ = Describe("Config Daemon", func() {
 
 func createSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	_, err := c.SriovnetworkV1().
-		SriovNetworkNodeStates(namespace).
+		SriovNetworkNodeStates(vars.Namespace).
 		Create(context.Background(), nodeState, metav1.CreateOptions{})
 	return err
 }
 
 func updateSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	_, err := c.SriovnetworkV1().
-		SriovNetworkNodeStates(namespace).
+		SriovNetworkNodeStates(vars.Namespace).
 		Update(context.Background(), nodeState, metav1.UpdateOptions{})
 	return err
 }

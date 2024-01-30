@@ -39,6 +39,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 var webhooks = map[string](string){
@@ -54,8 +55,6 @@ const (
 	machineConfigCRDName                  = "MachineConfig"
 	trueString                            = "true"
 )
-
-var namespace = os.Getenv("NAMESPACE")
 
 func GetImagePullSecrets() []string {
 	imagePullSecrets := os.Getenv("IMAGE_PULL_SECRETS")
@@ -85,7 +84,7 @@ func syncPluginDaemonObjs(ctx context.Context, client k8sclient.Client, scheme *
 
 	// render plugin manifests
 	data := render.MakeRenderData()
-	data.Data["Namespace"] = namespace
+	data.Data["Namespace"] = vars.Namespace
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
@@ -94,7 +93,7 @@ func syncPluginDaemonObjs(ctx context.Context, client k8sclient.Client, scheme *
 
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
 	err := client.Get(ctx, types.NamespacedName{
-		Name: constants.DefaultConfigName, Namespace: namespace}, defaultConfig)
+		Name: constants.DefaultConfigName, Namespace: vars.Namespace}, defaultConfig)
 	if err != nil {
 		return err
 	}

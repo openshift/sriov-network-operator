@@ -12,6 +12,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
@@ -19,7 +20,7 @@ var _ = Describe("Operator", func() {
 	var config *sriovnetworkv1.SriovOperatorConfig
 	BeforeEach(func() {
 		defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-		defaultPolicy.SetNamespace(namespace)
+		defaultPolicy.SetNamespace(vars.Namespace)
 		defaultPolicy.SetName(constants.DefaultPolicyName)
 		defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
 			NumVfs:       0,
@@ -30,7 +31,7 @@ var _ = Describe("Operator", func() {
 	})
 	AfterEach(func() {
 		defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-		defaultPolicy.SetNamespace(namespace)
+		defaultPolicy.SetNamespace(vars.Namespace)
 		defaultPolicy.SetName(constants.DefaultPolicyName)
 		Expect(k8sClient.Delete(goctx.TODO(), defaultPolicy)).Should(Succeed())
 	})

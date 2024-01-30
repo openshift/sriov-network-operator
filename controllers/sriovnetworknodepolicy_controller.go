@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 
 	dptypes "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/types"
 
@@ -82,11 +83,11 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	reqLogger.Info("Reconciling")
 
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-	err := r.Get(ctx, types.NamespacedName{Name: constants.DefaultPolicyName, Namespace: namespace}, defaultPolicy)
+	err := r.Get(ctx, types.NamespacedName{Name: constants.DefaultPolicyName, Namespace: vars.Namespace}, defaultPolicy)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Default policy object not found, create it.
-			defaultPolicy.SetNamespace(namespace)
+			defaultPolicy.SetNamespace(vars.Namespace)
 			defaultPolicy.SetName(constants.DefaultPolicyName)
 			defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
 				NumVfs:       0,
@@ -95,7 +96,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 			}
 			err = r.Create(ctx, defaultPolicy)
 			if err != nil {
-				reqLogger.Error(err, "Failed to create default Policy", "Namespace", namespace, "Name", constants.DefaultPolicyName)
+				reqLogger.Error(err, "Failed to create default Policy", "Namespace", vars.Namespace, "Name", constants.DefaultPolicyName)
 				return reconcile.Result{}, err
 			}
 			reqLogger.Info("Default policy created")
@@ -125,7 +126,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 		"kubernetes.io/os":               "linux",
 	}
 	defaultOpConf := &sriovnetworkv1.SriovOperatorConfig{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: constants.DefaultConfigName}, defaultOpConf); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: constants.DefaultConfigName}, defaultOpConf); err != nil {
 		return reconcile.Result{}, err
 	}
 	if len(defaultOpConf.Spec.ConfigDaemonNodeSelector) > 0 {
@@ -216,7 +217,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(ctx context
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      constants.ConfigMapName,
-			Namespace: namespace,
+			Namespace: vars.Namespace,
 		},
 		Data: configData,
 	}
@@ -246,14 +247,14 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 	logger := log.Log.WithName("syncAllSriovNetworkNodeStates")
 	logger.V(1).Info("Start to sync all SriovNetworkNodeState custom resource")
 	found := &corev1.ConfigMap{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: constants.ConfigMapName}, found); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: constants.ConfigMapName}, found); err != nil {
 		logger.V(1).Info("Fail to get", "ConfigMap", constants.ConfigMapName)
 	}
 	for _, node := range nl.Items {
 		logger.V(1).Info("Sync SriovNetworkNodeState CR", "name", node.Name)
 		ns := &sriovnetworkv1.SriovNetworkNodeState{}
 		ns.Name = node.Name
-		ns.Namespace = namespace
+		ns.Namespace = vars.Namespace
 		j, _ := json.Marshal(ns)
 		logger.V(2).Info("SriovNetworkNodeState CR", "content", j)
 		if err := r.syncSriovNetworkNodeState(ctx, np, npl, ns, &node, utils.HashConfigMap(found)); err != nil {
@@ -428,7 +429,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 		}
 
 		nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
-		err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: node.Name}, nodeState)
+		err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: node.Name}, nodeState)
 		if err != nil {
 			return rcl, err
 		}
