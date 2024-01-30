@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 // SriovNetworkReconciler reconciles a SriovNetwork object
@@ -57,7 +58,7 @@ type SriovNetworkReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *SriovNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	req.Namespace = namespace
+	req.Namespace = vars.Namespace
 	reqLogger := log.FromContext(ctx).WithValues("sriovnetwork", req.NamespacedName)
 
 	reqLogger.Info("Reconciling SriovNetwork")
