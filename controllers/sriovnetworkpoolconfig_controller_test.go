@@ -16,6 +16,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
 var _ = Describe("Operator", func() {
@@ -65,7 +66,7 @@ var _ = Describe("Operator", func() {
 					return err
 				}
 				return nil
-			}, timeout*3, interval).Should(Succeed())
+			}, util.APITimeout*3, util.RetryInterval).Should(Succeed())
 		})
 	})
 })

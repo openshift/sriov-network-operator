@@ -46,6 +46,7 @@ import (
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -60,12 +61,7 @@ var (
 )
 
 // Define utility constants for object names and testing timeouts/durations and intervals.
-const (
-	testNamespace = "openshift-sriov-network-operator"
-
-	timeout  = time.Second * 10
-	interval = time.Millisecond * 250
-)
+const testNamespace = "openshift-sriov-network-operator"
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(
@@ -221,7 +217,7 @@ var _ = AfterSuite(func() {
 	if testEnv != nil {
 		Eventually(func() error {
 			return testEnv.Stop()
-		}, timeout, time.Second).ShouldNot(HaveOccurred())
+		}, util.APITimeout, time.Second).ShouldNot(HaveOccurred())
 	}
 })
 
