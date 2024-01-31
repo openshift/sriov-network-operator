@@ -11,52 +11,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
 var _ = Describe("Operator", func() {
-	var config *sriovnetworkv1.SriovOperatorConfig
-	BeforeEach(func() {
-		defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-		defaultPolicy.SetNamespace(vars.Namespace)
-		defaultPolicy.SetName(constants.DefaultPolicyName)
-		defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
-			NumVfs:       0,
-			NodeSelector: make(map[string]string),
-			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
-		}
-		Expect(k8sClient.Create(goctx.TODO(), defaultPolicy)).Should(Succeed())
-	})
-	AfterEach(func() {
-		defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-		defaultPolicy.SetNamespace(vars.Namespace)
-		defaultPolicy.SetName(constants.DefaultPolicyName)
-		Expect(k8sClient.Delete(goctx.TODO(), defaultPolicy)).Should(Succeed())
-	})
-	// BeforeEach(func() {
-	// 	config = &sriovnetworkv1.SriovOperatorConfig{}
-	// 	config.SetNamespace(testNamespace)
-	// 	config.SetName(DEFAULT_CONFIG_NAME)
-	// 	config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
-	// 		EnableInjector:           func() *bool { b := true; return &b }(),
-	// 		EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
-	// 		ConfigDaemonNodeSelector: map[string]string{},
-	// 		LogLevel:                 2,
-	// 	}
-	// 	Expect(k8sClient.Create(goctx.TODO(), config)).Should(Succeed())
-	// })
-	// AfterEach(func() {
-	// 	config := &sriovnetworkv1.SriovOperatorConfig{}
-	// 	config.SetNamespace(testNamespace)
-	// 	config.SetName(DEFAULT_CONFIG_NAME)
-	// 	Expect(k8sClient.Delete(goctx.TODO(), config)).Should(Succeed())
-	// })
-
 	Context("When is up", func() {
 		JustBeforeEach(func() {
-			config = &sriovnetworkv1.SriovOperatorConfig{}
+			config := &sriovnetworkv1.SriovOperatorConfig{}
 			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 			config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{

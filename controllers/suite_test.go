@@ -193,6 +193,16 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.TODO(), config)).Should(Succeed())
 
+	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
+	defaultPolicy.SetNamespace(testNamespace)
+	defaultPolicy.SetName(constants.DefaultPolicyName)
+	defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+		NumVfs:       0,
+		NodeSelector: make(map[string]string),
+		NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
+	}
+	Expect(k8sClient.Create(context.TODO(), defaultPolicy)).Should(Succeed())
+
 	infra := &openshiftconfigv1.Infrastructure{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
