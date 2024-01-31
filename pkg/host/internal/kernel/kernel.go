@@ -535,7 +535,7 @@ func (k *kernel) ReloadDriver(driverName string) error {
 
 	_, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("%s modprobe -r %s && %s modprobe %s", chrootDefinition, driverName, chrootDefinition, driverName))
 	if err != nil && len(stderr) != 0 {
-		log.Log.Error(err, "InstallRDMA(): failed to reload kernel module",
+		log.Log.Error(err, "ReloadDriver(): failed to reload kernel module",
 			"name", driverName, "stderr", stderr)
 		return err
 	}
@@ -553,7 +553,7 @@ func (k *kernel) GetOSPrettyName() (string, error) {
 
 	stdout, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("cat %s | grep PRETTY_NAME | cut -c 13-", path))
 	if err != nil && len(stderr) != 0 {
-		log.Log.Error(err, "IsUbuntuSystem(): failed to check for ubuntu operating system name in os-releasae file", "stderr", stderr)
+		log.Log.Error(err, "GetOSPrettyName(): failed to check for operating system name in os-release file", "stderr", stderr)
 		return "", fmt.Errorf(stderr)
 	}
 
