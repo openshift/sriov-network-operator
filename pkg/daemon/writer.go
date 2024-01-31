@@ -150,7 +150,7 @@ func (w *NodeStateStatusWriter) updateNodeStateStatusRetry(f func(*sriovnetworkv
 		lastError = n.Status.LastSyncError
 
 		var err error
-		nodeState, err = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).UpdateStatus(context.Background(), n, metav1.UpdateOptions{})
+		nodeState, err = w.client.SriovnetworkV1().SriovNetworkNodeStates(vars.Namespace).UpdateStatus(context.Background(), n, metav1.UpdateOptions{})
 		if err != nil {
 			log.Log.V(0).Error(err, "updateNodeStateStatusRetry(): fail to update the node status")
 		}
@@ -207,7 +207,7 @@ func (w *NodeStateStatusWriter) getNodeState() (*sriovnetworkv1.SriovNetworkNode
 	var lastErr error
 	var n *sriovnetworkv1.SriovNetworkNodeState
 	err := wait.PollImmediate(10*time.Second, 5*time.Minute, func() (bool, error) {
-		n, lastErr = w.client.SriovnetworkV1().SriovNetworkNodeStates(namespace).Get(context.Background(), vars.NodeName, metav1.GetOptions{})
+		n, lastErr = w.client.SriovnetworkV1().SriovNetworkNodeStates(vars.Namespace).Get(context.Background(), vars.NodeName, metav1.GetOptions{})
 		if lastErr == nil {
 			return true, nil
 		}
