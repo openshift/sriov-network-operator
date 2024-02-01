@@ -165,12 +165,6 @@ var _ = BeforeSuite(func() {
 
 	ctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())
 
-	go func() {
-		defer GinkgoRecover()
-		err = k8sManager.Start(ctx)
-		Expect(err).ToNot(HaveOccurred())
-	}()
-
 	// Create test namespace
 	ns := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{},
@@ -182,6 +176,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.TODO(), ns)).Should(Succeed())
 
+	// Create default SriovOperatorConfig
 	config := &sriovnetworkv1.SriovOperatorConfig{}
 	config.SetNamespace(testNamespace)
 	config.SetName(constants.DefaultConfigName)
@@ -193,6 +188,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.TODO(), config)).Should(Succeed())
 
+	// Create default SriovNetworkNodePolicy
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
 	defaultPolicy.SetNamespace(testNamespace)
 	defaultPolicy.SetName(constants.DefaultPolicyName)
@@ -203,6 +199,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.TODO(), defaultPolicy)).Should(Succeed())
 
+	// Create openshift Infrastructure
 	infra := &openshiftconfigv1.Infrastructure{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
@@ -214,11 +211,18 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.TODO(), infra)).Should(Succeed())
 
+	// Create default SriovNetworkPoolConfig
 	poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
 	poolConfig.SetNamespace(testNamespace)
 	poolConfig.SetName(constants.DefaultConfigName)
 	poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{}
 	Expect(k8sClient.Create(context.TODO(), poolConfig)).Should(Succeed())
+
+	go func() {
+		defer GinkgoRecover()
+		err = k8sManager.Start(ctx)
+		Expect(err).ToNot(HaveOccurred())
+	}()
 })
 
 var _ = AfterSuite(func() {
