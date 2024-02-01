@@ -197,6 +197,10 @@ do
   update_host $cluster_name-worker-$num
 done
 
+# remove the patch after multus bug is fixed
+# https://github.com/k8snetworkplumbingwg/multus-cni/issues/1221
+kubectl patch  -n kube-system ds/kube-multus-ds --type=json -p='[{"op": "replace", "path": "/spec/template/spec/initContainers/0/command", "value":["cp", "-f","/usr/src/multus-cni/bin/multus-shim", "/host/opt/cni/bin/multus-shim"]}]'
+
 kubectl create namespace container-registry
 
 echo "## deploy internal registry"
