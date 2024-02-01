@@ -111,6 +111,8 @@ spec:
                             type: string
                           pciAddress:
                             type: string
+                          vdpaType:
+                            type: string
                           vendor:
                             type: string
                           vfID:
