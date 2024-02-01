@@ -148,7 +148,7 @@ var _ = Describe("Operator", func() {
 					return nil
 				}
 				return daemonSet.Spec.Template.Spec.NodeSelector
-			}, util.APITimeout*10, util.RetryInterval).Should(Equal(config.Spec.ConfigDaemonNodeSelector))
+			}, util.APITimeout, util.RetryInterval).Should(Equal(config.Spec.ConfigDaemonNodeSelector))
 		})
 
 		It("should be able to do multiple updates to the node selector of sriov-network-config-daemon", func() {
@@ -170,7 +170,7 @@ var _ = Describe("Operator", func() {
 					return nil
 				}
 				return daemonSet.Spec.Template.Spec.NodeSelector
-			}, util.APITimeout*10, util.RetryInterval).Should(Equal(config.Spec.ConfigDaemonNodeSelector))
+			}, util.APITimeout, util.RetryInterval).Should(Equal(config.Spec.ConfigDaemonNodeSelector))
 		})
 
 	})
