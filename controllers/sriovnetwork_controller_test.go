@@ -1,10 +1,11 @@
 package controllers
 
 import (
-	goctx "context"
+	"context"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -27,7 +28,39 @@ const (
 	emptyCurls = "{}"
 )
 
-var _ = Describe("SriovNetwork Controller", func() {
+var _ = Describe("SriovNetwork Controller", Ordered, func() {
+	var cancel context.CancelFunc
+	var ctx context.Context
+
+	BeforeAll(func() {
+		By("Setup controller manager")
+		k8sManager, err := setupK8sManagerForTest()
+		Expect(err).ToNot(HaveOccurred())
+
+		err = (&SriovNetworkReconciler{
+			Client: k8sManager.GetClient(),
+			Scheme: k8sManager.GetScheme(),
+		}).SetupWithManager(k8sManager)
+		Expect(err).ToNot(HaveOccurred())
+
+		ctx, cancel = context.WithCancel(context.Background())
+
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			By("Start controller manager")
+			err := k8sManager.Start(ctx)
+			Expect(err).ToNot(HaveOccurred())
+		}()
+
+		DeferCleanup(func() {
+			By("Shutdown controller manager")
+			cancel()
+			wg.Wait()
+		})
+	})
 
 	Context("with SriovNetwork", func() {
 		specs := map[string]sriovnetworkv1.SriovNetworkSpec{
@@ -72,7 +105,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 
 				By("Create the SriovNetwork Custom Resource")
 				// get global framework variables
-				err = k8sClient.Create(goctx.TODO(), &cr)
+				err = k8sClient.Create(ctx, &cr)
 				Expect(err).NotTo(HaveOccurred())
 				ns := testNamespace
 				if cr.Spec.NetworkNamespace != "" {
@@ -88,9 +121,9 @@ var _ = Describe("SriovNetwork Controller", func() {
 
 				By("Delete the SriovNetwork Custom Resource")
 				found := &sriovnetworkv1.SriovNetwork{}
-				err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
+				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
 				Expect(err).NotTo(HaveOccurred())
-				err = k8sClient.Delete(goctx.TODO(), found, []dynclient.DeleteOption{}...)
+				err = k8sClient.Delete(ctx, found, []dynclient.DeleteOption{}...)
 				Expect(err).NotTo(HaveOccurred())
 
 				netAttDef = &netattdefv1.NetworkAttachmentDefinition{}
@@ -131,10 +164,10 @@ var _ = Describe("SriovNetwork Controller", func() {
 		DescribeTable("should be possible to update net-att-def",
 			func(old, new sriovnetworkv1.SriovNetwork) {
 				old.Name = new.GetName()
-				err := k8sClient.Create(goctx.TODO(), &old)
+				err := k8sClient.Create(ctx, &old)
 				defer func() {
 					// Cleanup the test resource
-					Expect(k8sClient.Delete(goctx.TODO(), &old)).To(Succeed())
+					Expect(k8sClient.Delete(ctx, &old)).To(Succeed())
 				}()
 				Expect(err).NotTo(HaveOccurred())
 				found := &sriovnetworkv1.SriovNetwork{}
@@ -143,13 +176,13 @@ var _ = Describe("SriovNetwork Controller", func() {
 				retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 					// Retrieve the latest version of SriovNetwork before attempting update
 					// RetryOnConflict uses exponential backoff to avoid exhausting the apiserver
-					getErr := k8sClient.Get(goctx.TODO(), types.NamespacedName{Namespace: old.GetNamespace(), Name: old.GetName()}, found)
+					getErr := k8sClient.Get(ctx, types.NamespacedName{Namespace: old.GetNamespace(), Name: old.GetName()}, found)
 					if getErr != nil {
 						io.WriteString(GinkgoWriter, fmt.Sprintf("Failed to get latest version of SriovNetwork: %v", getErr))
 					}
 					found.Spec = new.Spec
 					found.Annotations = new.Annotations
-					updateErr := k8sClient.Update(goctx.TODO(), found)
+					updateErr := k8sClient.Update(ctx, found)
 					if getErr != nil {
 						io.WriteString(GinkgoWriter, fmt.Sprintf("Failed to update latest version of SriovNetwork: %v", getErr))
 					}
@@ -200,7 +233,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 				var err error
 				expect := generateExpectedNetConfig(&cr)
 
-				err = k8sClient.Create(goctx.TODO(), &cr)
+				err = k8sClient.Create(ctx, &cr)
 				Expect(err).NotTo(HaveOccurred())
 				ns := testNamespace
 				if cr.Spec.NetworkNamespace != "" {
@@ -210,7 +243,7 @@ var _ = Describe("SriovNetwork Controller", func() {
 				err = util.WaitForNamespacedObject(netAttDef, k8sClient, ns, cr.GetName(), util.RetryInterval, util.Timeout)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = k8sClient.Delete(goctx.TODO(), netAttDef)
+				err = k8sClient.Delete(ctx, netAttDef)
 				Expect(err).NotTo(HaveOccurred())
 				time.Sleep(3 * time.Second)
 				err = util.WaitForNamespacedObject(netAttDef, k8sClient, ns, cr.GetName(), util.RetryInterval, util.Timeout)
@@ -220,9 +253,9 @@ var _ = Describe("SriovNetwork Controller", func() {
 				Expect(strings.TrimSpace(netAttDef.Spec.Config)).To(Equal(expect))
 
 				found := &sriovnetworkv1.SriovNetwork{}
-				err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
+				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
 				Expect(err).NotTo(HaveOccurred())
-				err = k8sClient.Delete(goctx.TODO(), found, []dynclient.DeleteOption{}...)
+				err = k8sClient.Delete(ctx, found, []dynclient.DeleteOption{}...)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -244,11 +277,11 @@ var _ = Describe("SriovNetwork Controller", func() {
 				var err error
 				expect := generateExpectedNetConfig(&cr)
 
-				err = k8sClient.Create(goctx.TODO(), &cr)
+				err = k8sClient.Create(ctx, &cr)
 				Expect(err).NotTo(HaveOccurred())
 
 				DeferCleanup(func() {
-					err = k8sClient.Delete(goctx.TODO(), &cr)
+					err = k8sClient.Delete(ctx, &cr)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -264,10 +297,10 @@ var _ = Describe("SriovNetwork Controller", func() {
 				nsObj := &corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{Name: "ns-xxx"},
 				}
-				err = k8sClient.Create(goctx.TODO(), nsObj)
+				err = k8sClient.Create(ctx, nsObj)
 				Expect(err).NotTo(HaveOccurred())
 				DeferCleanup(func() {
-					err = k8sClient.Delete(goctx.TODO(), nsObj)
+					err = k8sClient.Delete(ctx, nsObj)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
