@@ -53,12 +53,21 @@ var _ = Describe("Operator", func() {
 			}
 			err = k8sClient.Create(goctx.TODO(), mcp)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				err = k8sClient.Delete(goctx.TODO(), mcp)
+				Expect(err).ToNot(HaveOccurred())
+			})
 
 			config.Spec.OvsHardwareOffloadConfig = sriovnetworkv1.OvsHardwareOffloadConfig{
 				Name: mcpName,
 			}
 			err = k8sClient.Create(goctx.TODO(), config)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				err = k8sClient.Delete(goctx.TODO(), config)
+				Expect(err).ToNot(HaveOccurred())
+			})
+
 			Eventually(func() error {
 				mc := &mcfgv1.MachineConfig{}
 				err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: mcName, Namespace: testNamespace}, mc)
