@@ -75,7 +75,7 @@ var _ = Describe("Operator", func() {
 					return err
 				}
 				return nil
-			}, util.APITimeout*3, util.RetryInterval).Should(Succeed())
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
 		})
 	})
 })
