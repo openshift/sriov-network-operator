@@ -15,10 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
-
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	dputilsPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils"
 	netlinkPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/store"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
@@ -33,18 +32,21 @@ type sriov struct {
 	networkHelper types.NetworkInterface
 	udevHelper    types.UdevInterface
 	netlinkLib    netlinkPkg.NetlinkLib
+	dputilsLib    dputilsPkg.DPUtilsLib
 }
 
 func New(utilsHelper utils.CmdInterface,
 	kernelHelper types.KernelInterface,
 	networkHelper types.NetworkInterface,
 	udevHelper types.UdevInterface,
-	netlinkLib netlinkPkg.NetlinkLib) types.SriovInterface {
+	netlinkLib netlinkPkg.NetlinkLib,
+	dputilsLib dputilsPkg.DPUtilsLib) types.SriovInterface {
 	return &sriov{utilsHelper: utilsHelper,
 		kernelHelper:  kernelHelper,
 		networkHelper: networkHelper,
 		udevHelper:    udevHelper,
 		netlinkLib:    netlinkLib,
+		dputilsLib:    dputilsLib,
 	}
 }
 
@@ -94,11 +96,11 @@ func (s *sriov) ResetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error 
 }
 
 func (s *sriov) GetVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction {
-	driver, err := dputils.GetDriverName(pciAddr)
+	driver, err := s.dputilsLib.GetDriverName(pciAddr)
 	if err != nil {
 		log.Log.Error(err, "getVfInfo(): unable to parse device driver", "device", pciAddr)
 	}
-	id, err := dputils.GetVFID(pciAddr)
+	id, err := s.dputilsLib.GetVFID(pciAddr)
 	if err != nil {
 		log.Log.Error(err, "getVfInfo(): unable to get VF index", "device", pciAddr)
 	}
@@ -129,7 +131,7 @@ func (s *sriov) GetVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetwork
 
 func (s *sriov) SetVfGUID(vfAddr string, pfLink netlink.Link) error {
 	log.Log.Info("SetVfGUID()", "vf", vfAddr)
-	vfID, err := dputils.GetVFID(vfAddr)
+	vfID, err := s.dputilsLib.GetVFID(vfAddr)
 	if err != nil {
 		log.Log.Error(err, "SetVfGUID(): unable to get VF id", "address", vfAddr)
 		return err
@@ -169,7 +171,7 @@ func (s *sriov) VFIsReady(pciAddr string) (netlink.Link, error) {
 func (s *sriov) SetVfAdminMac(vfAddr string, pfLink, vfLink netlink.Link) error {
 	log.Log.Info("SetVfAdminMac()", "vf", vfAddr)
 
-	vfID, err := dputils.GetVFID(vfAddr)
+	vfID, err := s.dputilsLib.GetVFID(vfAddr)
 	if err != nil {
 		log.Log.Error(err, "SetVfAdminMac(): unable to get VF id", "address", vfAddr)
 		return err
@@ -210,17 +212,17 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 
 		// TODO: exclude devices used by host system
 
-		if dputils.IsSriovVF(device.Address) {
+		if s.dputilsLib.IsSriovVF(device.Address) {
 			continue
 		}
 
-		driver, err := dputils.GetDriverName(device.Address)
+		driver, err := s.dputilsLib.GetDriverName(device.Address)
 		if err != nil {
 			log.Log.Error(err, "DiscoverSriovDevices(): unable to parse device driver for device, skipping", "device", device)
 			continue
 		}
 
-		deviceNames, err := dputils.GetNetNames(device.Address)
+		deviceNames, err := s.dputilsLib.GetNetNames(device.Address)
 		if err != nil {
 			log.Log.Error(err, "DiscoverSriovDevices(): unable to get device names for device, skipping", "device", device)
 			continue
@@ -263,15 +265,15 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 			}
 		}
 
-		if dputils.IsSriovPF(device.Address) {
-			iface.TotalVfs = dputils.GetSriovVFcapacity(device.Address)
-			iface.NumVfs = dputils.GetVFconfigured(device.Address)
+		if s.dputilsLib.IsSriovPF(device.Address) {
+			iface.TotalVfs = s.dputilsLib.GetSriovVFcapacity(device.Address)
+			iface.NumVfs = s.dputilsLib.GetVFconfigured(device.Address)
 			if iface.EswitchMode, err = s.GetNicSriovMode(device.Address); err != nil {
 				log.Log.Error(err, "DiscoverSriovDevices(): warning, unable to get device eswitch mode",
 					"device", device.Address)
 			}
-			if dputils.SriovConfigured(device.Address) {
-				vfs, err := dputils.GetVFList(device.Address)
+			if s.dputilsLib.SriovConfigured(device.Address) {
+				vfs, err := s.dputilsLib.GetVFList(device.Address)
 				if err != nil {
 					log.Log.Error(err, "DiscoverSriovDevices(): unable to parse VFs for device, skipping",
 						"device", device)
@@ -340,7 +342,7 @@ func (s *sriov) ConfigSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *
 	}
 	// Config VFs
 	if iface.NumVfs > 0 {
-		vfAddrs, err := dputils.GetVFList(iface.PciAddress)
+		vfAddrs, err := s.dputilsLib.GetVFList(iface.PciAddress)
 		if err != nil {
 			log.Log.Error(err, "configSriovDevice(): unable to parse VFs for device", "device", iface.PciAddress)
 		}
@@ -353,7 +355,7 @@ func (s *sriov) ConfigSriovDevice(iface *sriovnetworkv1.Interface, ifaceStatus *
 		for _, addr := range vfAddrs {
 			var group *sriovnetworkv1.VfGroup
 
-			vfID, err := dputils.GetVFID(addr)
+			vfID, err := s.dputilsLib.GetVFID(addr)
 			if err != nil {
 				log.Log.Error(err, "configSriovDevice(): unable to get VF id", "device", iface.PciAddress)
 				return err
