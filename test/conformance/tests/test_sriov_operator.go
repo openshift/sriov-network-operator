@@ -214,7 +214,7 @@ var _ = Describe("[sriov] operator", func() {
 				setOperatorConfigLogLevel(2)
 
 				By("Flip DisableDrain to trigger operator activity")
-				since := time.Now()
+				since := time.Now().Add(-10 * time.Second)
 				Eventually(func() error {
 					return cluster.SetDisableNodeDrainState(clients, operatorNamespace, !initialDisableDrain)
 				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
@@ -240,7 +240,7 @@ var _ = Describe("[sriov] operator", func() {
 				setOperatorConfigLogLevel(0)
 
 				By("Flip DisableDrain again to trigger operator activity")
-				since = time.Now()
+				since = time.Now().Add(-10 * time.Second)
 				Eventually(func() error {
 					return cluster.SetDisableNodeDrainState(clients, operatorNamespace, initialDisableDrain)
 				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
@@ -248,20 +248,32 @@ var _ = Describe("[sriov] operator", func() {
 				By("Assert logs contains less operator activity")
 				Eventually(func(g Gomega) {
 					logs := getOperatorLogs(since)
-					g.Expect(logs).To(
+
+					// time only contains sec, but we can have race here that in the same sec there was a sync
+					afterLogs := []string{}
+					found := false
+					for _, log := range logs {
+						if found {
+							afterLogs = append(afterLogs, log)
+						}
+						if strings.Contains(log, "{\"new-level\": 0, \"current-level\": 2}") {
+							found = true
+						}
+					}
+					g.Expect(found).To(BeTrue())
+					g.Expect(afterLogs).To(
 						ContainElement(And(
 							ContainSubstring("Reconciling SriovOperatorConfig"),
 						)),
 					)
 
 					// Should not contain verbose logging
-					g.Expect(logs).ToNot(
+					g.Expect(afterLogs).ToNot(
 						ContainElement(
 							ContainSubstring("Start to sync webhook objects"),
 						),
 					)
-				}, 1*time.Minute, 5*time.Second).Should(Succeed())
-
+				}, 3*time.Minute, 5*time.Second).Should(Succeed())
 			})
 		})
 	})
@@ -1059,7 +1071,9 @@ var _ = Describe("[sriov] operator", func() {
 					}
 
 					vfioNode, vfioNic = sriovInfos.FindOneVfioSriovDevice()
-					Expect(vfioNode).ToNot(Equal(""))
+					if vfioNode == "" {
+						Skip("skip test as no vfio-pci capable PF was found")
+					}
 					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 				})
 
@@ -1096,20 +1110,20 @@ var _ = Describe("[sriov] operator", func() {
 			})
 
 			Context("PF Partitioning", func() {
-				var vfioNode string
-				var vfioNic sriovv1.InterfaceExt
-
 				// 27633
 				BeforeEach(func() {
 					if discovery.Enabled() {
 						Skip("Test unsuitable to be run in discovery mode")
 					}
-					vfioNode, vfioNic = sriovInfos.FindOneVfioSriovDevice()
-					Expect(vfioNode).ToNot(Equal(""))
-					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 				})
 
 				It("Should be possible to partition the pf's vfs", func() {
+					vfioNode, vfioNic := sriovInfos.FindOneVfioSriovDevice()
+					if vfioNode == "" {
+						Skip("skip test as no vfio-pci capable PF was found")
+					}
+					By("Using device " + vfioNic.Name + " on node " + vfioNode)
+
 					_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name+"#2-4", vfioNode, 5, testResourceName, "netdevice")
 					Expect(err).ToNot(HaveOccurred())
 
@@ -1193,7 +1207,7 @@ var _ = Describe("[sriov] operator", func() {
 						capacity, _ = resNum.AsInt64()
 						res["openshift.io/testresource1"] = capacity
 						return res
-					}, 2*time.Minute, time.Second).Should(Equal(map[string]int64{
+					}, 15*time.Minute, time.Second).Should(Equal(map[string]int64{
 						"openshift.io/testresource":  int64(3),
 						"openshift.io/testresource1": int64(2),
 					}))
@@ -1434,10 +1448,6 @@ var _ = Describe("[sriov] operator", func() {
 
 			Context("MTU", func() {
 				BeforeEach(func() {
-					if cluster.VirtualCluster() {
-						// https://bugzilla.redhat.com/show_bug.cgi?id=2214977
-						Skip("Bug in IGB driver")
-					}
 
 					var node string
 					resourceName := "mturesource"
@@ -2018,14 +2028,16 @@ var _ = Describe("[sriov] operator", func() {
 		Context("ExternallyManaged Validation", func() {
 			numVfs := 5
 			var node string
-			var nic sriovv1.InterfaceExt
+			var nic *sriovv1.InterfaceExt
 			externallyManage := func(policy *sriovv1.SriovNetworkNodePolicy) {
 				policy.Spec.ExternallyManaged = true
 			}
 
 			execute.BeforeAll(func() {
-				node, nic = sriovInfos.FindOneVfioSriovDevice()
-				Expect(node).ToNot(Equal(""))
+				var err error
+				node, nic, err = sriovInfos.FindOneSriovNodeAndDevice()
+				Expect(err).ToNot(HaveOccurred())
+
 				By("Using device " + nic.Name + " on node " + node)
 			})
 

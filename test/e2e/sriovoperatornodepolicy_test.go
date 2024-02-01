@@ -28,6 +28,8 @@ var _ = Describe("Operator", func() {
 
 	execute.BeforeAll(func() {
 		clients := testclient.New("")
+		Expect(clients).ToNot(BeNil())
+
 		Eventually(func() *cluster.EnabledNodes {
 			sriovInfos, _ = cluster.DiscoverSriov(clients, testNamespace)
 			return sriovInfos

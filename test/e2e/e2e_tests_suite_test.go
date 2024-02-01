@@ -13,7 +13,7 @@ import (
 
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -55,7 +55,7 @@ func TestSriovTests(t *testing.T) {
 
 var sriovIface *sriovnetworkv1.InterfaceExt
 
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	// Go to project root directory
@@ -64,7 +64,7 @@ var _ = BeforeSuite(func(done Done) {
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:  []string{filepath.Join("config", "crd", "bases"), filepath.Join("test", "util", "crds")},
-		UseExistingCluster: pointer.BoolPtr(true),
+		UseExistingCluster: ptr.To[bool](true),
 	}
 
 	var err error
@@ -102,8 +102,6 @@ var _ = BeforeSuite(func(done Done) {
 		doneNetNsSet = make(chan error, 1)
 		go netns.SetPfVfLinkNetNs(testPciDev, testNsPath, devPollInterval, quitNetNsSet, doneNetNsSet)
 	}
-
-	close(done)
 })
 
 var _ = AfterSuite(func() {

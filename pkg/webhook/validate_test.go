@@ -10,8 +10,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -159,15 +157,16 @@ func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 	config := newDefaultOperatorConfig()
 	snclient = fakesnclientset.NewSimpleClientset()
 
-	ok, _, err := validateSriovOperatorConfig(config, "DELETE")
-	g.Expect(err).To(HaveOccurred())
-	g.Expect(ok).To(Equal(false))
+	ok, w, err := validateSriovOperatorConfig(config, "DELETE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+	g.Expect(w[0]).To(ContainSubstring("default SriovOperatorConfig shouldn't be deleted"))
 
 	ok, _, err = validateSriovOperatorConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 
-	ok, w, err := validateSriovOperatorConfig(config, "UPDATE")
+	ok, w, err = validateSriovOperatorConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
 	g.Expect(w[0]).To(ContainSubstring("Node draining is disabled"))
@@ -227,9 +226,10 @@ func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
 	}
 	os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
 	g := NewGomegaWithT(t)
-	ok, _, err = validateSriovNetworkNodePolicy(policy, "DELETE")
-	g.Expect(err).To(HaveOccurred())
-	g.Expect(ok).To(Equal(false))
+	ok, w, err := validateSriovNetworkNodePolicy(policy, "DELETE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+	g.Expect(w[0]).To(ContainSubstring("default SriovNetworkNodePolicy shouldn't be deleted"))
 
 	ok, _, err = validateSriovNetworkNodePolicy(policy, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
@@ -1045,13 +1045,8 @@ func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	var testEnv = &envtest.Environment{}
 
-	cfg, err := testEnv.Start()
-	g.Expect(err).ToNot(HaveOccurred())
-	g.Expect(cfg).ToNot(BeNil())
-	kubeclient = kubernetes.NewForConfigOrDie(cfg)
-	_, err = validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 }
 

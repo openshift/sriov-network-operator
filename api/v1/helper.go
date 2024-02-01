@@ -20,7 +20,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 const (
@@ -35,7 +37,8 @@ const (
 	SriovCniStateAuto    = "auto"
 	SriovCniStateOff     = "off"
 	SriovCniStateOn      = "on"
-	SriovCniIpamEmpty    = "\"ipam\":{}"
+	SriovCniIpam         = "\"ipam\""
+	SriovCniIpamEmpty    = SriovCniIpam + ":{}"
 )
 
 const invalidVfIndex = -1
@@ -46,6 +49,8 @@ var log = logf.Log.WithName("sriovnetwork")
 // NicIDMap contains supported mapping of IDs with each in the format of:
 // Vendor ID, Physical Function Device ID, Virtual Function Device ID
 var NicIDMap = []string{}
+
+var InitialState SriovNetworkNodeState
 
 // NetFilterType Represents the NetFilter tags to be used
 type NetFilterType int
@@ -209,6 +214,80 @@ func GetVfDeviceID(deviceID string) string {
 		}
 	}
 	return ""
+}
+
+func IsSwitchdevModeSpec(spec SriovNetworkNodeStateSpec) bool {
+	for _, iface := range spec.Interfaces {
+		if iface.EswitchMode == ESwithModeSwitchDev {
+			return true
+		}
+	}
+	return false
+}
+
+func FindInterface(interfaces Interfaces, name string) (iface Interface, err error) {
+	for _, i := range interfaces {
+		if i.Name == name {
+			return i, nil
+		}
+	}
+	return Interface{}, fmt.Errorf("unable to find interface: %v", name)
+}
+
+func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
+	if ifaceSpec.Mtu > 0 {
+		mtu := ifaceSpec.Mtu
+		if mtu != ifaceStatus.Mtu {
+			log.V(2).Info("NeedToUpdateSriov(): MTU needs update", "desired", mtu, "current", ifaceStatus.Mtu)
+			return true
+		}
+	}
+
+	if ifaceSpec.NumVfs != ifaceStatus.NumVfs {
+		log.V(2).Info("NeedToUpdateSriov(): NumVfs needs update", "desired", ifaceSpec.NumVfs, "current", ifaceStatus.NumVfs)
+		return true
+	}
+	if ifaceSpec.NumVfs > 0 {
+		for _, vfStatus := range ifaceStatus.VFs {
+			ingroup := false
+			for _, groupSpec := range ifaceSpec.VfGroups {
+				if IndexInRange(vfStatus.VfID, groupSpec.VfRange) {
+					ingroup = true
+					if groupSpec.DeviceType != consts.DeviceTypeNetDevice {
+						if groupSpec.DeviceType != vfStatus.Driver {
+							log.V(2).Info("NeedToUpdateSriov(): Driver needs update",
+								"desired", groupSpec.DeviceType, "current", vfStatus.Driver)
+							return true
+						}
+					} else {
+						if StringInArray(vfStatus.Driver, vars.DpdkDrivers) {
+							log.V(2).Info("NeedToUpdateSriov(): Driver needs update",
+								"desired", groupSpec.DeviceType, "current", vfStatus.Driver)
+							return true
+						}
+						if vfStatus.Mtu != 0 && groupSpec.Mtu != 0 && vfStatus.Mtu != groupSpec.Mtu {
+							log.V(2).Info("NeedToUpdateSriov(): VF MTU needs update",
+								"vf", vfStatus.VfID, "desired", groupSpec.Mtu, "current", vfStatus.Mtu)
+							return true
+						}
+
+						// this is needed to be sure the admin mac address is configured as expected
+						if ifaceSpec.ExternallyManaged {
+							log.V(2).Info("NeedToUpdateSriov(): need to update the device as it's externally manage",
+								"device", ifaceStatus.PciAddress)
+							return true
+						}
+					}
+					break
+				}
+			}
+			if !ingroup && StringInArray(vfStatus.Driver, vars.DpdkDrivers) {
+				// VF which has DPDK driver loaded but not in any group, needs to be reset to default driver.
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type ByPriority []SriovNetworkNodePolicy
@@ -517,7 +596,7 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	}
 
 	if cr.Spec.IPAM != "" {
-		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
+		data.Data["SriovCniIpam"] = SriovCniIpam + ":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 	} else {
 		data.Data["SriovCniIpam"] = SriovCniIpamEmpty
 	}
@@ -652,7 +731,7 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	}
 
 	if cr.Spec.IPAM != "" {
-		data.Data["SriovCniIpam"] = "\"ipam\":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
+		data.Data["SriovCniIpam"] = SriovCniIpam + ":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
 	} else {
 		data.Data["SriovCniIpam"] = SriovCniIpamEmpty
 	}

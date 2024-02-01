@@ -23,13 +23,11 @@ import (
 	"testing"
 	"time"
 
-	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	openshiftconfigv1 "github.com/openshift/api/config/v1"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	"go.uber.org/zap/zapcore"
 
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -39,10 +37,16 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	openshiftconfigv1 "github.com/openshift/api/config/v1"
+	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
+	//+kubebuilder:scaffold:imports
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-	//+kubebuilder:scaffold:imports
+	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -57,14 +61,9 @@ var (
 )
 
 // Define utility constants for object names and testing timeouts/durations and intervals.
-const (
-	testNamespace = "openshift-sriov-network-operator"
+const testNamespace = "openshift-sriov-network-operator"
 
-	timeout  = time.Second * 10
-	interval = time.Millisecond * 250
-)
-
-var _ = BeforeSuite(func(done Done) {
+var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(
 		zap.WriteTo(GinkgoWriter),
 		zap.UseDevMode(true),
@@ -129,17 +128,24 @@ var _ = BeforeSuite(func(done Done) {
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
+	t := GinkgoT()
+	mockCtrl := gomock.NewController(t)
+	platformHelper := mock_platforms.NewMockInterface(mockCtrl)
+	platformHelper.EXPECT().GetFlavor().Return(openshift.OpenshiftFlavorDefault).AnyTimes()
+	platformHelper.EXPECT().IsOpenshiftCluster().Return(false).AnyTimes()
+	platformHelper.EXPECT().IsHypershift().Return(false).AnyTimes()
+
 	err = (&SriovOperatorConfigReconciler{
-		Client:           k8sManager.GetClient(),
-		Scheme:           k8sManager.GetScheme(),
-		OpenshiftContext: &utils.OpenshiftContext{OpenshiftFlavor: utils.OpenshiftFlavorDefault},
+		Client:         k8sManager.GetClient(),
+		Scheme:         k8sManager.GetScheme(),
+		PlatformHelper: platformHelper,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&SriovNetworkPoolConfigReconciler{
-		Client:           k8sManager.GetClient(),
-		Scheme:           k8sManager.GetScheme(),
-		OpenshiftContext: &utils.OpenshiftContext{OpenshiftFlavor: utils.OpenshiftFlavorDefault},
+		Client:         k8sManager.GetClient(),
+		Scheme:         k8sManager.GetScheme(),
+		PlatformHelper: platformHelper,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -159,12 +165,6 @@ var _ = BeforeSuite(func(done Done) {
 
 	ctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())
 
-	go func() {
-		defer GinkgoRecover()
-		err = k8sManager.Start(ctx)
-		Expect(err).ToNot(HaveOccurred())
-	}()
-
 	// Create test namespace
 	ns := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{},
@@ -176,6 +176,7 @@ var _ = BeforeSuite(func(done Done) {
 	}
 	Expect(k8sClient.Create(context.TODO(), ns)).Should(Succeed())
 
+	// Create default SriovOperatorConfig
 	config := &sriovnetworkv1.SriovOperatorConfig{}
 	config.SetNamespace(testNamespace)
 	config.SetName(constants.DefaultConfigName)
@@ -187,6 +188,18 @@ var _ = BeforeSuite(func(done Done) {
 	}
 	Expect(k8sClient.Create(context.TODO(), config)).Should(Succeed())
 
+	// Create default SriovNetworkNodePolicy
+	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
+	defaultPolicy.SetNamespace(testNamespace)
+	defaultPolicy.SetName(constants.DefaultPolicyName)
+	defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+		NumVfs:       0,
+		NodeSelector: make(map[string]string),
+		NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
+	}
+	Expect(k8sClient.Create(context.TODO(), defaultPolicy)).Should(Succeed())
+
+	// Create openshift Infrastructure
 	infra := &openshiftconfigv1.Infrastructure{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
@@ -198,20 +211,28 @@ var _ = BeforeSuite(func(done Done) {
 	}
 	Expect(k8sClient.Create(context.TODO(), infra)).Should(Succeed())
 
+	// Create default SriovNetworkPoolConfig
 	poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
 	poolConfig.SetNamespace(testNamespace)
 	poolConfig.SetName(constants.DefaultConfigName)
 	poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{}
 	Expect(k8sClient.Create(context.TODO(), poolConfig)).Should(Succeed())
-	close(done)
+
+	go func() {
+		defer GinkgoRecover()
+		err = k8sManager.Start(ctx)
+		Expect(err).ToNot(HaveOccurred())
+	}()
 })
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	cancel()
-	Eventually(func() error {
-		return testEnv.Stop()
-	}, timeout, time.Second).ShouldNot(HaveOccurred())
+	if testEnv != nil {
+		Eventually(func() error {
+			return testEnv.Stop()
+		}, util.APITimeout, time.Second).ShouldNot(HaveOccurred())
+	}
 })
 
 func TestAPIs(t *testing.T) {

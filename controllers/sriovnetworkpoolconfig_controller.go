@@ -17,16 +17,21 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 // SriovNetworkPoolConfigReconciler reconciles a SriovNetworkPoolConfig object
 type SriovNetworkPoolConfigReconciler struct {
 	client.Client
-	Scheme           *runtime.Scheme
-	OpenshiftContext *utils.OpenshiftContext
+	Scheme         *runtime.Scheme
+	PlatformHelper platforms.Interface
 }
+
+const (
+	mcPriority string = "00-"
+)
 
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworkpoolconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworkpoolconfigs/status,verbs=get;update;patch
@@ -44,8 +49,8 @@ type SriovNetworkPoolConfigReconciler struct {
 func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("sriovnetworkpoolconfig", req.NamespacedName)
 	isHypershift := false
-	if r.OpenshiftContext.IsOpenshiftCluster() {
-		if r.OpenshiftContext.IsHypershift() {
+	if r.PlatformHelper.IsOpenshiftCluster() {
+		if r.PlatformHelper.IsHypershift() {
 			isHypershift = true
 		}
 		logger = logger.WithValues("isHypershift", isHypershift)
@@ -78,7 +83,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 				return reconcile.Result{}, err
 			}
 		}
-		if utils.ClusterType == utils.ClusterTypeOpenshift {
+		if vars.ClusterType == constants.ClusterTypeOpenshift {
 			if !isHypershift {
 				if err = r.syncOvsHardwareOffloadMachineConfigs(ctx, instance, false); err != nil {
 					return reconcile.Result{}, err
@@ -92,7 +97,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 		if sriovnetworkv1.StringInArray(sriovnetworkv1.POOLCONFIGFINALIZERNAME, instance.ObjectMeta.Finalizers) {
 			// our finalizer is present, so lets handle any external dependency
 			logger.Info("delete SriovNetworkPoolConfig CR", "Namespace", instance.Namespace, "Name", instance.Name)
-			if utils.ClusterType == utils.ClusterTypeOpenshift && !isHypershift {
+			if vars.ClusterType == constants.ClusterTypeOpenshift && !isHypershift {
 				if err = r.syncOvsHardwareOffloadMachineConfigs(ctx, instance, true); err != nil {
 					// if fail to delete the external dependency here, return with error
 					// so that it can be retried
@@ -125,7 +130,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 	logger := log.Log.WithName("syncOvsHardwareOffloadMachineConfigs")
 
 	mcpName := nc.Spec.OvsHardwareOffloadConfig.Name
-	mcName := "00-" + mcpName + "-" + constants.OVSHWOLMachineConfigNameSuffix
+	mcName := mcPriority + mcpName + "-" + constants.OVSHWOLMachineConfigNameSuffix
 
 	foundMC := &mcfgv1.MachineConfig{}
 	mcp := &mcfgv1.MachineConfigPool{}

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +18,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
@@ -180,6 +182,24 @@ func (n *EnabledNodes) FindSriovDevicesIgnoreFilters(node string) ([]*sriovv1.In
 	return devices, nil
 }
 
+// FindOneSriovNodeAndDevice finds a cluster node with one SR-IOV devices respecting the `SRIOV_NODE_AND_DEVICE_NAME_FILTER` filter.
+func (n *EnabledNodes) FindOneSriovNodeAndDevice() (string, *sriovv1.InterfaceExt, error) {
+	errs := []error{}
+	for _, node := range n.Nodes {
+		devices, err := n.FindSriovDevices(node)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if len(devices) > 0 {
+			return node, devices[0], nil
+		}
+	}
+
+	return "", nil, fmt.Errorf("can't find any SR-IOV devices in cluster's nodes: %w", errors.Join(errs...))
+}
+
 // FindOneVfioSriovDevice retrieves a node with a valid sriov device for vfio
 func (n *EnabledNodes) FindOneVfioSriovDevice() (string, sriovv1.InterfaceExt) {
 	for _, node := range n.Nodes {
@@ -323,7 +343,7 @@ func GetNodeSecureBootState(clients *testclient.ClientSet, nodeName, namespace s
 	podDefinition.Namespace = namespace
 
 	volume := corev1.Volume{Name: "host", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/"}}}
-	mount := corev1.VolumeMount{Name: "host", MountPath: "/host"}
+	mount := corev1.VolumeMount{Name: "host", MountPath: consts.Host}
 	podDefinition = pod.RedefineWithMount(podDefinition, volume, mount)
 	created, err := clients.Pods(namespace).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	if err != nil {
