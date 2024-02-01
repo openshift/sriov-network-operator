@@ -102,8 +102,10 @@ type OSPDeviceInfo struct {
 	NetworkID  string
 }
 
-func New() OpenstackInterface {
-	return &openstackContext{}
+func New(hostManager host.HostManagerInterface) OpenstackInterface {
+	return &openstackContext{
+		hostManager: hostManager,
+	}
 }
 
 // GetOpenstackData gets the metadata and network_data
