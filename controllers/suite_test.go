@@ -165,12 +165,6 @@ var _ = BeforeSuite(func() {
 
 	ctx, cancel = context.WithCancel(ctrl.SetupSignalHandler())
 
-	go func() {
-		defer GinkgoRecover()
-		err = k8sManager.Start(ctx)
-		Expect(err).ToNot(HaveOccurred())
-	}()
-
 	// Create test namespace
 	ns := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{},
@@ -223,6 +217,12 @@ var _ = BeforeSuite(func() {
 	poolConfig.SetName(constants.DefaultConfigName)
 	poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{}
 	Expect(k8sClient.Create(context.TODO(), poolConfig)).Should(Succeed())
+
+	go func() {
+		defer GinkgoRecover()
+		err = k8sManager.Start(ctx)
+		Expect(err).ToNot(HaveOccurred())
+	}()
 })
 
 var _ = AfterSuite(func() {
