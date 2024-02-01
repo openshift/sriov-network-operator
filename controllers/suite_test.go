@@ -182,6 +182,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.TODO(), ns)).Should(Succeed())
 
+	// Create default SriovOperatorConfig
 	config := &sriovnetworkv1.SriovOperatorConfig{}
 	config.SetNamespace(testNamespace)
 	config.SetName(constants.DefaultConfigName)
@@ -193,6 +194,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.TODO(), config)).Should(Succeed())
 
+	// Create default SriovNetworkNodePolicy
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
 	defaultPolicy.SetNamespace(testNamespace)
 	defaultPolicy.SetName(constants.DefaultPolicyName)
@@ -203,6 +205,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.TODO(), defaultPolicy)).Should(Succeed())
 
+	// Create openshift Infrastructure
 	infra := &openshiftconfigv1.Infrastructure{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "cluster",
@@ -214,6 +217,7 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.TODO(), infra)).Should(Succeed())
 
+	// Create default SriovNetworkPoolConfig
 	poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
 	poolConfig.SetNamespace(testNamespace)
 	poolConfig.SetName(constants.DefaultConfigName)

@@ -260,11 +260,18 @@ var _ = Describe("SriovNetwork Controller", func() {
 				err = k8sClient.Get(ctx, types.NamespacedName{Name: cr.GetName(), Namespace: "ns-xxx"}, netAttDef)
 				Expect(err).To(HaveOccurred())
 
-				err = k8sClient.Create(goctx.TODO(), &corev1.Namespace{
+				// Create Namespace
+				nsObj := &corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{Name: "ns-xxx"},
-				})
+				}
+				err = k8sClient.Create(goctx.TODO(), nsObj)
 				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					err = k8sClient.Delete(goctx.TODO(), nsObj)
+					Expect(err).NotTo(HaveOccurred())
+				})
 
+				// Check that net-attach-def has been created
 				err = util.WaitForNamespacedObject(netAttDef, k8sClient, "ns-xxx", cr.GetName(), util.RetryInterval, util.Timeout)
 				Expect(err).NotTo(HaveOccurred())
 
