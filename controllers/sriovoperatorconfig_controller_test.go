@@ -2,6 +2,7 @@ package controllers
 
 import (
 	goctx "context"
+	"strings"
 
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,11 +33,11 @@ var _ = Describe("Operator", func() {
 
 		It("should have webhook enable", func() {
 			mutateCfg := &admv1.MutatingWebhookConfiguration{}
-			err := util.WaitForNamespacedObject(mutateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", util.RetryInterval, util.APITimeout)
+			err := util.WaitForNamespacedObject(mutateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", util.RetryInterval, util.APITimeout*3)
 			Expect(err).NotTo(HaveOccurred())
 
 			validateCfg := &admv1.ValidatingWebhookConfiguration{}
-			err = util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", util.RetryInterval, util.APITimeout)
+			err = util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", util.RetryInterval, util.APITimeout*3)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -173,5 +174,38 @@ var _ = Describe("Operator", func() {
 			}, util.APITimeout, util.RetryInterval).Should(Equal(config.Spec.ConfigDaemonNodeSelector))
 		})
 
+		It("should not render disable-plugins cmdline flag of sriov-network-config-daemon if disablePlugin not provided in spec", func() {
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() string {
+				daemonSet := &appsv1.DaemonSet{}
+				err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: "sriov-network-config-daemon", Namespace: testNamespace}, daemonSet)
+				if err != nil {
+					return ""
+				}
+				return strings.Join(daemonSet.Spec.Template.Spec.Containers[0].Args, " ")
+			}, util.APITimeout*10, util.RetryInterval).Should(And(Not(BeEmpty()), Not(ContainSubstring("disable-plugins"))))
+		})
+
+		It("should render disable-plugins cmdline flag of sriov-network-config-daemon if disablePlugin provided in spec", func() {
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
+			config.Spec.DisablePlugins = sriovnetworkv1.PluginNameSlice{"mellanox"}
+			err = k8sClient.Update(goctx.TODO(), config)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() string {
+				daemonSet := &appsv1.DaemonSet{}
+				err := k8sClient.Get(goctx.TODO(), types.NamespacedName{Name: "sriov-network-config-daemon", Namespace: testNamespace}, daemonSet)
+				if err != nil {
+					return ""
+				}
+				return strings.Join(daemonSet.Spec.Template.Spec.Containers[0].Args, " ")
+			}, util.APITimeout*10, util.RetryInterval).Should(ContainSubstring("disable-plugins=mellanox"))
+		})
 	})
 })

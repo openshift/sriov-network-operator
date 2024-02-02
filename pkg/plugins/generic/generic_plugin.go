@@ -21,7 +21,7 @@ import (
 	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
 
-var PluginName = "generic_plugin"
+var PluginName = "generic"
 
 // driver id
 const (
@@ -109,7 +109,7 @@ func (p *GenericPlugin) Spec() string {
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need drain and/or reboot node
 func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
-	log.Log.Info("generic-plugin OnNodeStateChange()")
+	log.Log.Info("generic plugin OnNodeStateChange()")
 	p.DesireState = new
 
 	needDrain = p.needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
@@ -129,7 +129,7 @@ func (p *GenericPlugin) syncDriverState() error {
 		if !driverState.DriverLoaded && driverState.NeedDriverFunc(p.DesireState, driverState) {
 			log.Log.V(2).Info("loading driver", "name", driverState.DriverName)
 			if err := p.helpers.LoadKernelModule(driverState.DriverName); err != nil {
-				log.Log.Error(err, "generic-plugin syncDriverState(): fail to load kmod", "name", driverState.DriverName)
+				log.Log.Error(err, "generic plugin syncDriverState(): fail to load kmod", "name", driverState.DriverName)
 				return err
 			}
 			driverState.DriverLoaded = true
@@ -140,12 +140,12 @@ func (p *GenericPlugin) syncDriverState() error {
 
 // Apply config change
 func (p *GenericPlugin) Apply() error {
-	log.Log.Info("generic-plugin Apply()", "desiredState", p.DesireState.Spec)
+	log.Log.Info("generic plugin Apply()", "desiredState", p.DesireState.Spec)
 
 	if p.LastState != nil {
-		log.Log.Info("generic-plugin Apply()", "lastState", p.LastState.Spec)
+		log.Log.Info("generic plugin Apply()", "lastState", p.LastState.Spec)
 		if reflect.DeepEqual(p.LastState.Spec.Interfaces, p.DesireState.Spec.Interfaces) {
-			log.Log.Info("generic-plugin Apply(): desired and latest state are the same, nothing to apply")
+			log.Log.Info("generic plugin Apply(): desired and latest state are the same, nothing to apply")
 			return nil
 		}
 	}
@@ -199,7 +199,7 @@ func needDriverCheckVdpaType(state *sriovnetworkv1.SriovNetworkNodeState, driver
 
 // setKernelArg Tries to add the kernel args via ostree or grubby.
 func setKernelArg(karg string) (bool, error) {
-	log.Log.Info("generic-plugin setKernelArg()")
+	log.Log.Info("generic plugin setKernelArg()")
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command("/bin/sh", scriptsPath, karg)
 	cmd.Stdout = &stdout
@@ -208,18 +208,18 @@ func setKernelArg(karg string) (bool, error) {
 	if err := cmd.Run(); err != nil {
 		// if grubby is not there log and assume kernel args are set correctly.
 		if utils.IsCommandNotFound(err) {
-			log.Log.Error(err, "generic-plugin setKernelArg(): grubby or ostree command not found. Please ensure that kernel arg are set",
+			log.Log.Error(err, "generic plugin setKernelArg(): grubby or ostree command not found. Please ensure that kernel arg are set",
 				"kargs", karg)
 			return false, nil
 		}
-		log.Log.Error(err, "generic-plugin setKernelArg(): fail to enable kernel arg", "karg", karg)
+		log.Log.Error(err, "generic plugin setKernelArg(): fail to enable kernel arg", "karg", karg)
 		return false, err
 	}
 
 	i, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
 	if err == nil {
 		if i > 0 {
-			log.Log.Info("generic-plugin setKernelArg(): need to reboot node for kernel arg", "karg", karg)
+			log.Log.Info("generic plugin setKernelArg(): need to reboot node for kernel arg", "karg", karg)
 			return true, nil
 		}
 	}
@@ -229,7 +229,7 @@ func setKernelArg(karg string) (bool, error) {
 // addToDesiredKernelArgs Should be called to queue a kernel arg to be added to the node.
 func (p *GenericPlugin) addToDesiredKernelArgs(karg string) {
 	if _, ok := p.DesiredKernelArgs[karg]; !ok {
-		log.Log.Info("generic-plugin addToDesiredKernelArgs(): Adding to desired kernel arg", "karg", karg)
+		log.Log.Info("generic plugin addToDesiredKernelArgs(): Adding to desired kernel arg", "karg", karg)
 		p.DesiredKernelArgs[karg] = false
 	}
 }
@@ -248,7 +248,7 @@ func (p *GenericPlugin) syncDesiredKernelArgs() (bool, error) {
 		set := p.helpers.IsKernelArgsSet(kargs, desiredKarg)
 		if !set {
 			if attempted {
-				log.Log.V(2).Info("generic-plugin syncDesiredKernelArgs(): previously attempted to set kernel arg",
+				log.Log.V(2).Info("generic plugin syncDesiredKernelArgs(): previously attempted to set kernel arg",
 					"karg", desiredKarg)
 			}
 			// There is a case when we try to set the kernel argument here, the daemon could decide to not reboot because
@@ -256,12 +256,12 @@ func (p *GenericPlugin) syncDesiredKernelArgs() (bool, error) {
 			// argument is set once the daemon goes through node state sync again.
 			update, err := setKernelArg(desiredKarg)
 			if err != nil {
-				log.Log.Error(err, "generic-plugin syncDesiredKernelArgs(): fail to set kernel arg", "karg", desiredKarg)
+				log.Log.Error(err, "generic plugin syncDesiredKernelArgs(): fail to set kernel arg", "karg", desiredKarg)
 				return false, err
 			}
 			if update {
 				needReboot = true
-				log.Log.V(2).Info("generic-plugin syncDesiredKernelArgs(): need reboot for setting kernel arg", "karg", desiredKarg)
+				log.Log.V(2).Info("generic plugin syncDesiredKernelArgs(): need reboot for setting kernel arg", "karg", desiredKarg)
 			}
 			p.DesiredKernelArgs[desiredKarg] = true
 		}
@@ -270,7 +270,7 @@ func (p *GenericPlugin) syncDesiredKernelArgs() (bool, error) {
 }
 
 func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool) {
-	log.Log.V(2).Info("generic-plugin needDrainNode()", "current", current, "desired", desired)
+	log.Log.V(2).Info("generic plugin needDrainNode()", "current", current, "desired", desired)
 
 	needDrain = false
 	for _, ifaceStatus := range current {
@@ -279,17 +279,17 @@ func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
 				if ifaceStatus.NumVfs == 0 {
-					log.Log.V(2).Info("generic-plugin needDrainNode(): no need drain, for PCI address, current NumVfs is 0",
+					log.Log.V(2).Info("generic plugin needDrainNode(): no need drain, for PCI address, current NumVfs is 0",
 						"address", iface.PciAddress)
 					break
 				}
 				if sriovnetworkv1.NeedToUpdateSriov(&iface, &ifaceStatus) {
-					log.Log.V(2).Info("generic-plugin needDrainNode(): need drain, for PCI address request update",
+					log.Log.V(2).Info("generic plugin needDrainNode(): need drain, for PCI address request update",
 						"address", iface.PciAddress)
 					needDrain = true
 					return
 				}
-				log.Log.V(2).Info("generic-plugin needDrainNode(): no need drain,for PCI address",
+				log.Log.V(2).Info("generic plugin needDrainNode(): no need drain,for PCI address",
 					"address", iface.PciAddress, "expected-vfs", iface.NumVfs, "current-vfs", ifaceStatus.NumVfs)
 			}
 		}
@@ -297,26 +297,26 @@ func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current
 			// load the PF info
 			pfStatus, exist, err := p.helpers.LoadPfsStatus(ifaceStatus.PciAddress)
 			if err != nil {
-				log.Log.Error(err, "generic-plugin needDrainNode(): failed to load info about PF status for pci device",
+				log.Log.Error(err, "generic plugin needDrainNode(): failed to load info about PF status for pci device",
 					"address", ifaceStatus.PciAddress)
 				continue
 			}
 
 			if !exist {
-				log.Log.Info("generic-plugin needDrainNode(): PF name with pci address has VFs configured but they weren't created by the sriov operator. Skipping drain",
+				log.Log.Info("generic plugin needDrainNode(): PF name with pci address has VFs configured but they weren't created by the sriov operator. Skipping drain",
 					"name", ifaceStatus.Name,
 					"address", ifaceStatus.PciAddress)
 				continue
 			}
 
 			if pfStatus.ExternallyManaged {
-				log.Log.Info("generic-plugin needDrainNode()(): PF name with pci address was externally created. Skipping drain",
+				log.Log.Info("generic plugin needDrainNode()(): PF name with pci address was externally created. Skipping drain",
 					"name", ifaceStatus.Name,
 					"address", ifaceStatus.PciAddress)
 				continue
 			}
 
-			log.Log.V(2).Info("generic-plugin needDrainNode(): need drain since interface needs to be reset",
+			log.Log.V(2).Info("generic plugin needDrainNode(): need drain since interface needs to be reset",
 				"interface", ifaceStatus)
 			needDrain = true
 			return
@@ -339,11 +339,11 @@ func (p *GenericPlugin) needRebootNode(state *sriovnetworkv1.SriovNetworkNodeSta
 
 	updateNode, err := p.syncDesiredKernelArgs()
 	if err != nil {
-		log.Log.Error(err, "generic-plugin needRebootNode(): failed to set the desired kernel arguments")
+		log.Log.Error(err, "generic plugin needRebootNode(): failed to set the desired kernel arguments")
 		return false, err
 	}
 	if updateNode {
-		log.Log.V(2).Info("generic-plugin needRebootNode(): need reboot for updating kernel arguments")
+		log.Log.V(2).Info("generic plugin needRebootNode(): need reboot for updating kernel arguments")
 		needReboot = true
 	}
 
@@ -358,11 +358,11 @@ func (p *GenericPlugin) needRebootNode(state *sriovnetworkv1.SriovNetworkNodeSta
 
 	updateNode, err = p.helpers.WriteSwitchdevConfFile(state, p.pfsToSkip)
 	if err != nil {
-		log.Log.Error(err, "generic-plugin needRebootNode(): fail to write switchdev device config file")
+		log.Log.Error(err, "generic plugin needRebootNode(): fail to write switchdev device config file")
 		return false, err
 	}
 	if updateNode {
-		log.Log.V(2).Info("generic-plugin needRebootNode(): need reboot for updating switchdev device configuration")
+		log.Log.V(2).Info("generic plugin needRebootNode(): need reboot for updating switchdev device configuration")
 		needReboot = true
 	}
 
