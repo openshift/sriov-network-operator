@@ -109,6 +109,8 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		return reconcile.Result{}, err
 	}
 
+	snolog.SetLogLevel(defaultConfig.Spec.LogLevel)
+
 	// Fetch the SriovNetworkNodePolicyList
 	policyList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
 	err = r.List(ctx, policyList, &client.ListOptions{})
@@ -142,8 +144,6 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		return reconcile.Result{}, err
 	}
 
-	snolog.SetLogLevel(defaultConfig.Spec.LogLevel)
-
 	// For Openshift we need to create the systemd files using a machine config
 	if vars.ClusterType == consts.ClusterTypeOpenshift {
 		// TODO: add support for hypershift as today there is no MCO on hypershift clusters
@@ -155,6 +155,8 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 			return reconcile.Result{}, err
 		}
 	}
+
+	logger.Info("Reconcile SriovOperatorConfig completed successfully")
 	return reconcile.Result{RequeueAfter: consts.ResyncPeriod}, nil
 }
 
