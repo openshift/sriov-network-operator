@@ -88,8 +88,6 @@ spec:
               value: {{ .Values.operator.cniBinPath }}
             - name: CLUSTER_TYPE
               value: {{ .Values.operator.clusterType }}
-            - name: ADMISSION_CONTROLLERS_ENABLED
-              value: {{ .Values.operator.admissionControllers.enabled | quote }}
         {{- if .Values.operator.admissionControllers.enabled }}
             - name: ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME
               value: {{ .Values.operator.admissionControllers.certificates.secretNames.operator }}
