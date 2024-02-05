@@ -122,6 +122,7 @@ func (s *sriov) GetVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetwork
 		PciAddress: pciAddr,
 		Driver:     driver,
 		VfID:       id,
+		VdpaType:   s.vdpaHelper.DiscoverVDPAType(pciAddr),
 	}
 
 	if name := s.networkHelper.TryGetInterfaceName(pciAddr); name != "" {
