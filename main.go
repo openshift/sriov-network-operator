@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -190,13 +189,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create default SriovOperatorConfig
-	err = createDefaultOperatorConfig(kubeClient)
-	if err != nil {
-		setupLog.Error(err, "unable to create default SriovOperatorConfig")
-		os.Exit(1)
-	}
-
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
@@ -251,41 +243,6 @@ func createDefaultPolicy(c client.Client) error {
 			policy.Namespace = namespace
 			policy.Name = constants.DefaultPolicyName
 			err = c.Create(context.TODO(), policy)
-			if err != nil {
-				return err
-			}
-		}
-		// Error reading the object - requeue the request.
-		return err
-	}
-	return nil
-}
-
-func createDefaultOperatorConfig(c client.Client) error {
-	logger := setupLog.WithName("createDefaultOperatorConfig")
-	singleNode, err := utils.IsSingleNodeCluster(c)
-	if err != nil {
-		return fmt.Errorf("couldn't get cluster single node status: %s", err)
-	}
-
-	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS_ENABLED") == "true"
-	config := &sriovnetworkv1.SriovOperatorConfig{
-		Spec: sriovnetworkv1.SriovOperatorConfigSpec{
-			EnableInjector:           enableAdmissionController,
-			EnableOperatorWebhook:    enableAdmissionController,
-			ConfigDaemonNodeSelector: map[string]string{},
-			LogLevel:                 2,
-			DisableDrain:             singleNode,
-		},
-	}
-	namespace := os.Getenv("NAMESPACE")
-	err = c.Get(context.TODO(), types.NamespacedName{Name: constants.DefaultConfigName, Namespace: namespace}, config)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Create default SriovOperatorConfig")
-			config.Namespace = namespace
-			config.Name = constants.DefaultConfigName
-			err = c.Create(context.TODO(), config)
 			if err != nil {
 				return err
 			}
