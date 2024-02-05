@@ -183,6 +183,7 @@ export ADMISSION_CONTROLLERS_ENABLED=true
 export SKIP_VAR_SET=""
 export NAMESPACE="openshift-sriov-network-operator"
 export OPERATOR_NAMESPACE=$NAMESPACE
+export MULTUS_NAMESPACE="openshift-multus"
 export OPERATOR_EXEC=kubectl
 export CLUSTER_TYPE=openshift
 export DEV_MODE=TRUE
@@ -300,7 +301,7 @@ if [ -z $SKIP_TEST ]; then
   set -e
 
   if [[ -v TEST_REPORT_PATH ]]; then
-    kubectl cluster-info dump --namespaces ${NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
+    kubectl cluster-info dump --namespaces ${NAMESPACE},${MULTUS_NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
   fi
 
   if [[ $TEST_EXITE_CODE -ne 0 ]]; then
