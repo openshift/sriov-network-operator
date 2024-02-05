@@ -19,6 +19,8 @@ if [ "$NUM_OF_WORKERS" -lt 2 ]; then
     exit 1
 fi
 
+export MULTUS_NAMESPACE="kube-system"
+
 source $here/run-e2e-conformance-common
 
 check_requirements() {
@@ -199,7 +201,7 @@ done
 
 # remove the patch after multus bug is fixed
 # https://github.com/k8snetworkplumbingwg/multus-cni/issues/1221
-kubectl patch  -n kube-system ds/kube-multus-ds --type=json -p='[{"op": "replace", "path": "/spec/template/spec/initContainers/0/command", "value":["cp", "-f","/usr/src/multus-cni/bin/multus-shim", "/host/opt/cni/bin/multus-shim"]}]'
+kubectl patch  -n ${MULTUS_NAMESPACE} ds/kube-multus-ds --type=json -p='[{"op": "replace", "path": "/spec/template/spec/initContainers/0/command", "value":["cp", "-f","/usr/src/multus-cni/bin/multus-shim", "/host/opt/cni/bin/multus-shim"]}]'
 
 kubectl create namespace container-registry
 
@@ -324,14 +326,14 @@ if [ $(ip a | grep 10.85.0 | wc -l) -eq 0 ]; then ip link del cni0; fi
 EOF
 
 
-kubectl -n kube-system get po | grep multus | awk '{print "kubectl -n kube-system delete po",$1}' | sh
+kubectl -n ${MULTUS_NAMESPACE} get po | grep multus | awk '{print "kubectl -n kube-system delete po",$1}' | sh
 kubectl -n kube-system get po | grep coredns | awk '{print "kubectl -n kube-system delete po",$1}' | sh
 
 TIMEOUT=400
 echo "## wait for coredns"
 kubectl -n kube-system wait --for=condition=available deploy/coredns --timeout=${TIMEOUT}s
 echo "## wait for multus"
-kubectl -n kube-system wait --for=condition=ready -l name=multus pod --timeout=${TIMEOUT}s
+kubectl -n ${MULTUS_NAMESPACE} wait --for=condition=ready -l name=multus pod --timeout=${TIMEOUT}s
 
 echo "## deploy cert manager"
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.yaml
@@ -437,7 +439,7 @@ if [ -z $SKIP_TEST ]; then
   set -e
 
   if [[ -v TEST_REPORT_PATH ]]; then
-    kubectl cluster-info dump --namespaces ${NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
+    kubectl cluster-info dump --namespaces ${NAMESPACE},${MULTUS_NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
   fi
 
   if [[ $TEST_EXITE_CODE -ne 0 ]]; then
