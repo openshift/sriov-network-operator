@@ -399,6 +399,11 @@ func (dn *Daemon) operatorConfigAddHandler(obj interface{}) {
 
 func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 	newCfg := new.(*sriovnetworkv1.SriovOperatorConfig)
+	if newCfg.Namespace != vars.Namespace || newCfg.Name != consts.DefaultConfigName {
+		log.Log.V(2).Info("unsupported SriovOperatorConfig", "namespace", newCfg.Namespace, "name", newCfg.Name)
+		return
+	}
+
 	snolog.SetLogLevel(newCfg.Spec.LogLevel)
 
 	newDisableDrain := newCfg.Spec.DisableDrain
