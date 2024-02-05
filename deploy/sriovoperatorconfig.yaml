@@ -1,0 +1,11 @@
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovOperatorConfig
+metadata:
+  name: default
+spec:
+  enableInjector: $ADMISSION_CONTROLLERS_ENABLED
+  enableOperatorWebhook: $ADMISSION_CONTROLLERS_ENABLED
+  configDaemonNodeSelector: {}
+  logLevel: 2
+  disableDrain: false
+  configurationMode: daemon
