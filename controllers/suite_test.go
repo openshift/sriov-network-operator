@@ -122,7 +122,6 @@ var _ = BeforeSuite(func() {
 	By("setting up env variables for tests")
 	os.Setenv("RESOURCE_PREFIX", "openshift.io")
 	os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
-	os.Setenv("ADMISSION_CONTROLLERS_ENABLED", "true")
 	os.Setenv("ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME", "operator-webhook-cert")
 	os.Setenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME", "network-resources-injector-cert")
 	os.Setenv("SRIOV_CNI_IMAGE", "mock-image")
