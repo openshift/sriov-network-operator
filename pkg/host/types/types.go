@@ -1,9 +1,5 @@
 package types
 
-import (
-	"github.com/coreos/go-systemd/v22/unit"
-)
-
 // Service contains info about systemd service
 type Service struct {
 	Name    string
@@ -32,12 +28,3 @@ type ScriptManifestFile struct {
 		Inline string
 	}
 }
-
-var (
-	// Remove run condition form the service
-	ConditionOpt = &unit.UnitOption{
-		Section: "Unit",
-		Name:    "ConditionPathExists",
-		Value:   "!/etc/ignition-machine-config-encapsulated.json",
-	}
-)

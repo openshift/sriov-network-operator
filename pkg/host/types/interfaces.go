@@ -1,7 +1,6 @@
 package types
 
 import (
-	"github.com/coreos/go-systemd/v22/unit"
 	"github.com/jaypipes/ghw"
 	"github.com/vishvananda/netlink"
 
@@ -119,13 +118,9 @@ type ServiceInterface interface {
 	EnableService(service *Service) error
 	// ReadServiceManifestFile reads the systemd manifest for a specific service
 	ReadServiceManifestFile(path string) (*Service, error)
-	// RemoveFromService removes a systemd service from the host
-	RemoveFromService(service *Service, options ...*unit.UnitOption) (*Service, error)
-	// ReadScriptManifestFile reads the script manifest from a systemd service
-	ReadScriptManifestFile(path string) (*ScriptManifestFile, error)
 	// ReadServiceInjectionManifestFile reads the injection manifest file for the systemd service
 	ReadServiceInjectionManifestFile(path string) (*Service, error)
-	// CompareServices compare two servers and return true if they are equal
+	// CompareServices returns true if serviceA needs update(doesn't contain all fields from service B)
 	CompareServices(serviceA, serviceB *Service) (bool, error)
 	// UpdateSystemService updates a system service on the host
 	UpdateSystemService(serviceObj *Service) error

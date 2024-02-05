@@ -7,7 +7,6 @@ package mock_host
 import (
 	reflect "reflect"
 
-	unit "github.com/coreos/go-systemd/v22/unit"
 	gomock "github.com/golang/mock/gomock"
 	ghw "github.com/jaypipes/ghw"
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -664,21 +663,6 @@ func (mr *MockHostManagerInterfaceMockRecorder) RdmaIsLoaded() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RdmaIsLoaded", reflect.TypeOf((*MockHostManagerInterface)(nil).RdmaIsLoaded))
 }
 
-// ReadScriptManifestFile mocks base method.
-func (m *MockHostManagerInterface) ReadScriptManifestFile(path string) (*types.ScriptManifestFile, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadScriptManifestFile", path)
-	ret0, _ := ret[0].(*types.ScriptManifestFile)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ReadScriptManifestFile indicates an expected call of ReadScriptManifestFile.
-func (mr *MockHostManagerInterfaceMockRecorder) ReadScriptManifestFile(path interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadScriptManifestFile", reflect.TypeOf((*MockHostManagerInterface)(nil).ReadScriptManifestFile), path)
-}
-
 // ReadService mocks base method.
 func (m *MockHostManagerInterface) ReadService(servicePath string) (*types.Service, error) {
 	m.ctrl.T.Helper()
@@ -750,26 +734,6 @@ func (m *MockHostManagerInterface) ReloadDriver(driver string) error {
 func (mr *MockHostManagerInterfaceMockRecorder) ReloadDriver(driver interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReloadDriver", reflect.TypeOf((*MockHostManagerInterface)(nil).ReloadDriver), driver)
-}
-
-// RemoveFromService mocks base method.
-func (m *MockHostManagerInterface) RemoveFromService(service *types.Service, options ...*unit.UnitOption) (*types.Service, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{service}
-	for _, a := range options {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "RemoveFromService", varargs...)
-	ret0, _ := ret[0].(*types.Service)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// RemoveFromService indicates an expected call of RemoveFromService.
-func (mr *MockHostManagerInterfaceMockRecorder) RemoveFromService(service interface{}, options ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{service}, options...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveFromService", reflect.TypeOf((*MockHostManagerInterface)(nil).RemoveFromService), varargs...)
 }
 
 // RemoveUdevRule mocks base method.

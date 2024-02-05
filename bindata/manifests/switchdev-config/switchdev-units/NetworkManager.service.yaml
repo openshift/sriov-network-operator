@@ -1,9 +1,0 @@
-name: NetworkManager.service
-dropins:
-- name: 10-switchdev.conf
-  contents: |
-    [Unit]
-    Wants=switchdev-configuration-before-nm.service
-    Wants=switchdev-configuration-after-nm.service
-    After=switchdev-configuration-before-nm.service
-    Before=switchdev-configuration-after-nm.service
