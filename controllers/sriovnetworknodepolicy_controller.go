@@ -157,7 +157,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 		return reconcile.Result{}, err
 	}
 	// Render and sync Daemon objects
-	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultOpConf, defaultPolicy, policyList); err != nil {
+	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultOpConf, policyList); err != nil {
 		return reconcile.Result{}, err
 	}
 

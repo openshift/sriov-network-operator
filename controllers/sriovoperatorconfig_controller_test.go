@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
@@ -53,6 +54,21 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		Expect(k8sClient.Create(context.Background(), defaultPolicy)).Should(Succeed())
 		DeferCleanup(func() {
 			err := k8sClient.Delete(context.Background(), defaultPolicy)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		otherPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
+		otherPolicy.SetNamespace(testNamespace)
+		otherPolicy.SetName("other-policy")
+		otherPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+			NumVfs:       5,
+			NodeSelector: map[string]string{"foo": "bar"},
+			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
+			Priority:     20,
+		}
+		Expect(k8sClient.Create(context.Background(), otherPolicy)).ToNot(HaveOccurred())
+		DeferCleanup(func() {
+			err := k8sClient.Delete(context.Background(), otherPolicy)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
@@ -125,10 +141,14 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				daemonSet := &appsv1.DaemonSet{}
 				err := util.WaitForNamespacedObject(daemonSet, k8sClient, testNamespace, dsName, util.RetryInterval, util.APITimeout)
 				Expect(err).NotTo(HaveOccurred())
+				Expect(daemonSet.OwnerReferences).To(HaveLen(1))
+				Expect(daemonSet.OwnerReferences[0].Kind).To(Equal("SriovOperatorConfig"))
+				Expect(daemonSet.OwnerReferences[0].Name).To(Equal(consts.DefaultConfigName))
 			},
 			Entry("operator-webhook", "operator-webhook"),
 			Entry("network-resources-injector", "network-resources-injector"),
 			Entry("sriov-network-config-daemon", "sriov-network-config-daemon"),
+			Entry("sriov-device-plugin", "sriov-device-plugin"),
 		)
 
 		It("should be able to turn network-resources-injector on/off", func() {
