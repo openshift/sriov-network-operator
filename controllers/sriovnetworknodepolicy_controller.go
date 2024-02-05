@@ -106,6 +106,16 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 		return reconcile.Result{}, err
 	}
 
+	// Fetch the default SriovOperatorConfig
+	defaultOpConf := &sriovnetworkv1.SriovOperatorConfig{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: constants.DefaultConfigName}, defaultOpConf); err != nil {
+		if errors.IsNotFound(err) {
+			reqLogger.Info("default SriovOperatorConfig object not found, cannot reconcile SriovNetworkNodePolicies. Requeue.")
+			return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+		return reconcile.Result{}, err
+	}
+
 	// Fetch the SriovNetworkNodePolicyList
 	policyList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
 	err = r.List(ctx, policyList, &client.ListOptions{})
@@ -124,10 +134,6 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	lo := &client.MatchingLabels{
 		"node-role.kubernetes.io/worker": "",
 		"kubernetes.io/os":               "linux",
-	}
-	defaultOpConf := &sriovnetworkv1.SriovOperatorConfig{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: constants.DefaultConfigName}, defaultOpConf); err != nil {
-		return reconcile.Result{}, err
 	}
 	if len(defaultOpConf.Spec.ConfigDaemonNodeSelector) > 0 {
 		labels := client.MatchingLabels(defaultOpConf.Spec.ConfigDaemonNodeSelector)
@@ -151,7 +157,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 		return reconcile.Result{}, err
 	}
 	// Render and sync Daemon objects
-	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultPolicy, policyList); err != nil {
+	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultOpConf, defaultPolicy, policyList); err != nil {
 		return reconcile.Result{}, err
 	}
 
