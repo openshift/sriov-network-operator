@@ -13,6 +13,7 @@ import (
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 
 	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
 )
@@ -139,7 +140,8 @@ func NewNode() *corev1.Node {
 func newDefaultOperatorConfig() *SriovOperatorConfig {
 	return &SriovOperatorConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "default",
+			Name:      "default",
+			Namespace: vars.Namespace,
 		},
 		Spec: SriovOperatorConfigSpec{
 			ConfigDaemonNodeSelector: map[string]string{},

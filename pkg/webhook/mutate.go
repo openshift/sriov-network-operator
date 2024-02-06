@@ -23,6 +23,8 @@ func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1.AdmissionRespo
 	reviewResponse.Allowed = true
 
 	name := cr["metadata"].(map[string]interface{})["name"]
+	// Note(adrianc): the "default" policy is deprecated, we keep this skip below
+	// in case we encounter it in the cluster.
 	if name == constants.DefaultPolicyName {
 		// skip the default policy
 		return &reviewResponse, nil
