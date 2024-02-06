@@ -195,5 +195,27 @@ var _ = Describe("Kernel", func() {
 				helpers.GinkgoAssertFileContentsEquals("/sys/bus/pci/drivers/vfio-pci/bind", "0000:d8:00.0")
 			})
 		})
+		Context("GetDriverByBusAndDevice", func() {
+			It("device has driver", func() {
+				helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+					Dirs: []string{
+						"/sys/bus/vdpa/devices/vdpa:0000:d8:00.3"},
+					Symlinks: map[string]string{
+						"/sys/bus/vdpa/devices/vdpa:0000:d8:00.3/driver": "../../../../../bus/vdpa/drivers/vhost_vdpa"},
+				})
+				driver, err := k.GetDriverByBusAndDevice(consts.BusVdpa, "vdpa:0000:d8:00.3")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(driver).To(Equal("vhost_vdpa"))
+			})
+			It("device has no driver", func() {
+				helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+					Dirs: []string{
+						"/sys/bus/vdpa/devices/vdpa:0000:d8:00.3"},
+				})
+				driver, err := k.GetDriverByBusAndDevice(consts.BusVdpa, "vdpa:0000:d8:00.3")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(driver).To(BeEmpty())
+			})
+		})
 	})
 })

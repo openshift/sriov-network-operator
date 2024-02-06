@@ -3,7 +3,6 @@ package host
 import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/kernel"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/govdpa"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/network"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/service"
@@ -38,13 +37,13 @@ type hostManager struct {
 
 func NewHostManager(utilsInterface utils.CmdInterface) HostManagerInterface {
 	dpUtils := dputils.New()
-	nl := netlink.New()
+	netlinkLib := netlink.New()
 	k := kernel.New(utilsInterface)
-	n := network.New(utilsInterface, dpUtils, nl)
+	n := network.New(utilsInterface, dpUtils, netlinkLib)
 	sv := service.New(utilsInterface)
 	u := udev.New(utilsInterface)
-	sr := sriov.New(utilsInterface, k, n, u, nl, dpUtils)
-	v := vdpa.New(k, govdpa.New())
+	sr := sriov.New(utilsInterface, k, n, u, netlinkLib, dpUtils)
+	v := vdpa.New(k, netlinkLib)
 
 	return &hostManager{
 		utilsInterface,

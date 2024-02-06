@@ -41,6 +41,15 @@ type NetlinkLib interface {
 	// Equivalent to: `devlink dev eswitch set $dev mode switchdev`
 	// Equivalent to: `devlink dev eswitch set $dev mode legacy`
 	DevLinkSetEswitchMode(dev *netlink.DevlinkDevice, newMode string) error
+	// VDPAGetDevByName returns VDPA device selected by name
+	// Equivalent to: `vdpa dev show <name>`
+	VDPAGetDevByName(name string) (*netlink.VDPADev, error)
+	// VDPADelDev removes VDPA device
+	// Equivalent to: `vdpa dev del <name>`
+	VDPADelDev(name string) error
+	// VDPANewDev adds new VDPA device
+	// Equivalent to: `vdpa dev add name <name> mgmtdev <mgmtBus>/mgmtName [params]`
+	VDPANewDev(name, mgmtBus, mgmtName string, params netlink.VDPANewDevParams) error
 }
 
 type libWrapper struct{}
@@ -92,4 +101,22 @@ func (w *libWrapper) DevLinkGetDeviceByName(bus string, device string) (*netlink
 // Equivalent to: `devlink dev eswitch set $dev mode legacy`
 func (w *libWrapper) DevLinkSetEswitchMode(dev *netlink.DevlinkDevice, newMode string) error {
 	return netlink.DevLinkSetEswitchMode(dev, newMode)
+}
+
+// VDPAGetDevByName returns VDPA device selected by name
+// Equivalent to: `vdpa dev show <name>`
+func (w *libWrapper) VDPAGetDevByName(name string) (*netlink.VDPADev, error) {
+	return netlink.VDPAGetDevByName(name)
+}
+
+// VDPADelDev removes VDPA device
+// Equivalent to: `vdpa dev del <name>`
+func (w *libWrapper) VDPADelDev(name string) error {
+	return netlink.VDPADelDev(name)
+}
+
+// VDPANewDev adds new VDPA device
+// Equivalent to: `vdpa dev add name <name> mgmtdev <mgmtBus>/mgmtName [params]`
+func (w *libWrapper) VDPANewDev(name, mgmtBus, mgmtName string, params netlink.VDPANewDevParams) error {
+	return netlink.VDPANewDev(name, mgmtBus, mgmtName, params)
 }
