@@ -313,6 +313,21 @@ func (mr *MockHostHelpersInterfaceMockRecorder) GetCurrentKernelArgs() *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentKernelArgs", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetCurrentKernelArgs))
 }
 
+// GetDriverByBusAndDevice mocks base method.
+func (m *MockHostHelpersInterface) GetDriverByBusAndDevice(bus, device string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDriverByBusAndDevice", bus, device)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDriverByBusAndDevice indicates an expected call of GetDriverByBusAndDevice.
+func (mr *MockHostHelpersInterfaceMockRecorder) GetDriverByBusAndDevice(bus, device interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDriverByBusAndDevice", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetDriverByBusAndDevice), bus, device)
+}
+
 // GetLinkType mocks base method.
 func (m *MockHostHelpersInterface) GetLinkType(name string) string {
 	m.ctrl.T.Helper()
