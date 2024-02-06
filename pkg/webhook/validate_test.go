@@ -13,6 +13,7 @@ import (
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 
 	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
 )
@@ -136,7 +137,8 @@ func NewNode() *corev1.Node {
 func newDefaultOperatorConfig() *SriovOperatorConfig {
 	return &SriovOperatorConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "default",
+			Name:      "default",
+			Namespace: vars.Namespace,
 		},
 		Spec: SriovOperatorConfigSpec{
 			ConfigDaemonNodeSelector: map[string]string{},
@@ -157,7 +159,7 @@ func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 	ok, w, err := validateSriovOperatorConfig(config, "DELETE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
-	g.Expect(w[0]).To(ContainSubstring("default SriovOperatorConfig shouldn't be deleted"))
+	g.Expect(w).To(BeEmpty())
 
 	ok, _, err = validateSriovOperatorConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
@@ -226,7 +228,7 @@ func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
 	ok, w, err := validateSriovNetworkNodePolicy(policy, "DELETE")
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(ok).To(Equal(true))
-	g.Expect(w[0]).To(ContainSubstring("default SriovNetworkNodePolicy shouldn't be deleted"))
+	g.Expect(w).To(BeEmpty())
 
 	ok, _, err = validateSriovNetworkNodePolicy(policy, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
