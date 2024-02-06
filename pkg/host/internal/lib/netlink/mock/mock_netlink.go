@@ -200,3 +200,46 @@ func (mr *MockNetlinkLibMockRecorder) LinkSetVfPortGUID(link, vf, portguid inter
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetVfPortGUID", reflect.TypeOf((*MockNetlinkLib)(nil).LinkSetVfPortGUID), link, vf, portguid)
 }
+
+// VDPADelDev mocks base method.
+func (m *MockNetlinkLib) VDPADelDev(name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VDPADelDev", name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VDPADelDev indicates an expected call of VDPADelDev.
+func (mr *MockNetlinkLibMockRecorder) VDPADelDev(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VDPADelDev", reflect.TypeOf((*MockNetlinkLib)(nil).VDPADelDev), name)
+}
+
+// VDPAGetDevByName mocks base method.
+func (m *MockNetlinkLib) VDPAGetDevByName(name string) (*netlink0.VDPADev, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VDPAGetDevByName", name)
+	ret0, _ := ret[0].(*netlink0.VDPADev)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// VDPAGetDevByName indicates an expected call of VDPAGetDevByName.
+func (mr *MockNetlinkLibMockRecorder) VDPAGetDevByName(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VDPAGetDevByName", reflect.TypeOf((*MockNetlinkLib)(nil).VDPAGetDevByName), name)
+}
+
+// VDPANewDev mocks base method.
+func (m *MockNetlinkLib) VDPANewDev(name, mgmtBus, mgmtName string, params netlink0.VDPANewDevParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VDPANewDev", name, mgmtBus, mgmtName, params)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VDPANewDev indicates an expected call of VDPANewDev.
+func (mr *MockNetlinkLibMockRecorder) VDPANewDev(name, mgmtBus, mgmtName, params interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VDPANewDev", reflect.TypeOf((*MockNetlinkLib)(nil).VDPANewDev), name, mgmtBus, mgmtName, params)
+}
