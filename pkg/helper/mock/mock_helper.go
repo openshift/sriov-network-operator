@@ -239,6 +239,20 @@ func (mr *MockHostHelpersInterfaceMockRecorder) DiscoverVDPAType(pciAddr interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverVDPAType", reflect.TypeOf((*MockHostHelpersInterface)(nil).DiscoverVDPAType), pciAddr)
 }
 
+// EnableHwTcOffload mocks base method.
+func (m *MockHostHelpersInterface) EnableHwTcOffload(ifaceName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnableHwTcOffload", ifaceName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnableHwTcOffload indicates an expected call of EnableHwTcOffload.
+func (mr *MockHostHelpersInterfaceMockRecorder) EnableHwTcOffload(ifaceName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableHwTcOffload", reflect.TypeOf((*MockHostHelpersInterface)(nil).EnableHwTcOffload), ifaceName)
+}
+
 // EnableRDMA mocks base method.
 func (m *MockHostHelpersInterface) EnableRDMA(conditionFilePath, serviceName, packageManager string) (bool, error) {
 	m.ctrl.T.Helper()
