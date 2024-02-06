@@ -147,7 +147,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 		return reconcile.Result{}, err
 	}
 	// Sync Sriov device plugin ConfigMap object
-	if err = r.syncDevicePluginConfigMap(ctx, policyList, nodeList); err != nil {
+	if err = r.syncDevicePluginConfigMap(ctx, defaultOpConf, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
 	}
 	// Render and sync Daemon objects
@@ -193,7 +193,8 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Complete(r)
 }
 
-func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(ctx context.Context, pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
+func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig,
+	pl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
 	logger := log.Log.WithName("syncDevicePluginConfigMap")
 	logger.V(1).Info("Start to sync device plugin ConfigMap")
 
@@ -221,6 +222,11 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(ctx context
 		},
 		Data: configData,
 	}
+
+	if err := controllerutil.SetControllerReference(dc, cm, r.Scheme); err != nil {
+		return err
+	}
+
 	found := &corev1.ConfigMap{}
 	err := r.Get(ctx, types.NamespacedName{Namespace: cm.Namespace, Name: cm.Name}, found)
 	if err != nil {
