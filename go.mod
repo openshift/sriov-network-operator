@@ -22,6 +22,7 @@ require (
 	github.com/openshift/client-go v0.0.0-20220831193253-4950ae70c8ea
 	github.com/openshift/machine-config-operator v0.0.1-0.20230118083703-fc27a2bdaa85
 	github.com/pkg/errors v0.9.1
+	github.com/safchain/ethtool v0.3.0
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
 	github.com/vishvananda/netlink v1.2.1-beta.2.0.20240221172127-ec7bcb248e94
