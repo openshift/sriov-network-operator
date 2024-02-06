@@ -83,30 +83,6 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	reqLogger := log.FromContext(ctx)
 	reqLogger.Info("Reconciling")
 
-	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-	err := r.Get(ctx, types.NamespacedName{Name: constants.DefaultPolicyName, Namespace: vars.Namespace}, defaultPolicy)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Default policy object not found, create it.
-			defaultPolicy.SetNamespace(vars.Namespace)
-			defaultPolicy.SetName(constants.DefaultPolicyName)
-			defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
-				NumVfs:       0,
-				NodeSelector: make(map[string]string),
-				NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
-			}
-			err = r.Create(ctx, defaultPolicy)
-			if err != nil {
-				reqLogger.Error(err, "Failed to create default Policy", "Namespace", vars.Namespace, "Name", constants.DefaultPolicyName)
-				return reconcile.Result{}, err
-			}
-			reqLogger.Info("Default policy created")
-			return reconcile.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-
 	// Fetch the default SriovOperatorConfig
 	defaultOpConf := &sriovnetworkv1.SriovOperatorConfig{}
 	if err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: constants.DefaultConfigName}, defaultOpConf); err != nil {
@@ -119,7 +95,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 
 	// Fetch the SriovNetworkNodePolicyList
 	policyList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
-	err = r.List(ctx, policyList, &client.ListOptions{})
+	err := r.List(ctx, policyList, &client.ListOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -344,6 +320,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 		// it should not matter since the flag used in p.Apply() will only be applied when VF partition is detected.
 		ppp := 100
 		for _, p := range npl.Items {
+			// Note(adrianc): default policy is deprecated and ignored.
 			if p.Name == constants.DefaultPolicyName {
 				continue
 			}
@@ -394,6 +371,11 @@ func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1
 func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePolicy) []corev1.NodeSelectorTerm {
 	terms := []corev1.NodeSelectorTerm{}
 	for _, p := range policies {
+		// Note(adrianc): default policy is deprecated and ignored.
+		if p.Name == constants.DefaultPolicyName {
+			continue
+		}
+
 		if len(p.Spec.NodeSelector) == 0 {
 			continue
 		}
@@ -437,6 +419,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 	logger.V(1).Info("Start to render device plugin config data", "node", node.Name)
 	rcl := dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
+		// Note(adrianc): default policy is deprecated and ignored.
 		if p.Name == constants.DefaultPolicyName {
 			continue
 		}
