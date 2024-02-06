@@ -25,8 +25,8 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
-	github.com/vishvananda/netlink v1.1.1-0.20211101163509-b10eb8fe5cf6
-	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae
+	github.com/vishvananda/netlink v1.2.1-beta.2.0.20240221172127-ec7bcb248e94
+	github.com/vishvananda/netns v0.0.4
 	go.uber.org/zap v1.25.0
 	golang.org/x/time v0.3.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -129,7 +129,7 @@ require (
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/sync v0.4.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/sys v0.17.0 // indirect
 	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
