@@ -734,16 +734,6 @@ func (in *SriovOperatorConfigSpec) DeepCopyInto(out *SriovOperatorConfigSpec) {
 			(*out)[key] = val
 		}
 	}
-	if in.EnableInjector != nil {
-		in, out := &in.EnableInjector, &out.EnableInjector
-		*out = new(bool)
-		**out = **in
-	}
-	if in.EnableOperatorWebhook != nil {
-		in, out := &in.EnableOperatorWebhook, &out.EnableOperatorWebhook
-		*out = new(bool)
-		**out = **in
-	}
 	if in.DisablePlugins != nil {
 		in, out := &in.DisablePlugins, &out.DisablePlugins
 		*out = make(PluginNameSlice, len(*in))

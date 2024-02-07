@@ -44,9 +44,9 @@ type SriovOperatorConfigSpec struct {
 	// NodeSelector selects the nodes to be configured
 	ConfigDaemonNodeSelector map[string]string `json:"configDaemonNodeSelector,omitempty"`
 	// Flag to control whether the network resource injector webhook shall be deployed
-	EnableInjector *bool `json:"enableInjector,omitempty"`
+	EnableInjector bool `json:"enableInjector,omitempty"`
 	// Flag to control whether the operator admission controller webhook shall be deployed
-	EnableOperatorWebhook *bool `json:"enableOperatorWebhook,omitempty"`
+	EnableOperatorWebhook bool `json:"enableOperatorWebhook,omitempty"`
 	// Flag to control the log verbose level of the operator. Set to '0' to show only the basic logs. And set to '2' to show all the available logs.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=2
