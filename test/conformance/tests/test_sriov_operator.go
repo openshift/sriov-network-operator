@@ -2560,18 +2560,18 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 	}, &cfg)
 
 	Expect(err).ToNot(HaveOccurred())
-	if flagName == operatorNetworkInjectorFlag && *cfg.Spec.EnableInjector != flagValue {
-		cfg.Spec.EnableInjector = &flagValue
+	if flagName == operatorNetworkInjectorFlag && cfg.Spec.EnableInjector != flagValue {
+		cfg.Spec.EnableInjector = flagValue
 		err = clients.Update(context.TODO(), &cfg)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(*cfg.Spec.EnableInjector).To(Equal(flagValue))
+		Expect(cfg.Spec.EnableInjector).To(Equal(flagValue))
 	}
 
-	if flagName == operatorWebhookFlag && *cfg.Spec.EnableOperatorWebhook != flagValue {
-		cfg.Spec.EnableOperatorWebhook = &flagValue
+	if flagName == operatorWebhookFlag && cfg.Spec.EnableOperatorWebhook != flagValue {
+		cfg.Spec.EnableOperatorWebhook = flagValue
 		clients.Update(context.TODO(), &cfg)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(*cfg.Spec.EnableOperatorWebhook).To(Equal(flagValue))
+		Expect(cfg.Spec.EnableOperatorWebhook).To(Equal(flagValue))
 	}
 
 	if flagValue {

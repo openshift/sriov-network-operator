@@ -87,7 +87,7 @@ var _ = Describe("validation", func() {
 			err := clients.Client.Get(context.TODO(), goclient.ObjectKey{Name: "default", Namespace: operatorNamespace}, operatorConfig)
 			Expect(err).ToNot(HaveOccurred())
 
-			if *operatorConfig.Spec.EnableInjector {
+			if operatorConfig.Spec.EnableInjector {
 				daemonset, err := clients.DaemonSets(operatorNamespace).Get(context.Background(), "network-resources-injector", metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(daemonset.Status.DesiredNumberScheduled).To(Equal(daemonset.Status.NumberReady))
@@ -103,7 +103,7 @@ var _ = Describe("validation", func() {
 			err := clients.Get(context.TODO(), goclient.ObjectKey{Name: "default", Namespace: operatorNamespace}, operatorConfig)
 			Expect(err).ToNot(HaveOccurred())
 
-			if *operatorConfig.Spec.EnableOperatorWebhook {
+			if operatorConfig.Spec.EnableOperatorWebhook {
 				daemonset, err := clients.DaemonSets(operatorNamespace).Get(context.Background(), "operator-webhook", metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(daemonset.Status.DesiredNumberScheduled).To(Equal(daemonset.Status.NumberReady))

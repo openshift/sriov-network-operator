@@ -146,8 +146,8 @@ func newDefaultOperatorConfig() *SriovOperatorConfig {
 		Spec: SriovOperatorConfigSpec{
 			ConfigDaemonNodeSelector: map[string]string{},
 			DisableDrain:             true,
-			EnableInjector:           func() *bool { b := true; return &b }(),
-			EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
+			EnableInjector:           true,
+			EnableOperatorWebhook:    true,
 			LogLevel:                 2,
 		},
 	}

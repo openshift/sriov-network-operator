@@ -30,8 +30,8 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		config.SetNamespace(testNamespace)
 		config.SetName(constants.DefaultConfigName)
 		config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
-			EnableInjector:           func() *bool { b := true; return &b }(),
-			EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
+			EnableInjector:           true,
+			EnableOperatorWebhook:    true,
 			ConfigDaemonNodeSelector: map[string]string{},
 			LogLevel:                 2,
 		}
@@ -100,8 +100,8 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 			config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
-				EnableInjector:        func() *bool { b := true; return &b }(),
-				EnableOperatorWebhook: func() *bool { b := true; return &b }(),
+				EnableInjector:        true,
+				EnableOperatorWebhook: true,
 				// ConfigDaemonNodeSelector: map[string]string{},
 				LogLevel: 2,
 			}
@@ -137,7 +137,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			*config.Spec.EnableInjector = false
+			config.Spec.EnableInjector = false
 			err = k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -153,7 +153,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			err = util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			*config.Spec.EnableInjector = true
+			config.Spec.EnableInjector = true
 			err = k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -173,7 +173,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			*config.Spec.EnableOperatorWebhook = false
+			config.Spec.EnableOperatorWebhook = false
 			err = k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -193,7 +193,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			err = util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			*config.Spec.EnableOperatorWebhook = true
+			config.Spec.EnableOperatorWebhook = true
 			err = k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 
