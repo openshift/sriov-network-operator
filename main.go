@@ -271,8 +271,8 @@ func createDefaultOperatorConfig(c client.Client) error {
 	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS_ENABLED") == "true"
 	config := &sriovnetworkv1.SriovOperatorConfig{
 		Spec: sriovnetworkv1.SriovOperatorConfigSpec{
-			EnableInjector:           func() *bool { b := enableAdmissionController; return &b }(),
-			EnableOperatorWebhook:    func() *bool { b := enableAdmissionController; return &b }(),
+			EnableInjector:           enableAdmissionController,
+			EnableOperatorWebhook:    enableAdmissionController,
 			ConfigDaemonNodeSelector: map[string]string{},
 			LogLevel:                 2,
 			DisableDrain:             singleNode,
