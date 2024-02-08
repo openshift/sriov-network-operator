@@ -69,7 +69,10 @@ type Daemon struct {
 
 	nodeState *sriovnetworkv1.SriovNetworkNodeState
 
-	enabledPlugins map[string]plugin.VendorPlugin
+	// list of disabled plugins
+	disabledPlugins []string
+
+	loadedPlugins map[string]plugin.VendorPlugin
 
 	HostHelpers helper.HostHelpersInterface
 
@@ -133,6 +136,7 @@ func New(
 	syncCh <-chan struct{},
 	refreshCh chan<- Message,
 	er *EventRecorder,
+	disabledPlugins []string,
 ) *Daemon {
 	return &Daemon{
 		client:          client,
@@ -165,7 +169,8 @@ func New(
 		workqueue: workqueue.NewNamedRateLimitingQueue(workqueue.NewMaxOfRateLimiter(
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(updateDelay), 1)},
 			workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, maxUpdateBackoff)), "SriovNetworkNodeState"),
-		eventRecorder: er,
+		eventRecorder:   er,
+		disabledPlugins: disabledPlugins,
 	}
 }
 
@@ -508,8 +513,8 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	latestState.Status = updatedState.Status
 
 	// load plugins if it has not loaded
-	if len(dn.enabledPlugins) == 0 {
-		dn.enabledPlugins, err = enablePlugins(latestState, dn.HostHelpers)
+	if len(dn.loadedPlugins) == 0 {
+		dn.loadedPlugins, err = loadPlugins(latestState, dn.HostHelpers, dn.disabledPlugins)
 		if err != nil {
 			log.Log.Error(err, "nodeStateSyncHandler(): failed to enable vendor plugins")
 			return err
@@ -520,7 +525,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	reqDrain := false
 
 	// check if any of the plugins required to drain or reboot the node
-	for k, p := range dn.enabledPlugins {
+	for k, p := range dn.loadedPlugins {
 		d, r := false, false
 		if dn.nodeState.GetName() == "" {
 			log.Log.V(0).Info("nodeStateSyncHandler(): calling OnNodeStateChange for a new node state")
@@ -570,7 +575,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	log.Log.V(0).Info("nodeStateSyncHandler(): aggregated daemon",
 		"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", dn.disableDrain)
 
-	for k, p := range dn.enabledPlugins {
+	for k, p := range dn.loadedPlugins {
 		// Skip both the general and virtual plugin apply them last
 		if k != GenericPluginName && k != VirtualPluginName {
 			err := p.Apply()
@@ -617,23 +622,23 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 
 	if !reqReboot && !vars.UsingSystemdMode {
 		// For BareMetal machines apply the generic plugin
-		selectedPlugin, ok := dn.enabledPlugins[GenericPluginName]
+		selectedPlugin, ok := dn.loadedPlugins[GenericPluginName]
 		if ok {
-			// Apply generic_plugin last
+			// Apply generic plugin last
 			err = selectedPlugin.Apply()
 			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): generic_plugin fail to apply")
+				log.Log.Error(err, "nodeStateSyncHandler(): generic plugin fail to apply")
 				return err
 			}
 		}
 
 		// For Virtual machines apply the virtual plugin
-		selectedPlugin, ok = dn.enabledPlugins[VirtualPluginName]
+		selectedPlugin, ok = dn.loadedPlugins[VirtualPluginName]
 		if ok {
-			// Apply virtual_plugin last
+			// Apply virtual plugin last
 			err = selectedPlugin.Apply()
 			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): virtual_plugin failed to apply")
+				log.Log.Error(err, "nodeStateSyncHandler(): virtual plugin failed to apply")
 				return err
 			}
 		}
@@ -732,8 +737,9 @@ func (dn *Daemon) restartDevicePluginPod() error {
 
 	var podToDelete string
 	pods, err := dn.kubeClient.CoreV1().Pods(vars.Namespace).List(context.Background(), metav1.ListOptions{
-		LabelSelector: "app=sriov-device-plugin",
-		FieldSelector: "spec.nodeName=" + vars.NodeName,
+		LabelSelector:   "app=sriov-device-plugin",
+		FieldSelector:   "spec.nodeName=" + vars.NodeName,
+		ResourceVersion: "0",
 	})
 	if err != nil {
 		if errors.IsNotFound(err) {

@@ -23,6 +23,22 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// PluginNameValue defines the plugin name
+// +kubebuilder:validation:Enum=mellanox
+type PluginNameValue string
+
+// PluginNameSlice defines a slice of PluginNameValue
+type PluginNameSlice []PluginNameValue
+
+// ToStringSlice converts PluginNameSlice to string slice
+func (pns PluginNameSlice) ToStringSlice() []string {
+	ss := make([]string, 0, len(pns))
+	for _, v := range pns {
+		ss = append(ss, string(v))
+	}
+	return ss
+}
+
 // SriovOperatorConfigSpec defines the desired state of SriovOperatorConfig
 type SriovOperatorConfigSpec struct {
 	// NodeSelector selects the nodes to be configured
@@ -45,6 +61,8 @@ type SriovOperatorConfigSpec struct {
 	ConfigurationMode ConfigurationModeType `json:"configurationMode,omitempty"`
 	// Flag to enable Container Device Interface mode for SR-IOV Network Device Plugin
 	UseCDI bool `json:"useCDI,omitempty"`
+	// DisablePlugins is a list of sriov-network-config-daemon plugins to disable
+	DisablePlugins PluginNameSlice `json:"disablePlugins,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
