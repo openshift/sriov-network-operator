@@ -236,6 +236,11 @@ var _ = Describe("Service", func() {
 				"/etc/sriov-operator/sriov-interface-result.yaml":   getTestResultFileContent("InProgress", ""),
 			},
 		})
+		hostHelpers.EXPECT().DiscoverSriovDevices(hostHelpers).Return([]sriovnetworkv1.InterfaceExt{{
+			Name: "enp216s0f0np0",
+		}}, nil)
+		genericPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil)
+		genericPlugin.EXPECT().Apply().Return(nil)
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).NotTo(HaveOccurred())
 		testHelpers.GinkgoAssertFileContentsEquals("/etc/sriov-operator/sriov-interface-result.yaml",
 			string(getTestResultFileContent("Succeeded", "")))
