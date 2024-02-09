@@ -206,14 +206,12 @@ func getPlugin(setupLog logr.Logger, phase string,
 	case consts.Baremetal:
 		switch phase {
 		case PhasePre:
-			configPlugin, err = newGenericPluginFunc(hostHelpers)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create generic plugin for %v", err)
-			}
+			configPlugin, err = newGenericPluginFunc(hostHelpers, generic.WithSkipVFConfiguration())
 		case PhasePost:
-			// TODO add initialization for the generic plugin for the post phase
-			setupLog.Info("post phase is not implemented for generic plugin yet, skip")
-			return nil, nil
+			configPlugin, err = newGenericPluginFunc(hostHelpers)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to create generic plugin for %v", err)
 		}
 	case consts.VirtualOpenStack:
 		switch phase {
