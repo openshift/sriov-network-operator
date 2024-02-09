@@ -114,6 +114,10 @@ func GetHostExtension() string {
 	return filepath.Join(vars.FilesystemRoot, consts.Host)
 }
 
+func GetHostExtensionPath(path string) string {
+	return filepath.Join(GetHostExtension(), path)
+}
+
 func GetChrootExtension() string {
 	if vars.InChroot {
 		return vars.FilesystemRoot
