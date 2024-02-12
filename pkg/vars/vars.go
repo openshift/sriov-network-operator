@@ -48,6 +48,9 @@ var (
 	// UsingSystemdMode global variable to mark the config-daemon is running on systemd mode
 	UsingSystemdMode = false
 
+	// ParallelNicConfig global variable to perform NIC configuration in parallel
+	ParallelNicConfig = false
+
 	// FilesystemRoot used by test to mock interactions with filesystem
 	FilesystemRoot = ""
 

@@ -102,6 +102,9 @@ spec:
         {{- with index . "DisablePlugins" }}
           - --disable-plugins={{.}}
         {{- end }}
+        {{- if .ParallelNicConfig }}
+        - --parallel-nic-config
+        {{- end }}
         env:
           - name: NODE_NAME
             valueFrom:
