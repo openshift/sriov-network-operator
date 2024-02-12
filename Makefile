@@ -239,6 +239,12 @@ deps-update:
 	go mod tidy && \
 	go mod vendor
 
+check-deps: deps-update
+	@set +e; git diff --quiet HEAD go.sum go.mod vendor; \
+	if [ $$? -eq 1 ]; \
+	then echo -e "\ngo modules are out of date. Please commit after running 'make deps-update' command\n"; \
+	exit 1; fi
+
 $(GOLANGCI_LINT): ; $(info installing golangci-lint...)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER))
 
