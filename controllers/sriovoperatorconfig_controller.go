@@ -89,8 +89,8 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 			defaultConfig.SetNamespace(vars.Namespace)
 			defaultConfig.SetName(consts.DefaultConfigName)
 			defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
-				EnableInjector:           func() *bool { b := vars.EnableAdmissionController; return &b }(),
-				EnableOperatorWebhook:    func() *bool { b := vars.EnableAdmissionController; return &b }(),
+				EnableInjector:           vars.EnableAdmissionController,
+				EnableOperatorWebhook:    vars.EnableAdmissionController,
 				ConfigDaemonNodeSelector: map[string]string{},
 				LogLevel:                 2,
 				DisableDrain:             singleNode,
@@ -266,7 +266,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 		}
 
 		// Delete injector webhook
-		if !*dc.Spec.EnableInjector && path == consts.InjectorWebHookPath {
+		if !dc.Spec.EnableInjector && path == consts.InjectorWebHookPath {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(ctx, obj)
 				if err != nil {
@@ -279,7 +279,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 			continue
 		}
 		// Delete operator webhook
-		if !*dc.Spec.EnableOperatorWebhook && path == consts.OperatorWebHookPath {
+		if !dc.Spec.EnableOperatorWebhook && path == consts.OperatorWebHookPath {
 			for _, obj := range objs {
 				err = r.deleteWebhookObject(ctx, obj)
 				if err != nil {
