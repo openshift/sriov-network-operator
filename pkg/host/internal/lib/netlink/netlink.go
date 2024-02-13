@@ -50,6 +50,14 @@ type NetlinkLib interface {
 	// VDPANewDev adds new VDPA device
 	// Equivalent to: `vdpa dev add name <name> mgmtdev <mgmtBus>/mgmtName [params]`
 	VDPANewDev(name, mgmtBus, mgmtName string, params netlink.VDPANewDevParams) error
+	// DevlinkGetDeviceParamByName returns specific parameter for devlink device
+	// Equivalent to: `devlink dev param show <bus>/<device> name <param>`
+	DevlinkGetDeviceParamByName(bus string, device string, param string) (*netlink.DevlinkParam, error)
+	// DevlinkSetDeviceParam set specific parameter for devlink device
+	// Equivalent to: `devlink dev param set <bus>/<device> name <param> cmode <cmode> value <value>`
+	// cmode argument should contain valid cmode value as uint8, modes are define in nl.DEVLINK_PARAM_CMODE_* constants
+	// value argument should have one of the following types: uint8, uint16, uint32, string, bool
+	DevlinkSetDeviceParam(bus string, device string, param string, cmode uint8, value interface{}) error
 }
 
 type libWrapper struct{}
@@ -119,4 +127,18 @@ func (w *libWrapper) VDPADelDev(name string) error {
 // Equivalent to: `vdpa dev add name <name> mgmtdev <mgmtBus>/mgmtName [params]`
 func (w *libWrapper) VDPANewDev(name, mgmtBus, mgmtName string, params netlink.VDPANewDevParams) error {
 	return netlink.VDPANewDev(name, mgmtBus, mgmtName, params)
+}
+
+// DevlinkGetDeviceParamByName returns specific parameter for devlink device
+// Equivalent to: `devlink dev param show <bus>/<device> name <param>`
+func (w *libWrapper) DevlinkGetDeviceParamByName(bus string, device string, param string) (*netlink.DevlinkParam, error) {
+	return netlink.DevlinkGetDeviceParamByName(bus, device, param)
+}
+
+// DevlinkSetDeviceParam set specific parameter for devlink device
+// Equivalent to: `devlink dev param set <bus>/<device> name <param> cmode <cmode> value <value>`
+// cmode argument should contain valid cmode value as uint8, modes are define in nl.DEVLINK_PARAM_CMODE_* constants
+// value argument should have one of the following types: uint8, uint16, uint32, string, bool
+func (w *libWrapper) DevlinkSetDeviceParam(bus string, device string, param string, cmode uint8, value interface{}) error {
+	return netlink.DevlinkSetDeviceParam(bus, device, param, cmode, value)
 }

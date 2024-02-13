@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/vishvananda/netlink/nl"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -192,4 +194,95 @@ func (n *network) GetNetDevLinkSpeed(ifaceName string) string {
 	}
 
 	return fmt.Sprintf("%s Mb/s", strings.TrimSpace(string(data)))
+}
+
+// GetDevlinkDeviceParam returns devlink parameter for the device as a string, if the parameter has multiple values
+// then the function will return only first one from the list.
+func (n *network) GetDevlinkDeviceParam(pciAddr, paramName string) (string, error) {
+	funcLog := log.Log.WithValues("device", pciAddr, "param", paramName)
+	funcLog.V(2).Info("GetDevlinkDeviceParam(): get device parameter")
+	param, err := n.netlinkLib.DevlinkGetDeviceParamByName(consts.BusPci, pciAddr, paramName)
+	if err != nil {
+		funcLog.Error(err, "GetDevlinkDeviceParam(): fail to get devlink device param")
+		return "", err
+	}
+	if len(param.Values) == 0 {
+		err = fmt.Errorf("param %s has no value", paramName)
+		funcLog.Error(err, "GetDevlinkDeviceParam(): error")
+		return "", err
+	}
+	var value string
+	switch param.Type {
+	case nl.DEVLINK_PARAM_TYPE_U8, nl.DEVLINK_PARAM_TYPE_U16, nl.DEVLINK_PARAM_TYPE_U32:
+		var valData uint64
+		switch v := param.Values[0].Data.(type) {
+		case uint8:
+			valData = uint64(v)
+		case uint16:
+			valData = uint64(v)
+		case uint32:
+			valData = uint64(v)
+		default:
+			return "", fmt.Errorf("unexpected uint type type")
+		}
+		value = strconv.FormatUint(valData, 10)
+
+	case nl.DEVLINK_PARAM_TYPE_STRING:
+		value = param.Values[0].Data.(string)
+	case nl.DEVLINK_PARAM_TYPE_BOOL:
+		value = strconv.FormatBool(param.Values[0].Data.(bool))
+	default:
+		return "", fmt.Errorf("unknown value type: %d", param.Type)
+	}
+	funcLog.V(2).Info("GetDevlinkDeviceParam(): result", "value", value)
+	return value, nil
+}
+
+// SetDevlinkDeviceParam set devlink parameter for the device, accepts paramName and value
+// as a string. Automatically set CMODE for the parameter and converts the value to the right
+// type before submitting it.
+func (n *network) SetDevlinkDeviceParam(pciAddr, paramName, value string) error {
+	funcLog := log.Log.WithValues("device", pciAddr, "param", paramName, "value", value)
+	funcLog.V(2).Info("SetDevlinkDeviceParam(): set device parameter")
+	param, err := n.netlinkLib.DevlinkGetDeviceParamByName(consts.BusPci, pciAddr, paramName)
+	if err != nil {
+		funcLog.Error(err, "SetDevlinkDeviceParam(): can't get existing param data")
+		return err
+	}
+	if len(param.Values) == 0 {
+		err = fmt.Errorf("param %s has no value", paramName)
+		funcLog.Error(err, "SetDevlinkDeviceParam(): error")
+		return err
+	}
+	targetCMOD := param.Values[0].CMODE
+	var typedValue interface{}
+	var v uint64
+	switch param.Type {
+	case nl.DEVLINK_PARAM_TYPE_U8:
+		v, err = strconv.ParseUint(value, 10, 8)
+		typedValue = uint8(v)
+	case nl.DEVLINK_PARAM_TYPE_U16:
+		v, err = strconv.ParseUint(value, 10, 16)
+		typedValue = uint16(v)
+	case nl.DEVLINK_PARAM_TYPE_U32:
+		v, err = strconv.ParseUint(value, 10, 32)
+		typedValue = uint32(v)
+	case nl.DEVLINK_PARAM_TYPE_STRING:
+		err = nil
+		typedValue = value
+	case nl.DEVLINK_PARAM_TYPE_BOOL:
+		typedValue, err = strconv.ParseBool(value)
+	default:
+		return fmt.Errorf("parameter has unknown value type: %d", param.Type)
+	}
+	if err != nil {
+		err = fmt.Errorf("failed to convert value %s to the required type: %T, devlink paramType is: %d", value, typedValue, param.Type)
+		funcLog.Error(err, "SetDevlinkDeviceParam(): error")
+		return err
+	}
+	if err := n.netlinkLib.DevlinkSetDeviceParam(consts.BusPci, pciAddr, paramName, targetCMOD, typedValue); err != nil {
+		funcLog.Error(err, "SetDevlinkDeviceParam(): failed to set parameter")
+		return err
+	}
+	return nil
 }
