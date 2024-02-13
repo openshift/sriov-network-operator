@@ -116,6 +116,35 @@ func (mr *MockNetlinkLibMockRecorder) DevLinkSetEswitchMode(dev, newMode interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevLinkSetEswitchMode", reflect.TypeOf((*MockNetlinkLib)(nil).DevLinkSetEswitchMode), dev, newMode)
 }
 
+// DevlinkGetDeviceParamByName mocks base method.
+func (m *MockNetlinkLib) DevlinkGetDeviceParamByName(bus, device, param string) (*netlink0.DevlinkParam, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DevlinkGetDeviceParamByName", bus, device, param)
+	ret0, _ := ret[0].(*netlink0.DevlinkParam)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DevlinkGetDeviceParamByName indicates an expected call of DevlinkGetDeviceParamByName.
+func (mr *MockNetlinkLibMockRecorder) DevlinkGetDeviceParamByName(bus, device, param interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevlinkGetDeviceParamByName", reflect.TypeOf((*MockNetlinkLib)(nil).DevlinkGetDeviceParamByName), bus, device, param)
+}
+
+// DevlinkSetDeviceParam mocks base method.
+func (m *MockNetlinkLib) DevlinkSetDeviceParam(bus, device, param string, cmode uint8, value interface{}) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DevlinkSetDeviceParam", bus, device, param, cmode, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DevlinkSetDeviceParam indicates an expected call of DevlinkSetDeviceParam.
+func (mr *MockNetlinkLibMockRecorder) DevlinkSetDeviceParam(bus, device, param, cmode, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevlinkSetDeviceParam", reflect.TypeOf((*MockNetlinkLib)(nil).DevlinkSetDeviceParam), bus, device, param, cmode, value)
+}
+
 // LinkByName mocks base method.
 func (m *MockNetlinkLib) LinkByName(name string) (netlink.Link, error) {
 	m.ctrl.T.Helper()

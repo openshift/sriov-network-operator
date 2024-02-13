@@ -97,6 +97,13 @@ type NetworkInterface interface {
 	GetNetDevMac(name string) string
 	// GetNetDevLinkSpeed returns the network interface link speed
 	GetNetDevLinkSpeed(name string) string
+	// GetDevlinkDeviceParam returns devlink parameter for the device as a string, if the parameter has multiple values
+	// then the function will return only first one from the list.
+	GetDevlinkDeviceParam(pciAddr, paramName string) (string, error)
+	// SetDevlinkDeviceParam set devlink parameter for the device, accepts paramName and value
+	// as a string. Automatically set CMODE for the parameter and converts the value to the right
+	// type before submitting it.
+	SetDevlinkDeviceParam(pciAddr, paramName, value string) error
 }
 
 type ServiceInterface interface {
