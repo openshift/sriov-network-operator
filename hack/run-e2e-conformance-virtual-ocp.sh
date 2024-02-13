@@ -21,6 +21,8 @@ fi
 here="$(dirname "$(readlink --canonicalize "${BASH_SOURCE[0]}")")"
 root="$(readlink --canonicalize "$here/..")"
 
+source $here/run-e2e-conformance-common
+
 check_requirements() {
   for cmd in kcli virsh podman make go jq base64 tar; do
     if ! command -v "$cmd" &> /dev/null; then
@@ -181,6 +183,7 @@ export ADMISSION_CONTROLLERS_ENABLED=true
 export SKIP_VAR_SET=""
 export NAMESPACE="openshift-sriov-network-operator"
 export OPERATOR_NAMESPACE=$NAMESPACE
+export MULTUS_NAMESPACE="openshift-multus"
 export OPERATOR_EXEC=kubectl
 export CLUSTER_TYPE=openshift
 export DEV_MODE=TRUE
@@ -214,9 +217,31 @@ internal_registry="image-registry.openshift-image-registry.svc:5000"
 pass=$( jq .\"$internal_registry\".password registry-login.conf )
 podman login -u serviceaccount -p ${pass:1:-1} $registry --tls-verify=false
 
-podman push --tls-verify=false "${SRIOV_NETWORK_OPERATOR_IMAGE}"
-podman push --tls-verify=false "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
-podman push --tls-verify=false "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
+MAX_RETRIES=20
+DELAY_SECONDS=10
+retry_push() {
+  local command="podman push --tls-verify=false $@"
+  local retries=0
+
+  until [ $retries -ge $MAX_RETRIES ]; do
+    $command && break
+    retries=$((retries+1))
+    echo "Command failed. Retrying... (Attempt $retries/$MAX_RETRIES)"
+    sleep $DELAY_SECONDS
+  done
+
+  if [ $retries -eq $MAX_RETRIES ]; then
+    echo "Max retries reached. Exiting..."
+    exit 1
+  fi
+}
+
+retry_push "${SRIOV_NETWORK_OPERATOR_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_OPERATOR_IMAGE}
+retry_push "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}
+retry_push "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_WEBHOOK_IMAGE}
 
 podman logout $registry
 
@@ -241,6 +266,21 @@ export SRIOV_NETWORK_OPERATOR_IMAGE="image-registry.openshift-image-registry.svc
 export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-config-daemon:latest"
 export SRIOV_NETWORK_WEBHOOK_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-operator-webhook:latest"
 
+if [[ -v LOCAL_SRIOV_CNI_IMAGE ]]; then
+  podman_tag_and_push ${LOCAL_SRIOV_CNI_IMAGE} "$registry/$NAMESPACE/sriov-cni:latest"
+  export SRIOV_CNI_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-cni:latest"
+fi
+
+if [[ -v LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE ]]; then
+  podman_tag_and_push ${LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE} "$registry/$NAMESPACE/sriov-network-device-plugin:latest"
+  export SRIOV_DEVICE_PLUGIN_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-device-plugin:latest"
+fi
+
+if [[ -v LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE ]]; then
+  podman_tag_and_push ${LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE} "$registry/$NAMESPACE/network-resources-injector:latest"
+  export NETWORK_RESOURCES_INJECTOR_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/network-resources-injector:latest"
+fi
+
 echo "## deploying SRIOV Network Operator"
 hack/deploy-setup.sh $NAMESPACE
 
@@ -254,9 +294,17 @@ if [ -z $SKIP_TEST ]; then
     export JUNIT_OUTPUT="${root}/${TEST_REPORT_PATH}/conformance-test-report"
   fi
 
+  # Disable exit on error temporarily to gather cluster information
+  set +e
   SUITE=./test/conformance hack/run-e2e-conformance.sh
+  TEST_EXITE_CODE=$?
+  set -e
 
   if [[ -v TEST_REPORT_PATH ]]; then
-    kubectl cluster-info dump --namespaces ${NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
+    kubectl cluster-info dump --namespaces ${NAMESPACE},${MULTUS_NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
+  fi
+
+  if [[ $TEST_EXITE_CODE -ne 0 ]]; then
+    exit $TEST_EXITE_CODE
   fi
 fi

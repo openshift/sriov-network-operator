@@ -4,6 +4,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
+//go:generate ../../bin/mockgen -destination mock/mock_plugin.go -source plugin.go
 type VendorPlugin interface {
 	// Return the name of plugin
 	Name() string

@@ -20,6 +20,10 @@ func All() error {
 		operatorNamespace = "openshift-sriov-network-operator"
 	}
 	clients := client.New("")
+	if clients == nil {
+		return fmt.Errorf("failed to create ClientSet")
+	}
+
 	if RestoreNodeDrainState {
 		err := cluster.SetDisableNodeDrainState(clients, operatorNamespace, false)
 		if err != nil {

@@ -5,10 +5,12 @@ import (
 )
 
 // This plugin is used in Daemon unit tests
-type FakePlugin struct{}
+type FakePlugin struct {
+	PluginName string
+}
 
 func (f *FakePlugin) Name() string {
-	return "fake_plugin"
+	return f.PluginName
 }
 
 func (f *FakePlugin) Spec() string {

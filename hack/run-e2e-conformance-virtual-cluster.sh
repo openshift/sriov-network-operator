@@ -19,6 +19,10 @@ if [ "$NUM_OF_WORKERS" -lt 2 ]; then
     exit 1
 fi
 
+export MULTUS_NAMESPACE="kube-system"
+
+source $here/run-e2e-conformance-common
+
 check_requirements() {
   for cmd in kcli virsh virt-edit podman make go; do
     if ! command -v "$cmd" &> /dev/null; then
@@ -166,6 +170,23 @@ method=disabled
 [proxy]' > /etc/NetworkManager/system-connections/multi.nmconnection
 
 chmod 600 /etc/NetworkManager/system-connections/multi.nmconnection
+
+echo '[Unit]
+Description=disable checksum offload to avoid vf bug
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash -c "ethtool --offload  eth1  rx off  tx off && ethtool -K eth1 gso off"
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=default.target' > /etc/systemd/system/disable-offload.service
+
+systemctl daemon-reload
+systemctl enable --now disable-offload
+
 systemctl restart NetworkManager
 
 EOF
@@ -177,6 +198,10 @@ for ((num=0; num<NUM_OF_WORKERS; num++))
 do
   update_host $cluster_name-worker-$num
 done
+
+# remove the patch after multus bug is fixed
+# https://github.com/k8snetworkplumbingwg/multus-cni/issues/1221
+kubectl patch  -n ${MULTUS_NAMESPACE} ds/kube-multus-ds --type=json -p='[{"op": "replace", "path": "/spec/template/spec/initContainers/0/command", "value":["cp", "-f","/usr/src/multus-cni/bin/multus-shim", "/host/opt/cni/bin/multus-shim"]}]'
 
 kubectl create namespace container-registry
 
@@ -271,8 +296,28 @@ echo "## build webhook image"
 podman build -t "${SRIOV_NETWORK_WEBHOOK_IMAGE}" -f "${root}/Dockerfile.webhook" "${root}"
 
 podman push --tls-verify=false "${SRIOV_NETWORK_OPERATOR_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_OPERATOR_IMAGE}
 podman push --tls-verify=false "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}
 podman push --tls-verify=false "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
+podman rmi -fi ${SRIOV_NETWORK_WEBHOOK_IMAGE}
+
+
+if [[ -v LOCAL_SRIOV_CNI_IMAGE ]]; then
+  export SRIOV_CNI_IMAGE="$controller_ip:5000/sriov-cni:latest"
+  podman_tag_and_push ${LOCAL_SRIOV_CNI_IMAGE} ${SRIOV_CNI_IMAGE}
+fi
+
+if [[ -v LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE ]]; then
+  export SRIOV_DEVICE_PLUGIN_IMAGE="$controller_ip:5000/sriov-network-device-plugin:latest"
+  podman_tag_and_push ${LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE} ${SRIOV_DEVICE_PLUGIN_IMAGE}
+fi
+
+if [[ -v LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE ]]; then
+  export NETWORK_RESOURCES_INJECTOR_IMAGE="$controller_ip:5000/network-resources-injector:latest"
+  podman_tag_and_push ${LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE} ${NETWORK_RESOURCES_INJECTOR_IMAGE}
+fi
+
 
 # remove the crio bridge and let flannel to recreate
 kcli ssh $cluster_name-ctlplane-0 << EOF
@@ -281,14 +326,14 @@ if [ $(ip a | grep 10.85.0 | wc -l) -eq 0 ]; then ip link del cni0; fi
 EOF
 
 
-kubectl -n kube-system get po | grep multus | awk '{print "kubectl -n kube-system delete po",$1}' | sh
+kubectl -n ${MULTUS_NAMESPACE} get po | grep multus | awk '{print "kubectl -n kube-system delete po",$1}' | sh
 kubectl -n kube-system get po | grep coredns | awk '{print "kubectl -n kube-system delete po",$1}' | sh
 
 TIMEOUT=400
 echo "## wait for coredns"
 kubectl -n kube-system wait --for=condition=available deploy/coredns --timeout=${TIMEOUT}s
 echo "## wait for multus"
-kubectl -n kube-system wait --for=condition=ready -l name=multus pod --timeout=${TIMEOUT}s
+kubectl -n ${MULTUS_NAMESPACE} wait --for=condition=ready -l name=multus pod --timeout=${TIMEOUT}s
 
 echo "## deploy cert manager"
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.yaml
@@ -387,9 +432,17 @@ if [ -z $SKIP_TEST ]; then
     export JUNIT_OUTPUT="${root}/${TEST_REPORT_PATH}/conformance-test-report"
   fi
 
+  # Disable exit on error temporarily to gather cluster information
+  set +e
   SUITE=./test/conformance hack/run-e2e-conformance.sh
+  TEST_EXITE_CODE=$?
+  set -e
 
   if [[ -v TEST_REPORT_PATH ]]; then
-    kubectl cluster-info dump --namespaces ${NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
+    kubectl cluster-info dump --namespaces ${NAMESPACE},${MULTUS_NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
+  fi
+
+  if [[ $TEST_EXITE_CODE -ne 0 ]]; then
+    exit $TEST_EXITE_CODE
   fi
 fi
