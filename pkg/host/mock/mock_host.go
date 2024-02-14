@@ -124,20 +124,6 @@ func (mr *MockHostManagerInterfaceMockRecorder) CompareServices(serviceA, servic
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompareServices", reflect.TypeOf((*MockHostManagerInterface)(nil).CompareServices), serviceA, serviceB)
 }
 
-// ConfigSriovDevice mocks base method.
-func (m *MockHostManagerInterface) ConfigSriovDevice(iface *v1.Interface, ifaceStatus *v1.InterfaceExt) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfigSriovDevice", iface, ifaceStatus)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ConfigSriovDevice indicates an expected call of ConfigSriovDevice.
-func (mr *MockHostManagerInterfaceMockRecorder) ConfigSriovDevice(iface, ifaceStatus interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovDevice", reflect.TypeOf((*MockHostManagerInterface)(nil).ConfigSriovDevice), iface, ifaceStatus)
-}
-
 // ConfigSriovDeviceVirtual mocks base method.
 func (m *MockHostManagerInterface) ConfigSriovDeviceVirtual(iface *v1.Interface) error {
 	m.ctrl.T.Helper()
@@ -153,17 +139,17 @@ func (mr *MockHostManagerInterfaceMockRecorder) ConfigSriovDeviceVirtual(iface i
 }
 
 // ConfigSriovInterfaces mocks base method.
-func (m *MockHostManagerInterface) ConfigSriovInterfaces(storeManager store.ManagerInterface, interfaces []v1.Interface, ifaceStatuses []v1.InterfaceExt, pfsToConfig map[string]bool) error {
+func (m *MockHostManagerInterface) ConfigSriovInterfaces(storeManager store.ManagerInterface, interfaces []v1.Interface, ifaceStatuses []v1.InterfaceExt, pfsToConfig map[string]bool, skipVFConfiguration bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfigSriovInterfaces", storeManager, interfaces, ifaceStatuses, pfsToConfig)
+	ret := m.ctrl.Call(m, "ConfigSriovInterfaces", storeManager, interfaces, ifaceStatuses, pfsToConfig, skipVFConfiguration)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ConfigSriovInterfaces indicates an expected call of ConfigSriovInterfaces.
-func (mr *MockHostManagerInterfaceMockRecorder) ConfigSriovInterfaces(storeManager, interfaces, ifaceStatuses, pfsToConfig interface{}) *gomock.Call {
+func (mr *MockHostManagerInterfaceMockRecorder) ConfigSriovInterfaces(storeManager, interfaces, ifaceStatuses, pfsToConfig, skipVFConfiguration interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovInterfaces", reflect.TypeOf((*MockHostManagerInterface)(nil).ConfigSriovInterfaces), storeManager, interfaces, ifaceStatuses, pfsToConfig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovInterfaces", reflect.TypeOf((*MockHostManagerInterface)(nil).ConfigSriovInterfaces), storeManager, interfaces, ifaceStatuses, pfsToConfig, skipVFConfiguration)
 }
 
 // CreateVDPADevice mocks base method.
