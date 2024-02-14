@@ -400,8 +400,8 @@ func (o *openstackContext) DiscoverSriovDevicesVirtual() ([]sriovnetworkv1.Inter
 				iface.Mac = metaMac
 			}
 			iface.LinkSpeed = o.hostManager.GetNetDevLinkSpeed(name)
+			iface.LinkType = o.hostManager.GetLinkType(name)
 		}
-		iface.LinkType = o.hostManager.GetLinkType(iface)
 
 		iface.TotalVfs = 1
 		iface.NumVfs = 1

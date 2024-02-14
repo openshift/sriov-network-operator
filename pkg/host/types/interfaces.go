@@ -137,7 +137,7 @@ type SriovInterface interface {
 	SetNicSriovMode(pciAddr, mode string) error
 	// GetLinkType return the link type
 	// supported types are ethernet and infiniband
-	GetLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string
+	GetLinkType(name string) string
 	// ResetSriovDevice resets the number of virtual function for the specific physical function to zero
 	ResetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error
 	// DiscoverSriovDevices returns a list of all the available SR-IOV capable network interfaces on the system
