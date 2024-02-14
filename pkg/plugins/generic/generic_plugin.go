@@ -163,7 +163,7 @@ func (p *GenericPlugin) Apply() error {
 		defer exit()
 	}
 
-	if err := p.helpers.ConfigSriovInterfaces(p.helpers, p.DesireState.Spec.Interfaces, p.DesireState.Status.Interfaces, p.pfsToSkip); err != nil {
+	if err := p.helpers.ConfigSriovInterfaces(p.helpers, p.DesireState.Spec.Interfaces, p.DesireState.Status.Interfaces, p.pfsToSkip, false); err != nil {
 		// Catch the "cannot allocate memory" error and try to use PCI realloc
 		if errors.Is(err, syscall.ENOMEM) {
 			p.addToDesiredKernelArgs(consts.KernelArgPciRealloc)
