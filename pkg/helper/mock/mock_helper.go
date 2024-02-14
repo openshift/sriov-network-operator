@@ -328,17 +328,17 @@ func (mr *MockHostHelpersInterfaceMockRecorder) GetCurrentKernelArgs() *gomock.C
 }
 
 // GetLinkType mocks base method.
-func (m *MockHostHelpersInterface) GetLinkType(ifaceStatus v1.InterfaceExt) string {
+func (m *MockHostHelpersInterface) GetLinkType(name string) string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLinkType", ifaceStatus)
+	ret := m.ctrl.Call(m, "GetLinkType", name)
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
 // GetLinkType indicates an expected call of GetLinkType.
-func (mr *MockHostHelpersInterfaceMockRecorder) GetLinkType(ifaceStatus interface{}) *gomock.Call {
+func (mr *MockHostHelpersInterfaceMockRecorder) GetLinkType(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLinkType", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetLinkType), ifaceStatus)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLinkType", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetLinkType), name)
 }
 
 // GetMellanoxBlueFieldMode mocks base method.

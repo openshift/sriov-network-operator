@@ -283,17 +283,17 @@ func (mr *MockHostManagerInterfaceMockRecorder) GetCurrentKernelArgs() *gomock.C
 }
 
 // GetLinkType mocks base method.
-func (m *MockHostManagerInterface) GetLinkType(ifaceStatus v1.InterfaceExt) string {
+func (m *MockHostManagerInterface) GetLinkType(name string) string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLinkType", ifaceStatus)
+	ret := m.ctrl.Call(m, "GetLinkType", name)
 	ret0, _ := ret[0].(string)
 	return ret0
 }
 
 // GetLinkType indicates an expected call of GetLinkType.
-func (mr *MockHostManagerInterfaceMockRecorder) GetLinkType(ifaceStatus interface{}) *gomock.Call {
+func (mr *MockHostManagerInterfaceMockRecorder) GetLinkType(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLinkType", reflect.TypeOf((*MockHostManagerInterface)(nil).GetLinkType), ifaceStatus)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLinkType", reflect.TypeOf((*MockHostManagerInterface)(nil).GetLinkType), name)
 }
 
 // GetNetDevLinkSpeed mocks base method.
