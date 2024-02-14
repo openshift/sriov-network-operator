@@ -258,8 +258,8 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 			iface.Name = name
 			iface.Mac = s.networkHelper.GetNetDevMac(name)
 			iface.LinkSpeed = s.networkHelper.GetNetDevLinkSpeed(name)
+			iface.LinkType = s.GetLinkType(name)
 		}
-		iface.LinkType = s.GetLinkType(iface)
 
 		pfStatus, exist, err := storeManager.LoadPfsStatus(iface.PciAddress)
 		if err != nil {
@@ -755,12 +755,11 @@ func (s *sriov) SetNicSriovMode(pciAddress string, mode string) error {
 	return s.netlinkLib.DevLinkSetEswitchMode(dev, mode)
 }
 
-func (s *sriov) GetLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
-	log.Log.V(2).Info("GetLinkType()", "device", ifaceStatus.PciAddress)
-	if ifaceStatus.Name != "" {
-		link, err := s.netlinkLib.LinkByName(ifaceStatus.Name)
+func (s *sriov) GetLinkType(name string) string {
+	log.Log.V(2).Info("GetLinkType()", "name", name)
+	link, err := s.netlinkLib.LinkByName(name)
 		if err != nil {
-			log.Log.Error(err, "GetLinkType(): failed to get link", "device", ifaceStatus.Name)
+		log.Log.Error(err, "GetLinkType(): failed to get link", "device", name)
 			return ""
 		}
 		linkType := link.Attrs().EncapType
@@ -769,7 +768,5 @@ func (s *sriov) GetLinkType(ifaceStatus sriovnetworkv1.InterfaceExt) string {
 		} else if linkType == "infiniband" {
 			return consts.LinkTypeIB
 		}
-	}
-
 	return ""
 }
