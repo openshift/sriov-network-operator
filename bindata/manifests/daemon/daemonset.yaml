@@ -103,7 +103,7 @@ spec:
           - --disable-plugins={{.}}
         {{- end }}
         {{- if .ParallelNicConfig }}
-        - --parallel-nic-config
+          - --parallel-nic-config
         {{- end }}
         env:
           - name: NODE_NAME
