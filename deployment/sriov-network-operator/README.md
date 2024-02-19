@@ -104,6 +104,18 @@ controllers, which can be found in the table below. In a nutshell, the modes tha
 | `operator.admissionControllers.certificates.custom.injector.tlsCrt` | string | `` | The public part of the certificate to be used by the Network Resources Injector's admission controller |
 | `operator.admissionControllers.certificates.custom.injector.tlsKey` | string | `` | The private part of the certificate to be used by the Network Resources Injector's admission controller |
 
+### SR-IOV Operator Configuration Parameters
+
+This section contains general parameters that apply to both the operator and daemon componets of SR-IOV Network Operator.
+
+| Name | Type | Default | description |
+| ---- | ---- | ------- | ----------- |
+| `sriovOperatorConfig.deploy` | bool | `false` | deploy SriovOperatorConfig custom resource |
+| `sriovOperatorConfig.configDaemonNodeSelector` | map[string]string | `{}` | node slectors for sriov-network-config-daemon |
+| `sriovOperatorConfig.logLevel` | int | `2` | log level for both operator and sriov-network-config-daemon |
+| `sriovOperatorConfig.disableDrain` | bool | `false` | disable node draining when configuring SR-IOV, set to true in case of a single node cluster or any other justifiable reason |
+| `sriovOperatorConfig.configurationMode` | string | `daemon` | sriov-network-config-daemon configuration mode. either `daemon` or `systemd` |
+
 ### Images parameters
 
 | Name | description |

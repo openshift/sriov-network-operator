@@ -134,11 +134,10 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		It("should be able to turn network-resources-injector on/off", func() {
 			By("set disable to enableInjector")
 			config := &sriovnetworkv1.SriovOperatorConfig{}
-			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
 
 			config.Spec.EnableInjector = false
-			err = k8sClient.Update(ctx, config)
+			err := k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 
 			daemonSet := &appsv1.DaemonSet{}
@@ -170,11 +169,10 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 			By("set disable to enableOperatorWebhook")
 			config := &sriovnetworkv1.SriovOperatorConfig{}
-			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
 
 			config.Spec.EnableOperatorWebhook = false
-			err = k8sClient.Update(ctx, config)
+			err := k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 
 			daemonSet := &appsv1.DaemonSet{}
@@ -190,8 +188,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("set disable to enableOperatorWebhook")
-			err = util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
 
 			config.Spec.EnableOperatorWebhook = true
 			err = k8sClient.Update(ctx, config)
@@ -213,10 +210,10 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		It("should be able to update the node selector of sriov-network-config-daemon", func() {
 			By("specify the configDaemonNodeSelector")
 			config := &sriovnetworkv1.SriovOperatorConfig{}
-			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
+
 			config.Spec.ConfigDaemonNodeSelector = map[string]string{"node-role.kubernetes.io/worker": ""}
-			err = k8sClient.Update(ctx, config)
+			err := k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 
 			daemonSet := &appsv1.DaemonSet{}
@@ -233,10 +230,9 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		It("should be able to do multiple updates to the node selector of sriov-network-config-daemon", func() {
 			By("changing the configDaemonNodeSelector")
 			config := &sriovnetworkv1.SriovOperatorConfig{}
-			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
 			config.Spec.ConfigDaemonNodeSelector = map[string]string{"labelA": "", "labelB": "", "labelC": ""}
-			err = k8sClient.Update(ctx, config)
+			err := k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 			config.Spec.ConfigDaemonNodeSelector = map[string]string{"labelA": "", "labelB": ""}
 			err = k8sClient.Update(ctx, config)
@@ -254,8 +250,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 		It("should not render disable-plugins cmdline flag of sriov-network-config-daemon if disablePlugin not provided in spec", func() {
 			config := &sriovnetworkv1.SriovOperatorConfig{}
-			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
 
 			Eventually(func() string {
 				daemonSet := &appsv1.DaemonSet{}
@@ -269,11 +264,10 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 		It("should render disable-plugins cmdline flag of sriov-network-config-daemon if disablePlugin provided in spec", func() {
 			config := &sriovnetworkv1.SriovOperatorConfig{}
-			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
 
 			config.Spec.DisablePlugins = sriovnetworkv1.PluginNameSlice{"mellanox"}
-			err = k8sClient.Update(ctx, config)
+			err := k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() string {

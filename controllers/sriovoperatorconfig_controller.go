@@ -30,9 +30,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	ctrl_builder "sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	machinev1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
@@ -43,7 +45,6 @@ import (
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
-	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -69,47 +70,30 @@ type SriovOperatorConfigReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("sriovoperatorconfig", req.NamespacedName)
-
 	logger.Info("Reconciling SriovOperatorConfig")
 
-	if !vars.EnableAdmissionController {
-		logger.Info("SR-IOV Network Resource Injector and Operator Webhook are disabled.")
-	}
+	// Note: in SetupWithManager we setup manager to enqueue only default config obj
 	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
-	err := r.Get(ctx, types.NamespacedName{
-		Name: consts.DefaultConfigName, Namespace: vars.Namespace}, defaultConfig)
+	err := r.Get(ctx, req.NamespacedName, defaultConfig)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			singleNode, err := utils.IsSingleNodeCluster(r.Client)
-			if err != nil {
-				return reconcile.Result{}, fmt.Errorf("couldn't get cluster single node status: %s", err)
-			}
-
-			// Default Config object not found, create it.
-			defaultConfig.SetNamespace(vars.Namespace)
-			defaultConfig.SetName(consts.DefaultConfigName)
-			defaultConfig.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
-				EnableInjector:           vars.EnableAdmissionController,
-				EnableOperatorWebhook:    vars.EnableAdmissionController,
-				ConfigDaemonNodeSelector: map[string]string{},
-				LogLevel:                 2,
-				DisableDrain:             singleNode,
-				ConfigurationMode:        sriovnetworkv1.DaemonConfigurationMode,
-			}
-
-			err = r.Create(ctx, defaultConfig)
-			if err != nil {
-				logger.Error(err, "Failed to create default Operator Config", "Namespace",
-					vars.Namespace, "Name", consts.DefaultConfigName)
-				return reconcile.Result{}, err
-			}
+			logger.Info("default SriovOperatorConfig object not found. waiting for creation.")
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
+		logger.Error(err, "Failed to get default SriovOperatorConfig object")
 		return reconcile.Result{}, err
 	}
 
 	snolog.SetLogLevel(defaultConfig.Spec.LogLevel)
+
+	if !defaultConfig.Spec.EnableInjector {
+		logger.Info("SR-IOV Network Resource Injector is disabled.")
+	}
+
+	if !defaultConfig.Spec.EnableOperatorWebhook {
+		logger.Info("SR-IOV Network Operator Webhook is disabled.")
+	}
 
 	// Fetch the SriovNetworkNodePolicyList
 	policyList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
@@ -126,10 +110,6 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		return reconcile.Result{}, err
 	}
 
-	if req.Namespace != vars.Namespace {
-		return reconcile.Result{}, nil
-	}
-
 	// Render and sync webhook objects
 	if err = r.syncWebhookObjs(ctx, defaultConfig); err != nil {
 		return reconcile.Result{}, err
@@ -140,7 +120,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		return reconcile.Result{}, err
 	}
 
-	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultPolicy, policyList); err != nil {
+	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultConfig, defaultPolicy, policyList); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -160,10 +140,21 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	return reconcile.Result{RequeueAfter: consts.ResyncPeriod}, nil
 }
 
+// defaultConfigPredicate creates a predicate.Predicate that will return true
+// only for the default sriovoperatorconfig obj.
+func defaultConfigPredicate() predicate.Predicate {
+	return predicate.NewPredicateFuncs(func(object client.Object) bool {
+		if object.GetName() == consts.DefaultConfigName && object.GetNamespace() == vars.Namespace {
+			return true
+		}
+		return false
+	})
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *SriovOperatorConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&sriovnetworkv1.SriovOperatorConfig{}).
+		For(&sriovnetworkv1.SriovOperatorConfig{}, ctrl_builder.WithPredicates(defaultConfigPredicate())).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&corev1.ConfigMap{}).
 		Complete(r)

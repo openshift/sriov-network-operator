@@ -78,7 +78,12 @@ func GetDefaultNodeSelector() map[string]string {
 		"kubernetes.io/os": "linux"}
 }
 
-func syncPluginDaemonObjs(ctx context.Context, client k8sclient.Client, scheme *runtime.Scheme, dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
+func syncPluginDaemonObjs(ctx context.Context,
+	client k8sclient.Client,
+	scheme *runtime.Scheme,
+	dc *sriovnetworkv1.SriovOperatorConfig,
+	dp *sriovnetworkv1.SriovNetworkNodePolicy,
+	pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.Log.WithName("syncPluginDaemonObjs")
 	logger.V(1).Info("Start to sync sriov daemons objects")
 
@@ -90,14 +95,7 @@ func syncPluginDaemonObjs(ctx context.Context, client k8sclient.Client, scheme *
 	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
 	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
 	data.Data["NodeSelectorField"] = GetDefaultNodeSelector()
-
-	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
-	err := client.Get(ctx, types.NamespacedName{
-		Name: constants.DefaultConfigName, Namespace: vars.Namespace}, defaultConfig)
-	if err != nil {
-		return err
-	}
-	data.Data["UseCDI"] = defaultConfig.Spec.UseCDI
+	data.Data["UseCDI"] = dc.Spec.UseCDI
 	objs, err := renderDsForCR(constants.PluginPath, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render SR-IoV manifests")
@@ -116,7 +114,7 @@ func syncPluginDaemonObjs(ctx context.Context, client k8sclient.Client, scheme *
 
 	// Sync DaemonSets
 	for _, obj := range objs {
-		if obj.GetKind() == constants.DaemonSet && len(defaultConfig.Spec.ConfigDaemonNodeSelector) > 0 {
+		if obj.GetKind() == constants.DaemonSet && len(dc.Spec.ConfigDaemonNodeSelector) > 0 {
 			scheme := kscheme.Scheme
 			ds := &appsv1.DaemonSet{}
 			err = scheme.Convert(obj, ds, nil)
@@ -124,7 +122,7 @@ func syncPluginDaemonObjs(ctx context.Context, client k8sclient.Client, scheme *
 				logger.Error(err, "Fail to convert to DaemonSet")
 				return err
 			}
-			ds.Spec.Template.Spec.NodeSelector = defaultConfig.Spec.ConfigDaemonNodeSelector
+			ds.Spec.Template.Spec.NodeSelector = dc.Spec.ConfigDaemonNodeSelector
 			err = scheme.Convert(ds, obj, nil)
 			if err != nil {
 				logger.Error(err, "Fail to convert to Unstructured")
