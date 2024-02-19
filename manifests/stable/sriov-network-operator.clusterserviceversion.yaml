@@ -100,13 +100,24 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:4.16
-    createdAt: 2019/04/30
+    createdAt: "2024-02-19T16:42:52Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     olm.skipRange: '>=4.3.0-0 <4.16.0'
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
+    operatorframework.io/suggested-namespace-template: |-
+      {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": {
+          "name": "openshift-sriov-network-operator",
+          "annotations": {
+            "workload.openshift.io/allowed": "management"
+          }
+        }
+      }
     operators.openshift.io/infrastructure-features: '["disconnected", "cni"]'
-    operators.operatorframework.io/builder: operator-sdk-v1.25.2
+    operators.operatorframework.io/builder: operator-sdk-v1.33.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
