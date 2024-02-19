@@ -82,7 +82,6 @@ func syncPluginDaemonObjs(ctx context.Context,
 	client k8sclient.Client,
 	scheme *runtime.Scheme,
 	dc *sriovnetworkv1.SriovOperatorConfig,
-	dp *sriovnetworkv1.SriovNetworkNodePolicy,
 	pl *sriovnetworkv1.SriovNetworkNodePolicyList) error {
 	logger := log.Log.WithName("syncPluginDaemonObjs")
 	logger.V(1).Info("Start to sync sriov daemons objects")
@@ -129,7 +128,7 @@ func syncPluginDaemonObjs(ctx context.Context,
 				return err
 			}
 		}
-		err = syncDsObject(ctx, client, scheme, dp, pl, obj)
+		err = syncDsObject(ctx, client, scheme, dc, pl, obj)
 		if err != nil {
 			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
 			return err
@@ -146,13 +145,13 @@ func deleteK8sResource(ctx context.Context, client k8sclient.Client, in *uns.Uns
 	return nil
 }
 
-func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.Scheme, dp *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, obj *uns.Unstructured) error {
+func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.Scheme, dc *sriovnetworkv1.SriovOperatorConfig, pl *sriovnetworkv1.SriovNetworkNodePolicyList, obj *uns.Unstructured) error {
 	logger := log.Log.WithName("syncDsObject")
 	kind := obj.GetKind()
 	logger.V(1).Info("Start to sync Objects", "Kind", kind)
 	switch kind {
 	case constants.ServiceAccount, constants.Role, constants.RoleBinding:
-		if err := controllerutil.SetControllerReference(dp, obj, scheme); err != nil {
+		if err := controllerutil.SetControllerReference(dc, obj, scheme); err != nil {
 			return err
 		}
 		if err := apply.ApplyObject(ctx, client, obj); err != nil {
@@ -166,7 +165,7 @@ func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.
 			logger.Error(err, "Fail to convert to DaemonSet")
 			return err
 		}
-		err = syncDaemonSet(ctx, client, scheme, dp, pl, ds)
+		err = syncDaemonSet(ctx, client, scheme, dc, pl, ds)
 		if err != nil {
 			logger.Error(err, "Fail to sync DaemonSet", "Namespace", ds.Namespace, "Name", ds.Name)
 			return err
@@ -175,7 +174,7 @@ func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.
 	return nil
 }
 
-func syncDaemonSet(ctx context.Context, client k8sclient.Client, scheme *runtime.Scheme, cr *sriovnetworkv1.SriovNetworkNodePolicy, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *appsv1.DaemonSet) error {
+func syncDaemonSet(ctx context.Context, client k8sclient.Client, scheme *runtime.Scheme, dc *sriovnetworkv1.SriovOperatorConfig, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *appsv1.DaemonSet) error {
 	logger := log.Log.WithName("syncDaemonSet")
 	logger.V(1).Info("Start to sync DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
 	var err error
@@ -185,7 +184,7 @@ func syncDaemonSet(ctx context.Context, client k8sclient.Client, scheme *runtime
 			return err
 		}
 	}
-	if err = controllerutil.SetControllerReference(cr, in, scheme); err != nil {
+	if err = controllerutil.SetControllerReference(dc, in, scheme); err != nil {
 		return err
 	}
 	ds := &appsv1.DaemonSet{}
@@ -207,7 +206,13 @@ func syncDaemonSet(ctx context.Context, client k8sclient.Client, scheme *runtime
 		// DeepDerivative checks for changes only comparing non-zero fields in the source struct.
 		// This skips default values added by the api server.
 		// References in https://github.com/kubernetes-sigs/kubebuilder/issues/592#issuecomment-625738183
-		if equality.Semantic.DeepDerivative(in.Spec, ds.Spec) {
+
+		// Note(Adrianc): we check Equality of OwnerReference as we changed sriov-device-plugin owner ref
+		// from SriovNetworkNodePolicy to SriovOperatorConfig, hence even if there is no change in spec,
+		// we need to update the obj's owner reference.
+
+		if equality.Semantic.DeepEqual(in.OwnerReferences, ds.OwnerReferences) &&
+			equality.Semantic.DeepDerivative(in.Spec, ds.Spec) {
 			// DeepDerivative has issue detecting nodeAffinity change
 			// https://bugzilla.redhat.com/show_bug.cgi?id=1914066
 			// DeepDerivative doesn't detect changes in containers args section

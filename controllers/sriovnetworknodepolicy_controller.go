@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -149,7 +150,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	// Sort the policies with priority, higher priority ones is applied later
 	sort.Sort(sriovnetworkv1.ByPriority(policyList.Items))
 	// Sync SriovNetworkNodeState objects
-	if err = r.syncAllSriovNetworkNodeStates(ctx, defaultPolicy, policyList, nodeList); err != nil {
+	if err = r.syncAllSriovNetworkNodeStates(ctx, defaultOpConf, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
 	}
 	// Sync Sriov device plugin ConfigMap object
@@ -157,7 +158,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 		return reconcile.Result{}, err
 	}
 	// Render and sync Daemon objects
-	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultOpConf, defaultPolicy, policyList); err != nil {
+	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultOpConf, policyList); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -255,7 +256,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(ctx context
 	return nil
 }
 
-func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx context.Context, np *sriovnetworkv1.SriovNetworkNodePolicy, npl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
+func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig, npl *sriovnetworkv1.SriovNetworkNodePolicyList, nl *corev1.NodeList) error {
 	logger := log.Log.WithName("syncAllSriovNetworkNodeStates")
 	logger.V(1).Info("Start to sync all SriovNetworkNodeState custom resource")
 	found := &corev1.ConfigMap{}
@@ -269,7 +270,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 		ns.Namespace = vars.Namespace
 		j, _ := json.Marshal(ns)
 		logger.V(2).Info("SriovNetworkNodeState CR", "content", j)
-		if err := r.syncSriovNetworkNodeState(ctx, np, npl, ns, &node, utils.HashConfigMap(found)); err != nil {
+		if err := r.syncSriovNetworkNodeState(ctx, dc, npl, ns, &node, utils.HashConfigMap(found)); err != nil {
 			logger.Error(err, "Fail to sync", "SriovNetworkNodeState", ns.Name)
 			return err
 		}
@@ -303,11 +304,11 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 	return nil
 }
 
-func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context.Context, np *sriovnetworkv1.SriovNetworkNodePolicy, npl *sriovnetworkv1.SriovNetworkNodePolicyList, ns *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node, cksum string) error {
+func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig, npl *sriovnetworkv1.SriovNetworkNodePolicyList, ns *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node, cksum string) error {
 	logger := log.Log.WithName("syncSriovNetworkNodeState")
 	logger.V(1).Info("Start to sync SriovNetworkNodeState", "Name", ns.Name, "cksum", cksum)
 
-	if err := controllerutil.SetControllerReference(np, ns, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(dc, ns, r.Scheme); err != nil {
 		return err
 	}
 	found := &sriovnetworkv1.SriovNetworkNodeState{}
@@ -334,6 +335,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 		logger.V(1).Info("SriovNetworkNodeState already exists, updating")
 		newVersion := found.DeepCopy()
 		newVersion.Spec = ns.Spec
+		newVersion.OwnerReferences = ns.OwnerReferences
 
 		// Previous Policy Priority(ppp) records the priority of previous evaluated policy in node policy list.
 		// Since node policy list is already sorted with priority number, comparing current priority with ppp shall
@@ -359,7 +361,11 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 			}
 		}
 		newVersion.Spec.DpConfigVersion = cksum
-		if equality.Semantic.DeepEqual(newVersion.Spec, found.Spec) {
+		// Note(adrianc): we check same ownerReferences since SriovNetworkNodeState
+		// was owned by a default SriovNetworkNodePolicy. if we encounter a descripancy
+		// we need to update.
+		if reflect.DeepEqual(newVersion.OwnerReferences, found.OwnerReferences) &&
+			equality.Semantic.DeepEqual(newVersion.Spec, found.Spec) {
 			logger.V(1).Info("SriovNetworkNodeState did not change, not updating")
 			return nil
 		}
