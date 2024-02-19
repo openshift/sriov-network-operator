@@ -16,6 +16,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	platformsMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/generic"
 	pluginsMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/systemd"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
@@ -128,7 +129,7 @@ var _ = Describe("Service", func() {
 		genericPlugin = pluginsMock.NewMockVendorPlugin(testCtrl)
 		virtualPlugin = pluginsMock.NewMockVendorPlugin(testCtrl)
 
-		newGenericPluginFunc = func(_ helper.HostHelpersInterface) (plugin.VendorPlugin, error) {
+		newGenericPluginFunc = func(_ helper.HostHelpersInterface, _ ...generic.Option) (plugin.VendorPlugin, error) {
 			return genericPlugin, nil
 		}
 		newVirtualPluginFunc = func(_ helper.HostHelpersInterface) (plugin.VendorPlugin, error) {
@@ -235,6 +236,11 @@ var _ = Describe("Service", func() {
 				"/etc/sriov-operator/sriov-interface-result.yaml":   getTestResultFileContent("InProgress", ""),
 			},
 		})
+		hostHelpers.EXPECT().DiscoverSriovDevices(hostHelpers).Return([]sriovnetworkv1.InterfaceExt{{
+			Name: "enp216s0f0np0",
+		}}, nil)
+		genericPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil)
+		genericPlugin.EXPECT().Apply().Return(nil)
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).NotTo(HaveOccurred())
 		testHelpers.GinkgoAssertFileContentsEquals("/etc/sriov-operator/sriov-interface-result.yaml",
 			string(getTestResultFileContent("Succeeded", "")))

@@ -2,6 +2,7 @@ package sriov
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"syscall"
 
@@ -11,9 +12,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	dputilsMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils/mock"
 	netlinkMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink/mock"
 	hostMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/mock"
+	hostStoreMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/store/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/helpers"
@@ -21,10 +24,11 @@ import (
 
 var _ = Describe("SRIOV", func() {
 	var (
-		s              types.SriovInterface
-		netlinkLibMock *netlinkMockPkg.MockNetlinkLib
-		dputilsLibMock *dputilsMockPkg.MockDPUtilsLib
-		hostMock       *hostMockPkg.MockHostManagerInterface
+		s                types.SriovInterface
+		netlinkLibMock   *netlinkMockPkg.MockNetlinkLib
+		dputilsLibMock   *dputilsMockPkg.MockDPUtilsLib
+		hostMock         *hostMockPkg.MockHostManagerInterface
+		storeManagerMode *hostStoreMockPkg.MockManagerInterface
 
 		testCtrl *gomock.Controller
 
@@ -35,6 +39,8 @@ var _ = Describe("SRIOV", func() {
 		netlinkLibMock = netlinkMockPkg.NewMockNetlinkLib(testCtrl)
 		dputilsLibMock = dputilsMockPkg.NewMockDPUtilsLib(testCtrl)
 		hostMock = hostMockPkg.NewMockHostManagerInterface(testCtrl)
+		storeManagerMode = hostStoreMockPkg.NewMockManagerInterface(testCtrl)
+
 		s = New(nil, hostMock, hostMock, hostMock, netlinkLibMock, dputilsLibMock)
 	})
 
@@ -94,6 +100,252 @@ var _ = Describe("SRIOV", func() {
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(&netlink.DevlinkDevice{}, nil)
 			netlinkLibMock.EXPECT().DevLinkSetEswitchMode(testDev, "legacy").Return(testError)
 			Expect(s.SetNicSriovMode("0000:d8:00.0", "legacy")).To(MatchError(testError))
+		})
+	})
+
+	Context("ConfigSriovInterfaces", func() {
+		It("should configure", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
+				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+			})
+
+			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
+			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(2)
+			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
+			hostMock.EXPECT().AddUdevRule("0000:d8:00.0").Return(nil)
+			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2", "0000:d8:00.3"}, nil)
+			pfLinkMock := netlinkMockPkg.NewMockLink(testCtrl)
+			netlinkLibMock.EXPECT().LinkByName("enp216s0f0np0").Return(pfLinkMock, nil).Times(3)
+			pfLinkMock.EXPECT().Attrs().Return(&netlink.LinkAttrs{OperState: netlink.OperDown, EncapType: "ether"}).Times(2)
+			netlinkLibMock.EXPECT().LinkSetUp(pfLinkMock).Return(nil)
+
+			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.2").Return(0, nil).Times(2)
+			hostMock.EXPECT().HasDriver("0000:d8:00.2").Return(false, "")
+			hostMock.EXPECT().BindDefaultDriver("0000:d8:00.2").Return(nil)
+			hostMock.EXPECT().HasDriver("0000:d8:00.2").Return(true, "test")
+			hostMock.EXPECT().UnbindDriverIfNeeded("0000:d8:00.2", true).Return(nil)
+			hostMock.EXPECT().BindDefaultDriver("0000:d8:00.2").Return(nil)
+			hostMock.EXPECT().SetNetdevMTU("0000:d8:00.2", 2000).Return(nil)
+			hostMock.EXPECT().TryGetInterfaceName("0000:d8:00.2").Return("enp216s0f0_0")
+			vf0LinkMock := netlinkMockPkg.NewMockLink(testCtrl)
+			vf0Mac, _ := net.ParseMAC("02:42:19:51:2f:af")
+			vf0LinkMock.EXPECT().Attrs().Return(&netlink.LinkAttrs{HardwareAddr: vf0Mac})
+			netlinkLibMock.EXPECT().LinkByName("enp216s0f0_0").Return(vf0LinkMock, nil)
+			netlinkLibMock.EXPECT().LinkSetVfHardwareAddr(vf0LinkMock, 0, vf0Mac).Return(nil)
+
+			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.3").Return(1, nil)
+			hostMock.EXPECT().HasDriver("0000:d8:00.3").Return(true, "vfio-pci").Times(2)
+			hostMock.EXPECT().UnbindDriverIfNeeded("0000:d8:00.3", false).Return(nil)
+			hostMock.EXPECT().BindDpdkDriver("0000:d8:00.3", "vfio-pci").Return(nil)
+
+			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil)
+
+			Expect(s.ConfigSriovInterfaces(storeManagerMode,
+				[]sriovnetworkv1.Interface{{
+					Name:       "enp216s0f0np0",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     2,
+					VfGroups: []sriovnetworkv1.VfGroup{
+						{
+							VfRange:      "0-0",
+							ResourceName: "test-resource0",
+							PolicyName:   "test-policy0",
+							Mtu:          2000,
+							IsRdma:       true,
+						},
+						{
+							VfRange:      "1-1",
+							ResourceName: "test-resource1",
+							PolicyName:   "test-policy1",
+							Mtu:          1600,
+							IsRdma:       false,
+							DeviceType:   "vfio-pci",
+						}},
+				}},
+				[]sriovnetworkv1.InterfaceExt{{PciAddress: "0000:d8:00.0"}, {PciAddress: "0000:d8:00.1"}},
+				map[string]bool{"0000:d8:00.1": true}, false)).NotTo(HaveOccurred())
+			helpers.GinkgoAssertFileContentsEquals("/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs", "2")
+		})
+		It("should configure IB", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
+				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+			})
+
+			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
+			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(1)
+			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
+			hostMock.EXPECT().AddUdevRule("0000:d8:00.0").Return(nil)
+			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2"}, nil)
+			pfLinkMock := netlinkMockPkg.NewMockLink(testCtrl)
+			netlinkLibMock.EXPECT().LinkByName("enp216s0f0np0").Return(pfLinkMock, nil).Times(2)
+			pfLinkMock.EXPECT().Attrs().Return(&netlink.LinkAttrs{OperState: netlink.OperDown})
+			netlinkLibMock.EXPECT().LinkSetUp(pfLinkMock).Return(nil)
+
+			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.2").Return(0, nil).Times(2)
+			hostMock.EXPECT().HasDriver("0000:d8:00.2").Return(true, "test").Times(2)
+			hostMock.EXPECT().UnbindDriverIfNeeded("0000:d8:00.2", true).Return(nil)
+			hostMock.EXPECT().Unbind("0000:d8:00.2").Return(nil)
+			hostMock.EXPECT().BindDefaultDriver("0000:d8:00.2").Return(nil)
+			hostMock.EXPECT().SetNetdevMTU("0000:d8:00.2", 2000).Return(nil)
+			vf0LinkMock := netlinkMockPkg.NewMockLink(testCtrl)
+			netlinkLibMock.EXPECT().LinkSetVfNodeGUID(vf0LinkMock, 0, gomock.Any()).Return(nil)
+			netlinkLibMock.EXPECT().LinkSetVfPortGUID(vf0LinkMock, 0, gomock.Any()).Return(nil)
+
+			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil)
+
+			Expect(s.ConfigSriovInterfaces(storeManagerMode,
+				[]sriovnetworkv1.Interface{{
+					Name:       "enp216s0f0np0",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+					LinkType:   "IB",
+					VfGroups: []sriovnetworkv1.VfGroup{
+						{
+							VfRange:      "0-0",
+							ResourceName: "test-resource0",
+							PolicyName:   "test-policy0",
+							Mtu:          2000,
+							IsRdma:       true,
+						}},
+				}},
+				[]sriovnetworkv1.InterfaceExt{{PciAddress: "0000:d8:00.0"}},
+				map[string]bool{}, false)).NotTo(HaveOccurred())
+			helpers.GinkgoAssertFileContentsEquals("/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs", "1")
+		})
+
+		It("externally managed - wrong VF count", func() {
+			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
+			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
+			Expect(s.ConfigSriovInterfaces(storeManagerMode,
+				[]sriovnetworkv1.Interface{{
+					Name:              "enp216s0f0np0",
+					PciAddress:        "0000:d8:00.0",
+					NumVfs:            1,
+					ExternallyManaged: true,
+					VfGroups: []sriovnetworkv1.VfGroup{
+						{
+							VfRange:      "0-0",
+							ResourceName: "test-resource0",
+							PolicyName:   "test-policy0",
+							Mtu:          2000,
+							IsRdma:       true,
+						}},
+				}},
+				[]sriovnetworkv1.InterfaceExt{{PciAddress: "0000:d8:00.0"}},
+				map[string]bool{}, false)).To(HaveOccurred())
+		})
+
+		It("externally managed - wrong MTU", func() {
+			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
+			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(1)
+			hostMock.EXPECT().GetNetdevMTU("0000:d8:00.0")
+			Expect(s.ConfigSriovInterfaces(storeManagerMode,
+				[]sriovnetworkv1.Interface{{
+					Name:              "enp216s0f0np0",
+					PciAddress:        "0000:d8:00.0",
+					NumVfs:            1,
+					Mtu:               2000,
+					ExternallyManaged: true,
+					VfGroups: []sriovnetworkv1.VfGroup{
+						{
+							VfRange:      "0-0",
+							ResourceName: "test-resource0",
+							PolicyName:   "test-policy0",
+							IsRdma:       true,
+						}},
+				}},
+				[]sriovnetworkv1.InterfaceExt{{PciAddress: "0000:d8:00.0"}},
+				map[string]bool{}, false)).To(HaveOccurred())
+		})
+
+		It("reset device", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
+				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+			})
+
+			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
+			storeManagerMode.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(&sriovnetworkv1.Interface{
+				Name:       "enp216s0f0np0",
+				PciAddress: "0000:d8:00.0",
+				NumVfs:     2,
+			}, true, nil)
+			hostMock.EXPECT().RemoveUdevRule("0000:d8:00.0").Return(nil)
+
+			Expect(s.ConfigSriovInterfaces(storeManagerMode,
+				[]sriovnetworkv1.Interface{},
+				[]sriovnetworkv1.InterfaceExt{
+					{
+						Name:       "enp216s0f0np0",
+						PciAddress: "0000:d8:00.0",
+						NumVfs:     2,
+						TotalVfs:   2,
+					}},
+				map[string]bool{}, false)).NotTo(HaveOccurred())
+			helpers.GinkgoAssertFileContentsEquals("/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs", "0")
+		})
+		It("reset device - skip external", func() {
+			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
+			storeManagerMode.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(&sriovnetworkv1.Interface{
+				Name:              "enp216s0f0np0",
+				PciAddress:        "0000:d8:00.0",
+				NumVfs:            2,
+				ExternallyManaged: true,
+			}, true, nil)
+			Expect(s.ConfigSriovInterfaces(storeManagerMode,
+				[]sriovnetworkv1.Interface{},
+				[]sriovnetworkv1.InterfaceExt{
+					{
+						Name:       "enp216s0f0np0",
+						PciAddress: "0000:d8:00.0",
+						NumVfs:     2,
+						TotalVfs:   2,
+					}},
+				map[string]bool{}, false)).NotTo(HaveOccurred())
+		})
+		It("should configure - skipVFConfiguration is true", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
+				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+			})
+
+			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
+			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(2)
+			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
+			hostMock.EXPECT().AddUdevRule("0000:d8:00.0").Return(nil)
+			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2", "0000:d8:00.3"}, nil)
+			hostMock.EXPECT().Unbind("0000:d8:00.2").Return(nil)
+			hostMock.EXPECT().Unbind("0000:d8:00.3").Return(nil)
+
+			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil)
+
+			Expect(s.ConfigSriovInterfaces(storeManagerMode,
+				[]sriovnetworkv1.Interface{{
+					Name:       "enp216s0f0np0",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     2,
+					VfGroups: []sriovnetworkv1.VfGroup{
+						{
+							VfRange:      "0-0",
+							ResourceName: "test-resource0",
+							PolicyName:   "test-policy0",
+							Mtu:          2000,
+							IsRdma:       true,
+						},
+						{
+							VfRange:      "1-1",
+							ResourceName: "test-resource1",
+							PolicyName:   "test-policy1",
+							Mtu:          1600,
+							IsRdma:       false,
+							DeviceType:   "vfio-pci",
+						}},
+				}},
+				[]sriovnetworkv1.InterfaceExt{{PciAddress: "0000:d8:00.0"}},
+				map[string]bool{}, true)).NotTo(HaveOccurred())
+			helpers.GinkgoAssertFileContentsEquals("/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs", "2")
 		})
 	})
 })
