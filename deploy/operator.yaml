@@ -66,8 +66,6 @@ spec:
               value: $SRIOV_NETWORK_WEBHOOK_IMAGE
             - name: RESOURCE_PREFIX
               value: $RESOURCE_PREFIX
-            - name: ADMISSION_CONTROLLERS_ENABLED
-              value: "$ADMISSION_CONTROLLERS_ENABLED"
             - name: DEV_MODE
               value: "$DEV_MODE"
             - name: NAMESPACE

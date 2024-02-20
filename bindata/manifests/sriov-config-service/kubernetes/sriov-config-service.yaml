@@ -1,14 +1,15 @@
 contents: |
   [Unit]
-  Description=Configures SRIOV NIC
-  After=network-pre.target
-  Before=NetworkManager.service kubelet.service
-  
+  Description=Configures SRIOV NIC - pre network configuration
+  DefaultDependencies=no
+  After=network-pre.target systemd-udev-settle.service systemd-sysusers.service systemd-sysctl.service
+  Before=network.target NetworkManager.service systemd-networkd.service ovs-vswitchd.service ovsdb-server.service
+
   [Service]
   Type=oneshot
-  ExecStart=/var/lib/sriov/sriov-network-config-daemon -v 2 service
+  ExecStart=/var/lib/sriov/sriov-network-config-daemon -v 2 --zap-log-level 2 service --phase pre
   StandardOutput=journal+console
-  
+
   [Install]
   WantedBy=multi-user.target
 enabled: true

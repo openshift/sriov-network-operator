@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-logr/logr"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -36,6 +37,11 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/version"
 )
 
+const (
+	PhasePre  = "pre"
+	PhasePost = "post"
+)
+
 var (
 	serviceCmd = &cobra.Command{
 		Use:   "service",
@@ -43,164 +49,245 @@ var (
 		Long:  "",
 		RunE:  runServiceCmd,
 	}
+	phaseArg string
+
+	newGenericPluginFunc  = generic.NewGenericPlugin
+	newVirtualPluginFunc  = virtual.NewVirtualPlugin
+	newHostHelpersFunc    = helper.NewDefaultHostHelpers
+	newPlatformHelperFunc = platforms.NewDefaultPlatformHelper
 )
 
 func init() {
 	rootCmd.AddCommand(serviceCmd)
+	serviceCmd.Flags().StringVarP(&phaseArg, "phase", "p", PhasePre, fmt.Sprintf("configuration phase, supported values are: %s, %s", PhasePre, PhasePost))
 }
 
+// The service supports two configuration phases:
+// * pre(default) - before the NetworkManager or systemd-networkd
+// * post - after the NetworkManager or systemd-networkd
+// "sriov-config" systemd unit is responsible for starting the service in the "pre" phase mode.
+// "sriov-config-post-network" systemd unit starts the service in the "post" phase mode.
+// The service may use different plugins for each phase and call different initialization flows.
+// The "post" phase checks the completion status of the "pre" phase by reading the sriov result file.
+// The "pre" phase should set "InProgress" status if it succeeds or "Failed" otherwise.
+// If the result of the "pre" phase is different than "InProgress", then the "post" phase will not be executed
+// and the execution result will be forcefully set to "Failed".
 func runServiceCmd(cmd *cobra.Command, args []string) error {
+	if phaseArg != PhasePre && phaseArg != PhasePost {
+		return fmt.Errorf("invalid value for \"--phase\" argument, valid values are: %s, %s", PhasePre, PhasePost)
+	}
 	// init logger
 	snolog.InitLog()
-	setupLog := log.Log.WithName("sriov-config-service")
+	setupLog := log.Log.WithName("sriov-config-service").WithValues("phase", phaseArg)
 
-	// To help debugging, immediately log version
-	setupLog.V(2).Info("sriov-config-service", "version", version.Version)
-
-	setupLog.V(0).Info("Starting sriov-config-service")
+	setupLog.V(0).Info("Starting sriov-config-service", "version", version.Version)
 
 	// Mark that we are running on host
 	vars.UsingSystemdMode = true
 	vars.InChroot = true
 
-	supportedNicIds, err := systemd.ReadSriovSupportedNics()
+	sriovConf, err := readConf(setupLog)
 	if err != nil {
-		setupLog.Error(err, "failed to read list of supported nic ids")
-		sriovResult := &systemd.SriovResult{
-			SyncStatus:    consts.SyncStatusFailed,
-			LastSyncError: fmt.Sprintf("failed to read list of supported nic ids: %v", err),
-		}
-		err = systemd.WriteSriovResult(sriovResult)
-		if err != nil {
-			setupLog.Error(err, "failed to write sriov result file", "content", *sriovResult)
-			return fmt.Errorf("sriov-config-service failed to write sriov result file with content %v error: %v", *sriovResult, err)
-		}
-		return fmt.Errorf("sriov-config-service failed to read list of supported nic ids: %v", err)
+		return updateSriovResultErr(setupLog, phaseArg, err)
 	}
-	sriovv1.InitNicIDMapFromList(supportedNicIds)
+	setupLog.V(2).Info("sriov-config-service", "config", sriovConf)
+	vars.DevMode = sriovConf.UnsupportedNics
 
+	if err := initSupportedNics(); err != nil {
+		return updateSriovResultErr(setupLog, phaseArg, fmt.Errorf("failed to initialize list of supported NIC ids: %v", err))
+	}
+
+	hostHelpers, err := newHostHelpersFunc()
+	if err != nil {
+		return updateSriovResultErr(setupLog, phaseArg, fmt.Errorf("failed to create hostHelpers: %v", err))
+	}
+
+	if phaseArg == PhasePre {
+		err = phasePre(setupLog, sriovConf, hostHelpers)
+	} else {
+		err = phasePost(setupLog, sriovConf, hostHelpers)
+	}
+	if err != nil {
+		return updateSriovResultErr(setupLog, phaseArg, err)
+	}
+	return updateSriovResultOk(setupLog, phaseArg)
+}
+
+func readConf(setupLog logr.Logger) (*systemd.SriovConfig, error) {
 	nodeStateSpec, err := systemd.ReadConfFile()
 	if err != nil {
 		if _, err := os.Stat(systemd.SriovSystemdConfigPath); !errors.Is(err, os.ErrNotExist) {
-			setupLog.Error(err, "failed to read the sriov configuration file", "path", systemd.SriovSystemdConfigPath)
-			sriovResult := &systemd.SriovResult{
-				SyncStatus:    consts.SyncStatusFailed,
-				LastSyncError: fmt.Sprintf("failed to read the sriov configuration file in path %s: %v", systemd.SriovSystemdConfigPath, err),
-			}
-			err = systemd.WriteSriovResult(sriovResult)
-			if err != nil {
-				setupLog.Error(err, "failed to write sriov result file", "content", *sriovResult)
-				return fmt.Errorf("sriov-config-service failed to write sriov result file with content %v error: %v", *sriovResult, err)
-			}
+			return nil, fmt.Errorf("failed to read the sriov configuration file in path %s: %v", systemd.SriovSystemdConfigPath, err)
 		}
-
+		setupLog.Info("configuration file not found, use default config")
 		nodeStateSpec = &systemd.SriovConfig{
 			Spec:            sriovv1.SriovNetworkNodeStateSpec{},
 			UnsupportedNics: false,
 			PlatformType:    consts.Baremetal,
 		}
 	}
+	return nodeStateSpec, nil
+}
 
-	setupLog.V(2).Info("sriov-config-service", "config", nodeStateSpec)
-	hostHelpers, err := helper.NewDefaultHostHelpers()
+func initSupportedNics() error {
+	supportedNicIds, err := systemd.ReadSriovSupportedNics()
 	if err != nil {
-		setupLog.Error(err, "failed to create hostHelpers")
-		return updateSriovResultErr("failed to create hostHelpers")
+		return fmt.Errorf("failed to read list of supported nic ids: %v", err)
 	}
-	platformHelper, err := platforms.NewDefaultPlatformHelper()
-	if err != nil {
-		setupLog.Error(err, "failed to create platformHelpers")
-		return updateSriovResultErr("failed to create platformHelpers")
+	sriovv1.InitNicIDMapFromList(supportedNicIds)
+	return nil
+}
+
+func phasePre(setupLog logr.Logger, conf *systemd.SriovConfig, hostHelpers helper.HostHelpersInterface) error {
+	// make sure there is no stale result file to avoid situation when we
+	// read outdated info in the Post phase when the Pre silently failed (should not happen)
+	if err := systemd.RemoveSriovResult(); err != nil {
+		return fmt.Errorf("failed to remove sriov result file: %v", err)
 	}
 
-	_, err = hostHelpers.TryEnableRdma()
+	_, err := hostHelpers.TryEnableRdma()
 	if err != nil {
 		setupLog.Error(err, "warning, failed to enable RDMA")
 	}
 	hostHelpers.TryEnableTun()
 	hostHelpers.TryEnableVhostNet()
 
-	var configPlugin plugin.VendorPlugin
-	var ifaceStatuses []sriovv1.InterfaceExt
-	if nodeStateSpec.PlatformType == consts.Baremetal {
-		// Bare metal support
-		vars.DevMode = nodeStateSpec.UnsupportedNics
-		ifaceStatuses, err = hostHelpers.DiscoverSriovDevices(hostHelpers)
-		if err != nil {
-			setupLog.Error(err, "failed to discover sriov devices on the host")
-			return updateSriovResultErr(fmt.Sprintf("sriov-config-service: failed to discover sriov devices on the host:  %v", err))
-		}
+	return callPlugin(setupLog, PhasePre, conf, hostHelpers)
+}
 
-		// Create the generic plugin
-		configPlugin, err = generic.NewGenericPlugin(hostHelpers)
-		if err != nil {
-			setupLog.Error(err, "failed to create generic plugin")
-			return updateSriovResultErr(fmt.Sprintf("sriov-config-service failed to create generic plugin %v", err))
-		}
-	} else if nodeStateSpec.PlatformType == consts.VirtualOpenStack {
-		err = platformHelper.CreateOpenstackDevicesInfo()
-		if err != nil {
-			setupLog.Error(err, "failed to read OpenStack data")
-			return updateSriovResultErr(fmt.Sprintf("sriov-config-service failed to read OpenStack data: %v", err))
-		}
+func phasePost(setupLog logr.Logger, conf *systemd.SriovConfig, hostHelpers helper.HostHelpersInterface) error {
+	setupLog.V(0).Info("check result of the Pre phase")
+	prePhaseResult, err := systemd.ReadSriovResult()
+	if err != nil {
+		return fmt.Errorf("failed to read result of the pre phase: %v", err)
+	}
+	if prePhaseResult.SyncStatus != consts.SyncStatusInProgress {
+		return fmt.Errorf("unexpected result of the pre phase: %s, syncError: %s", prePhaseResult.SyncStatus, prePhaseResult.LastSyncError)
+	}
+	setupLog.V(0).Info("Pre phase succeed, continue execution")
 
-		ifaceStatuses, err = platformHelper.DiscoverSriovDevicesVirtual()
-		if err != nil {
-			setupLog.Error(err, "failed to read OpenStack data")
-			return updateSriovResultErr(fmt.Sprintf("sriov-config-service: failed to read OpenStack data: %v", err))
-		}
+	return callPlugin(setupLog, PhasePost, conf, hostHelpers)
+}
 
-		// Create the virtual plugin
-		configPlugin, err = virtual.NewVirtualPlugin(hostHelpers)
-		if err != nil {
-			setupLog.Error(err, "failed to create virtual plugin")
-			return updateSriovResultErr(fmt.Sprintf("sriov-config-service: failed to create virtual plugin %v", err))
-		}
+func callPlugin(setupLog logr.Logger, phase string, conf *systemd.SriovConfig, hostHelpers helper.HostHelpersInterface) error {
+	configPlugin, err := getPlugin(setupLog, phase, conf, hostHelpers)
+	if err != nil {
+		return err
 	}
 
-	nodeState := &sriovv1.SriovNetworkNodeState{
-		Spec:   nodeStateSpec.Spec,
-		Status: sriovv1.SriovNetworkNodeStateStatus{Interfaces: ifaceStatuses},
+	if configPlugin == nil {
+		setupLog.V(0).Info("no plugin for the platform for the current phase, skip calling", "platform", conf.PlatformType)
+		return nil
 	}
 
+	nodeState, err := getNetworkNodeState(setupLog, conf, hostHelpers)
+	if err != nil {
+		return nil
+	}
 	_, _, err = configPlugin.OnNodeStateChange(nodeState)
 	if err != nil {
-		setupLog.Error(err, "failed to run OnNodeStateChange to update the generic plugin status")
-		return updateSriovResultErr(fmt.Sprintf("sriov-config-service: failed to run OnNodeStateChange to update the generic plugin status %v", err))
+		return fmt.Errorf("failed to run OnNodeStateChange to update the plugin status %v", err)
 	}
 
-	sriovResult := &systemd.SriovResult{
-		SyncStatus:    consts.SyncStatusSucceeded,
-		LastSyncError: "",
+	if err = configPlugin.Apply(); err != nil {
+		return fmt.Errorf("failed to apply configuration: %v", err)
 	}
+	setupLog.V(0).Info("plugin call succeed")
+	return nil
+}
 
-	err = configPlugin.Apply()
+func getPlugin(setupLog logr.Logger, phase string,
+	conf *systemd.SriovConfig, hostHelpers helper.HostHelpersInterface) (plugin.VendorPlugin, error) {
+	var (
+		configPlugin plugin.VendorPlugin
+		err          error
+	)
+	switch conf.PlatformType {
+	case consts.Baremetal:
+		switch phase {
+		case PhasePre:
+			configPlugin, err = newGenericPluginFunc(hostHelpers, generic.WithSkipVFConfiguration())
+		case PhasePost:
+			configPlugin, err = newGenericPluginFunc(hostHelpers)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to create generic plugin for %v", err)
+		}
+	case consts.VirtualOpenStack:
+		switch phase {
+		case PhasePre:
+			configPlugin, err = newVirtualPluginFunc(hostHelpers)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create virtual plugin %v", err)
+			}
+		case PhasePost:
+			setupLog.Info("skip post configuration phase for virtual cluster")
+			return nil, nil
+		}
+	}
+	return configPlugin, nil
+}
+
+func getNetworkNodeState(setupLog logr.Logger, conf *systemd.SriovConfig,
+	hostHelpers helper.HostHelpersInterface) (*sriovv1.SriovNetworkNodeState, error) {
+	var (
+		ifaceStatuses []sriovv1.InterfaceExt
+		err           error
+	)
+	switch conf.PlatformType {
+	case consts.Baremetal:
+		ifaceStatuses, err = hostHelpers.DiscoverSriovDevices(hostHelpers)
+		if err != nil {
+			return nil, fmt.Errorf("failed to discover sriov devices on the host:  %v", err)
+		}
+	case consts.VirtualOpenStack:
+		platformHelper, err := newPlatformHelperFunc()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create platformHelpers")
+		}
+		err = platformHelper.CreateOpenstackDevicesInfo()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read OpenStack data: %v", err)
+		}
+		ifaceStatuses, err = platformHelper.DiscoverSriovDevicesVirtual()
+		if err != nil {
+			return nil, fmt.Errorf("failed to discover devices: %v", err)
+		}
+	}
+	return &sriovv1.SriovNetworkNodeState{
+		Spec:   conf.Spec,
+		Status: sriovv1.SriovNetworkNodeStateStatus{Interfaces: ifaceStatuses},
+	}, nil
+}
+
+func updateSriovResultErr(setupLog logr.Logger, phase string, origErr error) error {
+	setupLog.Error(origErr, "service call failed")
+	err := updateResult(setupLog, consts.SyncStatusFailed, fmt.Sprintf("%s: %v", phase, origErr))
 	if err != nil {
-		setupLog.Error(err, "failed to run apply node configuration")
-		sriovResult.SyncStatus = consts.SyncStatusFailed
-		sriovResult.LastSyncError = err.Error()
+		return err
 	}
+	return origErr
+}
 
-	err = systemd.WriteSriovResult(sriovResult)
+func updateSriovResultOk(setupLog logr.Logger, phase string) error {
+	setupLog.V(0).Info("service call succeed")
+	syncStatus := consts.SyncStatusSucceeded
+	if phase == PhasePre {
+		syncStatus = consts.SyncStatusInProgress
+	}
+	return updateResult(setupLog, syncStatus, "")
+}
+
+func updateResult(setupLog logr.Logger, result, msg string) error {
+	sriovResult := &systemd.SriovResult{
+		SyncStatus:    result,
+		LastSyncError: msg,
+	}
+	err := systemd.WriteSriovResult(sriovResult)
 	if err != nil {
 		setupLog.Error(err, "failed to write sriov result file", "content", *sriovResult)
 		return fmt.Errorf("sriov-config-service failed to write sriov result file with content %v error: %v", *sriovResult, err)
 	}
-
-	setupLog.V(0).Info("shutting down sriov-config-service")
-	return nil
-}
-
-func updateSriovResultErr(errMsg string) error {
-	sriovResult := &systemd.SriovResult{
-		SyncStatus:    consts.SyncStatusFailed,
-		LastSyncError: errMsg,
-	}
-
-	err := systemd.WriteSriovResult(sriovResult)
-	if err != nil {
-		log.Log.Error(err, "failed to write sriov result file", "content", *sriovResult)
-		return fmt.Errorf("sriov-config-service failed to write sriov result file with content %v error: %v", *sriovResult, err)
-	}
+	setupLog.V(0).Info("result file updated", "SyncStatus", sriovResult.SyncStatus, "LastSyncError", msg)
 	return nil
 }
