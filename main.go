@@ -24,7 +24,6 @@ import (
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	openshiftconfigv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
@@ -34,7 +33,6 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -48,7 +46,6 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/leaderelection"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
@@ -182,13 +179,6 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
-	// Create a default SriovNetworkNodePolicy
-	err = createDefaultPolicy(kubeClient)
-	if err != nil {
-		setupLog.Error(err, "unable to create default SriovNetworkNodePolicy")
-		os.Exit(1)
-	}
-
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
@@ -223,32 +213,5 @@ func initNicIDMap() error {
 		return err
 	}
 
-	return nil
-}
-
-func createDefaultPolicy(c client.Client) error {
-	logger := setupLog.WithName("createDefaultPolicy")
-	policy := &sriovnetworkv1.SriovNetworkNodePolicy{
-		Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
-			NumVfs:       0,
-			NodeSelector: make(map[string]string),
-			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
-		},
-	}
-	namespace := os.Getenv("NAMESPACE")
-	err := c.Get(context.TODO(), types.NamespacedName{Name: constants.DefaultPolicyName, Namespace: namespace}, policy)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Create a default SriovNetworkNodePolicy")
-			policy.Namespace = namespace
-			policy.Name = constants.DefaultPolicyName
-			err = c.Create(context.TODO(), policy)
-			if err != nil {
-				return err
-			}
-		}
-		// Error reading the object - requeue the request.
-		return err
-	}
 	return nil
 }

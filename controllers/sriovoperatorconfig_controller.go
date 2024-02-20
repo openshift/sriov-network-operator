@@ -103,13 +103,6 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		return reconcile.Result{}, err
 	}
 
-	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-	err = r.Get(ctx, types.NamespacedName{Name: consts.DefaultPolicyName, Namespace: vars.Namespace}, defaultPolicy)
-	if err != nil {
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-
 	// Render and sync webhook objects
 	if err = r.syncWebhookObjs(ctx, defaultConfig); err != nil {
 		return reconcile.Result{}, err

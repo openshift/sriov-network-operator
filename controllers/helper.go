@@ -78,6 +78,19 @@ func GetDefaultNodeSelector() map[string]string {
 		"kubernetes.io/os": "linux"}
 }
 
+// hasNoValidPolicy returns true if no SriovNetworkNodePolicy
+// or only the (deprecated) "default" policy is present
+func hasNoValidPolicy(pl []sriovnetworkv1.SriovNetworkNodePolicy) bool {
+	switch len(pl) {
+	case 0:
+		return true
+	case 1:
+		return pl[0].Name == constants.DefaultPolicyName
+	default:
+		return false
+	}
+}
+
 func syncPluginDaemonObjs(ctx context.Context,
 	client k8sclient.Client,
 	scheme *runtime.Scheme,
@@ -101,7 +114,7 @@ func syncPluginDaemonObjs(ctx context.Context,
 		return err
 	}
 
-	if len(pl.Items) < 2 {
+	if hasNoValidPolicy(pl.Items) {
 		for _, obj := range objs {
 			err := deleteK8sResource(ctx, client, obj)
 			if err != nil {
