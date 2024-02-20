@@ -26,6 +26,8 @@ func New(reportPath string) (*kniK8sReporter.KubernetesReporter, error) {
 		operatorNamespace = "openshift-sriov-network-operator"
 	}
 
+	multusNamespace := os.Getenv("MULTUS_NAMESPACE")
+
 	dumpNamespace := func(ns string) bool {
 		switch {
 		case ns == namespaces.Test:
@@ -33,6 +35,8 @@ func New(reportPath string) (*kniK8sReporter.KubernetesReporter, error) {
 		case ns == operatorNamespace:
 			return true
 		case strings.HasPrefix(ns, "sriov-"):
+			return true
+		case multusNamespace != "" && ns == multusNamespace:
 			return true
 		}
 		return false
