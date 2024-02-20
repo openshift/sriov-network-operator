@@ -38,11 +38,12 @@ type hostManager struct {
 
 func NewHostManager(utilsInterface utils.CmdInterface) HostManagerInterface {
 	dpUtils := dputils.New()
+	nl := netlink.New()
 	k := kernel.New(utilsInterface)
-	n := network.New(utilsInterface, dpUtils)
+	n := network.New(utilsInterface, dpUtils, nl)
 	sv := service.New(utilsInterface)
 	u := udev.New(utilsInterface)
-	sr := sriov.New(utilsInterface, k, n, u, netlink.New(), dpUtils)
+	sr := sriov.New(utilsInterface, k, n, u, nl, dpUtils)
 	v := vdpa.New(k, govdpa.New())
 
 	return &hostManager{
