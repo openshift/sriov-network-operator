@@ -30,6 +30,9 @@ type NetlinkLib interface {
 	// LinkSetUp enables the link device.
 	// Equivalent to: `ip link set $link up`
 	LinkSetUp(link Link) error
+	// LinkSetMTU sets the mtu of the link device.
+	// Equivalent to: `ip link set $link mtu $mtu`
+	LinkSetMTU(link Link, mtu int) error
 	// DevlinkGetDeviceByName provides a pointer to devlink device and nil error,
 	// otherwise returns an error code.
 	DevLinkGetDeviceByName(bus string, device string) (*netlink.DevlinkDevice, error)
@@ -69,6 +72,12 @@ func (w *libWrapper) LinkSetVfHardwareAddr(link Link, vf int, hwaddr net.Hardwar
 // Equivalent to: `ip link set $link up`
 func (w *libWrapper) LinkSetUp(link Link) error {
 	return netlink.LinkSetUp(link)
+}
+
+// LinkSetMTU sets the mtu of the link device.
+// Equivalent to: `ip link set $link mtu $mtu`
+func (w *libWrapper) LinkSetMTU(link Link, mtu int) error {
+	return netlink.LinkSetMTU(link, mtu)
 }
 
 // DevlinkGetDeviceByName provides a pointer to devlink device and nil error,
