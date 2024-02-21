@@ -44,8 +44,8 @@ func NewHostManager(utilsInterface utils.CmdInterface) HostManagerInterface {
 	n := network.New(utilsInterface, dpUtils, netlinkLib, ethtoolLib)
 	sv := service.New(utilsInterface)
 	u := udev.New(utilsInterface)
-	sr := sriov.New(utilsInterface, k, n, u, netlinkLib, dpUtils)
 	v := vdpa.New(k, netlinkLib)
+	sr := sriov.New(utilsInterface, k, n, u, v, netlinkLib, dpUtils)
 
 	return &hostManager{
 		utilsInterface,
