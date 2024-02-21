@@ -78,6 +78,10 @@ func (v *vdpa) DeleteVDPADevice(pciAddr string) error {
 			funcLog.V(2).Info("DeleteVDPADevice(): VDPA device not found")
 			return nil
 		}
+		if errors.Is(err, syscall.ENOENT) {
+			funcLog.V(2).Info("DeleteVDPADevice(): VDPA module is not loaded")
+			return nil
+		}
 		funcLog.Error(err, "DeleteVDPADevice(): fail to remove VDPA device")
 		return err
 	}
@@ -95,6 +99,10 @@ func (v *vdpa) DiscoverVDPAType(pciAddr string) string {
 	if err != nil {
 		if errors.Is(err, syscall.ENODEV) {
 			funcLog.V(2).Info("DiscoverVDPAType(): VDPA device for VF not found")
+			return ""
+		}
+		if errors.Is(err, syscall.ENOENT) {
+			funcLog.V(2).Info("DiscoverVDPAType(): VDPA module is not loaded")
 			return ""
 		}
 		funcLog.Error(err, "DiscoverVDPAType(): unable to get VF VDPA devices")
