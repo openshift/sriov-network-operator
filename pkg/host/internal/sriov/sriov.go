@@ -115,12 +115,15 @@ func (s *sriov) GetVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetwork
 		VfID:       id,
 	}
 
-	if mtu := s.networkHelper.GetNetdevMTU(pciAddr); mtu > 0 {
-		vf.Mtu = mtu
-	}
 	if name := s.networkHelper.TryGetInterfaceName(pciAddr); name != "" {
-		vf.Name = name
-		vf.Mac = s.networkHelper.GetNetDevMac(name)
+		link, err := s.netlinkLib.LinkByName(name)
+		if err != nil {
+			log.Log.Error(err, "getVfInfo(): unable to get VF Link Object", "name", name, "device", pciAddr)
+		} else {
+			vf.Name = name
+			vf.Mtu = link.Attrs().MTU
+			vf.Mac = link.Attrs().HardwareAddr.String()
+		}
 	}
 
 	for _, device := range devices {
@@ -129,7 +132,6 @@ func (s *sriov) GetVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetwork
 			vf.DeviceID = device.Product.ID
 			break
 		}
-		continue
 	}
 	return vf
 }
@@ -221,23 +223,6 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 			continue
 		}
 
-		driver, err := s.dputilsLib.GetDriverName(device.Address)
-		if err != nil {
-			log.Log.Error(err, "DiscoverSriovDevices(): unable to parse device driver for device, skipping", "device", device)
-			continue
-		}
-
-		deviceNames, err := s.dputilsLib.GetNetNames(device.Address)
-		if err != nil {
-			log.Log.Error(err, "DiscoverSriovDevices(): unable to get device names for device, skipping", "device", device)
-			continue
-		}
-
-		if len(deviceNames) == 0 {
-			// no network devices found, skipping device
-			continue
-		}
-
 		if !vars.DevMode {
 			if !sriovnetworkv1.IsSupportedModel(device.Vendor.ID, device.Product.ID) {
 				log.Log.Info("DiscoverSriovDevices(): unsupported device", "device", device)
@@ -245,20 +230,35 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 			}
 		}
 
+		driver, err := s.dputilsLib.GetDriverName(device.Address)
+		if err != nil {
+			log.Log.Error(err, "DiscoverSriovDevices(): unable to parse device driver for device, skipping", "device", device)
+			continue
+		}
+
+		pfNetName := s.networkHelper.TryGetInterfaceName(device.Address)
+
+		if pfNetName == "" {
+			log.Log.Error(err, "DiscoverSriovDevices(): unable to get device name for device, skipping", "device", device.Address)
+			continue
+		}
+
+		link, err := s.netlinkLib.LinkByName(pfNetName)
+		if err != nil {
+			log.Log.Error(err, "DiscoverSriovDevices(): unable to get Link for device, skipping", "device", device.Address)
+			continue
+		}
+
 		iface := sriovnetworkv1.InterfaceExt{
+			Name:       pfNetName,
 			PciAddress: device.Address,
 			Driver:     driver,
 			Vendor:     device.Vendor.ID,
 			DeviceID:   device.Product.ID,
-		}
-		if mtu := s.networkHelper.GetNetdevMTU(device.Address); mtu > 0 {
-			iface.Mtu = mtu
-		}
-		if name := s.networkHelper.TryGetInterfaceName(device.Address); name != "" {
-			iface.Name = name
-			iface.Mac = s.networkHelper.GetNetDevMac(name)
-			iface.LinkSpeed = s.networkHelper.GetNetDevLinkSpeed(name)
-			iface.LinkType = s.GetLinkType(name)
+			Mtu:        link.Attrs().MTU,
+			Mac:        link.Attrs().HardwareAddr.String(),
+			LinkType:   s.encapTypeToLinkType(link.Attrs().EncapType),
+			LinkSpeed:  s.networkHelper.GetNetDevLinkSpeed(pfNetName),
 		}
 
 		pfStatus, exist, err := storeManager.LoadPfsStatus(iface.PciAddress)
@@ -809,10 +809,13 @@ func (s *sriov) GetLinkType(name string) string {
 		log.Log.Error(err, "GetLinkType(): failed to get link", "device", name)
 		return ""
 	}
-	linkType := link.Attrs().EncapType
-	if linkType == "ether" {
+	return s.encapTypeToLinkType(link.Attrs().EncapType)
+}
+
+func (s *sriov) encapTypeToLinkType(encapType string) string {
+	if encapType == "ether" {
 		return consts.LinkTypeETH
-	} else if linkType == "infiniband" {
+	} else if encapType == "infiniband" {
 		return consts.LinkTypeIB
 	}
 	return ""

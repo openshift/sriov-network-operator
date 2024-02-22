@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	dputilsPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils"
+	netlinkPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
@@ -21,12 +21,14 @@ import (
 type network struct {
 	utilsHelper utils.CmdInterface
 	dputilsLib  dputilsPkg.DPUtilsLib
+	netlinkLib  netlinkPkg.NetlinkLib
 }
 
-func New(utilsHelper utils.CmdInterface, dputilsLib dputilsPkg.DPUtilsLib) types.NetworkInterface {
+func New(utilsHelper utils.CmdInterface, dputilsLib dputilsPkg.DPUtilsLib, netlinkLib netlinkPkg.NetlinkLib) types.NetworkInterface {
 	return &network{
 		utilsHelper: utilsHelper,
 		dputilsLib:  dputilsLib,
+		netlinkLib:  netlinkLib,
 	}
 }
 
@@ -123,28 +125,20 @@ func (n *network) IsSwitchdev(name string) bool {
 	return true
 }
 
-func mtuFilePath(ifaceName string, pciAddr string) string {
-	mtuFile := "net/" + ifaceName + "/mtu"
-	return filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, mtuFile)
-}
-
 func (n *network) GetNetdevMTU(pciAddr string) int {
 	log.Log.V(2).Info("GetNetdevMTU(): get MTU", "device", pciAddr)
 	ifaceName := n.TryGetInterfaceName(pciAddr)
 	if ifaceName == "" {
 		return 0
 	}
-	data, err := os.ReadFile(mtuFilePath(ifaceName, pciAddr))
+
+	link, err := n.netlinkLib.LinkByName(ifaceName)
 	if err != nil {
-		log.Log.Error(err, "GetNetdevMTU(): fail to read mtu file", "path", mtuFilePath)
+		log.Log.Error(err, "GetNetdevMTU(): fail to get Link ", "device", ifaceName)
 		return 0
 	}
-	mtu, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil {
-		log.Log.Error(err, "GetNetdevMTU(): fail to convert mtu to int", "raw-mtu", strings.TrimSpace(string(data)))
-		return 0
-	}
-	return mtu
+
+	return link.Attrs().MTU
 }
 
 func (n *network) SetNetdevMTU(pciAddr string, mtu int) error {
@@ -155,34 +149,37 @@ func (n *network) SetNetdevMTU(pciAddr string, mtu int) error {
 	}
 	b := backoff.NewConstantBackOff(1 * time.Second)
 	err := backoff.Retry(func() error {
-		ifaceName, err := n.dputilsLib.GetNetNames(pciAddr)
+		ifaceName := n.TryGetInterfaceName(pciAddr)
+		if ifaceName == "" {
+			log.Log.Error(nil, "SetNetdevMTU(): fail to get interface name", "device", pciAddr)
+			return fmt.Errorf("failed to get netdevice for device %s", pciAddr)
+		}
+
+		link, err := n.netlinkLib.LinkByName(ifaceName)
 		if err != nil {
-			log.Log.Error(err, "SetNetdevMTU(): fail to get interface name", "device", pciAddr)
+			log.Log.Error(err, "SetNetdevMTU(): fail to get Link ", "device", ifaceName)
 			return err
 		}
-		if len(ifaceName) < 1 {
-			return fmt.Errorf("SetNetdevMTU(): interface name is empty")
-		}
-		mtuFilePath := mtuFilePath(ifaceName[0], pciAddr)
-		return os.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
+		return n.netlinkLib.LinkSetMTU(link, mtu)
 	}, backoff.WithMaxRetries(b, 10))
+
 	if err != nil {
-		log.Log.Error(err, "SetNetdevMTU(): fail to write mtu file after retrying")
+		log.Log.Error(err, "SetNetdevMTU(): fail to set mtu after retrying")
 		return err
 	}
 	return nil
 }
 
+// GetNetDevMac returns network device MAC address or empty string if address cannot be
+// retrieved.
 func (n *network) GetNetDevMac(ifaceName string) string {
 	log.Log.V(2).Info("GetNetDevMac(): get Mac", "device", ifaceName)
-	macFilePath := filepath.Join(vars.FilesystemRoot, consts.SysClassNet, ifaceName, "address")
-	data, err := os.ReadFile(macFilePath)
+	link, err := n.netlinkLib.LinkByName(ifaceName)
 	if err != nil {
-		log.Log.Error(err, "GetNetDevMac(): fail to read Mac file", "path", macFilePath)
+		log.Log.Error(err, "GetNetDevMac(): failed to get Link", "device", ifaceName)
 		return ""
 	}
-
-	return strings.TrimSpace(string(data))
+	return link.Attrs().HardwareAddr.String()
 }
 
 func (n *network) GetNetDevLinkSpeed(ifaceName string) string {
