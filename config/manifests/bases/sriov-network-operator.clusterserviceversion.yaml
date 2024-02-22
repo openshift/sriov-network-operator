@@ -12,6 +12,17 @@ metadata:
       network devices in Openshift cluster.
     olm.skipRange: '>=4.3.0-0 <4.15.0'
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
+    operatorframework.io/suggested-namespace-template: |-
+      {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": {
+          "name": "openshift-sriov-network-operator",
+          "annotations": {
+            "workload.openshift.io/allowed": "management"
+          }
+        }
+      }
     operators.openshift.io/infrastructure-features: '["disconnected", "cni"]'
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
