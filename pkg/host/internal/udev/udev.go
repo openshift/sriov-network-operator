@@ -1,8 +1,6 @@
 package udev
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -11,7 +9,6 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
@@ -24,10 +21,6 @@ type udev struct {
 
 func New(utilsHelper utils.CmdInterface) types.UdevInterface {
 	return &udev{utilsHelper: utilsHelper}
-}
-
-type config struct {
-	Interfaces []sriovnetworkv1.Interface `json:"interfaces"`
 }
 
 func (u *udev) PrepareNMUdevRule(supportedVfIds []string) error {
@@ -74,96 +67,6 @@ func (u *udev) PrepareVFRepUdevRule() error {
 		return err
 	}
 	return nil
-}
-
-func (u *udev) WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToSkip map[string]bool) (bool, error) {
-	cfg := config{}
-	for _, iface := range newState.Spec.Interfaces {
-		for _, ifaceStatus := range newState.Status.Interfaces {
-			if iface.PciAddress != ifaceStatus.PciAddress {
-				continue
-			}
-
-			if skip := pfsToSkip[iface.PciAddress]; !skip {
-				continue
-			}
-
-			if iface.NumVfs > 0 {
-				var vfGroups []sriovnetworkv1.VfGroup = nil
-				ifc, err := sriovnetworkv1.FindInterface(newState.Spec.Interfaces, iface.Name)
-				if err != nil {
-					log.Log.Error(err, "WriteSwitchdevConfFile(): fail find interface")
-				} else {
-					vfGroups = ifc.VfGroups
-				}
-				i := sriovnetworkv1.Interface{
-					// Not passing all the contents, since only NumVfs and EswitchMode can be configured by configure-switchdev.sh currently.
-					Name:       iface.Name,
-					PciAddress: iface.PciAddress,
-					NumVfs:     iface.NumVfs,
-					Mtu:        iface.Mtu,
-					VfGroups:   vfGroups,
-				}
-
-				if iface.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-					i.EswitchMode = iface.EswitchMode
-				}
-				cfg.Interfaces = append(cfg.Interfaces, i)
-			}
-		}
-	}
-	_, err := os.Stat(consts.SriovHostSwitchDevConfPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if len(cfg.Interfaces) == 0 {
-				return false, nil
-			}
-
-			// TODO: refactor this function to allow using vars.FilesystemRoot for unit-tests
-			// Create the sriov-operator folder on the host if it doesn't exist
-			if _, err := os.Stat(consts.Host + consts.SriovConfBasePath); os.IsNotExist(err) {
-				err = os.Mkdir(consts.Host+consts.SriovConfBasePath, os.ModeDir)
-				if err != nil {
-					log.Log.Error(err, "WriteConfFile(): failed to create sriov-operator folder")
-					return false, err
-				}
-			}
-
-			log.Log.V(2).Info("WriteSwitchdevConfFile(): file not existed, create it")
-			_, err = os.Create(consts.SriovHostSwitchDevConfPath)
-			if err != nil {
-				log.Log.Error(err, "WriteSwitchdevConfFile(): failed to create file")
-				return false, err
-			}
-		} else {
-			return false, err
-		}
-	}
-	oldContent, err := os.ReadFile(consts.SriovHostSwitchDevConfPath)
-	if err != nil {
-		log.Log.Error(err, "WriteSwitchdevConfFile(): failed to read file")
-		return false, err
-	}
-	var newContent []byte
-	if len(cfg.Interfaces) != 0 {
-		newContent, err = json.Marshal(cfg)
-		if err != nil {
-			log.Log.Error(err, "WriteSwitchdevConfFile(): fail to marshal config")
-			return false, err
-		}
-	}
-
-	if bytes.Equal(newContent, oldContent) {
-		log.Log.V(2).Info("WriteSwitchdevConfFile(): no update")
-		return false, nil
-	}
-	log.Log.V(2).Info("WriteSwitchdevConfFile(): write to switchdev.conf", "content", newContent)
-	err = os.WriteFile(consts.SriovHostSwitchDevConfPath, newContent, 0644)
-	if err != nil {
-		log.Log.Error(err, "WriteSwitchdevConfFile(): failed to write file")
-		return false, err
-	}
-	return true, nil
 }
 
 // AddUdevRule adds a udev rule that disables network-manager for VFs on the concrete PF

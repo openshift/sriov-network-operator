@@ -3,7 +3,6 @@ package generic
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"os/exec"
 	"reflect"
 	"strconv"
@@ -18,7 +17,6 @@ import (
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
-	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
 
 var PluginName = "generic"
@@ -57,7 +55,6 @@ type GenericPlugin struct {
 	LastState           *sriovnetworkv1.SriovNetworkNodeState
 	DriverStateMap      DriverStateMapType
 	DesiredKernelArgs   map[string]bool
-	pfsToSkip           map[string]bool
 	helpers             helper.HostHelpersInterface
 	skipVFConfiguration bool
 }
@@ -112,7 +109,6 @@ func NewGenericPlugin(helpers helper.HostHelpersInterface, options ...Option) (p
 		SpecVersion:         "1.0",
 		DriverStateMap:      driverStateMap,
 		DesiredKernelArgs:   make(map[string]bool),
-		pfsToSkip:           make(map[string]bool),
 		helpers:             helpers,
 		skipVFConfiguration: cfg.skipVFConfiguration,
 	}, nil
@@ -185,7 +181,7 @@ func (p *GenericPlugin) Apply() error {
 	}
 
 	if err := p.helpers.ConfigSriovInterfaces(p.helpers, p.DesireState.Spec.Interfaces,
-		p.DesireState.Status.Interfaces, p.pfsToSkip, p.skipVFConfiguration); err != nil {
+		p.DesireState.Status.Interfaces, p.skipVFConfiguration); err != nil {
 		// Catch the "cannot allocate memory" error and try to use PCI realloc
 		if errors.Is(err, syscall.ENOMEM) {
 			p.addToDesiredKernelArgs(consts.KernelArgPciRealloc)
@@ -368,74 +364,7 @@ func (p *GenericPlugin) needRebootNode(state *sriovnetworkv1.SriovNetworkNodeSta
 		log.Log.V(2).Info("generic plugin needRebootNode(): need reboot for updating kernel arguments")
 		needReboot = true
 	}
-
-	// Create a map with all the PFs we will need to configure
-	// we need to create it here before we access the host file system using the chroot function
-	// because the skipConfigVf needs the mstconfig package that exist only inside the sriov-config-daemon file system
-	pfsToSkip, err := getPfsToSkip(p.DesireState, p.helpers)
-	if err != nil {
-		return false, err
-	}
-	p.pfsToSkip = pfsToSkip
-
-	updateNode, err = p.helpers.WriteSwitchdevConfFile(state, p.pfsToSkip)
-	if err != nil {
-		log.Log.Error(err, "generic plugin needRebootNode(): fail to write switchdev device config file")
-		return false, err
-	}
-	if updateNode {
-		log.Log.V(2).Info("generic plugin needRebootNode(): need reboot for updating switchdev device configuration")
-		needReboot = true
-	}
-
 	return needReboot, nil
-}
-
-// getPfsToSkip return a map of devices pci addresses to should be configured via systemd instead if the legacy mode
-// we skip devices in switchdev mode and Bluefield card in ConnectX mode
-func getPfsToSkip(ns *sriovnetworkv1.SriovNetworkNodeState, mlxHelper mlx.MellanoxInterface) (map[string]bool, error) {
-	pfsToSkip := map[string]bool{}
-	for _, ifaceStatus := range ns.Status.Interfaces {
-		for _, iface := range ns.Spec.Interfaces {
-			if iface.PciAddress == ifaceStatus.PciAddress {
-				skip, err := skipConfigVf(iface, ifaceStatus, mlxHelper)
-				if err != nil {
-					log.Log.Error(err, "GetPfsToSkip(): fail to check for skip VFs", "device", iface.PciAddress)
-					return pfsToSkip, err
-				}
-				pfsToSkip[iface.PciAddress] = skip
-				break
-			}
-		}
-	}
-
-	return pfsToSkip, nil
-}
-
-// skipConfigVf Use systemd service to configure switchdev mode or BF-2 NICs in OpenShift
-func skipConfigVf(ifSpec sriovnetworkv1.Interface, ifStatus sriovnetworkv1.InterfaceExt, mlxHelper mlx.MellanoxInterface) (bool, error) {
-	if ifSpec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-		log.Log.V(2).Info("skipConfigVf(): skip config VF for switchdev device")
-		return true, nil
-	}
-
-	//  NVIDIA BlueField 2 and BlueField3 in OpenShift
-	if vars.ClusterType == consts.ClusterTypeOpenshift && ifStatus.Vendor == mlx.VendorMellanox && (ifStatus.DeviceID == mlx.DeviceBF2 || ifStatus.DeviceID == mlx.DeviceBF3) {
-		// TODO: remove this when switch to the systemd configuration support.
-		mode, err := mlxHelper.GetMellanoxBlueFieldMode(ifStatus.PciAddress)
-		if err != nil {
-			return false, fmt.Errorf("failed to read Mellanox Bluefield card mode for %s,%v", ifStatus.PciAddress, err)
-		}
-
-		if mode == mlx.BluefieldConnectXMode {
-			return false, nil
-		}
-
-		log.Log.V(2).Info("skipConfigVf(): skip config VF for Bluefiled card on DPU mode")
-		return true, nil
-	}
-
-	return false, nil
 }
 
 // ////////////// for testing purposes only ///////////////////////

@@ -138,17 +138,17 @@ func (mr *MockHostManagerInterfaceMockRecorder) ConfigSriovDeviceVirtual(iface i
 }
 
 // ConfigSriovInterfaces mocks base method.
-func (m *MockHostManagerInterface) ConfigSriovInterfaces(storeManager store.ManagerInterface, interfaces []v1.Interface, ifaceStatuses []v1.InterfaceExt, pfsToConfig map[string]bool, skipVFConfiguration bool) error {
+func (m *MockHostManagerInterface) ConfigSriovInterfaces(storeManager store.ManagerInterface, interfaces []v1.Interface, ifaceStatuses []v1.InterfaceExt, skipVFConfiguration bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfigSriovInterfaces", storeManager, interfaces, ifaceStatuses, pfsToConfig, skipVFConfiguration)
+	ret := m.ctrl.Call(m, "ConfigSriovInterfaces", storeManager, interfaces, ifaceStatuses, skipVFConfiguration)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ConfigSriovInterfaces indicates an expected call of ConfigSriovInterfaces.
-func (mr *MockHostManagerInterfaceMockRecorder) ConfigSriovInterfaces(storeManager, interfaces, ifaceStatuses, pfsToConfig, skipVFConfiguration interface{}) *gomock.Call {
+func (mr *MockHostManagerInterfaceMockRecorder) ConfigSriovInterfaces(storeManager, interfaces, ifaceStatuses, skipVFConfiguration interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovInterfaces", reflect.TypeOf((*MockHostManagerInterface)(nil).ConfigSriovInterfaces), storeManager, interfaces, ifaceStatuses, pfsToConfig, skipVFConfiguration)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovInterfaces", reflect.TypeOf((*MockHostManagerInterface)(nil).ConfigSriovInterfaces), storeManager, interfaces, ifaceStatuses, skipVFConfiguration)
 }
 
 // CreateVDPADevice mocks base method.
@@ -1012,19 +1012,4 @@ func (m *MockHostManagerInterface) VFIsReady(pciAddr string) (netlink.Link, erro
 func (mr *MockHostManagerInterfaceMockRecorder) VFIsReady(pciAddr interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VFIsReady", reflect.TypeOf((*MockHostManagerInterface)(nil).VFIsReady), pciAddr)
-}
-
-// WriteSwitchdevConfFile mocks base method.
-func (m *MockHostManagerInterface) WriteSwitchdevConfFile(newState *v1.SriovNetworkNodeState, pfsToSkip map[string]bool) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WriteSwitchdevConfFile", newState, pfsToSkip)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// WriteSwitchdevConfFile indicates an expected call of WriteSwitchdevConfFile.
-func (mr *MockHostManagerInterfaceMockRecorder) WriteSwitchdevConfFile(newState, pfsToSkip interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteSwitchdevConfFile", reflect.TypeOf((*MockHostManagerInterface)(nil).WriteSwitchdevConfFile), newState, pfsToSkip)
 }
