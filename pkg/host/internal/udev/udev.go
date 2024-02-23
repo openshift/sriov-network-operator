@@ -56,6 +56,26 @@ func (u *udev) PrepareNMUdevRule(supportedVfIds []string) error {
 	return nil
 }
 
+// PrepareVFRepUdevRule creates a script which helps to configure representor name for the VF
+func (u *udev) PrepareVFRepUdevRule() error {
+	log.Log.V(2).Info("PrepareVFRepUdevRule()")
+	targetPath := filepath.Join(vars.FilesystemRoot, consts.HostUdevFolder, filepath.Base(consts.UdevRepName))
+	data, err := os.ReadFile(filepath.Join(vars.FilesystemRoot, consts.UdevRepName))
+	if err != nil {
+		log.Log.Error(err, "PrepareVFRepUdevRule(): failed to read source for representor name UDEV script")
+		return err
+	}
+	if err := os.WriteFile(targetPath, data, 0755); err != nil {
+		log.Log.Error(err, "PrepareVFRepUdevRule(): failed to write representor name UDEV script")
+		return err
+	}
+	if err := os.Chmod(targetPath, 0755); err != nil {
+		log.Log.Error(err, "PrepareVFRepUdevRule(): failed to set permissions on representor name UDEV script")
+		return err
+	}
+	return nil
+}
+
 func (u *udev) WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToSkip map[string]bool) (bool, error) {
 	cfg := config{}
 	for _, iface := range newState.Spec.Interfaces {
