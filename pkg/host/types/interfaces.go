@@ -170,6 +170,8 @@ type UdevInterface interface {
 	// PrepareNMUdevRule creates the needed udev rules to disable NetworkManager from
 	// our managed SR-IOV virtual functions
 	PrepareNMUdevRule(supportedVfIds []string) error
+	// PrepareVFRepUdevRule creates a script which helps to configure representor name for the VF
+	PrepareVFRepUdevRule() error
 	// AddUdevRule adds a udev rule that disables network-manager for VFs on the concrete PF
 	AddUdevRule(pfPciAddress string) error
 	// RemoveUdevRule removes a udev rule that disables network-manager for VFs on the concrete PF
