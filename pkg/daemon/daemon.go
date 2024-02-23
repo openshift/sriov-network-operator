@@ -156,6 +156,9 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 	if err := dn.prepareNMUdevRule(); err != nil {
 		log.Log.Error(err, "failed to prepare udev files to disable network manager on requested VFs")
 	}
+	if err := dn.HostHelpers.PrepareVFRepUdevRule(); err != nil {
+		log.Log.Error(err, "failed to prepare udev files to rename VF representors for requested VFs")
+	}
 	if err := dn.tryCreateSwitchdevUdevRule(); err != nil {
 		log.Log.Error(err, "failed to create udev files for switchdev")
 	}

@@ -635,6 +635,20 @@ func (mr *MockHostManagerInterfaceMockRecorder) PrepareNMUdevRule(supportedVfIds
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareNMUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).PrepareNMUdevRule), supportedVfIds)
 }
 
+// PrepareVFRepUdevRule mocks base method.
+func (m *MockHostManagerInterface) PrepareVFRepUdevRule() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PrepareVFRepUdevRule")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PrepareVFRepUdevRule indicates an expected call of PrepareVFRepUdevRule.
+func (mr *MockHostManagerInterfaceMockRecorder) PrepareVFRepUdevRule() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareVFRepUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).PrepareVFRepUdevRule))
+}
+
 // RdmaIsLoaded mocks base method.
 func (m *MockHostManagerInterface) RdmaIsLoaded() (bool, error) {
 	m.ctrl.T.Helper()

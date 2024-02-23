@@ -114,4 +114,26 @@ var _ = Describe("UDEV", func() {
 			Expect(s.RemoveVfRepresentorUdevRule("0000:d8:00.0")).To(BeNil())
 		})
 	})
+	Context("PrepareVFRepUdevRule", func() {
+		It("Already Exist", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/host/etc/udev", "/bindata/scripts"},
+				Files: map[string][]byte{
+					"/host/etc/udev/switchdev-vf-link-name.sh":   []byte("before"),
+					"/bindata/scripts/switchdev-vf-link-name.sh": []byte("script"),
+				},
+			})
+			Expect(s.PrepareVFRepUdevRule()).To(BeNil())
+			helpers.GinkgoAssertFileContentsEquals("/host/etc/udev/switchdev-vf-link-name.sh", "script")
+		})
+		It("Fail - no folder", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/bindata/scripts"},
+				Files: map[string][]byte{
+					"/bindata/scripts/switchdev-vf-link-name.sh": []byte("script"),
+				},
+			})
+			Expect(s.PrepareVFRepUdevRule()).NotTo(BeNil())
+		})
+	})
 })
