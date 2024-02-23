@@ -154,14 +154,12 @@ type SriovInterface interface {
 	// ConfigSriovInterfaces configure multiple SR-IOV devices with the desired configuration
 	// if skipVFConfiguration flag is set, the function will configure PF and create VFs on it, but will skip VFs configuration
 	ConfigSriovInterfaces(storeManager store.ManagerInterface, interfaces []sriovnetworkv1.Interface,
-		ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool, skipVFConfiguration bool) error
+		ifaceStatuses []sriovnetworkv1.InterfaceExt, skipVFConfiguration bool) error
 	// ConfigSriovInterfaces configure virtual functions for virtual environments with the desired configuration
 	ConfigSriovDeviceVirtual(iface *sriovnetworkv1.Interface) error
 }
 
 type UdevInterface interface {
-	// WriteSwitchdevConfFile writes the needed switchdev configuration files for HW offload support
-	WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToSkip map[string]bool) (bool, error)
 	// PrepareNMUdevRule creates the needed udev rules to disable NetworkManager from
 	// our managed SR-IOV virtual functions
 	PrepareNMUdevRule(supportedVfIds []string) error
