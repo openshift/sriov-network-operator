@@ -571,13 +571,13 @@ func (s *sriov) configSriovDevice(iface *sriovnetworkv1.Interface, skipVFConfigu
 }
 
 func (s *sriov) ConfigSriovInterfaces(storeManager store.ManagerInterface,
-	interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool, skipVFConfiguration bool) error {
+	interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, skipVFConfiguration bool) error {
 	if s.kernelHelper.IsKernelLockdownMode() && mlx.HasMellanoxInterfacesInSpec(ifaceStatuses, interfaces) {
 		log.Log.Error(nil, "cannot use mellanox devices when in kernel lockdown mode")
 		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
 	}
 
-	toBeConfigured, toBeResetted, err := s.getConfigureAndReset(storeManager, interfaces, ifaceStatuses, pfsToConfig)
+	toBeConfigured, toBeResetted, err := s.getConfigureAndReset(storeManager, interfaces, ifaceStatuses)
 	if err != nil {
 		log.Log.Error(err, "cannot get a list of interfaces to configure")
 		return fmt.Errorf("cannot get a list of interfaces to configure")
@@ -605,7 +605,8 @@ func (s *sriov) ConfigSriovInterfaces(storeManager store.ManagerInterface,
 	return nil
 }
 
-func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool) ([]interfaceToConfigure, []sriovnetworkv1.InterfaceExt, error) {
+func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interfaces []sriovnetworkv1.Interface,
+	ifaceStatuses []sriovnetworkv1.InterfaceExt) ([]interfaceToConfigure, []sriovnetworkv1.InterfaceExt, error) {
 	toBeConfigured := []interfaceToConfigure{}
 	toBeResetted := []sriovnetworkv1.InterfaceExt{}
 	for _, ifaceStatus := range ifaceStatuses {
@@ -613,11 +614,6 @@ func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interf
 		for _, iface := range interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
-
-				if skip := pfsToConfig[iface.PciAddress]; skip {
-					break
-				}
-
 				skip, err := skipSriovConfig(&iface, &ifaceStatus, storeManager)
 				if err != nil {
 					log.Log.Error(err, "getConfigureAndReset(): failed to check interface")
@@ -633,9 +629,7 @@ func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interf
 		}
 
 		if !configured && ifaceStatus.NumVfs > 0 {
-			if skip := pfsToConfig[ifaceStatus.PciAddress]; !skip {
-				toBeResetted = append(toBeResetted, ifaceStatus)
-			}
+			toBeResetted = append(toBeResetted, ifaceStatus)
 		}
 	}
 	return toBeConfigured, toBeResetted, nil
