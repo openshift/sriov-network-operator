@@ -268,6 +268,36 @@ func (mr *MockHostManagerInterfaceMockRecorder) GetCurrentKernelArgs() *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentKernelArgs", reflect.TypeOf((*MockHostManagerInterface)(nil).GetCurrentKernelArgs))
 }
 
+// GetDevlinkDeviceParam mocks base method.
+func (m *MockHostManagerInterface) GetDevlinkDeviceParam(pciAddr, paramName string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDevlinkDeviceParam", pciAddr, paramName)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDevlinkDeviceParam indicates an expected call of GetDevlinkDeviceParam.
+func (mr *MockHostManagerInterfaceMockRecorder) GetDevlinkDeviceParam(pciAddr, paramName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDevlinkDeviceParam", reflect.TypeOf((*MockHostManagerInterface)(nil).GetDevlinkDeviceParam), pciAddr, paramName)
+}
+
+// GetDriverByBusAndDevice mocks base method.
+func (m *MockHostManagerInterface) GetDriverByBusAndDevice(bus, device string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDriverByBusAndDevice", bus, device)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDriverByBusAndDevice indicates an expected call of GetDriverByBusAndDevice.
+func (mr *MockHostManagerInterfaceMockRecorder) GetDriverByBusAndDevice(bus, device interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDriverByBusAndDevice", reflect.TypeOf((*MockHostManagerInterface)(nil).GetDriverByBusAndDevice), bus, device)
+}
+
 // GetLinkType mocks base method.
 func (m *MockHostManagerInterface) GetLinkType(name string) string {
 	m.ctrl.T.Helper()
@@ -755,6 +785,20 @@ func (m *MockHostManagerInterface) ResetSriovDevice(ifaceStatus v1.InterfaceExt)
 func (mr *MockHostManagerInterfaceMockRecorder) ResetSriovDevice(ifaceStatus interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetSriovDevice", reflect.TypeOf((*MockHostManagerInterface)(nil).ResetSriovDevice), ifaceStatus)
+}
+
+// SetDevlinkDeviceParam mocks base method.
+func (m *MockHostManagerInterface) SetDevlinkDeviceParam(pciAddr, paramName, value string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetDevlinkDeviceParam", pciAddr, paramName, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetDevlinkDeviceParam indicates an expected call of SetDevlinkDeviceParam.
+func (mr *MockHostManagerInterfaceMockRecorder) SetDevlinkDeviceParam(pciAddr, paramName, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDevlinkDeviceParam", reflect.TypeOf((*MockHostManagerInterface)(nil).SetDevlinkDeviceParam), pciAddr, paramName, value)
 }
 
 // SetNetdevMTU mocks base method.
