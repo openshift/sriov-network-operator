@@ -114,7 +114,7 @@ func main() {
 		LeaderElectionReleaseOnCancel: true,
 		RenewDeadline:                 &le.RenewDeadline,
 		RetryPeriod:                   &le.RetryPeriod,
-		LeaderElectionID:              "a56def2a.openshift.io",
+		LeaderElectionID:              consts.LeaderElectionID,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start leader election manager")

@@ -43,6 +43,8 @@ spec:
           image: $SRIOV_NETWORK_OPERATOR_IMAGE
           command:
           - sriov-network-operator
+          args:
+          - --leader-elect=$OPERATOR_LEADER_ELECTION_ENABLE
           resources:
             requests:
               cpu: 100m
