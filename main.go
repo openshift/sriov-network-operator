@@ -49,6 +49,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/leaderelection"
 
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
@@ -109,7 +110,7 @@ func main() {
 		LeaderElectionReleaseOnCancel: true,
 		RenewDeadline:                 &le.RenewDeadline,
 		RetryPeriod:                   &le.RetryPeriod,
-		LeaderElectionID:              "a56def2a.openshift.io",
+		LeaderElectionID:              consts.LeaderElectionID,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start leader election manager")
