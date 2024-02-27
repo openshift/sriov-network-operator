@@ -104,6 +104,8 @@ type NetworkInterface interface {
 	// as a string. Automatically set CMODE for the parameter and converts the value to the right
 	// type before submitting it.
 	SetDevlinkDeviceParam(pciAddr, paramName, value string) error
+	// EnableHwTcOffload make sure that hw-tc-offload feature is enabled if device supports it
+	EnableHwTcOffload(ifaceName string) error
 }
 
 type ServiceInterface interface {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	dputilsPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils"
+	ethtoolPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/ethtool"
 	netlinkPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
@@ -24,13 +25,15 @@ type network struct {
 	utilsHelper utils.CmdInterface
 	dputilsLib  dputilsPkg.DPUtilsLib
 	netlinkLib  netlinkPkg.NetlinkLib
+	ethtoolLib  ethtoolPkg.EthtoolLib
 }
 
-func New(utilsHelper utils.CmdInterface, dputilsLib dputilsPkg.DPUtilsLib, netlinkLib netlinkPkg.NetlinkLib) types.NetworkInterface {
+func New(utilsHelper utils.CmdInterface, dputilsLib dputilsPkg.DPUtilsLib, netlinkLib netlinkPkg.NetlinkLib, ethtoolLib ethtoolPkg.EthtoolLib) types.NetworkInterface {
 	return &network{
 		utilsHelper: utilsHelper,
 		dputilsLib:  dputilsLib,
 		netlinkLib:  netlinkLib,
+		ethtoolLib:  ethtoolLib,
 	}
 }
 
@@ -284,5 +287,45 @@ func (n *network) SetDevlinkDeviceParam(pciAddr, paramName, value string) error 
 		funcLog.Error(err, "SetDevlinkDeviceParam(): failed to set parameter")
 		return err
 	}
+	return nil
+}
+
+// EnableHwTcOffload makes sure that hw-tc-offload feature is enabled if device supports it
+func (n *network) EnableHwTcOffload(ifaceName string) error {
+	log.Log.V(2).Info("EnableHwTcOffload(): enable offloading", "device", ifaceName)
+	hwTcOffloadFeatureName := "hw-tc-offload"
+
+	knownFeatures, err := n.ethtoolLib.FeatureNames(ifaceName)
+	if err != nil {
+		log.Log.Error(err, "EnableHwTcOffload(): can't list supported features", "device", ifaceName)
+		return err
+	}
+	if _, isKnown := knownFeatures[hwTcOffloadFeatureName]; !isKnown {
+		log.Log.V(0).Info("EnableHwTcOffload(): can't enable feature, feature is not supported", "device", ifaceName)
+		return nil
+	}
+	currentFeaturesState, err := n.ethtoolLib.Features(ifaceName)
+	if err != nil {
+		log.Log.Error(err, "EnableHwTcOffload(): can't read features state for device", "device", ifaceName)
+		return err
+	}
+	if currentFeaturesState[hwTcOffloadFeatureName] {
+		log.Log.V(2).Info("EnableHwTcOffload(): already enabled", "device", ifaceName)
+		return nil
+	}
+	if err := n.ethtoolLib.Change(ifaceName, map[string]bool{hwTcOffloadFeatureName: true}); err != nil {
+		log.Log.Error(err, "EnableHwTcOffload(): can't set feature for device", "device", ifaceName)
+		return err
+	}
+	updatedFeaturesState, err := n.ethtoolLib.Features(ifaceName)
+	if err != nil {
+		log.Log.Error(err, "EnableHwTcOffload(): can't read features state for device", "device", ifaceName)
+		return err
+	}
+	if updatedFeaturesState[hwTcOffloadFeatureName] {
+		log.Log.V(2).Info("EnableHwTcOffload(): feature enabled", "device", ifaceName)
+		return nil
+	}
+	log.Log.V(0).Info("EnableHwTcOffload(): feature is still disabled, not supported by device", "device", ifaceName)
 	return nil
 }
