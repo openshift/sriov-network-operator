@@ -1013,11 +1013,9 @@ var _ = Describe("[sriov] operator", func() {
 				Expect(err).ToNot(HaveOccurred())
 				waitForNetAttachDef(sriovNetworkName, namespaces.Test)
 
-				podDeployTime := time.Now()
-
 				testPod := createTestPod(node, []string{sriovNetworkName})
 
-				recentMultusLogs := getMultusPodLogs(testPod.Spec.NodeName, podDeployTime)
+				recentMultusLogs := getMultusPodLogs(testPod.Spec.NodeName, testPod.ObjectMeta.CreationTimestamp.Time)
 
 				Expect(recentMultusLogs).To(
 					ContainElement(
