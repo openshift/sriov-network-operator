@@ -219,6 +219,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovNetworkPoolConfig")
 		os.Exit(1)
 	}
+	if err = (&controllers.OVSNetworkReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OVSNetwork")
+		os.Exit(1)
+	}
 
 	// we need a client that doesn't use the local cache for the objects
 	drainKClient, err := client.New(restConfig, client.Options{
