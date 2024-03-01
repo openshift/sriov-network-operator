@@ -10,15 +10,11 @@ import (
 	"strconv"
 	"strings"
 
-	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/types"
 	intstrutil "k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -657,26 +653,9 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	return objs[0], nil
 }
 
-// DeleteNetAttDef deletes the generated net-att-def CR
-func (cr *SriovIBNetwork) DeleteNetAttDef(c client.Client) error {
-	// Fetch the NetworkAttachmentDefinition instance
-	instance := &netattdefv1.NetworkAttachmentDefinition{}
-	namespace := cr.GetNamespace()
-	if cr.Spec.NetworkNamespace != "" {
-		namespace = cr.Spec.NetworkNamespace
-	}
-	err := c.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: cr.GetName()}, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		}
-		return err
-	}
-	err = c.Delete(context.TODO(), instance)
-	if err != nil {
-		return err
-	}
-	return nil
+// NetworkNamespace returns target network namespace for the network
+func (cr *SriovIBNetwork) NetworkNamespace() string {
+	return cr.Spec.NetworkNamespace
 }
 
 // RenderNetAttDef renders a net-att-def for sriov CNI
@@ -792,26 +771,9 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	return objs[0], nil
 }
 
-// DeleteNetAttDef deletes the generated net-att-def CR
-func (cr *SriovNetwork) DeleteNetAttDef(c client.Client) error {
-	// Fetch the NetworkAttachmentDefinition instance
-	instance := &netattdefv1.NetworkAttachmentDefinition{}
-	namespace := cr.GetNamespace()
-	if cr.Spec.NetworkNamespace != "" {
-		namespace = cr.Spec.NetworkNamespace
-	}
-	err := c.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: cr.GetName()}, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		}
-		return err
-	}
-	err = c.Delete(context.TODO(), instance)
-	if err != nil {
-		return err
-	}
-	return nil
+// NetworkNamespace returns target network namespace for the network
+func (cr *SriovNetwork) NetworkNamespace() string {
+	return cr.Spec.NetworkNamespace
 }
 
 // NetFilterMatch -- parse netFilter and check for a match
