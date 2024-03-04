@@ -573,7 +573,8 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 			}
 		}
 		reqDrain = reqDrain || systemdConfModified
-		reqReboot = reqReboot || systemdConfModified
+		// require reboot if drain needed for systemd mode
+		reqReboot = reqReboot || systemdConfModified || reqDrain
 		log.Log.V(0).Info("nodeStateSyncHandler(): systemd mode WriteConfFile results",
 			"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", dn.disableDrain)
 
