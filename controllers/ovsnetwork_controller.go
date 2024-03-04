@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
@@ -30,33 +29,36 @@ import (
 // OVSNetworkReconciler reconciles a OVSNetwork object
 type OVSNetworkReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme            *runtime.Scheme
+	genericReconciler *genericNetworkReconciler
 }
 
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=ovsnetworks,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=ovsnetworks/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=ovsnetworks/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the OVSNetwork object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
+// Reconcile loop for OVSNetwork CRs
 func (r *OVSNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	return r.genericReconciler.Reconcile(ctx, req)
+}
 
-	// TODO(user): your logic here
+// return name of the controller
+func (r *OVSNetworkReconciler) Name() string {
+	return "OVSNetwork"
+}
 
-	return ctrl.Result{}, nil
+// return empty instance of the OVSNetwork CR
+func (r *OVSNetworkReconciler) GetObject() networkCRInstance {
+	return &sriovnetworkv1.OVSNetwork{}
+}
+
+// return empty list of the OVSNetwork CRs
+func (r *OVSNetworkReconciler) GetObjectList() client.ObjectList {
+	return &sriovnetworkv1.OVSNetworkList{}
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OVSNetworkReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&sriovnetworkv1.OVSNetwork{}).
-		Complete(r)
+	r.genericReconciler = newGenericNetworkReconciler(r.Client, r.Scheme, r)
+	return r.genericReconciler.SetupWithManager(mgr)
 }

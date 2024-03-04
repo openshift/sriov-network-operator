@@ -77,6 +77,10 @@ func setupK8sManagerForTest() (manager.Manager, error) {
 		return []string{o.(*sriovnetworkv1.SriovIBNetwork).Spec.NetworkNamespace}
 	})
 
+	k8sManager.GetCache().IndexField(context.Background(), &sriovnetworkv1.OVSNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
+		return []string{o.(*sriovnetworkv1.OVSNetwork).Spec.NetworkNamespace}
+	})
+
 	return k8sManager, nil
 }
 

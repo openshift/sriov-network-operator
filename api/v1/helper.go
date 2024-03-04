@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -660,7 +661,7 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	data.Data["LogLevelConfigured"] = false
 	data.Data["LogFileConfigured"] = false
 
-	objs, err := render.RenderDir(ManifestsPath, &data)
+	objs, err := render.RenderDir(filepath.Join(ManifestsPath, "sriov"), &data)
 	if err != nil {
 		return nil, err
 	}
@@ -778,7 +779,7 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	data.Data["LogFileConfigured"] = (cr.Spec.LogFile != "")
 	data.Data["LogFile"] = cr.Spec.LogFile
 
-	objs, err := render.RenderDir(ManifestsPath, &data)
+	objs, err := render.RenderDir(filepath.Join(ManifestsPath, "sriov"), &data)
 	if err != nil {
 		return nil, err
 	}
@@ -791,6 +792,68 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 
 // NetworkNamespace returns target network namespace for the network
 func (cr *SriovNetwork) NetworkNamespace() string {
+	return cr.Spec.NetworkNamespace
+}
+
+// RenderNetAttDef renders a net-att-def for sriov CNI
+func (cr *OVSNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
+	logger := log.WithName("RenderNetAttDef")
+	logger.Info("Start to render OVS CNI NetworkAttachmentDefinition")
+
+	// render RawCNIConfig manifests
+	data := render.MakeRenderData()
+	data.Data["CniType"] = "ovs"
+	data.Data["NetworkName"] = cr.Name
+	if cr.Spec.NetworkNamespace == "" {
+		data.Data["NetworkNamespace"] = cr.Namespace
+	} else {
+		data.Data["NetworkNamespace"] = cr.Spec.NetworkNamespace
+	}
+	data.Data["CniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
+
+	if cr.Spec.Capabilities == "" {
+		data.Data["CapabilitiesConfigured"] = false
+	} else {
+		data.Data["CapabilitiesConfigured"] = true
+		data.Data["CniCapabilities"] = cr.Spec.Capabilities
+	}
+
+	data.Data["Bridge"] = cr.Spec.Bridge
+	data.Data["VlanTag"] = cr.Spec.Vlan
+	data.Data["MTU"] = cr.Spec.MTU
+	if len(cr.Spec.Trunk) > 0 {
+		trunkConfRaw, _ := json.Marshal(cr.Spec.Trunk)
+		data.Data["Trunk"] = string(trunkConfRaw)
+	} else {
+		data.Data["Trunk"] = ""
+	}
+	data.Data["InterfaceType"] = cr.Spec.InterfaceType
+
+	if cr.Spec.IPAM != "" {
+		data.Data["CniIpam"] = SriovCniIpam + ":" + strings.Join(strings.Fields(cr.Spec.IPAM), "")
+	} else {
+		data.Data["CniIpam"] = SriovCniIpamEmpty
+	}
+
+	data.Data["MetaPluginsConfigured"] = false
+	if cr.Spec.MetaPluginsConfig != "" {
+		data.Data["MetaPluginsConfigured"] = true
+		data.Data["MetaPlugins"] = cr.Spec.MetaPluginsConfig
+	}
+
+	objs, err := render.RenderDir(filepath.Join(ManifestsPath, "ovs"), &data)
+	if err != nil {
+		return nil, err
+	}
+	for _, obj := range objs {
+		raw, _ := json.Marshal(obj)
+		logger.Info("render NetworkAttachmentDefinition output", "raw", string(raw))
+	}
+	return objs[0], nil
+}
+
+// NetworkNamespace returns target network namespace for the network
+func (cr *OVSNetwork) NetworkNamespace() string {
 	return cr.Spec.NetworkNamespace
 }
 
