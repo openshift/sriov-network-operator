@@ -253,7 +253,12 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 			for _, groupSpec := range ifaceSpec.VfGroups {
 				if IndexInRange(vfStatus.VfID, groupSpec.VfRange) {
 					ingroup = true
-					if groupSpec.DeviceType != consts.DeviceTypeNetDevice {
+					if vfStatus.Driver == "" {
+						log.V(2).Info("NeedToUpdateSriov(): Driver needs update - has no driver",
+							"desired", groupSpec.DeviceType)
+						return true
+					}
+					if groupSpec.DeviceType != "" && groupSpec.DeviceType != consts.DeviceTypeNetDevice {
 						if groupSpec.DeviceType != vfStatus.Driver {
 							log.V(2).Info("NeedToUpdateSriov(): Driver needs update",
 								"desired", groupSpec.DeviceType, "current", vfStatus.Driver)

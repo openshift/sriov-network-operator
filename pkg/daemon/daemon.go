@@ -399,6 +399,11 @@ func (dn *Daemon) operatorConfigAddHandler(obj interface{}) {
 
 func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 	newCfg := new.(*sriovnetworkv1.SriovOperatorConfig)
+	if newCfg.Namespace != vars.Namespace || newCfg.Name != consts.DefaultConfigName {
+		log.Log.V(2).Info("unsupported SriovOperatorConfig", "namespace", newCfg.Namespace, "name", newCfg.Name)
+		return
+	}
+
 	snolog.SetLogLevel(newCfg.Spec.LogLevel)
 
 	newDisableDrain := newCfg.Spec.DisableDrain
@@ -434,13 +439,19 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 				log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config service exist on host")
 				return err
 			}
+			postNetworkServiceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovPostNetworkServicePath)
+			if err != nil {
+				log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config-post-network service exist on host")
+				return err
+			}
 
 			// if the service doesn't exist we should continue to let the k8s plugin to create the service files
 			// this is only for k8s base environments, for openshift the sriov-operator creates a machine config to will apply
 			// the system service and reboot the node the config-daemon doesn't need to do anything.
-			if !serviceEnabled {
+			if !(serviceEnabled && postNetworkServiceEnabled) {
 				sriovResult = &systemd.SriovResult{SyncStatus: consts.SyncStatusFailed,
-					LastSyncError: "sriov-config systemd service is not available on node"}
+					LastSyncError: fmt.Sprintf("some sriov systemd services are not available on node: "+
+						"sriov-config available:%t, sriov-config-post-network available:%t", serviceEnabled, postNetworkServiceEnabled)}
 			} else {
 				sriovResult, err = systemd.ReadSriovResult()
 				if err != nil {

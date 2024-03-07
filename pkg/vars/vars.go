@@ -19,9 +19,6 @@ var (
 	// developer mode allows the operator to use un-supported network devices
 	DevMode bool
 
-	// EnableAdmissionController allows the user to disable the operator webhooks
-	EnableAdmissionController bool
-
 	// NodeName initialize and used by the config-daemon to identify the node it's running on
 	NodeName = ""
 
@@ -47,6 +44,9 @@ var (
 
 	// UsingSystemdMode global variable to mark the config-daemon is running on systemd mode
 	UsingSystemdMode = false
+
+	// ParallelNicConfig global variable to perform NIC configuration in parallel
+	ParallelNicConfig = false
 
 	// FilesystemRoot used by test to mock interactions with filesystem
 	FilesystemRoot = ""
@@ -78,12 +78,6 @@ func init() {
 	destdir := os.Getenv("DEST_DIR")
 	if destdir != "" {
 		Destdir = destdir
-	}
-
-	EnableAdmissionController = false
-	enableAdmissionController := os.Getenv("ADMISSION_CONTROLLERS_ENABLED")
-	if enableAdmissionController == "True" {
-		EnableAdmissionController = true
 	}
 
 	Namespace = os.Getenv("NAMESPACE")

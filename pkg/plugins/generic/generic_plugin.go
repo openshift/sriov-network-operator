@@ -51,20 +51,40 @@ type DriverState struct {
 type DriverStateMapType map[uint]*DriverState
 
 type GenericPlugin struct {
-	PluginName        string
-	SpecVersion       string
-	DesireState       *sriovnetworkv1.SriovNetworkNodeState
-	LastState         *sriovnetworkv1.SriovNetworkNodeState
-	DriverStateMap    DriverStateMapType
-	DesiredKernelArgs map[string]bool
-	pfsToSkip         map[string]bool
-	helpers           helper.HostHelpersInterface
+	PluginName          string
+	SpecVersion         string
+	DesireState         *sriovnetworkv1.SriovNetworkNodeState
+	LastState           *sriovnetworkv1.SriovNetworkNodeState
+	DriverStateMap      DriverStateMapType
+	DesiredKernelArgs   map[string]bool
+	pfsToSkip           map[string]bool
+	helpers             helper.HostHelpersInterface
+	skipVFConfiguration bool
+}
+
+type Option = func(c *genericPluginOptions)
+
+// WithSkipVFConfiguration configures generic plugin to skip configuration of the VFs.
+// In this case PFs will be configured and VFs are created only, VF configuration phase is skipped.
+// VFs on the PF (if the PF is not ExternallyManaged) will have no driver after the plugin execution completes.
+func WithSkipVFConfiguration() Option {
+	return func(c *genericPluginOptions) {
+		c.skipVFConfiguration = true
+	}
+}
+
+type genericPluginOptions struct {
+	skipVFConfiguration bool
 }
 
 const scriptsPath = "bindata/scripts/enable-kargs.sh"
 
 // Initialize our plugin and set up initial values
-func NewGenericPlugin(helpers helper.HostHelpersInterface) (plugin.VendorPlugin, error) {
+func NewGenericPlugin(helpers helper.HostHelpersInterface, options ...Option) (plugin.VendorPlugin, error) {
+	cfg := &genericPluginOptions{}
+	for _, o := range options {
+		o(cfg)
+	}
 	driverStateMap := make(map[uint]*DriverState)
 	driverStateMap[Vfio] = &DriverState{
 		DriverName:     vfioPciDriver,
@@ -88,12 +108,13 @@ func NewGenericPlugin(helpers helper.HostHelpersInterface) (plugin.VendorPlugin,
 		DriverLoaded:   false,
 	}
 	return &GenericPlugin{
-		PluginName:        PluginName,
-		SpecVersion:       "1.0",
-		DriverStateMap:    driverStateMap,
-		DesiredKernelArgs: make(map[string]bool),
-		pfsToSkip:         make(map[string]bool),
-		helpers:           helpers,
+		PluginName:          PluginName,
+		SpecVersion:         "1.0",
+		DriverStateMap:      driverStateMap,
+		DesiredKernelArgs:   make(map[string]bool),
+		pfsToSkip:           make(map[string]bool),
+		helpers:             helpers,
+		skipVFConfiguration: cfg.skipVFConfiguration,
 	}, nil
 }
 
@@ -163,7 +184,8 @@ func (p *GenericPlugin) Apply() error {
 		defer exit()
 	}
 
-	if err := p.helpers.ConfigSriovInterfaces(p.helpers, p.DesireState.Spec.Interfaces, p.DesireState.Status.Interfaces, p.pfsToSkip); err != nil {
+	if err := p.helpers.ConfigSriovInterfaces(p.helpers, p.DesireState.Spec.Interfaces,
+		p.DesireState.Status.Interfaces, p.pfsToSkip, p.skipVFConfiguration); err != nil {
 		// Catch the "cannot allocate memory" error and try to use PCI realloc
 		if errors.Is(err, syscall.ENOMEM) {
 			p.addToDesiredKernelArgs(consts.KernelArgPciRealloc)

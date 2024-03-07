@@ -110,6 +110,8 @@ const (
 	KernelArgPciRealloc = "pci=realloc"
 	KernelArgIntelIommu = "intel_iommu=on"
 	KernelArgIommuPt    = "iommu=pt"
+
+	ParallelNicConfigFeatureGate = "parallelNicConfig"
 )
 
 const (
