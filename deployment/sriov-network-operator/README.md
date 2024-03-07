@@ -124,6 +124,7 @@ This section contains general parameters that apply to both the operator and dae
 | `images.sriovConfigDaemon` | Daemon node agent image |
 | `images.sriovCni` | SR-IOV CNI image |
 | `images.ibSriovCni` | InfiniBand SR-IOV CNI image |
+| `images.ovsCni` | OVS CNI image |
 | `images.sriovDevicePlugin` | SR-IOV device plugin image |
 | `images.resourcesInjector` | Resources Injector image |
 | `images.webhook` | Operator Webhook image |
