@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -116,7 +115,6 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 		VersionedParams(&corev1.PodExecOptions{
 			Container: pod.Spec.Containers[0].Name,
 			Command:   command,
-			Stdin:     true,
 			Stdout:    true,
 			Stderr:    true,
 			TTY:       true,
@@ -128,7 +126,6 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 	}
 
 	err = exec.Stream(remotecommand.StreamOptions{
-		Stdin:  os.Stdin,
 		Stdout: &buf,
 		Stderr: &errbuf,
 		Tty:    true,
