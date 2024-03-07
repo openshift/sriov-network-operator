@@ -9,10 +9,13 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
+	"github.com/vishvananda/netlink/nl"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	dputilsPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils"
+	ethtoolPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/ethtool"
+	netlinkPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
@@ -21,12 +24,16 @@ import (
 type network struct {
 	utilsHelper utils.CmdInterface
 	dputilsLib  dputilsPkg.DPUtilsLib
+	netlinkLib  netlinkPkg.NetlinkLib
+	ethtoolLib  ethtoolPkg.EthtoolLib
 }
 
-func New(utilsHelper utils.CmdInterface, dputilsLib dputilsPkg.DPUtilsLib) types.NetworkInterface {
+func New(utilsHelper utils.CmdInterface, dputilsLib dputilsPkg.DPUtilsLib, netlinkLib netlinkPkg.NetlinkLib, ethtoolLib ethtoolPkg.EthtoolLib) types.NetworkInterface {
 	return &network{
 		utilsHelper: utilsHelper,
 		dputilsLib:  dputilsLib,
+		netlinkLib:  netlinkLib,
+		ethtoolLib:  ethtoolLib,
 	}
 }
 
@@ -123,28 +130,20 @@ func (n *network) IsSwitchdev(name string) bool {
 	return true
 }
 
-func mtuFilePath(ifaceName string, pciAddr string) string {
-	mtuFile := "net/" + ifaceName + "/mtu"
-	return filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, mtuFile)
-}
-
 func (n *network) GetNetdevMTU(pciAddr string) int {
 	log.Log.V(2).Info("GetNetdevMTU(): get MTU", "device", pciAddr)
 	ifaceName := n.TryGetInterfaceName(pciAddr)
 	if ifaceName == "" {
 		return 0
 	}
-	data, err := os.ReadFile(mtuFilePath(ifaceName, pciAddr))
+
+	link, err := n.netlinkLib.LinkByName(ifaceName)
 	if err != nil {
-		log.Log.Error(err, "GetNetdevMTU(): fail to read mtu file", "path", mtuFilePath)
+		log.Log.Error(err, "GetNetdevMTU(): fail to get Link ", "device", ifaceName)
 		return 0
 	}
-	mtu, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	if err != nil {
-		log.Log.Error(err, "GetNetdevMTU(): fail to convert mtu to int", "raw-mtu", strings.TrimSpace(string(data)))
-		return 0
-	}
-	return mtu
+
+	return link.Attrs().MTU
 }
 
 func (n *network) SetNetdevMTU(pciAddr string, mtu int) error {
@@ -155,34 +154,37 @@ func (n *network) SetNetdevMTU(pciAddr string, mtu int) error {
 	}
 	b := backoff.NewConstantBackOff(1 * time.Second)
 	err := backoff.Retry(func() error {
-		ifaceName, err := n.dputilsLib.GetNetNames(pciAddr)
+		ifaceName := n.TryGetInterfaceName(pciAddr)
+		if ifaceName == "" {
+			log.Log.Error(nil, "SetNetdevMTU(): fail to get interface name", "device", pciAddr)
+			return fmt.Errorf("failed to get netdevice for device %s", pciAddr)
+		}
+
+		link, err := n.netlinkLib.LinkByName(ifaceName)
 		if err != nil {
-			log.Log.Error(err, "SetNetdevMTU(): fail to get interface name", "device", pciAddr)
+			log.Log.Error(err, "SetNetdevMTU(): fail to get Link ", "device", ifaceName)
 			return err
 		}
-		if len(ifaceName) < 1 {
-			return fmt.Errorf("SetNetdevMTU(): interface name is empty")
-		}
-		mtuFilePath := mtuFilePath(ifaceName[0], pciAddr)
-		return os.WriteFile(mtuFilePath, []byte(strconv.Itoa(mtu)), os.ModeAppend)
+		return n.netlinkLib.LinkSetMTU(link, mtu)
 	}, backoff.WithMaxRetries(b, 10))
+
 	if err != nil {
-		log.Log.Error(err, "SetNetdevMTU(): fail to write mtu file after retrying")
+		log.Log.Error(err, "SetNetdevMTU(): fail to set mtu after retrying")
 		return err
 	}
 	return nil
 }
 
+// GetNetDevMac returns network device MAC address or empty string if address cannot be
+// retrieved.
 func (n *network) GetNetDevMac(ifaceName string) string {
 	log.Log.V(2).Info("GetNetDevMac(): get Mac", "device", ifaceName)
-	macFilePath := filepath.Join(vars.FilesystemRoot, consts.SysClassNet, ifaceName, "address")
-	data, err := os.ReadFile(macFilePath)
+	link, err := n.netlinkLib.LinkByName(ifaceName)
 	if err != nil {
-		log.Log.Error(err, "GetNetDevMac(): fail to read Mac file", "path", macFilePath)
+		log.Log.Error(err, "GetNetDevMac(): failed to get Link", "device", ifaceName)
 		return ""
 	}
-
-	return strings.TrimSpace(string(data))
+	return link.Attrs().HardwareAddr.String()
 }
 
 func (n *network) GetNetDevLinkSpeed(ifaceName string) string {
@@ -195,4 +197,135 @@ func (n *network) GetNetDevLinkSpeed(ifaceName string) string {
 	}
 
 	return fmt.Sprintf("%s Mb/s", strings.TrimSpace(string(data)))
+}
+
+// GetDevlinkDeviceParam returns devlink parameter for the device as a string, if the parameter has multiple values
+// then the function will return only first one from the list.
+func (n *network) GetDevlinkDeviceParam(pciAddr, paramName string) (string, error) {
+	funcLog := log.Log.WithValues("device", pciAddr, "param", paramName)
+	funcLog.V(2).Info("GetDevlinkDeviceParam(): get device parameter")
+	param, err := n.netlinkLib.DevlinkGetDeviceParamByName(consts.BusPci, pciAddr, paramName)
+	if err != nil {
+		funcLog.Error(err, "GetDevlinkDeviceParam(): fail to get devlink device param")
+		return "", err
+	}
+	if len(param.Values) == 0 {
+		err = fmt.Errorf("param %s has no value", paramName)
+		funcLog.Error(err, "GetDevlinkDeviceParam(): error")
+		return "", err
+	}
+	var value string
+	switch param.Type {
+	case nl.DEVLINK_PARAM_TYPE_U8, nl.DEVLINK_PARAM_TYPE_U16, nl.DEVLINK_PARAM_TYPE_U32:
+		var valData uint64
+		switch v := param.Values[0].Data.(type) {
+		case uint8:
+			valData = uint64(v)
+		case uint16:
+			valData = uint64(v)
+		case uint32:
+			valData = uint64(v)
+		default:
+			return "", fmt.Errorf("unexpected uint type type")
+		}
+		value = strconv.FormatUint(valData, 10)
+
+	case nl.DEVLINK_PARAM_TYPE_STRING:
+		value = param.Values[0].Data.(string)
+	case nl.DEVLINK_PARAM_TYPE_BOOL:
+		value = strconv.FormatBool(param.Values[0].Data.(bool))
+	default:
+		return "", fmt.Errorf("unknown value type: %d", param.Type)
+	}
+	funcLog.V(2).Info("GetDevlinkDeviceParam(): result", "value", value)
+	return value, nil
+}
+
+// SetDevlinkDeviceParam set devlink parameter for the device, accepts paramName and value
+// as a string. Automatically set CMODE for the parameter and converts the value to the right
+// type before submitting it.
+func (n *network) SetDevlinkDeviceParam(pciAddr, paramName, value string) error {
+	funcLog := log.Log.WithValues("device", pciAddr, "param", paramName, "value", value)
+	funcLog.V(2).Info("SetDevlinkDeviceParam(): set device parameter")
+	param, err := n.netlinkLib.DevlinkGetDeviceParamByName(consts.BusPci, pciAddr, paramName)
+	if err != nil {
+		funcLog.Error(err, "SetDevlinkDeviceParam(): can't get existing param data")
+		return err
+	}
+	if len(param.Values) == 0 {
+		err = fmt.Errorf("param %s has no value", paramName)
+		funcLog.Error(err, "SetDevlinkDeviceParam(): error")
+		return err
+	}
+	targetCMOD := param.Values[0].CMODE
+	var typedValue interface{}
+	var v uint64
+	switch param.Type {
+	case nl.DEVLINK_PARAM_TYPE_U8:
+		v, err = strconv.ParseUint(value, 10, 8)
+		typedValue = uint8(v)
+	case nl.DEVLINK_PARAM_TYPE_U16:
+		v, err = strconv.ParseUint(value, 10, 16)
+		typedValue = uint16(v)
+	case nl.DEVLINK_PARAM_TYPE_U32:
+		v, err = strconv.ParseUint(value, 10, 32)
+		typedValue = uint32(v)
+	case nl.DEVLINK_PARAM_TYPE_STRING:
+		err = nil
+		typedValue = value
+	case nl.DEVLINK_PARAM_TYPE_BOOL:
+		typedValue, err = strconv.ParseBool(value)
+	default:
+		return fmt.Errorf("parameter has unknown value type: %d", param.Type)
+	}
+	if err != nil {
+		err = fmt.Errorf("failed to convert value %s to the required type: %T, devlink paramType is: %d", value, typedValue, param.Type)
+		funcLog.Error(err, "SetDevlinkDeviceParam(): error")
+		return err
+	}
+	if err := n.netlinkLib.DevlinkSetDeviceParam(consts.BusPci, pciAddr, paramName, targetCMOD, typedValue); err != nil {
+		funcLog.Error(err, "SetDevlinkDeviceParam(): failed to set parameter")
+		return err
+	}
+	return nil
+}
+
+// EnableHwTcOffload makes sure that hw-tc-offload feature is enabled if device supports it
+func (n *network) EnableHwTcOffload(ifaceName string) error {
+	log.Log.V(2).Info("EnableHwTcOffload(): enable offloading", "device", ifaceName)
+	hwTcOffloadFeatureName := "hw-tc-offload"
+
+	knownFeatures, err := n.ethtoolLib.FeatureNames(ifaceName)
+	if err != nil {
+		log.Log.Error(err, "EnableHwTcOffload(): can't list supported features", "device", ifaceName)
+		return err
+	}
+	if _, isKnown := knownFeatures[hwTcOffloadFeatureName]; !isKnown {
+		log.Log.V(0).Info("EnableHwTcOffload(): can't enable feature, feature is not supported", "device", ifaceName)
+		return nil
+	}
+	currentFeaturesState, err := n.ethtoolLib.Features(ifaceName)
+	if err != nil {
+		log.Log.Error(err, "EnableHwTcOffload(): can't read features state for device", "device", ifaceName)
+		return err
+	}
+	if currentFeaturesState[hwTcOffloadFeatureName] {
+		log.Log.V(2).Info("EnableHwTcOffload(): already enabled", "device", ifaceName)
+		return nil
+	}
+	if err := n.ethtoolLib.Change(ifaceName, map[string]bool{hwTcOffloadFeatureName: true}); err != nil {
+		log.Log.Error(err, "EnableHwTcOffload(): can't set feature for device", "device", ifaceName)
+		return err
+	}
+	updatedFeaturesState, err := n.ethtoolLib.Features(ifaceName)
+	if err != nil {
+		log.Log.Error(err, "EnableHwTcOffload(): can't read features state for device", "device", ifaceName)
+		return err
+	}
+	if updatedFeaturesState[hwTcOffloadFeatureName] {
+		log.Log.V(2).Info("EnableHwTcOffload(): feature enabled", "device", ifaceName)
+		return nil
+	}
+	log.Log.V(0).Info("EnableHwTcOffload(): feature is still disabled, not supported by device", "device", ifaceName)
+	return nil
 }

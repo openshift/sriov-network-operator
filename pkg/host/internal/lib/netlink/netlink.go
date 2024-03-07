@@ -30,6 +30,9 @@ type NetlinkLib interface {
 	// LinkSetUp enables the link device.
 	// Equivalent to: `ip link set $link up`
 	LinkSetUp(link Link) error
+	// LinkSetMTU sets the mtu of the link device.
+	// Equivalent to: `ip link set $link mtu $mtu`
+	LinkSetMTU(link Link, mtu int) error
 	// DevlinkGetDeviceByName provides a pointer to devlink device and nil error,
 	// otherwise returns an error code.
 	DevLinkGetDeviceByName(bus string, device string) (*netlink.DevlinkDevice, error)
@@ -38,6 +41,23 @@ type NetlinkLib interface {
 	// Equivalent to: `devlink dev eswitch set $dev mode switchdev`
 	// Equivalent to: `devlink dev eswitch set $dev mode legacy`
 	DevLinkSetEswitchMode(dev *netlink.DevlinkDevice, newMode string) error
+	// VDPAGetDevByName returns VDPA device selected by name
+	// Equivalent to: `vdpa dev show <name>`
+	VDPAGetDevByName(name string) (*netlink.VDPADev, error)
+	// VDPADelDev removes VDPA device
+	// Equivalent to: `vdpa dev del <name>`
+	VDPADelDev(name string) error
+	// VDPANewDev adds new VDPA device
+	// Equivalent to: `vdpa dev add name <name> mgmtdev <mgmtBus>/mgmtName [params]`
+	VDPANewDev(name, mgmtBus, mgmtName string, params netlink.VDPANewDevParams) error
+	// DevlinkGetDeviceParamByName returns specific parameter for devlink device
+	// Equivalent to: `devlink dev param show <bus>/<device> name <param>`
+	DevlinkGetDeviceParamByName(bus string, device string, param string) (*netlink.DevlinkParam, error)
+	// DevlinkSetDeviceParam set specific parameter for devlink device
+	// Equivalent to: `devlink dev param set <bus>/<device> name <param> cmode <cmode> value <value>`
+	// cmode argument should contain valid cmode value as uint8, modes are define in nl.DEVLINK_PARAM_CMODE_* constants
+	// value argument should have one of the following types: uint8, uint16, uint32, string, bool
+	DevlinkSetDeviceParam(bus string, device string, param string, cmode uint8, value interface{}) error
 }
 
 type libWrapper struct{}
@@ -71,6 +91,12 @@ func (w *libWrapper) LinkSetUp(link Link) error {
 	return netlink.LinkSetUp(link)
 }
 
+// LinkSetMTU sets the mtu of the link device.
+// Equivalent to: `ip link set $link mtu $mtu`
+func (w *libWrapper) LinkSetMTU(link Link, mtu int) error {
+	return netlink.LinkSetMTU(link, mtu)
+}
+
 // DevlinkGetDeviceByName provides a pointer to devlink device and nil error,
 // otherwise returns an error code.
 func (w *libWrapper) DevLinkGetDeviceByName(bus string, device string) (*netlink.DevlinkDevice, error) {
@@ -83,4 +109,36 @@ func (w *libWrapper) DevLinkGetDeviceByName(bus string, device string) (*netlink
 // Equivalent to: `devlink dev eswitch set $dev mode legacy`
 func (w *libWrapper) DevLinkSetEswitchMode(dev *netlink.DevlinkDevice, newMode string) error {
 	return netlink.DevLinkSetEswitchMode(dev, newMode)
+}
+
+// VDPAGetDevByName returns VDPA device selected by name
+// Equivalent to: `vdpa dev show <name>`
+func (w *libWrapper) VDPAGetDevByName(name string) (*netlink.VDPADev, error) {
+	return netlink.VDPAGetDevByName(name)
+}
+
+// VDPADelDev removes VDPA device
+// Equivalent to: `vdpa dev del <name>`
+func (w *libWrapper) VDPADelDev(name string) error {
+	return netlink.VDPADelDev(name)
+}
+
+// VDPANewDev adds new VDPA device
+// Equivalent to: `vdpa dev add name <name> mgmtdev <mgmtBus>/mgmtName [params]`
+func (w *libWrapper) VDPANewDev(name, mgmtBus, mgmtName string, params netlink.VDPANewDevParams) error {
+	return netlink.VDPANewDev(name, mgmtBus, mgmtName, params)
+}
+
+// DevlinkGetDeviceParamByName returns specific parameter for devlink device
+// Equivalent to: `devlink dev param show <bus>/<device> name <param>`
+func (w *libWrapper) DevlinkGetDeviceParamByName(bus string, device string, param string) (*netlink.DevlinkParam, error) {
+	return netlink.DevlinkGetDeviceParamByName(bus, device, param)
+}
+
+// DevlinkSetDeviceParam set specific parameter for devlink device
+// Equivalent to: `devlink dev param set <bus>/<device> name <param> cmode <cmode> value <value>`
+// cmode argument should contain valid cmode value as uint8, modes are define in nl.DEVLINK_PARAM_CMODE_* constants
+// value argument should have one of the following types: uint8, uint16, uint32, string, bool
+func (w *libWrapper) DevlinkSetDeviceParam(bus string, device string, param string, cmode uint8, value interface{}) error {
+	return netlink.DevlinkSetDeviceParam(bus, device, param, cmode, value)
 }
