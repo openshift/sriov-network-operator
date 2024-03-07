@@ -56,6 +56,8 @@ spec:
               value: {{ .Values.images.sriovCni }}
             - name: SRIOV_INFINIBAND_CNI_IMAGE
               value: {{ .Values.images.ibSriovCni }}
+            - name: OVS_CNI_IMAGE
+              value: {{ .Values.images.ovsCni }}
             - name: SRIOV_DEVICE_PLUGIN_IMAGE
               value: {{ .Values.images.sriovDevicePlugin }}
             - name: NETWORK_RESOURCES_INJECTOR_IMAGE
