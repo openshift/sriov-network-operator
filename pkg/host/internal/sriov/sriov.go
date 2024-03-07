@@ -282,10 +282,7 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 		if s.dputilsLib.IsSriovPF(device.Address) {
 			iface.TotalVfs = s.dputilsLib.GetSriovVFcapacity(device.Address)
 			iface.NumVfs = s.dputilsLib.GetVFconfigured(device.Address)
-			if iface.EswitchMode, err = s.GetNicSriovMode(device.Address); err != nil {
-				log.Log.Error(err, "DiscoverSriovDevices(): warning, unable to get device eswitch mode",
-					"device", device.Address)
-			}
+			iface.EswitchMode = s.GetNicSriovMode(device.Address)
 			if s.dputilsLib.SriovConfigured(device.Address) {
 				vfs, err := s.dputilsLib.GetVFList(device.Address)
 				if err != nil {
@@ -366,12 +363,8 @@ func (s *sriov) configureHWOptionsForSwitchdev(iface *sriovnetworkv1.Interface) 
 	if currentFlowSteeringMode == desiredFlowSteeringMode {
 		return nil
 	}
-	currentEswitchMode, err := s.GetNicSriovMode(iface.PciAddress)
-	if err != nil {
-		return err
-	}
 	// flow steering mode can be changed only when NIC is in legacy mode
-	if currentEswitchMode != sriovnetworkv1.ESwithModeLegacy {
+	if s.GetNicSriovMode(iface.PciAddress) != sriovnetworkv1.ESwithModeLegacy {
 		s.setEswitchModeAndNumVFs(iface.PciAddress, sriovnetworkv1.ESwithModeLegacy, 0)
 	}
 	if err := s.networkHelper.SetDevlinkDeviceParam(iface.PciAddress, "flow_steering_mode", desiredFlowSteeringMode); err != nil {
@@ -392,10 +385,7 @@ func (s *sriov) checkExternallyManagedPF(iface *sriovnetworkv1.Interface) error 
 		log.Log.Error(nil, errMsg)
 		return fmt.Errorf(errMsg)
 	}
-	currentEswitchMode, err := s.GetNicSriovMode(iface.PciAddress)
-	if err != nil {
-		return err
-	}
+	currentEswitchMode := s.GetNicSriovMode(iface.PciAddress)
 	expectedEswitchMode := sriovnetworkv1.GetEswitchModeFromSpec(iface)
 	if currentEswitchMode != expectedEswitchMode {
 		errMsg := fmt.Sprintf("checkExternallyManagedPF(): requested ESwitchMode mode \"%s\" is not equal to configured \"%s\" "+
@@ -855,18 +845,19 @@ func (s *sriov) ConfigSriovDeviceVirtual(iface *sriovnetworkv1.Interface) error 
 	return nil
 }
 
-func (s *sriov) GetNicSriovMode(pciAddress string) (string, error) {
+func (s *sriov) GetNicSriovMode(pciAddress string) string {
 	log.Log.V(2).Info("GetNicSriovMode()", "device", pciAddress)
 	devLink, err := s.netlinkLib.DevLinkGetDeviceByName("pci", pciAddress)
 	if err != nil {
-		if errors.Is(err, syscall.ENODEV) {
-			return sriovnetworkv1.ESwithModeLegacy, nil
+		if !errors.Is(err, syscall.ENODEV) {
+			log.Log.Error(err, "GetNicSriovMode(): failed to get eswitch mode, assume legacy", "device", pciAddress)
 		}
-		log.Log.Error(err, "GetNicSriovMode(): failed to get eswitch mode", "device", pciAddress)
-		return "", err
+	}
+	if devLink != nil && devLink.Attrs.Eswitch.Mode != "" {
+		return devLink.Attrs.Eswitch.Mode
 	}
 
-	return devLink.Attrs.Eswitch.Mode, nil
+	return sriovnetworkv1.ESwithModeLegacy
 }
 
 func (s *sriov) SetNicSriovMode(pciAddress string, mode string) error {
@@ -940,11 +931,7 @@ func (s *sriov) createVFs(iface *sriovnetworkv1.Interface) error {
 		"device", iface.PciAddress, "count", iface.NumVfs, "mode", expectedEswitchMode)
 
 	if s.dputilsLib.GetVFconfigured(iface.PciAddress) == iface.NumVfs {
-		currentEswitchMode, err := s.GetNicSriovMode(iface.PciAddress)
-		if err != nil {
-			return err
-		}
-		if currentEswitchMode == expectedEswitchMode {
+		if s.GetNicSriovMode(iface.PciAddress) == expectedEswitchMode {
 			log.Log.V(2).Info("createVFs(): device is already configured",
 				"device", iface.PciAddress, "count", iface.NumVfs, "mode", expectedEswitchMode)
 			return nil
@@ -971,14 +958,9 @@ func (s *sriov) setEswitchModeAndNumVFs(pciAddr string, desiredEswitchMode strin
 	log.Log.V(2).Info("setEswitchModeAndNumVFs(): configure VFs for device",
 		"device", pciAddr, "count", numVFs, "mode", desiredEswitchMode)
 
-	currentEswitchMode, err := s.GetNicSriovMode(pciAddr)
-	if err != nil {
-		return err
-	}
-
 	// always switch NIC to the legacy mode before creating VFs. This is required because some drivers
 	// may not support VF creation in the switchdev mode
-	if currentEswitchMode != sriovnetworkv1.ESwithModeLegacy {
+	if s.GetNicSriovMode(pciAddr) != sriovnetworkv1.ESwithModeLegacy {
 		if err := s.setEswitchMode(pciAddr, sriovnetworkv1.ESwithModeLegacy); err != nil {
 			return err
 		}
