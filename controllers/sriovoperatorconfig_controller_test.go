@@ -42,33 +42,18 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		// Create default SriovNetworkNodePolicy
-		defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-		defaultPolicy.SetNamespace(testNamespace)
-		defaultPolicy.SetName(constants.DefaultPolicyName)
-		defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
-			NumVfs:       0,
-			NodeSelector: make(map[string]string),
-			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
-		}
-		Expect(k8sClient.Create(context.Background(), defaultPolicy)).Should(Succeed())
-		DeferCleanup(func() {
-			err := k8sClient.Delete(context.Background(), defaultPolicy)
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		otherPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-		otherPolicy.SetNamespace(testNamespace)
-		otherPolicy.SetName("other-policy")
-		otherPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+		somePolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
+		somePolicy.SetNamespace(testNamespace)
+		somePolicy.SetName("some-policy")
+		somePolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
 			NumVfs:       5,
 			NodeSelector: map[string]string{"foo": "bar"},
 			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
 			Priority:     20,
 		}
-		Expect(k8sClient.Create(context.Background(), otherPolicy)).ToNot(HaveOccurred())
+		Expect(k8sClient.Create(context.Background(), somePolicy)).ToNot(HaveOccurred())
 		DeferCleanup(func() {
-			err := k8sClient.Delete(context.Background(), otherPolicy)
+			err := k8sClient.Delete(context.Background(), somePolicy)
 			Expect(err).ToNot(HaveOccurred())
 		})
 

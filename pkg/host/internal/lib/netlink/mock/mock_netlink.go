@@ -116,6 +116,35 @@ func (mr *MockNetlinkLibMockRecorder) DevLinkSetEswitchMode(dev, newMode interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevLinkSetEswitchMode", reflect.TypeOf((*MockNetlinkLib)(nil).DevLinkSetEswitchMode), dev, newMode)
 }
 
+// DevlinkGetDeviceParamByName mocks base method.
+func (m *MockNetlinkLib) DevlinkGetDeviceParamByName(bus, device, param string) (*netlink0.DevlinkParam, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DevlinkGetDeviceParamByName", bus, device, param)
+	ret0, _ := ret[0].(*netlink0.DevlinkParam)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DevlinkGetDeviceParamByName indicates an expected call of DevlinkGetDeviceParamByName.
+func (mr *MockNetlinkLibMockRecorder) DevlinkGetDeviceParamByName(bus, device, param interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevlinkGetDeviceParamByName", reflect.TypeOf((*MockNetlinkLib)(nil).DevlinkGetDeviceParamByName), bus, device, param)
+}
+
+// DevlinkSetDeviceParam mocks base method.
+func (m *MockNetlinkLib) DevlinkSetDeviceParam(bus, device, param string, cmode uint8, value interface{}) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DevlinkSetDeviceParam", bus, device, param, cmode, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DevlinkSetDeviceParam indicates an expected call of DevlinkSetDeviceParam.
+func (mr *MockNetlinkLibMockRecorder) DevlinkSetDeviceParam(bus, device, param, cmode, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevlinkSetDeviceParam", reflect.TypeOf((*MockNetlinkLib)(nil).DevlinkSetDeviceParam), bus, device, param, cmode, value)
+}
+
 // LinkByName mocks base method.
 func (m *MockNetlinkLib) LinkByName(name string) (netlink.Link, error) {
 	m.ctrl.T.Helper()
@@ -129,6 +158,20 @@ func (m *MockNetlinkLib) LinkByName(name string) (netlink.Link, error) {
 func (mr *MockNetlinkLibMockRecorder) LinkByName(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkByName", reflect.TypeOf((*MockNetlinkLib)(nil).LinkByName), name)
+}
+
+// LinkSetMTU mocks base method.
+func (m *MockNetlinkLib) LinkSetMTU(link netlink.Link, mtu int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkSetMTU", link, mtu)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkSetMTU indicates an expected call of LinkSetMTU.
+func (mr *MockNetlinkLibMockRecorder) LinkSetMTU(link, mtu interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetMTU", reflect.TypeOf((*MockNetlinkLib)(nil).LinkSetMTU), link, mtu)
 }
 
 // LinkSetUp mocks base method.
@@ -185,4 +228,47 @@ func (m *MockNetlinkLib) LinkSetVfPortGUID(link netlink.Link, vf int, portguid n
 func (mr *MockNetlinkLibMockRecorder) LinkSetVfPortGUID(link, vf, portguid interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetVfPortGUID", reflect.TypeOf((*MockNetlinkLib)(nil).LinkSetVfPortGUID), link, vf, portguid)
+}
+
+// VDPADelDev mocks base method.
+func (m *MockNetlinkLib) VDPADelDev(name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VDPADelDev", name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VDPADelDev indicates an expected call of VDPADelDev.
+func (mr *MockNetlinkLibMockRecorder) VDPADelDev(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VDPADelDev", reflect.TypeOf((*MockNetlinkLib)(nil).VDPADelDev), name)
+}
+
+// VDPAGetDevByName mocks base method.
+func (m *MockNetlinkLib) VDPAGetDevByName(name string) (*netlink0.VDPADev, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VDPAGetDevByName", name)
+	ret0, _ := ret[0].(*netlink0.VDPADev)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// VDPAGetDevByName indicates an expected call of VDPAGetDevByName.
+func (mr *MockNetlinkLibMockRecorder) VDPAGetDevByName(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VDPAGetDevByName", reflect.TypeOf((*MockNetlinkLib)(nil).VDPAGetDevByName), name)
+}
+
+// VDPANewDev mocks base method.
+func (m *MockNetlinkLib) VDPANewDev(name, mgmtBus, mgmtName string, params netlink0.VDPANewDevParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VDPANewDev", name, mgmtBus, mgmtName, params)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// VDPANewDev indicates an expected call of VDPANewDev.
+func (mr *MockNetlinkLibMockRecorder) VDPANewDev(name, mgmtBus, mgmtName, params interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VDPANewDev", reflect.TypeOf((*MockNetlinkLib)(nil).VDPANewDev), name, mgmtBus, mgmtName, params)
 }

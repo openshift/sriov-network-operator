@@ -239,6 +239,20 @@ func (mr *MockHostHelpersInterfaceMockRecorder) DiscoverVDPAType(pciAddr interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverVDPAType", reflect.TypeOf((*MockHostHelpersInterface)(nil).DiscoverVDPAType), pciAddr)
 }
 
+// EnableHwTcOffload mocks base method.
+func (m *MockHostHelpersInterface) EnableHwTcOffload(ifaceName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnableHwTcOffload", ifaceName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnableHwTcOffload indicates an expected call of EnableHwTcOffload.
+func (mr *MockHostHelpersInterfaceMockRecorder) EnableHwTcOffload(ifaceName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableHwTcOffload", reflect.TypeOf((*MockHostHelpersInterface)(nil).EnableHwTcOffload), ifaceName)
+}
+
 // EnableRDMA mocks base method.
 func (m *MockHostHelpersInterface) EnableRDMA(conditionFilePath, serviceName, packageManager string) (bool, error) {
 	m.ctrl.T.Helper()
@@ -311,6 +325,36 @@ func (m *MockHostHelpersInterface) GetCurrentKernelArgs() (string, error) {
 func (mr *MockHostHelpersInterfaceMockRecorder) GetCurrentKernelArgs() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentKernelArgs", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetCurrentKernelArgs))
+}
+
+// GetDevlinkDeviceParam mocks base method.
+func (m *MockHostHelpersInterface) GetDevlinkDeviceParam(pciAddr, paramName string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDevlinkDeviceParam", pciAddr, paramName)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDevlinkDeviceParam indicates an expected call of GetDevlinkDeviceParam.
+func (mr *MockHostHelpersInterfaceMockRecorder) GetDevlinkDeviceParam(pciAddr, paramName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDevlinkDeviceParam", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetDevlinkDeviceParam), pciAddr, paramName)
+}
+
+// GetDriverByBusAndDevice mocks base method.
+func (m *MockHostHelpersInterface) GetDriverByBusAndDevice(bus, device string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDriverByBusAndDevice", bus, device)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDriverByBusAndDevice indicates an expected call of GetDriverByBusAndDevice.
+func (mr *MockHostHelpersInterfaceMockRecorder) GetDriverByBusAndDevice(bus, device interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDriverByBusAndDevice", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetDriverByBusAndDevice), bus, device)
 }
 
 // GetLinkType mocks base method.
@@ -912,6 +956,20 @@ func (m *MockHostHelpersInterface) SaveLastPfAppliedStatus(PfInfo *v1.Interface)
 func (mr *MockHostHelpersInterfaceMockRecorder) SaveLastPfAppliedStatus(PfInfo interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveLastPfAppliedStatus", reflect.TypeOf((*MockHostHelpersInterface)(nil).SaveLastPfAppliedStatus), PfInfo)
+}
+
+// SetDevlinkDeviceParam mocks base method.
+func (m *MockHostHelpersInterface) SetDevlinkDeviceParam(pciAddr, paramName, value string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetDevlinkDeviceParam", pciAddr, paramName, value)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetDevlinkDeviceParam indicates an expected call of SetDevlinkDeviceParam.
+func (mr *MockHostHelpersInterfaceMockRecorder) SetDevlinkDeviceParam(pciAddr, paramName, value interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetDevlinkDeviceParam", reflect.TypeOf((*MockHostHelpersInterface)(nil).SetDevlinkDeviceParam), pciAddr, paramName, value)
 }
 
 // SetNetdevMTU mocks base method.

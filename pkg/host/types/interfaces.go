@@ -37,6 +37,11 @@ type KernelInterface interface {
 	BindDriverByBusAndDevice(bus, device, driver string) error
 	// HasDriver returns try if the virtual function is bind to a driver
 	HasDriver(pciAddr string) (bool, string)
+	// GetDriverByBusAndDevice returns driver for the device or error.
+	// returns "", nil if the device has no driver.
+	// bus - the bus path in the sysfs, e.g. "pci" or "vdpa"
+	// device - the name of the device on the bus, e.g. 0000:85:1e.5 for PCI or vpda1 for VDPA
+	GetDriverByBusAndDevice(bus, device string) (string, error)
 	// RebindVfToDefaultDriver rebinds the virtual function to is default driver
 	RebindVfToDefaultDriver(pciAddr string) error
 	// UnbindDriverByBusAndDevice unbind device identified by bus and device ID from the driver
@@ -92,6 +97,15 @@ type NetworkInterface interface {
 	GetNetDevMac(name string) string
 	// GetNetDevLinkSpeed returns the network interface link speed
 	GetNetDevLinkSpeed(name string) string
+	// GetDevlinkDeviceParam returns devlink parameter for the device as a string, if the parameter has multiple values
+	// then the function will return only first one from the list.
+	GetDevlinkDeviceParam(pciAddr, paramName string) (string, error)
+	// SetDevlinkDeviceParam set devlink parameter for the device, accepts paramName and value
+	// as a string. Automatically set CMODE for the parameter and converts the value to the right
+	// type before submitting it.
+	SetDevlinkDeviceParam(pciAddr, paramName, value string) error
+	// EnableHwTcOffload make sure that hw-tc-offload feature is enabled if device supports it
+	EnableHwTcOffload(ifaceName string) error
 }
 
 type ServiceInterface interface {

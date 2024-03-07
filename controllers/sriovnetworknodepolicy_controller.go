@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
@@ -83,30 +84,6 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	reqLogger := log.FromContext(ctx)
 	reqLogger.Info("Reconciling")
 
-	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
-	err := r.Get(ctx, types.NamespacedName{Name: constants.DefaultPolicyName, Namespace: vars.Namespace}, defaultPolicy)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Default policy object not found, create it.
-			defaultPolicy.SetNamespace(vars.Namespace)
-			defaultPolicy.SetName(constants.DefaultPolicyName)
-			defaultPolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
-				NumVfs:       0,
-				NodeSelector: make(map[string]string),
-				NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
-			}
-			err = r.Create(ctx, defaultPolicy)
-			if err != nil {
-				reqLogger.Error(err, "Failed to create default Policy", "Namespace", vars.Namespace, "Name", constants.DefaultPolicyName)
-				return reconcile.Result{}, err
-			}
-			reqLogger.Info("Default policy created")
-			return reconcile.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-
 	// Fetch the default SriovOperatorConfig
 	defaultOpConf := &sriovnetworkv1.SriovOperatorConfig{}
 	if err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: constants.DefaultConfigName}, defaultOpConf); err != nil {
@@ -119,7 +96,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 
 	// Fetch the SriovNetworkNodePolicyList
 	policyList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
-	err = r.List(ctx, policyList, &client.ListOptions{})
+	err := r.List(ctx, policyList, &client.ListOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -192,11 +169,23 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 				Info("Enqueuing sync for delete event", "resource", e.Object.GetName())
 			qHandler(q)
 		},
+		GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
+			log.Log.WithName("SriovNetworkNodePolicy").
+				Info("Enqueuing sync for generic event", "resource", e.Object.GetName())
+			qHandler(q)
+		},
 	}
+
+	// send initial sync event to trigger reconcile when controller is started
+	var eventChan = make(chan event.GenericEvent, 1)
+	eventChan <- event.GenericEvent{Object: &sriovnetworkv1.SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: nodePolicySyncEventName, Namespace: ""}}}
+	close(eventChan)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sriovnetworkv1.SriovNetworkNodePolicy{}).
 		Watches(&sriovnetworkv1.SriovNetworkNodePolicy{}, delayedEventHandler).
+		WatchesRawSource(&source.Channel{Source: eventChan}, delayedEventHandler).
 		Complete(r)
 }
 
@@ -344,6 +333,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 		// it should not matter since the flag used in p.Apply() will only be applied when VF partition is detected.
 		ppp := 100
 		for _, p := range npl.Items {
+			// Note(adrianc): default policy is deprecated and ignored.
 			if p.Name == constants.DefaultPolicyName {
 				continue
 			}
@@ -394,6 +384,11 @@ func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1
 func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePolicy) []corev1.NodeSelectorTerm {
 	terms := []corev1.NodeSelectorTerm{}
 	for _, p := range policies {
+		// Note(adrianc): default policy is deprecated and ignored.
+		if p.Name == constants.DefaultPolicyName {
+			continue
+		}
+
 		if len(p.Spec.NodeSelector) == 0 {
 			continue
 		}
@@ -437,6 +432,7 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 	logger.V(1).Info("Start to render device plugin config data", "node", node.Name)
 	rcl := dptypes.ResourceConfList{}
 	for _, p := range pl.Items {
+		// Note(adrianc): default policy is deprecated and ignored.
 		if p.Name == constants.DefaultPolicyName {
 			continue
 		}

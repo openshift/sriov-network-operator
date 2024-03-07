@@ -35,12 +35,12 @@ func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operati
 	log.Log.V(2).Info("validateSriovOperatorConfig", "object", cr)
 	var warnings []string
 
-	if cr.GetName() != consts.DefaultConfigName {
-		return false, warnings, fmt.Errorf("only default SriovOperatorConfig is used")
+	if operation == v1.Delete {
+		return true, warnings, nil
 	}
 
-	if operation == v1.Delete {
-		warnings = append(warnings, "default SriovOperatorConfig shouldn't be deleted")
+	if cr.GetName() != consts.DefaultConfigName || cr.GetNamespace() != vars.Namespace {
+		return false, warnings, fmt.Errorf("only default SriovOperatorConfig in %s namespace is used", vars.Namespace)
 	}
 
 	if cr.Spec.DisableDrain {
@@ -96,11 +96,7 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 	var warnings []string
 
 	if cr.GetName() == consts.DefaultPolicyName && cr.GetNamespace() == os.Getenv("NAMESPACE") {
-		if operation == v1.Delete {
-			warnings = append(warnings, "default SriovNetworkNodePolicy shouldn't be deleted")
-		}
-
-		// skip validating default policy
+		// skip validating (deprecated) default policy
 		return true, warnings, nil
 	}
 
