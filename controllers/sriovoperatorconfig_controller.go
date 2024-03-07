@@ -178,6 +178,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 	data.Data["Namespace"] = vars.Namespace
 	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
 	data.Data["SRIOVInfiniBandCNIImage"] = os.Getenv("SRIOV_INFINIBAND_CNI_IMAGE")
+	data.Data["OVSCNIImage"] = os.Getenv("OVS_CNI_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ClusterType"] = vars.ClusterType
 	data.Data["DevMode"] = os.Getenv("DEV_MODE")
