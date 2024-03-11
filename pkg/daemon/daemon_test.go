@@ -3,8 +3,6 @@ package daemon
 import (
 	"context"
 	"flag"
-	"os"
-	"path"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -85,7 +83,9 @@ var _ = Describe("Config Daemon", func() {
 		fakeFs := &fakefilesystem.FS{
 			Dirs: []string{
 				"bindata/scripts",
-				"host",
+				"host/etc/sriov-operator",
+				"host/etc/sriov-operator/pci",
+				"host/etc/udev/rules.d",
 			},
 			Symlinks: map[string]string{},
 			Files: map[string][]byte{
@@ -95,7 +95,7 @@ var _ = Describe("Config Daemon", func() {
 		}
 
 		var err error
-		filesystemRoot, cleanFakeFs, err = fakeFs.Use()
+		utils.FilesystemRoot, cleanFakeFs, err = fakeFs.Use()
 		Expect(err).ToNot(HaveOccurred())
 
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
@@ -120,7 +120,9 @@ var _ = Describe("Config Daemon", func() {
 		sut.enabledPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{}}
 
 		go func() {
-			sut.Run(stopCh, exitCh)
+			defer GinkgoRecover()
+			err := sut.Run(stopCh, exitCh)
+			Expect(err).ToNot(HaveOccurred())
 		}()
 	})
 
@@ -134,7 +136,6 @@ var _ = Describe("Config Daemon", func() {
 	})
 
 	Context("Should", func() {
-
 		It("restart sriov-device-plugin pod", func() {
 
 			_, err := sut.kubeClient.CoreV1().Nodes().
@@ -231,17 +232,6 @@ var _ = Describe("Config Daemon", func() {
 
 			Expect(sut.nodeState.GetGeneration()).To(BeNumerically("==", 777))
 		})
-
-		It("configure udev rules on host", func() {
-
-			networkManagerUdevRulePath := path.Join(filesystemRoot, "host/etc/udev/rules.d/10-nm-unmanaged.rules")
-
-			expectedContents := `ACTION=="add|change|move", ATTRS{device}=="0x1014|0x154c", ENV{NM_UNMANAGED}="1"
-SUBSYSTEM=="net", ACTION=="add|move", ATTRS{phys_switch_id}!="", ATTR{phys_port_name}=="pf*vf*", ENV{NM_UNMANAGED}="1"
-`
-			// No need to trigger any action on config-daemon, as it checks the file in the main loop
-			assertFileContents(networkManagerUdevRulePath, expectedContents)
-		})
 	})
 
 	Context("isNodeDraining", func() {
@@ -317,11 +307,4 @@ func updateSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetwor
 		SriovNetworkNodeStates(namespace).
 		Update(context.Background(), nodeState, metav1.UpdateOptions{})
 	return err
-}
-
-func assertFileContents(path, contents string) {
-	Eventually(func() (string, error) {
-		ret, err := os.ReadFile(path)
-		return string(ret), err
-	}, "10s").WithOffset(1).Should(Equal(contents))
 }

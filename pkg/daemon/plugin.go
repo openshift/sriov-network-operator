@@ -6,6 +6,7 @@ import (
 	"github.com/golang/glog"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	genericplugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/generic"
 	intelplugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/intel"
@@ -28,7 +29,7 @@ var (
 	K8sPlugin         = k8splugin.NewK8sPlugin
 )
 
-func enablePlugins(platform utils.PlatformType, useSystemdService bool, ns *sriovnetworkv1.SriovNetworkNodeState) (map[string]plugin.VendorPlugin, error) {
+func enablePlugins(platform utils.PlatformType, useSystemdService bool, ns *sriovnetworkv1.SriovNetworkNodeState, hostManager host.HostManagerInterface, storeManager utils.StoreManagerInterface) (map[string]plugin.VendorPlugin, error) {
 	glog.Infof("enableVendorPlugins(): enabling plugins")
 	enabledPlugins := map[string]plugin.VendorPlugin{}
 
@@ -54,7 +55,7 @@ func enablePlugins(platform utils.PlatformType, useSystemdService bool, ns *srio
 			}
 			enabledPlugins[k8sPlugin.Name()] = k8sPlugin
 		}
-		genericPlugin, err := GenericPlugin(false)
+		genericPlugin, err := GenericPlugin(false, hostManager, storeManager)
 		if err != nil {
 			glog.Errorf("enableVendorPlugins(): failed to load the generic plugin error: %v", err)
 			return nil, err

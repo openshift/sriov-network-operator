@@ -282,12 +282,13 @@ func (p *SriovNetworkNodePolicy) Apply(state *SriovNetworkNodeState, equalPriori
 		if s.Selected(&iface) {
 			log.Info("Update interface", "name:", iface.Name)
 			result := Interface{
-				PciAddress:  iface.PciAddress,
-				Mtu:         p.Spec.Mtu,
-				Name:        iface.Name,
-				LinkType:    p.Spec.LinkType,
-				EswitchMode: p.Spec.EswitchMode,
-				NumVfs:      p.Spec.NumVfs,
+				PciAddress:        iface.PciAddress,
+				Mtu:               p.Spec.Mtu,
+				Name:              iface.Name,
+				LinkType:          p.Spec.LinkType,
+				EswitchMode:       p.Spec.EswitchMode,
+				NumVfs:            p.Spec.NumVfs,
+				ExternallyManaged: p.Spec.ExternallyManaged,
 			}
 			if p.Spec.NumVfs > 0 {
 				group, err := p.generateVfGroup(&iface)

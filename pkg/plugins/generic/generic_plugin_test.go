@@ -3,11 +3,14 @@ package generic
 import (
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	mock_host "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/mock"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
+	mock_utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils/mock"
 )
 
 func TestGenericPlugin(t *testing.T) {
@@ -16,10 +19,21 @@ func TestGenericPlugin(t *testing.T) {
 }
 
 var _ = Describe("Generic plugin", func() {
-	var genericPlugin plugin.VendorPlugin
-	var err error
+	var (
+		t             GinkgoTInterface
+		genericPlugin plugin.VendorPlugin
+		err           error
+		ctrl          *gomock.Controller
+		mockHost      *mock_host.MockHostManagerInterface
+		mockStore     *mock_utils.MockStoreManagerInterface
+	)
+
 	BeforeEach(func() {
-		genericPlugin, err = NewGenericPlugin(false)
+		t = GinkgoT()
+		ctrl = gomock.NewController(t)
+		mockHost = mock_host.NewMockHostManagerInterface(ctrl)
+		mockStore = mock_utils.NewMockStoreManagerInterface(ctrl)
+		genericPlugin, err = NewGenericPlugin(false, mockHost, mockStore)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
