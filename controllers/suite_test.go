@@ -127,6 +127,14 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("OPERATOR_NAME", "sriov-network-operator")
 	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_SECRET_NAME", "metrics-exporter-cert")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_PORT", "9110")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{

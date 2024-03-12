@@ -47,6 +47,7 @@ SRIOV_CNI_TAG=$(get_latest_github_tag k8snetworkplumbingwg sriov-cni)
 OVS_CNI_TAG=$(get_latest_github_tag k8snetworkplumbingwg ovs-cni)
 NETWORK_RESOURCE_INJECTOR_TAG=$(get_latest_github_tag k8snetworkplumbingwg network-resources-injector)
 SRIOV_DEVICE_PLUGIN_TAG=$(get_latest_github_tag k8snetworkplumbingwg sriov-network-device-plugin)
+METRICS_EXPORTER_TAG=$(get_latest_github_tag k8snetworkplumbingwg sriov-network-metrics-exporter)
 
 # patch values.yaml in-place
 
@@ -62,6 +63,7 @@ $YQ_CMD -i ".images.ibSriovCni = \"ghcr.io/k8snetworkplumbingwg/ib-sriov-cni:${I
 $YQ_CMD -i ".images.ovsCni = \"ghcr.io/k8snetworkplumbingwg/ovs-cni-plugin:${OVS_CNI_TAG}\"" ${HELM_VALUES}
 $YQ_CMD -i ".images.sriovDevicePlugin = \"ghcr.io/k8snetworkplumbingwg/sriov-network-device-plugin:${SRIOV_DEVICE_PLUGIN_TAG}\"" ${HELM_VALUES}
 $YQ_CMD -i ".images.resourcesInjector = \"ghcr.io/k8snetworkplumbingwg/network-resources-injector:${NETWORK_RESOURCE_INJECTOR_TAG}\"" ${HELM_VALUES}
+$YQ_CMD -i ".images.metricsExporter = \"ghcr.io/k8snetworkplumbingwg/sriov-network-metrics-exporter:${METRICS_EXPORTER_TAG}\"" ${HELM_VALUES}
 
 # patch Chart.yaml in-place
 $YQ_CMD -i ".version = \"${OPERATOR_TAG#"v"}\"" ${HELM_CHART}
