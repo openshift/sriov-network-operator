@@ -438,5 +438,43 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 					To(Equal(expectedAffinity))
 			}, "3s", "1s").Should(Succeed())
 		})
+		
+		It("should deploy the metrics-exporter when the feature gate is enabled", func() {
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
+
+			daemonSet := &appsv1.DaemonSet{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: "sriov-metrics-exporter", Namespace: testNamespace}, daemonSet)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+
+			By("Turn `metricsExporter` feature gate on")
+			config.Spec.FeatureGates = map[string]bool{constants.MetricsExporterFeatureGate: true}
+			err = k8sClient.Update(ctx, config)
+			Expect(err).NotTo(HaveOccurred())
+
+			DeferCleanup(func() {
+				config.Spec.FeatureGates = map[string]bool{}
+				err = k8sClient.Update(ctx, config)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			err = util.WaitForNamespacedObject(&appsv1.DaemonSet{}, k8sClient, testNamespace, "sriov-network-metrics-exporter", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = util.WaitForNamespacedObject(&corev1.Service{}, k8sClient, testNamespace, "sriov-network-metrics-exporter-service", util.RetryInterval, util.APITimeout)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Turn `metricsExporter` feature gate off")
+			config.Spec.FeatureGates = map[string]bool{}
+			err = k8sClient.Update(ctx, config)
+
+			err = util.WaitForNamespacedObjectDeleted(&appsv1.DaemonSet{}, k8sClient, testNamespace, "sriov-network-metrics-exporter", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = util.WaitForNamespacedObjectDeleted(&corev1.Service{}, k8sClient, testNamespace, "sriov-network-metrics-exporter-service", util.RetryInterval, util.APITimeout)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 	})
 })

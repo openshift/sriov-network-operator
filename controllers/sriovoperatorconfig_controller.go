@@ -128,6 +128,10 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		return reconcile.Result{}, err
 	}
 
+	if err = r.syncMetricsExporter(ctx, defaultConfig); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// For Openshift we need to create the systemd files using a machine config
 	if vars.ClusterType == consts.ClusterTypeOpenshift {
 		// TODO: add support for hypershift as today there is no MCO on hypershift clusters
@@ -205,27 +209,64 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 	}
 	// Sync DaemonSets
 	for _, obj := range objs {
-		if obj.GetKind() == "DaemonSet" && len(dc.Spec.ConfigDaemonNodeSelector) > 0 {
-			scheme := kscheme.Scheme
-			ds := &appsv1.DaemonSet{}
-			err = scheme.Convert(obj, ds, nil)
+		if obj.GetKind() == "DaemonSet" {
+			err = updateDaemonsetNodeSelector(obj, dc.Spec.ConfigDaemonNodeSelector)
 			if err != nil {
-				logger.Error(err, "Fail to convert to DaemonSet")
-				return err
-			}
-			ds.Spec.Template.Spec.NodeSelector = dc.Spec.ConfigDaemonNodeSelector
-			err = scheme.Convert(ds, obj, nil)
-			if err != nil {
-				logger.Error(err, "Fail to convert to Unstructured")
 				return err
 			}
 		}
+
 		err = r.syncK8sResource(ctx, dc, obj)
 		if err != nil {
-			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
+			logger.Error(err, "Couldn't sync SR-IOV daemons objects")
 			return err
 		}
 	}
+	return nil
+}
+
+func (r *SriovOperatorConfigReconciler) syncMetricsExporter(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig) error {
+	logger := log.Log.WithName("syncMetricsExporter")
+	logger.V(1).Info("Start to sync metrics exporter")
+
+	data := render.MakeRenderData()
+	data.Data["Image"] = os.Getenv("METRICS_EXPORTER_IMAGE")
+	data.Data["Namespace"] = vars.Namespace
+	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
+	data.Data["MetricsExporterSecretName"] = os.Getenv("METRICS_EXPORTER_SECRET_NAME")
+	data.Data["MetricsExporterPort"] = os.Getenv("METRICS_EXPORTER_PORT")
+	data.Data["MetricsExporterKubeRbacProxyImage"] = os.Getenv("METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE")
+	data.Data["ClusterType"] = vars.ClusterType
+	data.Data["NodeSelectorField"] = GetDefaultNodeSelector()
+	if dc.Spec.ConfigDaemonNodeSelector != nil {
+		data.Data["NodeSelectorField"] = dc.Spec.ConfigDaemonNodeSelector
+	}
+
+	objs, err := render.RenderDir(consts.MetricsExporterPath, &data)
+	if err != nil {
+		logger.Error(err, "Fail to render metrics exporter manifests")
+		return err
+	}
+
+	deployMetricsExporter, ok := dc.Spec.FeatureGates[consts.MetricsExporterFeatureGate]
+	if ok && deployMetricsExporter {
+		for _, obj := range objs {
+			err = r.syncK8sResource(ctx, dc, obj)
+			if err != nil {
+				logger.Error(err, "Couldn't sync metrics exporter objects")
+				return err
+			}
+		}
+		return nil
+	}
+
+	for _, obj := range objs {
+		err = r.deleteK8sResource(ctx, obj)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -393,7 +434,7 @@ func (r SriovOperatorConfigReconciler) setLabelInsideObject(ctx context.Context,
 		}
 		err := r.syncK8sResource(ctx, cr, obj)
 		if err != nil {
-			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
+			logger.Error(err, "Couldn't sync SR-IOV daemons objects")
 			return err
 		}
 	}
