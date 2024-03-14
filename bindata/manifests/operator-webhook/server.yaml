@@ -23,6 +23,8 @@ spec:
       labels:
         app: operator-webhook
     spec:
+      securityContext:
+        runAsNonRoot: true
       serviceAccountName: operator-webhook-sa
       priorityClassName: "system-cluster-critical"
       nodeSelector:
@@ -76,6 +78,9 @@ spec:
               fieldPath: metadata.namespace
         - name: DEV_MODE
           value: "{{.DevMode}}"
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
         resources:
           requests:
             cpu: 10m
