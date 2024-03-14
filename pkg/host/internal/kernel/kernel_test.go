@@ -6,6 +6,7 @@ import (
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/helpers"
 )
@@ -16,7 +17,7 @@ var _ = Describe("Kernel", func() {
 			k types.KernelInterface
 		)
 		BeforeEach(func() {
-			k = New(nil)
+			k = New(utils.New())
 		})
 		Context("Unbind, UnbindDriverByBusAndDevice", func() {
 			It("unknown device", func() {
@@ -215,6 +216,28 @@ var _ = Describe("Kernel", func() {
 				driver, err := k.GetDriverByBusAndDevice(consts.BusVdpa, "vdpa:0000:d8:00.3")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(driver).To(BeEmpty())
+			})
+		})
+
+		Context("IsKernelLockdownMode", func() {
+			It("should return true when kernel boots in lockdown integrity", func() {
+				helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+					Dirs: []string{"/host/sys/kernel/security"},
+					Files: map[string][]byte{
+						"/host/sys/kernel/security/lockdown": []byte("none [integrity] confidentiality")},
+				})
+
+				Expect(k.IsKernelLockdownMode()).To(BeTrue())
+			})
+
+			It("should return false when kernel lockdown is none", func() {
+				helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+					Dirs: []string{"/host/sys/kernel/security"},
+					Files: map[string][]byte{
+						"/host/sys/kernel/security/lockdown": []byte("[none] integrity confidentiality")},
+				})
+
+				Expect(k.IsKernelLockdownMode()).To(BeFalse())
 			})
 		})
 	})

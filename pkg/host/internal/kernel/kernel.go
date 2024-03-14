@@ -579,7 +579,7 @@ func (k *kernel) IsKernelLockdownMode() bool {
 	path := utils.GetHostExtension()
 	path = filepath.Join(path, "/sys/kernel/security/lockdown")
 
-	stdout, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", "cat", path)
+	stdout, stderr, err := k.utilsHelper.RunCommand("cat", path)
 	log.Log.V(2).Info("IsKernelLockdownMode()", "output", stdout, "error", err)
 	if err != nil {
 		log.Log.Error(err, "IsKernelLockdownMode(): failed to check for lockdown file", "stderr", stderr)
