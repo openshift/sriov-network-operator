@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -57,7 +58,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 	}
 	logger.Info("Reconciling")
 
-	// // Fetch SriovNetworkPoolConfig
+	// Fetch SriovNetworkPoolConfig
 	instance := &sriovnetworkv1.SriovNetworkPoolConfig{}
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
@@ -70,6 +71,11 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 		}
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
+	}
+
+	// we don't need a finalizer for pools that doesn't use the ovs hardware offload feature
+	if instance.Spec.OvsHardwareOffloadConfig.Name == "" {
+		return ctrl.Result{}, nil
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion

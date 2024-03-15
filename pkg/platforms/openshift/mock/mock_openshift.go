@@ -5,11 +5,13 @@
 package mock_openshift
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
 	openshift "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
-	versioned "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
+	v1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	v10 "k8s.io/api/core/v1"
 )
 
 // MockOpenshiftContextInterface is a mock of OpenshiftContextInterface interface.
@@ -35,6 +37,20 @@ func (m *MockOpenshiftContextInterface) EXPECT() *MockOpenshiftContextInterfaceM
 	return m.recorder
 }
 
+// ChangeMachineConfigPoolPause mocks base method.
+func (m *MockOpenshiftContextInterface) ChangeMachineConfigPoolPause(arg0 context.Context, arg1 *v1.MachineConfigPool, arg2 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ChangeMachineConfigPoolPause", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ChangeMachineConfigPoolPause indicates an expected call of ChangeMachineConfigPoolPause.
+func (mr *MockOpenshiftContextInterfaceMockRecorder) ChangeMachineConfigPoolPause(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeMachineConfigPoolPause", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).ChangeMachineConfigPoolPause), arg0, arg1, arg2)
+}
+
 // GetFlavor mocks base method.
 func (m *MockOpenshiftContextInterface) GetFlavor() openshift.OpenshiftFlavor {
 	m.ctrl.T.Helper()
@@ -49,18 +65,19 @@ func (mr *MockOpenshiftContextInterfaceMockRecorder) GetFlavor() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFlavor", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).GetFlavor))
 }
 
-// GetMcClient mocks base method.
-func (m *MockOpenshiftContextInterface) GetMcClient() versioned.Interface {
+// GetNodeMachinePoolName mocks base method.
+func (m *MockOpenshiftContextInterface) GetNodeMachinePoolName(arg0 context.Context, arg1 *v10.Node) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMcClient")
-	ret0, _ := ret[0].(versioned.Interface)
-	return ret0
+	ret := m.ctrl.Call(m, "GetNodeMachinePoolName", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// GetMcClient indicates an expected call of GetMcClient.
-func (mr *MockOpenshiftContextInterfaceMockRecorder) GetMcClient() *gomock.Call {
+// GetNodeMachinePoolName indicates an expected call of GetNodeMachinePoolName.
+func (mr *MockOpenshiftContextInterfaceMockRecorder) GetNodeMachinePoolName(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMcClient", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).GetMcClient))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeMachinePoolName", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).GetNodeMachinePoolName), arg0, arg1)
 }
 
 // IsHypershift mocks base method.
@@ -89,4 +106,34 @@ func (m *MockOpenshiftContextInterface) IsOpenshiftCluster() bool {
 func (mr *MockOpenshiftContextInterfaceMockRecorder) IsOpenshiftCluster() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsOpenshiftCluster", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).IsOpenshiftCluster))
+}
+
+// OpenshiftAfterCompleteDrainNode mocks base method.
+func (m *MockOpenshiftContextInterface) OpenshiftAfterCompleteDrainNode(arg0 context.Context, arg1 *v10.Node) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OpenshiftAfterCompleteDrainNode", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OpenshiftAfterCompleteDrainNode indicates an expected call of OpenshiftAfterCompleteDrainNode.
+func (mr *MockOpenshiftContextInterfaceMockRecorder) OpenshiftAfterCompleteDrainNode(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenshiftAfterCompleteDrainNode", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).OpenshiftAfterCompleteDrainNode), arg0, arg1)
+}
+
+// OpenshiftBeforeDrainNode mocks base method.
+func (m *MockOpenshiftContextInterface) OpenshiftBeforeDrainNode(arg0 context.Context, arg1 *v10.Node) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OpenshiftBeforeDrainNode", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OpenshiftBeforeDrainNode indicates an expected call of OpenshiftBeforeDrainNode.
+func (mr *MockOpenshiftContextInterfaceMockRecorder) OpenshiftBeforeDrainNode(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenshiftBeforeDrainNode", reflect.TypeOf((*MockOpenshiftContextInterface)(nil).OpenshiftBeforeDrainNode), arg0, arg1)
 }

@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/connrotation"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -210,6 +211,12 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	kClient, err := client.New(config, client.Options{Scheme: scheme.Scheme})
+	if err != nil {
+		setupLog.Error(err, "couldn't create client")
+		os.Exit(1)
+	}
+
 	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
 
@@ -251,8 +258,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 	}
 	setupLog.Info("Running on", "platform", vars.PlatformType.String())
 
-	var namespace = os.Getenv("NAMESPACE")
-	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, namespace); err != nil {
+	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, vars.Namespace); err != nil {
 		setupLog.Error(err, "failed to run init NicIdMap")
 		return err
 	}
@@ -269,6 +275,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 
 	setupLog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(
+		kClient,
 		snclient,
 		kubeclient,
 		hostHelpers,
