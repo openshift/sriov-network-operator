@@ -7,7 +7,9 @@ import (
 
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
@@ -103,8 +105,8 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 				EnableInjector:        true,
 				EnableOperatorWebhook: true,
-				// ConfigDaemonNodeSelector: map[string]string{},
-				LogLevel: 2,
+				LogLevel:              2,
+				FeatureGates:          map[string]bool{},
 			}
 			err = k8sClient.Update(ctx, config)
 			Expect(err).NotTo(HaveOccurred())
@@ -283,6 +285,45 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				}
 				return strings.Join(daemonSet.Spec.Template.Spec.Containers[0].Args, " ")
 			}, util.APITimeout*10, util.RetryInterval).Should(ContainSubstring("disable-plugins=mellanox"))
+		})
+
+		It("should render the resourceInjectorMatchCondition in the mutation if feature flag is enabled and block only pods with the networks annotation", func() {
+			By("set the feature flag")
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
+
+			config.Spec.FeatureGates = map[string]bool{}
+			config.Spec.FeatureGates[consts.ResourceInjectorMatchConditionFeatureGate] = true
+			err := k8sClient.Update(ctx, config)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("checking the webhook have all the needed configuration")
+			mutateCfg := &admv1.MutatingWebhookConfiguration{}
+			err = wait.PollUntilContextTimeout(ctx, util.RetryInterval, util.APITimeout, true, func(ctx context.Context) (done bool, err error) {
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector-config", Namespace: testNamespace}, mutateCfg)
+				if err != nil {
+					if errors.IsNotFound(err) {
+						return false, nil
+					}
+					return false, err
+				}
+				if len(mutateCfg.Webhooks) != 1 {
+					return false, nil
+				}
+				if *mutateCfg.Webhooks[0].FailurePolicy != admv1.Fail {
+					return false, nil
+				}
+				if len(mutateCfg.Webhooks[0].MatchConditions) != 1 {
+					return false, nil
+				}
+
+				if mutateCfg.Webhooks[0].MatchConditions[0].Name != "include-networks-annotation" {
+					return false, nil
+				}
+
+				return true, nil
+			})
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 })
