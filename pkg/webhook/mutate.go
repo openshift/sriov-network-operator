@@ -11,10 +11,9 @@ import (
 )
 
 var (
-	defaultPriorityPatch   = map[string]interface{}{"op": "add", "path": "/spec/priority", "value": 99}
-	defaultDeviceTypePatch = map[string]interface{}{"op": "add", "path": "/spec/deviceType", "value": "netdevice"}
-	defaultIsRdmaPatch     = map[string]interface{}{"op": "add", "path": "/spec/isRdma", "value": false}
-	InfiniBandIsRdmaPatch  = map[string]interface{}{"op": "add", "path": "/spec/isRdma", "value": true}
+	defaultPriorityPatch  = map[string]interface{}{"op": "add", "path": "/spec/priority", "value": 99}
+	defaultIsRdmaPatch    = map[string]interface{}{"op": "add", "path": "/spec/isRdma", "value": false}
+	InfiniBandIsRdmaPatch = map[string]interface{}{"op": "add", "path": "/spec/isRdma", "value": true}
 )
 
 func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1.AdmissionResponse, error) {
@@ -35,10 +34,6 @@ func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1.AdmissionRespo
 	if _, ok := spec.(map[string]interface{})["priority"]; !ok {
 		log.Log.V(2).Info("mutateSriovNetworkNodePolicy(): set default priority to lowest for", "policy-name", name)
 		patchs = append(patchs, defaultPriorityPatch)
-	}
-	if _, ok := spec.(map[string]interface{})["deviceType"]; !ok {
-		log.Log.V(2).Info("mutateSriovNetworkNodePolicy(): set default deviceType to netdevice for policy", "policy-name", name)
-		patchs = append(patchs, defaultDeviceTypePatch)
 	}
 	if _, ok := spec.(map[string]interface{})["isRdma"]; !ok {
 		log.Log.V(2).Info("mutateSriovNetworkNodePolicy(): set default isRdma to false for policy", "policy-name", name)
