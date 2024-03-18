@@ -11,6 +11,9 @@ import (
 )
 
 var (
+	// Namespace contains k8s namespace
+	Namespace string
+
 	// ClusterType used by the operator to specify the platform it's running on
 	// supported values [kubernetes,openshift]
 	ClusterType string
@@ -58,14 +61,16 @@ var (
 	// PfPhysPortNameRe regex to find switchdev devices on the host
 	PfPhysPortNameRe = regexp.MustCompile(`p\d+`)
 
-	// Namespace contains k8s namespace
-	Namespace = ""
+	// ResourcePrefix is the device plugin prefix we use to expose the devices to the nodes
+	ResourcePrefix = ""
 
 	// DisableablePlugins contains which plugins can be disabled in sriov config daemon
 	DisableablePlugins = map[string]struct{}{"mellanox": {}}
 )
 
 func init() {
+	Namespace = os.Getenv("NAMESPACE")
+
 	ClusterType = os.Getenv("CLUSTER_TYPE")
 
 	DevMode = false
@@ -80,5 +85,5 @@ func init() {
 		Destdir = destdir
 	}
 
-	Namespace = os.Getenv("NAMESPACE")
+	ResourcePrefix = os.Getenv("RESOURCE_PREFIX")
 }

@@ -67,19 +67,18 @@ var _ = Describe("SRIOV", func() {
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(
 				&netlink.DevlinkDevice{Attrs: netlink.DevlinkDevAttrs{Eswitch: netlink.DevlinkDevEswitchAttr{Mode: "switchdev"}}},
 				nil)
-			mode, err := s.GetNicSriovMode("0000:d8:00.0")
-			Expect(err).NotTo(HaveOccurred())
+			mode := s.GetNicSriovMode("0000:d8:00.0")
 			Expect(mode).To(Equal("switchdev"))
 		})
 		It("devlink returns error", func() {
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(nil, testError)
-			_, err := s.GetNicSriovMode("0000:d8:00.0")
-			Expect(err).To(MatchError(testError))
+			mode := s.GetNicSriovMode("0000:d8:00.0")
+
+			Expect(mode).To(Equal("legacy"))
 		})
 		It("devlink not supported - fail to get name", func() {
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(nil, syscall.ENODEV)
-			mode, err := s.GetNicSriovMode("0000:d8:00.0")
-			Expect(err).NotTo(HaveOccurred())
+			mode := s.GetNicSriovMode("0000:d8:00.0")
 			Expect(mode).To(Equal("legacy"))
 		})
 	})

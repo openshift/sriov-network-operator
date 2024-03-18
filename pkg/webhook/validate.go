@@ -91,18 +91,41 @@ func validateSriovOperatorConfigDisableDrain(cr *sriovnetworkv1.SriovOperatorCon
 	return nil
 }
 
+// validateSriovNetworkPoolConfig checks if the use tries to remove the default pool config and block it
+func validateSriovNetworkPoolConfig(cr *sriovnetworkv1.SriovNetworkPoolConfig, operation v1.Operation) (bool, []string, error) {
+	log.Log.V(2).Info("validateSriovNetworkPoolConfig", "object", cr)
+	var warnings []string
+
+	if cr.GetName() == consts.DefaultConfigName && operation == v1.Delete {
+		return false, warnings, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
+	}
+
+	if (cr.Spec.MaxUnavailable != nil || cr.Spec.NodeSelector != nil) && cr.Spec.OvsHardwareOffloadConfig.Name != "" {
+		return false, warnings, fmt.Errorf("SriovOperatorConfig can't have both parallel configuration and OvsHardwareOffloadConfig")
+	}
+
+	if cr.Spec.MaxUnavailable != nil {
+		_, err := cr.MaxUnavailable(0)
+		if err != nil {
+			return false, warnings, fmt.Errorf("SriovOperatorConfig invalid maxUnavailable: %v", err)
+		}
+	}
+
+	return true, warnings, nil
+}
+
 func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, operation v1.Operation) (bool, []string, error) {
 	log.Log.V(2).Info("validateSriovNetworkNodePolicy", "object", cr)
 	var warnings []string
 
-	if cr.GetName() == consts.DefaultPolicyName && cr.GetNamespace() == os.Getenv("NAMESPACE") {
+	if cr.GetName() == consts.DefaultPolicyName && cr.GetNamespace() == vars.Namespace {
 		// skip validating (deprecated) default policy
 		return true, warnings, nil
 	}
 
-	if cr.GetNamespace() != os.Getenv("NAMESPACE") {
+	if cr.GetNamespace() != vars.Namespace {
 		warnings = append(warnings, cr.GetName()+
-			fmt.Sprintf(" is created or updated but not used. Only policy in %s namespace is respected.", os.Getenv("NAMESPACE")))
+			fmt.Sprintf(" is created or updated but not used. Only policy in %s namespace is respected.", vars.Namespace))
 	}
 
 	if operation == v1.Delete {
