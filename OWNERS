@@ -4,10 +4,6 @@ reviewers:
   - dougbtv
   - fepan
   - s1061123
-  - SchSeba
-  - bn222
-  - Billy99
-  - wizhaoredhat
 approvers:
   - pliurh
   - zshi-redhat
@@ -15,9 +11,5 @@ approvers:
   - squeed
   - fepan
   - s1061123
-  - SchSeba
-  - bn222
-  - Billy99
-  - wizhaoredhat
 component: "Networking"
 subcomponent: "SR-IOV"

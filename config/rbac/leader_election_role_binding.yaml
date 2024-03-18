@@ -8,4 +8,5 @@ roleRef:
   name: leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: sriov-network-operator
+  name: controller-manager
+  namespace: system

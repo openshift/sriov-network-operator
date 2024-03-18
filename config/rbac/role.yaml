@@ -1,56 +1,112 @@
+
+---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: sriov-network-operator
+  name: manager-role
 rules:
 - apiGroups:
-  - ""
+  - sriovnetwork.openshift.io
   resources:
-  - pods
-  - services
-  - endpoints
-  - persistentvolumeclaims
-  - events
-  - configmaps
-  - secrets
+  - sriovibnetworks
   verbs:
-  - '*'
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - daemonsets
-  - replicasets
-  - statefulsets
-  verbs:
-  - '*'
-- apiGroups:
-  - monitoring.coreos.com
-  resources:
-  - servicemonitors
-  verbs:
-  - get
   - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
-  - apps
-  resourceNames:
-  - sriov-network-operator
+  - sriovnetwork.openshift.io
   resources:
-  - deployments/finalizers
+  - sriovibnetworks/finalizers
   verbs:
   - update
 - apiGroups:
-  - rbac.authorization.k8s.io
+  - sriovnetwork.openshift.io
   resources:
-  - serviceaccounts
-  - roles
-  - rolebindings
+  - sriovibnetworks/status
   verbs:
-  - '*'
+  - get
+  - patch
+  - update
 - apiGroups:
-  - 'coordination.k8s.io'
+  - sriovnetwork.openshift.io
   resources:
-  - 'leases'
+  - sriovnetworknodepolicies
   verbs:
-  - '*'
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworknodepolicies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworknodepolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworks/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworks/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovoperatorconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovoperatorconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovoperatorconfigs/status
+  verbs:
+  - get
+  - patch
+  - update

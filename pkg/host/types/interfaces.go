@@ -145,7 +145,7 @@ type SriovInterface interface {
 	SetVfAdminMac(vfAddr string, pfLink netlink.Link, vfLink netlink.Link) error
 	// GetNicSriovMode returns the interface mode
 	// supported modes SR-IOV legacy and switchdev
-	GetNicSriovMode(pciAddr string) (string, error)
+	GetNicSriovMode(pciAddr string) string
 	// SetNicSriovMode configure the interface mode
 	// supported modes SR-IOV legacy and switchdev
 	SetNicSriovMode(pciAddr, mode string) error

@@ -1,0 +1,20 @@
+# permissions for end users to view sriovnetworknodestates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sriovnetworknodestate-viewer-role
+rules:
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworknodestates
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworknodestates/status
+  verbs:
+  - get

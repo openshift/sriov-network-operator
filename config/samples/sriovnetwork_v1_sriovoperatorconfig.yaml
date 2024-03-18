@@ -1,9 +1,7 @@
 apiVersion: sriovnetwork.openshift.io/v1
 kind: SriovOperatorConfig
 metadata:
-  name: default
-  namespace: openshift-sriov-network-operator
+  name: sriovoperatorconfig-sample
 spec:
-  enableInjector: true
-  enableOperatorWebhook: true
-  logLevel: 2
+  # Add fields here
+  foo: bar

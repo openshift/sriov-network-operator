@@ -1,6 +1,8 @@
 package utils_test
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -75,3 +77,8 @@ var _ = Describe("HashConfigMap", func() {
 		Expect(hash1).To(Equal(hash2))
 	})
 })
+
+func TestUtils(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Utils Suite")
+}

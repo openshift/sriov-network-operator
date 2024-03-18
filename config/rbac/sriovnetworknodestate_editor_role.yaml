@@ -1,0 +1,24 @@
+# permissions for end users to edit sriovnetworknodestates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sriovnetworknodestate-editor-role
+rules:
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworknodestates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworknodestates/status
+  verbs:
+  - get
