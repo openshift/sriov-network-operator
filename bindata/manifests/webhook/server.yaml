@@ -20,14 +20,14 @@ spec:
       maxUnavailable: 33%
   template:
     metadata:
-      annotations:
-        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
         app: network-resources-injector
         component: network
         type: infra
         openshift.io/component: network
     spec:
+      securityContext:
+        runAsNonRoot: true
       serviceAccountName: network-resources-injector-sa
       priorityClassName: "system-cluster-critical"
       nodeSelector:
@@ -73,11 +73,16 @@ spec:
         - -tls-private-key-file=/etc/tls/tls.key
         - -tls-cert-file=/etc/tls/tls.crt
         - -insecure=true
+        - -logtostderr=true
+        - -alsologtostderr=true
         env:
         - name: NAMESPACE
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
         resources:
           requests:
             cpu: 10m

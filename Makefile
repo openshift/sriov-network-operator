@@ -1,8 +1,8 @@
-# Setting SHELL to bash allows bash commands to be executed by recipes.
-# This is a requirement for 'setup-envtest.sh' in the test target.
-# Options are set to exit when a recipe line exits non-zero or a piped command fails.
-SHELL = /usr/bin/env bash -o pipefail
-.SHELLFLAGS = -ec
+# Setting SHELL to bash allows bash commands to be executed by recipes. 
+# This is a requirement for 'setup-envtest.sh' in the test target. 
+# Options are set to exit when a recipe line exits non-zero or a piped command fails. 
+SHELL = /usr/bin/env bash -o pipefail 
+.SHELLFLAGS = -ec 
 CURPATH=$(PWD)
 TARGET_DIR=$(CURPATH)/build/_output
 BIN_DIR=$(CURPATH)/bin
@@ -53,12 +53,6 @@ GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
 # we keep it fixed to avoid it from unexpectedly failing on the project
 # in case of a version bump
 GOLANGCI_LINT_VER = v1.55.2
-
-GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
-# golangci-lint version should be updated periodically
-# we keep it fixed to avoid it from unexpectedly failing on the project
-# in case of a version bump
-GOLANGCI_LINT_VER = v1.46.1
 
 
 .PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests update-codegen
@@ -114,6 +108,7 @@ uninstall: manifests kustomize
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=$(CRD_BASES)
 	cp ./config/crd/bases/* ./deployment/sriov-network-operator/crds/
+
 
 sync-manifests-%: manifests
 	@mkdir -p manifests/$*
@@ -205,7 +200,7 @@ redeploy-operator-virtual-cluster:
 	./hack/virtual-cluster-redeploy.sh
 
 test-e2e-validation-only:
-	SUITE=./test/validation ./hack/run-e2e-conformance.sh
+	SUITE=./test/validation ./hack/run-e2e-conformance.sh	
 
 test-e2e: generate manifests skopeo envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v

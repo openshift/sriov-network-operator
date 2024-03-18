@@ -369,12 +369,11 @@ func (mr *MockHostManagerInterfaceMockRecorder) GetNetdevMTU(pciAddr interface{}
 }
 
 // GetNicSriovMode mocks base method.
-func (m *MockHostManagerInterface) GetNicSriovMode(pciAddr string) (string, error) {
+func (m *MockHostManagerInterface) GetNicSriovMode(pciAddr string) string {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNicSriovMode", pciAddr)
 	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // GetNicSriovMode indicates an expected call of GetNicSriovMode.

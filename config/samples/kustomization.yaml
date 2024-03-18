@@ -1,9 +1,0 @@
-## Append samples you want in your CSV to this file as resources ##
-resources:
-- sriovnetwork_v1_sriovnetwork.yaml
-- sriovnetwork_v1_sriovibnetwork.yaml
-- sriovnetwork_v1_sriovnetworknodepolicy.yaml
-- sriovnetwork_v1_sriovnetworknodestate.yaml
-- sriovnetwork_v1_sriovnetworkpoolconfig.yaml
-- sriovnetwork_v1_sriovoperatorconfig.yaml
-# +kubebuilder:scaffold:manifestskustomizesamples

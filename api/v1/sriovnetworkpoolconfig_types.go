@@ -2,12 +2,25 @@ package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // SriovNetworkPoolConfigSpec defines the desired state of SriovNetworkPoolConfig
 type SriovNetworkPoolConfigSpec struct {
 	// OvsHardwareOffloadConfig describes the OVS HWOL configuration for selected Nodes
 	OvsHardwareOffloadConfig OvsHardwareOffloadConfig `json:"ovsHardwareOffloadConfig,omitempty"`
+
+	// nodeSelector specifies a label selector for Nodes
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
+
+	// maxUnavailable defines either an integer number or percentage
+	// of nodes in the pool that can go Unavailable during an update.
+	//
+	// A value larger than 1 will mean multiple nodes going unavailable during
+	// the update, which may affect your workload stress on the remaining nodes.
+	// Drain will respect Pod Disruption Budgets (PDBs) such as etcd quorum guards,
+	// even if maxUnavailable is greater than one.
+	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }
 
 type OvsHardwareOffloadConfig struct {

@@ -1,0 +1,24 @@
+# permissions for end users to edit sriovnetworknodepolicies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sriovnetworknodepolicy-editor-role
+rules:
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworknodepolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sriovnetwork.openshift.io
+  resources:
+  - sriovnetworknodepolicies/status
+  verbs:
+  - get
