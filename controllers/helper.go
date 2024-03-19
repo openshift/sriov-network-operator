@@ -33,7 +33,9 @@ import (
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
@@ -55,6 +57,80 @@ const (
 	machineConfigCRDName                  = "MachineConfig"
 	trueString                            = "true"
 )
+
+type DrainAnnotationPredicate struct {
+	predicate.Funcs
+}
+
+func (DrainAnnotationPredicate) Create(e event.CreateEvent) bool {
+	if e.Object == nil {
+		return false
+	}
+
+	if _, hasAnno := e.Object.GetAnnotations()[constants.NodeDrainAnnotation]; hasAnno {
+		return true
+	}
+	return false
+}
+
+func (DrainAnnotationPredicate) Update(e event.UpdateEvent) bool {
+	if e.ObjectOld == nil {
+		return false
+	}
+	if e.ObjectNew == nil {
+		return false
+	}
+
+	oldAnno, hasOldAnno := e.ObjectOld.GetAnnotations()[constants.NodeDrainAnnotation]
+	newAnno, hasNewAnno := e.ObjectNew.GetAnnotations()[constants.NodeDrainAnnotation]
+
+	if !hasOldAnno && hasNewAnno {
+		return true
+	}
+
+	if oldAnno != newAnno {
+		return true
+	}
+
+	return false
+}
+
+type DrainStateAnnotationPredicate struct {
+	predicate.Funcs
+}
+
+func (DrainStateAnnotationPredicate) Create(e event.CreateEvent) bool {
+	if e.Object == nil {
+		return false
+	}
+
+	if _, hasAnno := e.Object.GetLabels()[constants.NodeStateDrainAnnotationCurrent]; hasAnno {
+		return true
+	}
+	return false
+}
+
+func (DrainStateAnnotationPredicate) Update(e event.UpdateEvent) bool {
+	if e.ObjectOld == nil {
+		return false
+	}
+	if e.ObjectNew == nil {
+		return false
+	}
+
+	oldAnno, hasOldAnno := e.ObjectOld.GetLabels()[constants.NodeStateDrainAnnotationCurrent]
+	newAnno, hasNewAnno := e.ObjectNew.GetLabels()[constants.NodeStateDrainAnnotationCurrent]
+
+	if !hasOldAnno || !hasNewAnno {
+		return true
+	}
+
+	if oldAnno != newAnno {
+		return true
+	}
+
+	return oldAnno != newAnno
+}
 
 func GetImagePullSecrets() []string {
 	imagePullSecrets := os.Getenv("IMAGE_PULL_SECRETS")
@@ -104,7 +180,7 @@ func syncPluginDaemonObjs(ctx context.Context,
 	data.Data["Namespace"] = vars.Namespace
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
-	data.Data["ResourcePrefix"] = os.Getenv("RESOURCE_PREFIX")
+	data.Data["ResourcePrefix"] = vars.ResourcePrefix
 	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
 	data.Data["NodeSelectorField"] = GetDefaultNodeSelector()
 	data.Data["UseCDI"] = dc.Spec.UseCDI

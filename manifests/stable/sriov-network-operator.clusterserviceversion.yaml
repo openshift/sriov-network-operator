@@ -100,7 +100,7 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:4.16
-    createdAt: "2024-02-22T09:53:03Z"
+    createdAt: "2024-03-18T12:47:39Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     olm.skipRange: '>=4.3.0-0 <4.16.0'
@@ -392,6 +392,9 @@ spec:
                   initialDelaySeconds: 5
                   periodSeconds: 10
                 resources: {}
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
               nodeSelector:
                 node-role.kubernetes.io/master: ""
               serviceAccountName: sriov-network-operator
