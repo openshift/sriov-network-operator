@@ -4,18 +4,23 @@ VERSION ?= 4.16.0
 # Default bundle image tag
 BUNDLE_IMG ?= controller-bundle:$(VERSION)
 
+OPERATORSDK = $(BIN_DIR)/operator-sdk
+operator-sdk: ## Download operator-sdk locally if necessary.
+	$(call go-install-tool,$(OPERATORSDK),github.com/operator-framework/operator-sdk/cmd/operator-sdk@v1.34.1)
+
 # Generate bundle manifests and metadata, then validate generated files.
 .PHONY: bundle
-bundle: manifests
+bundle: manifests kustomize operator-sdk
 	rm -f bundle/manifests/*
 	MANIFEST_YAML=$$(ls manifests/stable/*.yaml | grep -v supported-nic-ids_v1_configmap.yaml) ; \
 	rm -f $$MANIFEST_YAML
-	operator-sdk generate kustomize manifests --interactive=false -q
+	$(OPERATORSDK) generate kustomize manifests --interactive=false -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) --extra-service-accounts sriov-network-config-daemon
-	operator-sdk bundle validate ./bundle
+	$(KUSTOMIZE) build config/manifests | $(OPERATORSDK) generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) --extra-service-accounts sriov-network-config-daemon
+	$(OPERATORSDK) bundle validate ./bundle
 	BUNDLE_MANIFEST_YAML=$$(ls bundle/manifests/* | grep -v supported-nic-ids_v1_configmap.yaml); \
 	cp $$BUNDLE_MANIFEST_YAML manifests/stable
+
 # Build the bundle image.
 .PHONY: bundle-build
 bundle-build:
