@@ -247,6 +247,12 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 			data.Data["ExternalControlPlane"] = external
 		}
 
+		// check for ResourceInjectorMatchConditionFeatureGate feature gate
+		data.Data[consts.ResourceInjectorMatchConditionFeatureGate] = false
+		if resourceInjector, ok := dc.Spec.FeatureGates[consts.ResourceInjectorMatchConditionFeatureGate]; ok {
+			data.Data[consts.ResourceInjectorMatchConditionFeatureGate] = resourceInjector
+		}
+
 		objs, err := render.RenderDir(path, &data)
 		if err != nil {
 			logger.Error(err, "Fail to render webhook manifests")
