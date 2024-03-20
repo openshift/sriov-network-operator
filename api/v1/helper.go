@@ -214,7 +214,13 @@ func GetVfDeviceID(deviceID string) string {
 }
 
 func IsSwitchdevModeSpec(spec SriovNetworkNodeStateSpec) bool {
-	for _, iface := range spec.Interfaces {
+	return ContainsSwitchdevInterface(spec.Interfaces)
+}
+
+// ContainsSwitchdevInterface returns true if provided interface list contains interface
+// with switchdev configuration
+func ContainsSwitchdevInterface(interfaces []Interface) bool {
+	for _, iface := range interfaces {
 		if iface.EswitchMode == ESwithModeSwitchDev {
 			return true
 		}

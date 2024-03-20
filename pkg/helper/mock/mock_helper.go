@@ -39,18 +39,32 @@ func (m *MockHostHelpersInterface) EXPECT() *MockHostHelpersInterfaceMockRecorde
 	return m.recorder
 }
 
-// AddUdevRule mocks base method.
-func (m *MockHostHelpersInterface) AddUdevRule(pfPciAddress string) error {
+// AddDisableNMUdevRule mocks base method.
+func (m *MockHostHelpersInterface) AddDisableNMUdevRule(pfPciAddress string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddUdevRule", pfPciAddress)
+	ret := m.ctrl.Call(m, "AddDisableNMUdevRule", pfPciAddress)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AddUdevRule indicates an expected call of AddUdevRule.
-func (mr *MockHostHelpersInterfaceMockRecorder) AddUdevRule(pfPciAddress interface{}) *gomock.Call {
+// AddDisableNMUdevRule indicates an expected call of AddDisableNMUdevRule.
+func (mr *MockHostHelpersInterfaceMockRecorder) AddDisableNMUdevRule(pfPciAddress interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).AddUdevRule), pfPciAddress)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDisableNMUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).AddDisableNMUdevRule), pfPciAddress)
+}
+
+// AddPersistPFNameUdevRule mocks base method.
+func (m *MockHostHelpersInterface) AddPersistPFNameUdevRule(pfPciAddress, pfName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddPersistPFNameUdevRule", pfPciAddress, pfName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddPersistPFNameUdevRule indicates an expected call of AddPersistPFNameUdevRule.
+func (mr *MockHostHelpersInterfaceMockRecorder) AddPersistPFNameUdevRule(pfPciAddress, pfName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPersistPFNameUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).AddPersistPFNameUdevRule), pfPciAddress, pfName)
 }
 
 // AddVfRepresentorUdevRule mocks base method.
@@ -712,6 +726,20 @@ func (mr *MockHostHelpersInterfaceMockRecorder) LoadPfsStatus(pciAddress interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadPfsStatus", reflect.TypeOf((*MockHostHelpersInterface)(nil).LoadPfsStatus), pciAddress)
 }
 
+// LoadUdevRules mocks base method.
+func (m *MockHostHelpersInterface) LoadUdevRules() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadUdevRules")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LoadUdevRules indicates an expected call of LoadUdevRules.
+func (mr *MockHostHelpersInterfaceMockRecorder) LoadUdevRules() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadUdevRules", reflect.TypeOf((*MockHostHelpersInterface)(nil).LoadUdevRules))
+}
+
 // MlxConfigFW mocks base method.
 func (m *MockHostHelpersInterface) MlxConfigFW(attributesToChange map[string]mlxutils.MlxNic) error {
 	m.ctrl.T.Helper()
@@ -858,18 +886,32 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ReloadDriver(driver interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReloadDriver", reflect.TypeOf((*MockHostHelpersInterface)(nil).ReloadDriver), driver)
 }
 
-// RemoveUdevRule mocks base method.
-func (m *MockHostHelpersInterface) RemoveUdevRule(pfPciAddress string) error {
+// RemoveDisableNMUdevRule mocks base method.
+func (m *MockHostHelpersInterface) RemoveDisableNMUdevRule(pfPciAddress string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveUdevRule", pfPciAddress)
+	ret := m.ctrl.Call(m, "RemoveDisableNMUdevRule", pfPciAddress)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// RemoveUdevRule indicates an expected call of RemoveUdevRule.
-func (mr *MockHostHelpersInterfaceMockRecorder) RemoveUdevRule(pfPciAddress interface{}) *gomock.Call {
+// RemoveDisableNMUdevRule indicates an expected call of RemoveDisableNMUdevRule.
+func (mr *MockHostHelpersInterfaceMockRecorder) RemoveDisableNMUdevRule(pfPciAddress interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).RemoveUdevRule), pfPciAddress)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveDisableNMUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).RemoveDisableNMUdevRule), pfPciAddress)
+}
+
+// RemovePersistPFNameUdevRule mocks base method.
+func (m *MockHostHelpersInterface) RemovePersistPFNameUdevRule(pfPciAddress string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemovePersistPFNameUdevRule", pfPciAddress)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemovePersistPFNameUdevRule indicates an expected call of RemovePersistPFNameUdevRule.
+func (mr *MockHostHelpersInterfaceMockRecorder) RemovePersistPFNameUdevRule(pfPciAddress interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePersistPFNameUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).RemovePersistPFNameUdevRule), pfPciAddress)
 }
 
 // RemoveVfRepresentorUdevRule mocks base method.
