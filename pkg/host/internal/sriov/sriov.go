@@ -353,8 +353,8 @@ func (s *sriov) configureHWOptionsForSwitchdev(iface *sriovnetworkv1.Interface) 
 	desiredFlowSteeringMode := "smfs"
 	currentFlowSteeringMode, err := s.networkHelper.GetDevlinkDeviceParam(iface.PciAddress, "flow_steering_mode")
 	if err != nil {
-		if errors.Is(err, syscall.EINVAL) {
-			log.Log.V(2).Info("configureHWOptionsForSwitchdev(): software flow steering is not supported by the device, skip configuration",
+		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENODEV) {
+			log.Log.V(2).Info("configureHWOptionsForSwitchdev(): device has no flow_steering_mode parameter, skip",
 				"device", iface.PciAddress)
 			return nil
 		}
@@ -369,6 +369,10 @@ func (s *sriov) configureHWOptionsForSwitchdev(iface *sriovnetworkv1.Interface) 
 		s.setEswitchModeAndNumVFs(iface.PciAddress, sriovnetworkv1.ESwithModeLegacy, 0)
 	}
 	if err := s.networkHelper.SetDevlinkDeviceParam(iface.PciAddress, "flow_steering_mode", desiredFlowSteeringMode); err != nil {
+		if errors.Is(err, syscall.ENOTSUP) {
+			log.Log.V(2).Info("configureHWOptionsForSwitchdev(): device doesn't support changing of flow_steering_mode, skip", "device", iface.PciAddress)
+			return nil
+		}
 		log.Log.Error(err, "configureHWOptionsForSwitchdev(): fail to configure flow steering mode for the device", "device", iface.PciAddress)
 		return err
 	}
