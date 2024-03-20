@@ -165,14 +165,20 @@ type UdevInterface interface {
 	PrepareNMUdevRule(supportedVfIds []string) error
 	// PrepareVFRepUdevRule creates a script which helps to configure representor name for the VF
 	PrepareVFRepUdevRule() error
-	// AddUdevRule adds a udev rule that disables network-manager for VFs on the concrete PF
-	AddUdevRule(pfPciAddress string) error
-	// RemoveUdevRule removes a udev rule that disables network-manager for VFs on the concrete PF
-	RemoveUdevRule(pfPciAddress string) error
+	// AddDisableNMUdevRule adds udev rule that disables NetworkManager for VFs on the concrete PF:
+	AddDisableNMUdevRule(pfPciAddress string) error
+	// RemoveDisableNMUdevRule removes udev rule that disables NetworkManager for VFs on the concrete PF
+	RemoveDisableNMUdevRule(pfPciAddress string) error
+	// AddPersistPFNameUdevRule add udev rule that preserves PF name after switching to switchdev mode
+	AddPersistPFNameUdevRule(pfPciAddress, pfName string) error
+	// RemovePersistPFNameUdevRule removes udev rule that preserves PF name after switching to switchdev mode
+	RemovePersistPFNameUdevRule(pfPciAddress string) error
 	// AddVfRepresentorUdevRule adds udev rule that renames VF representors on the concrete PF
 	AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwitchPort string) error
 	// RemoveVfRepresentorUdevRule removes udev rule that renames VF representors on the concrete PF
 	RemoveVfRepresentorUdevRule(pfPciAddress string) error
+	// LoadUdevRules triggers udev rules for network subsystem
+	LoadUdevRules() error
 }
 
 type VdpaInterface interface {
