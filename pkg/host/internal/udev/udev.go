@@ -69,17 +69,30 @@ func (u *udev) PrepareVFRepUdevRule() error {
 	return nil
 }
 
-// AddUdevRule adds a udev rule that disables network-manager for VFs on the concrete PF
-func (u *udev) AddUdevRule(pfPciAddress string) error {
-	log.Log.V(2).Info("AddUdevRule()", "device", pfPciAddress)
+// AddDisableNMUdevRule adds udev rule that disables NetworkManager for VFs on the concrete PF:
+func (u *udev) AddDisableNMUdevRule(pfPciAddress string) error {
+	log.Log.V(2).Info("AddDisableNMUdevRule()", "device", pfPciAddress)
 	udevRuleContent := fmt.Sprintf(consts.NMUdevRule, strings.Join(vars.SupportedVfIds, "|"), pfPciAddress)
 	return u.addUdevRule(pfPciAddress, "10-nm-disable", udevRuleContent)
 }
 
-// RemoveUdevRule removes a udev rule that disables network-manager for VFs on the concrete PF
-func (u *udev) RemoveUdevRule(pfPciAddress string) error {
-	log.Log.V(2).Info("RemoveUdevRule()", "device", pfPciAddress)
+// RemoveDisableNMUdevRule removes udev rule that disables NetworkManager for VFs on the concrete PF
+func (u *udev) RemoveDisableNMUdevRule(pfPciAddress string) error {
+	log.Log.V(2).Info("RemoveDisableNMUdevRule()", "device", pfPciAddress)
 	return u.removeUdevRule(pfPciAddress, "10-nm-disable")
+}
+
+// AddPersistPFNameUdevRule add udev rule that preserves PF name after switching to switchdev mode
+func (u *udev) AddPersistPFNameUdevRule(pfPciAddress, pfName string) error {
+	log.Log.V(2).Info("AddPersistPFNameUdevRule()", "device", pfPciAddress)
+	udevRuleContent := fmt.Sprintf(consts.PFNameUdevRule, pfPciAddress, pfName)
+	return u.addUdevRule(pfPciAddress, "10-pf-name", udevRuleContent)
+}
+
+// RemovePersistPFNameUdevRule removes udev rule that preserves PF name after switching to switchdev mode
+func (u *udev) RemovePersistPFNameUdevRule(pfPciAddress string) error {
+	log.Log.V(2).Info("RemovePersistPFNameUdevRule()", "device", pfPciAddress)
+	return u.removeUdevRule(pfPciAddress, "10-pf-name")
 }
 
 // AddVfRepresentorUdevRule adds udev rule that renames VF representors on the concrete PF
@@ -94,6 +107,23 @@ func (u *udev) AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwit
 func (u *udev) RemoveVfRepresentorUdevRule(pfPciAddress string) error {
 	log.Log.V(2).Info("RemoveVfRepresentorUdevRule()", "device", pfPciAddress)
 	return u.removeUdevRule(pfPciAddress, "20-switchdev")
+}
+
+// LoadUdevRules triggers udev rules for network subsystem
+func (u *udev) LoadUdevRules() error {
+	log.Log.V(2).Info("LoadUdevRules()")
+	udevAdmTool := "udevadm"
+	_, stderr, err := u.utilsHelper.RunCommand(udevAdmTool, "control", "--reload-rules")
+	if err != nil {
+		log.Log.Error(err, "LoadUdevRules(): failed to reload rules", "error", stderr)
+		return err
+	}
+	_, stderr, err = u.utilsHelper.RunCommand(udevAdmTool, "trigger", "--action", "add", "--attr-match", "subsystem=net")
+	if err != nil {
+		log.Log.Error(err, "LoadUdevRules(): failed to trigger rules", "error", stderr)
+		return err
+	}
+	return nil
 }
 
 func (u *udev) addUdevRule(pfPciAddress, ruleName, ruleContent string) error {

@@ -99,6 +99,8 @@ const (
 	UdevDisableNM       = "/bindata/scripts/udev-find-sriov-pf.sh"
 	UdevRepName         = "/bindata/scripts/switchdev-vf-link-name.sh"
 	// nolint:goconst
+	PFNameUdevRule = `SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", KERNELS=="%s", NAME="%s"`
+	// nolint:goconst
 	NMUdevRule = `SUBSYSTEM=="net", ` +
 		`ACTION=="add|change|move", ` +
 		`ATTRS{device}=="%s", ` +
