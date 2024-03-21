@@ -15,7 +15,14 @@ webhooks:
   - name: network-resources-injector-config.k8s.io
     sideEffects: None
     admissionReviewVersions: ["v1", "v1beta1"]
+    {{- if .resourceInjectorMatchCondition}}
+    failurePolicy: Fail
+    matchConditions:
+      - name: 'include-networks-annotation'
+        expression: '"k8s.v1.cni.cncf.io/networks" in object.metadata.annotations'
+    {{- else }}
     failurePolicy: Ignore
+    {{- end}}
     clientConfig:
       service:
         name: network-resources-injector-service

@@ -113,7 +113,13 @@ const (
 	KernelArgIntelIommu = "intel_iommu=on"
 	KernelArgIommuPt    = "iommu=pt"
 
+	// Feature gates
+	// ParallelNicConfigFeatureGate: allow to configure nics in parallel
 	ParallelNicConfigFeatureGate = "parallelNicConfig"
+
+	// ResourceInjectorMatchConditionFeatureGate: switch injector to fail policy and add mactch condition
+	// this will make the mutating webhook to be called only when a pod has 'k8s.v1.cni.cncf.io/networks' annotation
+	ResourceInjectorMatchConditionFeatureGate = "resourceInjectorMatchCondition"
 )
 
 const (
