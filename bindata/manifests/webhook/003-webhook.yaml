@@ -19,7 +19,7 @@ webhooks:
     failurePolicy: Fail
     matchConditions:
       - name: 'include-networks-annotation'
-        expression: '"k8s.v1.cni.cncf.io/networks" in object.metadata.annotations'
+        expression: 'has(object.metadata.annotations) && "k8s.v1.cni.cncf.io/networks" in object.metadata.annotations'
     {{- else }}
     failurePolicy: Ignore
     {{- end}}
