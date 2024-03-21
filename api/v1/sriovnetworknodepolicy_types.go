@@ -42,6 +42,7 @@ type SriovNetworkNodePolicySpec struct {
 	// NicSelector selects the NICs to be configured
 	NicSelector SriovNetworkNicSelector `json:"nicSelector"`
 	// +kubebuilder:validation:Enum=netdevice;vfio-pci
+	// +kubebuilder:default=netdevice
 	// The driver type for configured VFs. Allowed value "netdevice", "vfio-pci". Defaults to netdevice.
 	DeviceType string `json:"deviceType,omitempty"`
 	// RDMA mode. Defaults to false.
