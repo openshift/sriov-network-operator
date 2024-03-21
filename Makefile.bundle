@@ -4,9 +4,20 @@ VERSION ?= 4.14.0
 # Default bundle image tag
 BUNDLE_IMG ?= controller-bundle:$(VERSION)
 
+
+# download-tool will download any package $2 and install it to $1.
+define download-tool
+@[ -f $(1) ] || { \
+set -e ;\
+echo "Downloading $(2)" ;\
+curl -sL -o $1 $2 ;\
+chmod +x $1 ;\
+}
+endef
+
 OPERATORSDK = $(BIN_DIR)/operator-sdk
 operator-sdk: ## Download operator-sdk locally if necessary.
-	$(call go-install-tool,$(OPERATORSDK),github.com/operator-framework/operator-sdk/cmd/operator-sdk@v1.34.1)
+	$(call download-tool,$(OPERATORSDK),https://github.com/operator-framework/operator-sdk/releases/download/v1.34.1/operator-sdk_linux_amd64)
 
 # Generate bundle manifests and metadata, then validate generated files.
 .PHONY: bundle
