@@ -24,11 +24,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -46,13 +43,6 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
-)
-
-var (
-	oneNode     = intstr.FromInt32(1)
-	defaultNpcl = &sriovnetworkv1.SriovNetworkPoolConfig{Spec: sriovnetworkv1.SriovNetworkPoolConfigSpec{
-		MaxUnavailable: &oneNode,
-		NodeSelector:   &metav1.LabelSelector{}}}
 )
 
 type DrainReconcile struct {
@@ -346,94 +336,7 @@ func (dr *DrainReconcile) tryDrainNode(ctx context.Context, node *corev1.Node) (
 }
 
 func (dr *DrainReconcile) findNodePoolConfig(ctx context.Context, node *corev1.Node) (*sriovnetworkv1.SriovNetworkPoolConfig, []corev1.Node, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("findNodePoolConfig():")
-	// get all the sriov network pool configs
-	npcl := &sriovnetworkv1.SriovNetworkPoolConfigList{}
-	err := dr.List(ctx, npcl)
-	if err != nil {
-		logger.Error(err, "failed to list sriovNetworkPoolConfig")
-		return nil, nil, err
-	}
-
-	selectedNpcl := []*sriovnetworkv1.SriovNetworkPoolConfig{}
-	nodesInPools := map[string]interface{}{}
-
-	for _, npc := range npcl.Items {
-		// we skip hw offload objects
-		if npc.Spec.OvsHardwareOffloadConfig.Name != "" {
-			continue
-		}
-
-		if npc.Spec.NodeSelector == nil {
-			npc.Spec.NodeSelector = &metav1.LabelSelector{}
-		}
-
-		selector, err := metav1.LabelSelectorAsSelector(npc.Spec.NodeSelector)
-		if err != nil {
-			logger.Error(err, "failed to create label selector from nodeSelector", "nodeSelector", npc.Spec.NodeSelector)
-			return nil, nil, err
-		}
-
-		if selector.Matches(labels.Set(node.Labels)) {
-			selectedNpcl = append(selectedNpcl, npc.DeepCopy())
-		}
-
-		nodeList := &corev1.NodeList{}
-		err = dr.List(ctx, nodeList, &client.ListOptions{LabelSelector: selector})
-		if err != nil {
-			logger.Error(err, "failed to list all the nodes matching the pool with label selector from nodeSelector",
-				"machineConfigPoolName", npc,
-				"nodeSelector", npc.Spec.NodeSelector)
-			return nil, nil, err
-		}
-
-		for _, nodeName := range nodeList.Items {
-			nodesInPools[nodeName.Name] = nil
-		}
-	}
-
-	if len(selectedNpcl) > 1 {
-		// don't allow the node to be part of multiple pools
-		err = fmt.Errorf("node is part of more then one pool")
-		logger.Error(err, "multiple pools founded for a specific node", "numberOfPools", len(selectedNpcl), "pools", selectedNpcl)
-		return nil, nil, err
-	} else if len(selectedNpcl) == 1 {
-		// found one pool for our node
-		logger.V(2).Info("found sriovNetworkPool", "pool", *selectedNpcl[0])
-		selector, err := metav1.LabelSelectorAsSelector(selectedNpcl[0].Spec.NodeSelector)
-		if err != nil {
-			logger.Error(err, "failed to create label selector from nodeSelector", "nodeSelector", selectedNpcl[0].Spec.NodeSelector)
-			return nil, nil, err
-		}
-
-		// list all the nodes that are also part of this pool and return them
-		nodeList := &corev1.NodeList{}
-		err = dr.List(ctx, nodeList, &client.ListOptions{LabelSelector: selector})
-		if err != nil {
-			logger.Error(err, "failed to list nodes using with label selector", "labelSelector", selector)
-			return nil, nil, err
-		}
-
-		return selectedNpcl[0], nodeList.Items, nil
-	} else {
-		// in this case we get all the nodes and remove the ones that already part of any pool
-		logger.V(1).Info("node doesn't belong to any pool, using default drain configuration with MaxUnavailable of one", "pool", *defaultNpcl)
-		nodeList := &corev1.NodeList{}
-		err = dr.List(ctx, nodeList)
-		if err != nil {
-			logger.Error(err, "failed to list all the nodes")
-			return nil, nil, err
-		}
-
-		defaultNodeLists := []corev1.Node{}
-		for _, nodeObj := range nodeList.Items {
-			if _, exist := nodesInPools[nodeObj.Name]; !exist {
-				defaultNodeLists = append(defaultNodeLists, nodeObj)
-			}
-		}
-		return defaultNpcl, defaultNodeLists, nil
-	}
+	return findNodePoolConfig(ctx, node, dr.Client)
 }
 
 // SetupWithManager sets up the controller with the Manager.

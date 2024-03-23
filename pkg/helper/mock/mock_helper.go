@@ -294,6 +294,21 @@ func (mr *MockHostHelpersInterfaceMockRecorder) DiscoverBridges() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverBridges", reflect.TypeOf((*MockHostHelpersInterface)(nil).DiscoverBridges))
 }
 
+// DiscoverRDMASubsystem mocks base method.
+func (m *MockHostHelpersInterface) DiscoverRDMASubsystem() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DiscoverRDMASubsystem")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DiscoverRDMASubsystem indicates an expected call of DiscoverRDMASubsystem.
+func (mr *MockHostHelpersInterfaceMockRecorder) DiscoverRDMASubsystem() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverRDMASubsystem", reflect.TypeOf((*MockHostHelpersInterface)(nil).DiscoverRDMASubsystem))
+}
+
 // DiscoverSriovDevices mocks base method.
 func (m *MockHostHelpersInterface) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]v1.InterfaceExt, error) {
 	m.ctrl.T.Helper()
@@ -1042,6 +1057,20 @@ func (m *MockHostHelpersInterface) SetNicSriovMode(pciAddr, mode string) error {
 func (mr *MockHostHelpersInterfaceMockRecorder) SetNicSriovMode(pciAddr, mode interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNicSriovMode", reflect.TypeOf((*MockHostHelpersInterface)(nil).SetNicSriovMode), pciAddr, mode)
+}
+
+// SetRDMASubsystem mocks base method.
+func (m *MockHostHelpersInterface) SetRDMASubsystem(mode string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetRDMASubsystem", mode)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetRDMASubsystem indicates an expected call of SetRDMASubsystem.
+func (mr *MockHostHelpersInterfaceMockRecorder) SetRDMASubsystem(mode interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRDMASubsystem", reflect.TypeOf((*MockHostHelpersInterface)(nil).SetRDMASubsystem), mode)
 }
 
 // SetSriovNumVfs mocks base method.

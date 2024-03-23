@@ -429,3 +429,34 @@ func (n *network) GetPciAddressFromInterfaceName(interfaceName string) (string, 
 	log.Log.V(2).Info("GetPciAddressFromInterfaceName(): result", "interface", interfaceName, "pci address", pciAddress)
 	return pciAddress, nil
 }
+
+func (n *network) DiscoverRDMASubsystem() (string, error) {
+	log.Log.Info("DiscoverRDMASubsystem(): retrieving RDMA subsystem mode")
+	subsystem, err := n.netlinkLib.DiscoverRDMASubsystem()
+
+	if err != nil {
+		log.Log.Error(err, "DiscoverRDMASubsystem(): failed to get RDMA subsystem mode")
+		return "", err
+	}
+
+	return subsystem, nil
+}
+
+func (n *network) SetRDMASubsystem(mode string) error {
+	log.Log.Info("SetRDMASubsystem(): Updating RDMA subsystem mode")
+
+	modeValue := 1
+	if mode == "exclusive" {
+		modeValue = 0
+	}
+	config := fmt.Sprintf("options ib_core netns_mode=%d\n", modeValue)
+	path := filepath.Join(vars.FilesystemRoot, consts.Host, "etc", "modprobe.d", "ib_core.conf")
+	err := os.WriteFile(path, []byte(config), 0644)
+
+	if err != nil {
+		log.Log.Error(err, "SetRDMASubsystem(): failed to write ib_core config")
+		return fmt.Errorf("failed to write ib_core config: %v", err)
+	}
+
+	return nil
+}

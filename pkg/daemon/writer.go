@@ -118,6 +118,7 @@ func (w *NodeStateStatusWriter) pollNicStatus() error {
 	log.Log.V(2).Info("pollNicStatus()")
 	var iface []sriovnetworkv1.InterfaceExt
 	var bridges sriovnetworkv1.Bridges
+	var rdmaMode string
 	var err error
 
 	if vars.PlatformType == consts.VirtualOpenStack {
@@ -138,8 +139,14 @@ func (w *NodeStateStatusWriter) pollNicStatus() error {
 		}
 	}
 
+	rdmaMode, err = w.hostHelper.DiscoverRDMASubsystem()
+	if err != nil {
+		return err
+	}
+
 	w.status.Interfaces = iface
 	w.status.Bridges = bridges
+	w.status.System.RdmaMode = rdmaMode
 
 	return nil
 }

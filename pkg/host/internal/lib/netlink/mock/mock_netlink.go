@@ -145,6 +145,21 @@ func (mr *MockNetlinkLibMockRecorder) DevlinkSetDeviceParam(bus, device, param, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevlinkSetDeviceParam", reflect.TypeOf((*MockNetlinkLib)(nil).DevlinkSetDeviceParam), bus, device, param, cmode, value)
 }
 
+// DiscoverRDMASubsystem mocks base method.
+func (m *MockNetlinkLib) DiscoverRDMASubsystem() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DiscoverRDMASubsystem")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DiscoverRDMASubsystem indicates an expected call of DiscoverRDMASubsystem.
+func (mr *MockNetlinkLibMockRecorder) DiscoverRDMASubsystem() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverRDMASubsystem", reflect.TypeOf((*MockNetlinkLib)(nil).DiscoverRDMASubsystem))
+}
+
 // IsLinkAdminStateUp mocks base method.
 func (m *MockNetlinkLib) IsLinkAdminStateUp(link netlink.Link) bool {
 	m.ctrl.T.Helper()

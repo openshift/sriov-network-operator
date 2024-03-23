@@ -283,4 +283,35 @@ var _ = Describe("Network", func() {
 			Expect(pci).To(Equal("0000:3b:00.0"))
 		})
 	})
+	Context("DiscoverRDMASubsystem", func() {
+		It("Should get RDMA Subsystem using netlink", func() {
+			netlinkLibMock.EXPECT().DiscoverRDMASubsystem().Return("shared", nil)
+
+			pci, err := n.DiscoverRDMASubsystem()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pci).To(Equal("shared"))
+		})
+	})
+	Context("SetRDMASubsystem", func() {
+		It("Should set RDMA Subsystem shared mode", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/host/etc/modprobe.d"},
+				Files: map[string][]byte{
+					"/host/etc/modprobe.d/ib_core.conf": {},
+				},
+			})
+			Expect(n.SetRDMASubsystem("shared")).NotTo(HaveOccurred())
+			helpers.GinkgoAssertFileContentsEquals("/host/etc/modprobe.d/ib_core.conf", "options ib_core netns_mode=1\n")
+		})
+		It("Should set RDMA Subsystem exclusive mode", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/host/etc/modprobe.d"},
+				Files: map[string][]byte{
+					"/host/etc/modprobe.d/ib_core.conf": {},
+				},
+			})
+			Expect(n.SetRDMASubsystem("exclusive")).NotTo(HaveOccurred())
+			helpers.GinkgoAssertFileContentsEquals("/host/etc/modprobe.d/ib_core.conf", "options ib_core netns_mode=0\n")
+		})
+	})
 })

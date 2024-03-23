@@ -429,6 +429,16 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		reqReboot = reqReboot || r
 	}
 
+	if dn.currentNodeState.Status.System.RdmaMode != dn.desiredNodeState.Spec.System.RdmaMode {
+		err = dn.HostHelpers.SetRDMASubsystem(dn.desiredNodeState.Spec.System.RdmaMode)
+		if err != nil {
+			log.Log.Error(err, "nodeStateSyncHandler(): failed to set RDMA subsystem")
+			return err
+		}
+		reqReboot = true
+		reqDrain = true
+	}
+
 	// When running using systemd check if the applied configuration is the latest one
 	// or there is a new config we need to apply
 	// When using systemd configuration we write the file
