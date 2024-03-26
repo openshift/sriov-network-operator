@@ -1,6 +1,8 @@
 package platforms
 
 import (
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openstack"
@@ -24,7 +26,11 @@ func NewDefaultPlatformHelper() (Interface, error) {
 		return nil, err
 	}
 	utilsHelper := utils.New()
-	hostManager := host.NewHostManager(utilsHelper)
+	hostManager, err := host.NewHostManager(utilsHelper)
+	if err != nil {
+		log.Log.Error(err, "failed to create host manager")
+		return nil, err
+	}
 	openstackContext := openstack.New(hostManager)
 
 	return &platformHelper{

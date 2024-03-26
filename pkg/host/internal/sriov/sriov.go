@@ -33,16 +33,16 @@ type interfaceToConfigure struct {
 }
 
 type sriov struct {
-	utilsHelper   utils.CmdInterface
-	kernelHelper  types.KernelInterface
-	networkHelper types.NetworkInterface
-	udevHelper    types.UdevInterface
-	vdpaHelper    types.VdpaInterface
+	utilsHelper      utils.CmdInterface
+	kernelHelper     types.KernelInterface
+	networkHelper    types.NetworkInterface
+	udevHelper       types.UdevInterface
+	vdpaHelper       types.VdpaInterface
 	infinibandHelper types.InfinibandInterface
-	netlinkLib    netlinkPkg.NetlinkLib
-	dputilsLib    dputilsPkg.DPUtilsLib
-	sriovnetLib   sriovnetPkg.SriovnetLib
-	ghwLib        ghwPkg.GHWLib
+	netlinkLib       netlinkPkg.NetlinkLib
+	dputilsLib       dputilsPkg.DPUtilsLib
+	sriovnetLib      sriovnetPkg.SriovnetLib
+	ghwLib           ghwPkg.GHWLib
 }
 
 func New(utilsHelper utils.CmdInterface,
@@ -56,15 +56,15 @@ func New(utilsHelper utils.CmdInterface,
 	sriovnetLib sriovnetPkg.SriovnetLib,
 	ghwLib ghwPkg.GHWLib) types.SriovInterface {
 	return &sriov{utilsHelper: utilsHelper,
-		kernelHelper:  kernelHelper,
-		networkHelper: networkHelper,
-		udevHelper:    udevHelper,
-		vdpaHelper:    vdpaHelper,
+		kernelHelper:     kernelHelper,
+		networkHelper:    networkHelper,
+		udevHelper:       udevHelper,
+		vdpaHelper:       vdpaHelper,
 		infinibandHelper: infinibandHelper,
-		netlinkLib:    netlinkLib,
-		dputilsLib:    dputilsLib,
-		sriovnetLib:   sriovnetLib,
-		ghwLib:        ghwLib,
+		netlinkLib:       netlinkLib,
+		dputilsLib:       dputilsLib,
+		sriovnetLib:      sriovnetLib,
+		ghwLib:           ghwLib,
 	}
 }
 
@@ -474,6 +474,9 @@ func (s *sriov) configSriovVFDevices(iface *sriovnetworkv1.Interface) error {
 				}
 				if strings.EqualFold(linkType, consts.LinkTypeIB) {
 					if err := s.infinibandHelper.ConfigureVfGUID(addr, iface.PciAddress, vfID, pfLink); err != nil {
+						return err
+					}
+					if err := s.kernelHelper.Unbind(iface.PciAddress); err != nil {
 						return err
 					}
 				} else {

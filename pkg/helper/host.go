@@ -35,7 +35,11 @@ func NewHostHelpers(utilsHelper utils.CmdInterface,
 func NewDefaultHostHelpers() (HostHelpersInterface, error) {
 	utilsHelper := utils.New()
 	mlxHelper := mlx.New(utilsHelper)
-	hostManager := host.NewHostManager(utilsHelper)
+	hostManager, err := host.NewHostManager(utilsHelper)
+	if err != nil {
+		log.Log.Error(err, "failed to create host manager")
+		return nil, err
+	}
 	storeManager, err := store.NewManager()
 	if err != nil {
 		log.Log.Error(err, "failed to create store manager")

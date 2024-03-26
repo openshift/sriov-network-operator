@@ -35,8 +35,7 @@ var _ = Describe("SRIOV", func() {
 		ghwLibMock       *ghwMockPkg.MockGHWLib
 		hostMock         *hostMockPkg.MockHostManagerInterface
 		storeManagerMode *hostStoreMockPkg.MockManagerInterface
-
-		testCtrl *gomock.Controller
+		testCtrl         *gomock.Controller
 
 		testError = fmt.Errorf("test")
 	)
@@ -50,7 +49,7 @@ var _ = Describe("SRIOV", func() {
 		hostMock = hostMockPkg.NewMockHostManagerInterface(testCtrl)
 		storeManagerMode = hostStoreMockPkg.NewMockManagerInterface(testCtrl)
 
-		s = New(nil, hostMock, hostMock, hostMock, hostMock, nil, netlinkLibMock, dputilsLibMock, sriovnetLibMock, ghwLibMock)
+		s = New(nil, hostMock, hostMock, hostMock, hostMock, hostMock, netlinkLibMock, dputilsLibMock, sriovnetLibMock, ghwLibMock)
 	})
 
 	AfterEach(func() {
@@ -227,7 +226,6 @@ var _ = Describe("SRIOV", func() {
 			pfLinkMock.EXPECT().Attrs().Return(&netlink.LinkAttrs{Flags: 0, EncapType: "ether"})
 			netlinkLibMock.EXPECT().IsLinkAdminStateUp(pfLinkMock).Return(false)
 			netlinkLibMock.EXPECT().LinkSetUp(pfLinkMock).Return(nil)
-			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).Times(0)
 
 			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.2").Return(0, nil).Times(2)
 			hostMock.EXPECT().HasDriver("0000:d8:00.2").Return(false, "")
@@ -296,16 +294,14 @@ var _ = Describe("SRIOV", func() {
 			netlinkLibMock.EXPECT().IsLinkAdminStateUp(pfLinkMock).Return(false)
 			netlinkLibMock.EXPECT().LinkSetUp(pfLinkMock).Return(nil)
 
-			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.2").Return(0, nil).Times(2)
-			hostMock.EXPECT().Unbind("0000:d8:00.2").Return(nil)
+			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.2").Return(0, nil).Times(1)
 			hostMock.EXPECT().HasDriver("0000:d8:00.2").Return(true, "test").Times(2)
 			hostMock.EXPECT().UnbindDriverIfNeeded("0000:d8:00.2", true).Return(nil)
 			hostMock.EXPECT().BindDefaultDriver("0000:d8:00.2").Return(nil)
 			hostMock.EXPECT().SetNetdevMTU("0000:d8:00.2", 2000).Return(nil)
-			vf0LinkMock := netlinkMockPkg.NewMockLink(testCtrl)
-			netlinkLibMock.EXPECT().LinkSetVfNodeGUID(vf0LinkMock, 0, gomock.Any()).Return(nil)
-			netlinkLibMock.EXPECT().LinkSetVfPortGUID(vf0LinkMock, 0, gomock.Any()).Return(nil)
-			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).AnyTimes()
+			hostMock.EXPECT().ConfigureVfGUID(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+			hostMock.EXPECT().Unbind(gomock.Any()).Return(nil).Times(1)
 
 			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil)
 
@@ -372,7 +368,6 @@ var _ = Describe("SRIOV", func() {
 			hostMock.EXPECT().AddVfRepresentorUdevRule("0000:d8:00.0", "enp216s0f0np0", "7cfe90ff2cc0", "p0").Return(nil)
 			hostMock.EXPECT().CreateVDPADevice("0000:d8:00.2", "vhost_vdpa")
 			hostMock.EXPECT().LoadUdevRules().Return(nil)
-			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).AnyTimes()
 
 			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil)
 
@@ -400,7 +395,6 @@ var _ = Describe("SRIOV", func() {
 
 		It("externally managed - wrong VF count", func() {
 			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
-			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).AnyTimes()
 
 			Expect(s.ConfigSriovInterfaces(storeManagerMode,
 				[]sriovnetworkv1.Interface{{
@@ -426,7 +420,6 @@ var _ = Describe("SRIOV", func() {
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(
 				&netlink.DevlinkDevice{Attrs: netlink.DevlinkDevAttrs{Eswitch: netlink.DevlinkDevEswitchAttr{Mode: "legacy"}}},
 				nil)
-			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).AnyTimes()
 
 			hostMock.EXPECT().GetNetdevMTU("0000:d8:00.0")
 			Expect(s.ConfigSriovInterfaces(storeManagerMode,
@@ -463,7 +456,6 @@ var _ = Describe("SRIOV", func() {
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(
 				&netlink.DevlinkDevice{Attrs: netlink.DevlinkDevAttrs{Eswitch: netlink.DevlinkDevEswitchAttr{Mode: "legacy"}}},
 				nil)
-			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).AnyTimes()
 			hostMock.EXPECT().RemoveDisableNMUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().RemovePersistPFNameUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().RemoveVfRepresentorUdevRule("0000:d8:00.0").Return(nil)
@@ -482,7 +474,6 @@ var _ = Describe("SRIOV", func() {
 			helpers.GinkgoAssertFileContentsEquals("/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs", "0")
 		})
 		It("reset device - skip external", func() {
-			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).AnyTimes()
 			storeManagerMode.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(&sriovnetworkv1.Interface{
 				Name:              "enp216s0f0np0",
 				PciAddress:        "0000:d8:00.0",
@@ -511,7 +502,6 @@ var _ = Describe("SRIOV", func() {
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(
 				&netlink.DevlinkDevice{Attrs: netlink.DevlinkDevAttrs{Eswitch: netlink.DevlinkDevEswitchAttr{Mode: "legacy"}}},
 				nil)
-			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).AnyTimes()
 			hostMock.EXPECT().RemoveDisableNMUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().RemovePersistPFNameUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().RemoveVfRepresentorUdevRule("0000:d8:00.0").Return(nil)

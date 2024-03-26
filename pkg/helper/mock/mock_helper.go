@@ -194,6 +194,20 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ConfigSriovInterfaces(storeManag
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovInterfaces", reflect.TypeOf((*MockHostHelpersInterface)(nil).ConfigSriovInterfaces), storeManager, interfaces, ifaceStatuses, skipVFConfiguration)
 }
 
+// ConfigureVfGUID mocks base method.
+func (m *MockHostHelpersInterface) ConfigureVfGUID(vfAddr, pfAddr string, vfID int, pfLink netlink.Link) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfigureVfGUID", vfAddr, pfAddr, vfID, pfLink)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ConfigureVfGUID indicates an expected call of ConfigureVfGUID.
+func (mr *MockHostHelpersInterfaceMockRecorder) ConfigureVfGUID(vfAddr, pfAddr, vfID, pfLink interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureVfGUID", reflect.TypeOf((*MockHostHelpersInterface)(nil).ConfigureVfGUID), vfAddr, pfAddr, vfID, pfLink)
+}
+
 // CreateVDPADevice mocks base method.
 func (m *MockHostHelpersInterface) CreateVDPADevice(pciAddr, vdpaType string) error {
 	m.ctrl.T.Helper()
