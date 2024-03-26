@@ -528,6 +528,21 @@ func (mr *MockHostHelpersInterfaceMockRecorder) GetOSPrettyName() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOSPrettyName", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetOSPrettyName))
 }
 
+// GetPciAddressFromInterfaceName mocks base method.
+func (m *MockHostHelpersInterface) GetPciAddressFromInterfaceName(interfaceName string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPciAddressFromInterfaceName", interfaceName)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPciAddressFromInterfaceName indicates an expected call of GetPciAddressFromInterfaceName.
+func (mr *MockHostHelpersInterfaceMockRecorder) GetPciAddressFromInterfaceName(interfaceName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPciAddressFromInterfaceName", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetPciAddressFromInterfaceName), interfaceName)
+}
+
 // GetPhysPortName mocks base method.
 func (m *MockHostHelpersInterface) GetPhysPortName(name string) (string, error) {
 	m.ctrl.T.Helper()
@@ -1087,20 +1102,6 @@ func (m *MockHostHelpersInterface) SetVfAdminMac(vfAddr string, pfLink, vfLink n
 func (mr *MockHostHelpersInterfaceMockRecorder) SetVfAdminMac(vfAddr, pfLink, vfLink interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVfAdminMac", reflect.TypeOf((*MockHostHelpersInterface)(nil).SetVfAdminMac), vfAddr, pfLink, vfLink)
-}
-
-// SetVfGUID mocks base method.
-func (m *MockHostHelpersInterface) SetVfGUID(vfAddr string, pfLink netlink.Link) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetVfGUID", vfAddr, pfLink)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetVfGUID indicates an expected call of SetVfGUID.
-func (mr *MockHostHelpersInterfaceMockRecorder) SetVfGUID(vfAddr, pfLink interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVfGUID", reflect.TypeOf((*MockHostHelpersInterface)(nil).SetVfGUID), vfAddr, pfLink)
 }
 
 // TriggerUdevEvent mocks base method.
