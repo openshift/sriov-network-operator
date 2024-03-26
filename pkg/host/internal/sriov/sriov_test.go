@@ -227,7 +227,7 @@ var _ = Describe("SRIOV", func() {
 			pfLinkMock.EXPECT().Attrs().Return(&netlink.LinkAttrs{Flags: 0, EncapType: "ether"})
 			netlinkLibMock.EXPECT().IsLinkAdminStateUp(pfLinkMock).Return(false)
 			netlinkLibMock.EXPECT().LinkSetUp(pfLinkMock).Return(nil)
-			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).AnyTimes()
+			netlinkLibMock.EXPECT().LinkList().Return(nil, nil).Times(0)
 
 			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.2").Return(0, nil).Times(2)
 			hostMock.EXPECT().HasDriver("0000:d8:00.2").Return(false, "")

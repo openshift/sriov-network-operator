@@ -271,4 +271,16 @@ var _ = Describe("Network", func() {
 			Expect(index).To(Equal(-1))
 		})
 	})
+	Context("GetPciAddressFromInterfaceName", func() {
+		It("Should get PCI address from sys fs", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs:     []string{"/sys/bus/pci/0000:3b:00.0", "/sys/class/net/ib216s0f0"},
+				Symlinks: map[string]string{"/sys/class/net/ib216s0f0/device": "/sys/bus/pci/0000:3b:00.0"},
+			})
+
+			pci, err := n.GetPciAddressFromInterfaceName("ib216s0f0")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pci).To(Equal("0000:3b:00.0"))
+		})
+	})
 })
