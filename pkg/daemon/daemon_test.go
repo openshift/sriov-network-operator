@@ -149,6 +149,7 @@ var _ = Describe("Config Daemon", func() {
 		vendorHelper.EXPECT().TryEnableVhostNet().AnyTimes()
 		vendorHelper.EXPECT().TryEnableTun().AnyTimes()
 		vendorHelper.EXPECT().PrepareNMUdevRule([]string{"0x1014", "0x154c"}).Return(nil).AnyTimes()
+		vendorHelper.EXPECT().PrepareVFRepUdevRule().Return(nil).AnyTimes()
 
 		sut = New(
 			kClient,

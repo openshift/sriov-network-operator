@@ -1,8 +1,6 @@
 package udev
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -11,7 +9,6 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
@@ -24,10 +21,6 @@ type udev struct {
 
 func New(utilsHelper utils.CmdInterface) types.UdevInterface {
 	return &udev{utilsHelper: utilsHelper}
-}
-
-type config struct {
-	Interfaces []sriovnetworkv1.Interface `json:"interfaces"`
 }
 
 func (u *udev) PrepareNMUdevRule(supportedVfIds []string) error {
@@ -56,107 +49,50 @@ func (u *udev) PrepareNMUdevRule(supportedVfIds []string) error {
 	return nil
 }
 
-func (u *udev) WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToSkip map[string]bool) (bool, error) {
-	cfg := config{}
-	for _, iface := range newState.Spec.Interfaces {
-		for _, ifaceStatus := range newState.Status.Interfaces {
-			if iface.PciAddress != ifaceStatus.PciAddress {
-				continue
-			}
-
-			if skip := pfsToSkip[iface.PciAddress]; !skip {
-				continue
-			}
-
-			if iface.NumVfs > 0 {
-				var vfGroups []sriovnetworkv1.VfGroup = nil
-				ifc, err := sriovnetworkv1.FindInterface(newState.Spec.Interfaces, iface.Name)
-				if err != nil {
-					log.Log.Error(err, "WriteSwitchdevConfFile(): fail find interface")
-				} else {
-					vfGroups = ifc.VfGroups
-				}
-				i := sriovnetworkv1.Interface{
-					// Not passing all the contents, since only NumVfs and EswitchMode can be configured by configure-switchdev.sh currently.
-					Name:       iface.Name,
-					PciAddress: iface.PciAddress,
-					NumVfs:     iface.NumVfs,
-					Mtu:        iface.Mtu,
-					VfGroups:   vfGroups,
-				}
-
-				if iface.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-					i.EswitchMode = iface.EswitchMode
-				}
-				cfg.Interfaces = append(cfg.Interfaces, i)
-			}
-		}
-	}
-	_, err := os.Stat(consts.SriovHostSwitchDevConfPath)
+// PrepareVFRepUdevRule creates a script which helps to configure representor name for the VF
+func (u *udev) PrepareVFRepUdevRule() error {
+	log.Log.V(2).Info("PrepareVFRepUdevRule()")
+	targetPath := filepath.Join(vars.FilesystemRoot, consts.HostUdevFolder, filepath.Base(consts.UdevRepName))
+	data, err := os.ReadFile(filepath.Join(vars.FilesystemRoot, consts.UdevRepName))
 	if err != nil {
-		if os.IsNotExist(err) {
-			if len(cfg.Interfaces) == 0 {
-				return false, nil
-			}
-
-			// TODO: refactor this function to allow using vars.FilesystemRoot for unit-tests
-			// Create the sriov-operator folder on the host if it doesn't exist
-			if _, err := os.Stat(consts.Host + consts.SriovConfBasePath); os.IsNotExist(err) {
-				err = os.Mkdir(consts.Host+consts.SriovConfBasePath, os.ModeDir)
-				if err != nil {
-					log.Log.Error(err, "WriteConfFile(): failed to create sriov-operator folder")
-					return false, err
-				}
-			}
-
-			log.Log.V(2).Info("WriteSwitchdevConfFile(): file not existed, create it")
-			_, err = os.Create(consts.SriovHostSwitchDevConfPath)
-			if err != nil {
-				log.Log.Error(err, "WriteSwitchdevConfFile(): failed to create file")
-				return false, err
-			}
-		} else {
-			return false, err
-		}
+		log.Log.Error(err, "PrepareVFRepUdevRule(): failed to read source for representor name UDEV script")
+		return err
 	}
-	oldContent, err := os.ReadFile(consts.SriovHostSwitchDevConfPath)
-	if err != nil {
-		log.Log.Error(err, "WriteSwitchdevConfFile(): failed to read file")
-		return false, err
+	if err := os.WriteFile(targetPath, data, 0755); err != nil {
+		log.Log.Error(err, "PrepareVFRepUdevRule(): failed to write representor name UDEV script")
+		return err
 	}
-	var newContent []byte
-	if len(cfg.Interfaces) != 0 {
-		newContent, err = json.Marshal(cfg)
-		if err != nil {
-			log.Log.Error(err, "WriteSwitchdevConfFile(): fail to marshal config")
-			return false, err
-		}
+	if err := os.Chmod(targetPath, 0755); err != nil {
+		log.Log.Error(err, "PrepareVFRepUdevRule(): failed to set permissions on representor name UDEV script")
+		return err
 	}
-
-	if bytes.Equal(newContent, oldContent) {
-		log.Log.V(2).Info("WriteSwitchdevConfFile(): no update")
-		return false, nil
-	}
-	log.Log.V(2).Info("WriteSwitchdevConfFile(): write to switchdev.conf", "content", newContent)
-	err = os.WriteFile(consts.SriovHostSwitchDevConfPath, newContent, 0644)
-	if err != nil {
-		log.Log.Error(err, "WriteSwitchdevConfFile(): failed to write file")
-		return false, err
-	}
-	return true, nil
+	return nil
 }
 
-// AddUdevRule adds a udev rule that disables network-manager for VFs on the concrete PF
-func (u *udev) AddUdevRule(pfPciAddress string) error {
-	log.Log.V(2).Info("AddUdevRule()", "device", pfPciAddress)
+// AddDisableNMUdevRule adds udev rule that disables NetworkManager for VFs on the concrete PF:
+func (u *udev) AddDisableNMUdevRule(pfPciAddress string) error {
+	log.Log.V(2).Info("AddDisableNMUdevRule()", "device", pfPciAddress)
 	udevRuleContent := fmt.Sprintf(consts.NMUdevRule, strings.Join(vars.SupportedVfIds, "|"), pfPciAddress)
 	return u.addUdevRule(pfPciAddress, "10-nm-disable", udevRuleContent)
 }
 
-// RemoveUdevRule removes a udev rule that disables network-manager for VFs on the concrete PF
-func (u *udev) RemoveUdevRule(pfPciAddress string) error {
-	log.Log.V(2).Info("RemoveUdevRule()", "device", pfPciAddress)
+// RemoveDisableNMUdevRule removes udev rule that disables NetworkManager for VFs on the concrete PF
+func (u *udev) RemoveDisableNMUdevRule(pfPciAddress string) error {
+	log.Log.V(2).Info("RemoveDisableNMUdevRule()", "device", pfPciAddress)
 	return u.removeUdevRule(pfPciAddress, "10-nm-disable")
+}
+
+// AddPersistPFNameUdevRule add udev rule that preserves PF name after switching to switchdev mode
+func (u *udev) AddPersistPFNameUdevRule(pfPciAddress, pfName string) error {
+	log.Log.V(2).Info("AddPersistPFNameUdevRule()", "device", pfPciAddress)
+	udevRuleContent := fmt.Sprintf(consts.PFNameUdevRule, pfPciAddress, pfName)
+	return u.addUdevRule(pfPciAddress, "10-pf-name", udevRuleContent)
+}
+
+// RemovePersistPFNameUdevRule removes udev rule that preserves PF name after switching to switchdev mode
+func (u *udev) RemovePersistPFNameUdevRule(pfPciAddress string) error {
+	log.Log.V(2).Info("RemovePersistPFNameUdevRule()", "device", pfPciAddress)
+	return u.removeUdevRule(pfPciAddress, "10-pf-name")
 }
 
 // AddVfRepresentorUdevRule adds udev rule that renames VF representors on the concrete PF
@@ -171,6 +107,23 @@ func (u *udev) AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwit
 func (u *udev) RemoveVfRepresentorUdevRule(pfPciAddress string) error {
 	log.Log.V(2).Info("RemoveVfRepresentorUdevRule()", "device", pfPciAddress)
 	return u.removeUdevRule(pfPciAddress, "20-switchdev")
+}
+
+// LoadUdevRules triggers udev rules for network subsystem
+func (u *udev) LoadUdevRules() error {
+	log.Log.V(2).Info("LoadUdevRules()")
+	udevAdmTool := "udevadm"
+	_, stderr, err := u.utilsHelper.RunCommand(udevAdmTool, "control", "--reload-rules")
+	if err != nil {
+		log.Log.Error(err, "LoadUdevRules(): failed to reload rules", "error", stderr)
+		return err
+	}
+	_, stderr, err = u.utilsHelper.RunCommand(udevAdmTool, "trigger", "--action", "add", "--attr-match", "subsystem=net")
+	if err != nil {
+		log.Log.Error(err, "LoadUdevRules(): failed to trigger rules", "error", stderr)
+		return err
+	}
+	return nil
 }
 
 func (u *udev) addUdevRule(pfPciAddress, ruleName, ruleContent string) error {
