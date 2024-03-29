@@ -23,7 +23,16 @@ metadata:
           }
         }
       }
-    operators.openshift.io/infrastructure-features: '["disconnected", "cni"]'
+    features.operators.openshift.io/disconnected: "true"
+    features.operators.openshift.io/fips-compliant: "true"
+    features.operators.openshift.io/proxy-aware: "false"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
+    features.operators.openshift.io/cnf: "false"
+    features.operators.openshift.io/cni: "true"
+    features.operators.openshift.io/csi: "false"
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
     target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
