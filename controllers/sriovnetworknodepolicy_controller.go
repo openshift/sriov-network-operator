@@ -49,7 +49,6 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -258,7 +257,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 		ns.Namespace = vars.Namespace
 		j, _ := json.Marshal(ns)
 		logger.V(2).Info("SriovNetworkNodeState CR", "content", j)
-		if err := r.syncSriovNetworkNodeState(ctx, dc, npl, ns, &node, utils.HashConfigMap(found)); err != nil {
+		if err := r.syncSriovNetworkNodeState(ctx, dc, npl, ns, &node); err != nil {
 			logger.Error(err, "Fail to sync", "SriovNetworkNodeState", ns.Name)
 			return err
 		}
@@ -292,9 +291,13 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 	return nil
 }
 
-func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig, npl *sriovnetworkv1.SriovNetworkNodePolicyList, ns *sriovnetworkv1.SriovNetworkNodeState, node *corev1.Node, cksum string) error {
+func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context.Context,
+	dc *sriovnetworkv1.SriovOperatorConfig,
+	npl *sriovnetworkv1.SriovNetworkNodePolicyList,
+	ns *sriovnetworkv1.SriovNetworkNodeState,
+	node *corev1.Node) error {
 	logger := log.Log.WithName("syncSriovNetworkNodeState")
-	logger.V(1).Info("Start to sync SriovNetworkNodeState", "Name", ns.Name, "cksum", cksum)
+	logger.V(1).Info("Start to sync SriovNetworkNodeState", "Name", ns.Name)
 
 	if err := controllerutil.SetControllerReference(dc, ns, r.Scheme); err != nil {
 		return err
@@ -304,7 +307,6 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 	if err != nil {
 		logger.Error(err, "Fail to get SriovNetworkNodeState", "namespace", ns.Namespace, "name", ns.Name)
 		if errors.IsNotFound(err) {
-			ns.Spec.DpConfigVersion = cksum
 			err = r.Create(ctx, ns)
 			if err != nil {
 				return fmt.Errorf("couldn't create SriovNetworkNodeState: %v", err)
@@ -349,7 +351,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 				ppp = p.Spec.Priority
 			}
 		}
-		newVersion.Spec.DpConfigVersion = cksum
+
 		// Note(adrianc): we check same ownerReferences since SriovNetworkNodeState
 		// was owned by a default SriovNetworkNodePolicy. if we encounter a descripancy
 		// we need to update.
