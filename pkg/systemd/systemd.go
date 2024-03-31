@@ -66,9 +66,6 @@ func ReadConfFile() (spec *SriovConfig, err error) {
 
 func WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	newFile := false
-	// remove the device plugin revision as we don't need it here
-	newState.Spec.DpConfigVersion = ""
-
 	sriovConfig := &SriovConfig{
 		newState.Spec,
 		vars.DevMode,
