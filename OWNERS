@@ -8,6 +8,7 @@ reviewers:
   - bn222
   - Billy99
   - wizhaoredhat
+  - SalDaniele
 approvers:
   - pliurh
   - zshi-redhat
@@ -19,5 +20,6 @@ approvers:
   - bn222
   - Billy99
   - wizhaoredhat
+  - SalDaniele
 component: "Networking"
 subcomponent: "SR-IOV"
