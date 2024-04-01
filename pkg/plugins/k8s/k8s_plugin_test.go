@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -35,7 +36,7 @@ func registerCall(m *gomock.Call, realF interface{}) *gomock.Call {
 		os.Chdir("../../..")
 	}).DoAndReturn(realF).Do(func(_ ...interface{}) {
 		os.Chdir(cur)
-	}).AnyTimes()
+	})
 }
 
 func setIsSystemdMode(val bool) {
@@ -82,28 +83,12 @@ var _ = Describe("K8s plugin", func() {
 
 		// proxy some functions to real host manager to simplify testing and to additionally validate manifests
 		for _, f := range []string{
-			"bindata/manifests/switchdev-config/files/switchdev-configuration-before-nm.sh.yaml",
-			"bindata/manifests/switchdev-config/files/switchdev-configuration-after-nm.sh.yaml",
-			"bindata/manifests/switchdev-config/files/switchdev-vf-link-name.sh.yaml",
-		} {
-			registerCall(hostHelper.EXPECT().ReadScriptManifestFile(f), realHostMgr.ReadScriptManifestFile)
-		}
-		for _, f := range []string{
-			"bindata/manifests/switchdev-config/switchdev-units/switchdev-configuration-before-nm.yaml",
-			"bindata/manifests/switchdev-config/switchdev-units/switchdev-configuration-after-nm.yaml",
 			"bindata/manifests/sriov-config-service/kubernetes/sriov-config-service.yaml",
 			"bindata/manifests/sriov-config-service/kubernetes/sriov-config-post-network-service.yaml",
 		} {
 			registerCall(hostHelper.EXPECT().ReadServiceManifestFile(f), realHostMgr.ReadServiceManifestFile)
 		}
 		for _, s := range []string{
-			"switchdev-configuration-before-nm.service",
-			"switchdev-configuration-after-nm.service",
-		} {
-			registerCall(hostHelper.EXPECT().RemoveFromService(newServiceNameMatcher(s), gomock.Any()), realHostMgr.RemoveFromService)
-		}
-		for _, s := range []string{
-			"bindata/manifests/switchdev-config/switchdev-units/NetworkManager.service.yaml",
 			"bindata/manifests/switchdev-config/ovs-units/ovs-vswitchd.service.yaml",
 		} {
 			registerCall(hostHelper.EXPECT().ReadServiceInjectionManifestFile(s), realHostMgr.ReadServiceInjectionManifestFile)
@@ -132,8 +117,6 @@ var _ = Describe("K8s plugin", func() {
 		hostHelper.EXPECT().IsServiceEnabled("/etc/systemd/system/sriov-config-post-network.service").Return(false, nil)
 		hostHelper.EXPECT().EnableService(newServiceNameMatcher("sriov-config.service")).Return(nil)
 		hostHelper.EXPECT().EnableService(newServiceNameMatcher("sriov-config-post-network.service")).Return(nil)
-		hostHelper.EXPECT().UpdateSystemService(newServiceNameMatcher("sriov-config.service")).Return(nil)
-		hostHelper.EXPECT().UpdateSystemService(newServiceNameMatcher("sriov-config-post-network.service")).Return(nil)
 
 		needDrain, needReboot, err := k8sPlugin.OnNodeStateChange(&sriovnetworkv1.SriovNetworkNodeState{})
 		Expect(err).ToNot(HaveOccurred())
@@ -176,7 +159,6 @@ var _ = Describe("K8s plugin", func() {
 			newServiceNameMatcher("sriov-config.service"),
 		).Return(true, nil)
 		hostHelper.EXPECT().EnableService(newServiceNameMatcher("sriov-config.service")).Return(nil)
-		hostHelper.EXPECT().UpdateSystemService(newServiceNameMatcher("sriov-config.service")).Return(nil)
 
 		hostHelper.EXPECT().IsServiceEnabled("/etc/systemd/system/sriov-config-post-network.service").Return(true, nil)
 		hostHelper.EXPECT().ReadService("/etc/systemd/system/sriov-config-post-network.service").Return(
@@ -189,6 +171,53 @@ var _ = Describe("K8s plugin", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(needReboot).To(BeTrue())
 		Expect(needDrain).To(BeTrue())
+		Expect(k8sPlugin.Apply()).NotTo(HaveOccurred())
+	})
+	It("ovs service not found", func() {
+		setIsSystemdMode(false)
+		hostHelper.EXPECT().IsServiceExist("/usr/lib/systemd/system/ovs-vswitchd.service").Return(false, nil)
+		needDrain, needReboot, err := k8sPlugin.OnNodeStateChange(&sriovnetworkv1.SriovNetworkNodeState{
+			Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{Interfaces: []sriovnetworkv1.Interface{{EswitchMode: "switchdev"}}}})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(needReboot).To(BeFalse())
+		Expect(needDrain).To(BeFalse())
+		Expect(k8sPlugin.Apply()).NotTo(HaveOccurred())
+	})
+	It("ovs service updated", func() {
+		setIsSystemdMode(false)
+		hostHelper.EXPECT().IsServiceExist("/usr/lib/systemd/system/ovs-vswitchd.service").Return(true, nil)
+		hostHelper.EXPECT().ReadService("/usr/lib/systemd/system/ovs-vswitchd.service").Return(
+			&hostTypes.Service{Name: "ovs-vswitchd.service"}, nil)
+		hostHelper.EXPECT().CompareServices(
+			&hostTypes.Service{Name: "ovs-vswitchd.service"},
+			newServiceNameMatcher("ovs-vswitchd.service"),
+		).Return(true, nil)
+		hostHelper.EXPECT().Chroot("/host").Return(nil, fmt.Errorf("test"))
+		hostHelper.EXPECT().UpdateSystemService(newServiceNameMatcher("ovs-vswitchd.service")).Return(nil)
+		needDrain, needReboot, err := k8sPlugin.OnNodeStateChange(&sriovnetworkv1.SriovNetworkNodeState{
+			Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{Interfaces: []sriovnetworkv1.Interface{{EswitchMode: "switchdev"}}}})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(needReboot).To(BeTrue())
+		Expect(needDrain).To(BeTrue())
+		Expect(k8sPlugin.Apply()).NotTo(HaveOccurred())
+	})
+	It("ovs service updated - hw offloading already enabled", func() {
+		setIsSystemdMode(false)
+		hostHelper.EXPECT().IsServiceExist("/usr/lib/systemd/system/ovs-vswitchd.service").Return(true, nil)
+		hostHelper.EXPECT().ReadService("/usr/lib/systemd/system/ovs-vswitchd.service").Return(
+			&hostTypes.Service{Name: "ovs-vswitchd.service"}, nil)
+		hostHelper.EXPECT().CompareServices(
+			&hostTypes.Service{Name: "ovs-vswitchd.service"},
+			newServiceNameMatcher("ovs-vswitchd.service"),
+		).Return(true, nil)
+		hostHelper.EXPECT().Chroot("/host").Return(func() error { return nil }, nil)
+		hostHelper.EXPECT().RunCommand("ovs-vsctl", "get", "Open_vSwitch", ".", "other_config:hw-offload").Return("\"true\"\n", "", nil)
+		hostHelper.EXPECT().UpdateSystemService(newServiceNameMatcher("ovs-vswitchd.service")).Return(nil)
+		needDrain, needReboot, err := k8sPlugin.OnNodeStateChange(&sriovnetworkv1.SriovNetworkNodeState{
+			Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{Interfaces: []sriovnetworkv1.Interface{{EswitchMode: "switchdev"}}}})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(needReboot).To(BeFalse())
+		Expect(needDrain).To(BeFalse())
 		Expect(k8sPlugin.Apply()).NotTo(HaveOccurred())
 	})
 })

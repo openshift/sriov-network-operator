@@ -214,7 +214,13 @@ func GetVfDeviceID(deviceID string) string {
 }
 
 func IsSwitchdevModeSpec(spec SriovNetworkNodeStateSpec) bool {
-	for _, iface := range spec.Interfaces {
+	return ContainsSwitchdevInterface(spec.Interfaces)
+}
+
+// ContainsSwitchdevInterface returns true if provided interface list contains interface
+// with switchdev configuration
+func ContainsSwitchdevInterface(interfaces []Interface) bool {
+	for _, iface := range interfaces {
 		if iface.EswitchMode == ESwithModeSwitchDev {
 			return true
 		}
@@ -255,7 +261,12 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 			return true
 		}
 	}
-
+	currentEswitchMode := GetEswitchModeFromStatus(ifaceStatus)
+	desiredEswitchMode := GetEswitchModeFromSpec(ifaceSpec)
+	if currentEswitchMode != desiredEswitchMode {
+		log.V(2).Info("NeedToUpdateSriov(): EswitchMode needs update", "desired", desiredEswitchMode, "current", currentEswitchMode)
+		return true
+	}
 	if ifaceSpec.NumVfs != ifaceStatus.NumVfs {
 		log.V(2).Info("NeedToUpdateSriov(): NumVfs needs update", "desired", ifaceSpec.NumVfs, "current", ifaceStatus.NumVfs)
 		return true
@@ -296,11 +307,18 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 							return true
 						}
 					}
+					if groupSpec.VdpaType != vfStatus.VdpaType {
+						log.V(2).Info("NeedToUpdateSriov(): VF VdpaType mismatch",
+							"desired", groupSpec.VdpaType, "current", vfStatus.VdpaType)
+						return true
+					}
 					break
 				}
 			}
-			if !ingroup && StringInArray(vfStatus.Driver, vars.DpdkDrivers) {
-				// VF which has DPDK driver loaded but not in any group, needs to be reset to default driver.
+			if !ingroup && (StringInArray(vfStatus.Driver, vars.DpdkDrivers) || vfStatus.VdpaType != "") {
+				// need to reset VF if it is not a part of a group and:
+				// a. has DPDK driver loaded
+				// b. has VDPA device
 				return true
 			}
 		}
