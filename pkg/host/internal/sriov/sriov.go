@@ -23,7 +23,6 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
-	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
 
 type interfaceToConfigure struct {
@@ -583,11 +582,6 @@ func (s *sriov) configSriovDevice(iface *sriovnetworkv1.Interface, skipVFConfigu
 
 func (s *sriov) ConfigSriovInterfaces(storeManager store.ManagerInterface,
 	interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, skipVFConfiguration bool) error {
-	if s.kernelHelper.IsKernelLockdownMode() && mlx.HasMellanoxInterfacesInSpec(ifaceStatuses, interfaces) {
-		log.Log.Error(nil, "cannot use mellanox devices when in kernel lockdown mode")
-		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
-	}
-
 	toBeConfigured, toBeResetted, err := s.getConfigureAndReset(storeManager, interfaces, ifaceStatuses)
 	if err != nil {
 		log.Log.Error(err, "cannot get a list of interfaces to configure")
