@@ -10,4 +10,5 @@ LABEL io.k8s.display-name="OpenShift sriov-network-webhook" \
       maintainer="Multus team <multus-dev@redhat.com>"
 COPY --from=builder /go/src/github.com/k8snetworkplumbingwg/sriov-network-operator/build/_output/cmd/webhook /usr/bin/webhook
 ENV CLUSTER_TYPE=openshift
+USER 1001
 CMD ["/usr/bin/webhook"]
