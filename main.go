@@ -52,6 +52,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/leaderelection"
 
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
@@ -162,6 +163,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	featureGate := featuregate.New()
+
 	if err = (&controllers.SriovNetworkReconciler{
 		Client: mgrGlobal.GetClient(),
 		Scheme: mgrGlobal.GetScheme(),
@@ -177,8 +180,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.SriovNetworkNodePolicyReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		FeatureGate: featureGate,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovNetworkNodePolicy")
 		os.Exit(1)
@@ -187,6 +191,7 @@ func main() {
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		PlatformHelper: platformsHelper,
+		FeatureGate:    featureGate,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovOperatorConfig")
 		os.Exit(1)

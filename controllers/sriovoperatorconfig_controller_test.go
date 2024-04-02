@@ -16,6 +16,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
 	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
@@ -88,6 +89,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			Client:         k8sManager.GetClient(),
 			Scheme:         k8sManager.GetScheme(),
 			PlatformHelper: platformHelper,
+			FeatureGate:    featuregate.New(),
 		}).SetupWithManager(k8sManager)
 		Expect(err).ToNot(HaveOccurred())
 
