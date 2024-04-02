@@ -54,6 +54,8 @@ spec:
               value: $SRIOV_CNI_IMAGE
             - name: SRIOV_INFINIBAND_CNI_IMAGE
               value: $SRIOV_INFINIBAND_CNI_IMAGE
+            - name: OVS_CNI_IMAGE
+              value: $OVS_CNI_IMAGE
             - name: SRIOV_DEVICE_PLUGIN_IMAGE
               value: $SRIOV_DEVICE_PLUGIN_IMAGE
             - name: NETWORK_RESOURCES_INJECTOR_IMAGE

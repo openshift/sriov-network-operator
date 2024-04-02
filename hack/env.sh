@@ -1,6 +1,8 @@
 if [ -z $SKIP_VAR_SET ]; then
         export SRIOV_CNI_IMAGE=${SRIOV_CNI_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-cni}
         export SRIOV_INFINIBAND_CNI_IMAGE=${SRIOV_INFINIBAND_CNI_IMAGE:-ghcr.io/k8snetworkplumbingwg/ib-sriov-cni}
+        # OVS_CNI_IMAGE can be explicitly set to empty value, use default only if the var is not set
+        export OVS_CNI_IMAGE=${OVS_CNI_IMAGE-quay.io/kubevirt/ovs-cni-plugin}
         export SRIOV_DEVICE_PLUGIN_IMAGE=${SRIOV_DEVICE_PLUGIN_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-network-device-plugin}
         export NETWORK_RESOURCES_INJECTOR_IMAGE=${NETWORK_RESOURCES_INJECTOR_IMAGE:-ghcr.io/k8snetworkplumbingwg/network-resources-injector}
         export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE=${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-network-operator-config-daemon}
@@ -9,6 +11,8 @@ if [ -z $SKIP_VAR_SET ]; then
 else
         [ -z $SRIOV_CNI_IMAGE ] && echo "SRIOV_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
         [ -z $SRIOV_INFINIBAND_CNI_IMAGE ] && echo "SRIOV_INFINIBAND_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
+        # check that OVS_CNI_IMAGE is set to any value, empty string is a valid value
+        [ -z ${OVS_CNI_IMAGE+set} ] && echo "OVS_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
         [ -z $SRIOV_DEVICE_PLUGIN_IMAGE ] && echo "SRIOV_DEVICE_PLUGIN_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
         [ -z $NETWORK_RESOURCES_INJECTOR_IMAGE ] && echo "NETWORK_RESOURCES_INJECTOR_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
         [ -z $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE ] && echo "SRIOV_NETWORK_CONFIG_DAEMON_IMAGE is empty but SKIP_VAR_SET is set" && exit 1

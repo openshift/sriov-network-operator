@@ -109,6 +109,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("SRIOV_INFINIBAND_CNI_IMAGE", "mock-image")
 	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("OVS_CNI_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("SRIOV_DEVICE_PLUGIN_IMAGE", "mock-image")
 	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("NETWORK_RESOURCES_INJECTOR_IMAGE", "mock-image")
