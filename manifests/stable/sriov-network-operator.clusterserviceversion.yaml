@@ -105,7 +105,16 @@ metadata:
       network devices in Openshift cluster.
     olm.skipRange: '>=4.3.0-0 <4.12.0'
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
-    operators.openshift.io/infrastructure-features: '["disconnected", "cni"]'
+    features.operators.openshift.io/disconnected: "true"
+    features.operators.openshift.io/fips-compliant: "true"
+    features.operators.openshift.io/proxy-aware: "false"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
+    features.operators.openshift.io/cnf: "false"
+    features.operators.openshift.io/cni: "true"
+    features.operators.openshift.io/csi: "false"    
     operators.operatorframework.io/builder: operator-sdk-v1.23.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
