@@ -109,7 +109,6 @@ var _ = Describe("SRIOV", func() {
 				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
 			})
 
-			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(2)
 			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(&netlink.DevlinkDevice{
@@ -177,7 +176,6 @@ var _ = Describe("SRIOV", func() {
 				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
 			})
 
-			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(1)
 			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(&netlink.DevlinkDevice{
@@ -230,7 +228,6 @@ var _ = Describe("SRIOV", func() {
 				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
 			})
 
-			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(1)
 			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
 			hostMock.EXPECT().RemoveDisableNMUdevRule("0000:d8:00.0").Return(nil)
@@ -294,7 +291,6 @@ var _ = Describe("SRIOV", func() {
 		})
 
 		It("externally managed - wrong VF count", func() {
-			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
 			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
 			Expect(s.ConfigSriovInterfaces(storeManagerMode,
 				[]sriovnetworkv1.Interface{{
@@ -316,7 +312,6 @@ var _ = Describe("SRIOV", func() {
 		})
 
 		It("externally managed - wrong MTU", func() {
-			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
 			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(1)
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(
 				&netlink.DevlinkDevice{Attrs: netlink.DevlinkDevAttrs{Eswitch: netlink.DevlinkDevEswitchAttr{Mode: "legacy"}}},
@@ -347,7 +342,6 @@ var _ = Describe("SRIOV", func() {
 				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
 			})
 
-			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
 			storeManagerMode.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(&sriovnetworkv1.Interface{
 				Name:       "enp216s0f0np0",
 				PciAddress: "0000:d8:00.0",
@@ -374,7 +368,6 @@ var _ = Describe("SRIOV", func() {
 			helpers.GinkgoAssertFileContentsEquals("/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs", "0")
 		})
 		It("reset device - skip external", func() {
-			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
 			storeManagerMode.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(&sriovnetworkv1.Interface{
 				Name:              "enp216s0f0np0",
 				PciAddress:        "0000:d8:00.0",
@@ -397,7 +390,6 @@ var _ = Describe("SRIOV", func() {
 				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
 			})
 
-			hostMock.EXPECT().IsKernelLockdownMode().Return(false)
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(2)
 			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(
