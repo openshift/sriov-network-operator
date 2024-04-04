@@ -259,6 +259,32 @@ spec:
 
 > **NOTE**: Currently only `mellanox` plugin can be disabled.
 
+### Parallel draining
+
+It is possible to drain more than one node at a time using this operator.
+
+The configuration is done via the SriovNetworkNodePool, selecting a number of nodes using the node selector and how many
+nodes in parallel from the pool the operator can drain in parallel. maxUnavailable can be a number of percentage.
+
+> **NOTE**: every node can only be part of one pool, if a node is selected by more then one pool it will not be drained
+
+> **NOTE**: If a node is not part of any pool it will have a default configuration of maxUnavailable 1
+
+**Example**:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: worker
+  namespace: sriov-network-operator
+spec:
+  maxUnavailable: 2
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
+```
+
 ## Components and design
 
 This operator is split into 2 components:
