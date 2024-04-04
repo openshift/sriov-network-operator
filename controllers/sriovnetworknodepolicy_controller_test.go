@@ -18,6 +18,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -211,7 +212,9 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 		},
 	}
 
-	reconciler := SriovNetworkNodePolicyReconciler{}
+	reconciler := SriovNetworkNodePolicyReconciler{
+		FeatureGate: featuregate.New(),
+	}
 
 	node := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}}
 	nodeState := sriovnetworkv1.SriovNetworkNodeState{ObjectMeta: metav1.ObjectMeta{Name: node.Name, Namespace: vars.Namespace}}
