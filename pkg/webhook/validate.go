@@ -225,13 +225,6 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	if (cr.Spec.VdpaType == consts.VdpaTypeVirtio || cr.Spec.VdpaType == consts.VdpaTypeVhost) && cr.Spec.EswitchMode != sriovnetworkv1.ESwithModeSwitchDev {
 		return false, fmt.Errorf("vdpa requires the device to be configured in switchdev mode")
 	}
-
-	// Externally created: we don't support  ExternallyManaged + EswitchMode
-	//TODO: if needed we will need to add this in the future as today EswitchMode is for HWOFFLOAD
-	if cr.Spec.ExternallyManaged && cr.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-		return false, fmt.Errorf("ExternallyManaged doesn't support the device to be configured in switchdev mode")
-	}
-
 	return true, nil
 }
 
@@ -424,16 +417,6 @@ func validateExternallyManage(current, previous *sriovnetworkv1.SriovNetworkNode
 	// reject policy with externallyManage if there is a policy on the same PF without it
 	if current.Spec.ExternallyManaged != previous.Spec.ExternallyManaged {
 		return fmt.Errorf("externallyManage is inconsistent with existing policy %s", previous.GetName())
-	}
-
-	// reject policy with externallyManage if there is a policy on the same PF with switch dev
-	if current.Spec.ExternallyManaged && previous.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-		return fmt.Errorf("externallyManage overlap with switchdev mode in existing policy %s", previous.GetName())
-	}
-
-	// reject policy with externallyManage if there is a policy on the same PF with switch dev
-	if previous.Spec.ExternallyManaged && current.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-		return fmt.Errorf("switchdev overlap with externallyManage mode in existing policy %s", previous.GetName())
 	}
 
 	return nil

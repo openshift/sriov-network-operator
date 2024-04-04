@@ -472,62 +472,6 @@ func TestValidatePolicyForNodePolicyWithExternallyManageConflict(t *testing.T) {
 	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("externallyManage is inconsistent with existing policy %s", appliedPolicy.ObjectMeta.Name))))
 }
 
-func TestValidatePolicyForNodePolicyWithExternallyManageConflictWithSwitchDev(t *testing.T) {
-	appliedPolicy := newNodePolicy()
-	appliedPolicy.Spec.EswitchMode = ESwithModeSwitchDev
-
-	policy := &SriovNetworkNodePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "p0",
-		},
-		Spec: SriovNetworkNodePolicySpec{
-			DeviceType: "netdevice",
-			NicSelector: SriovNetworkNicSelector{
-				PfNames: []string{"ens803f1#3-4"},
-				Vendor:  "8086",
-			},
-			NodeSelector: map[string]string{
-				"feature.node.kubernetes.io/network-sriov.capable": "true",
-			},
-			NumVfs:            63,
-			Priority:          99,
-			ResourceName:      "p0",
-			ExternallyManaged: true,
-		},
-	}
-	g := NewGomegaWithT(t)
-	err := validatePolicyForNodePolicy(policy, appliedPolicy)
-	g.Expect(err).To(HaveOccurred())
-}
-
-func TestValidatePolicyForNodePolicyWithSwitchDevConflictWithExternallyManage(t *testing.T) {
-	appliedPolicy := newNodePolicy()
-	appliedPolicy.Spec.ExternallyManaged = true
-
-	policy := &SriovNetworkNodePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "p0",
-		},
-		Spec: SriovNetworkNodePolicySpec{
-			DeviceType: "netdevice",
-			NicSelector: SriovNetworkNicSelector{
-				PfNames: []string{"ens803f1#3-4"},
-				Vendor:  "8086",
-			},
-			NodeSelector: map[string]string{
-				"feature.node.kubernetes.io/network-sriov.capable": "true",
-			},
-			NumVfs:       63,
-			Priority:     99,
-			ResourceName: "p0",
-			EswitchMode:  ESwithModeSwitchDev,
-		},
-	}
-	g := NewGomegaWithT(t)
-	err := validatePolicyForNodePolicy(policy, appliedPolicy)
-	g.Expect(err).To(HaveOccurred())
-}
-
 func TestValidatePolicyForNodeStateWithExternallyManageAndMTU(t *testing.T) {
 	state := newNodeState()
 	policy := &SriovNetworkNodePolicy{
@@ -1024,30 +968,6 @@ func TestStaticValidateSriovNetworkNodePolicyVhostVdpaMustSpecifySwitchDev(t *te
 	g.Expect(ok).To(Equal(false))
 }
 
-func TestStaticValidateSriovNetworkNodePolicyWithExternallyCreatedAndSwitchDev(t *testing.T) {
-	policy := &SriovNetworkNodePolicy{
-		Spec: SriovNetworkNodePolicySpec{
-			DeviceType: "netdevice",
-			NicSelector: SriovNetworkNicSelector{
-				Vendor:   "8086",
-				DeviceID: "158b",
-			},
-			NodeSelector: map[string]string{
-				"feature.node.kubernetes.io/network-sriov.capable": "true",
-			},
-			NumVfs:            63,
-			Priority:          99,
-			ResourceName:      "p0",
-			EswitchMode:       "switchdev",
-			ExternallyManaged: true,
-		},
-	}
-	g := NewGomegaWithT(t)
-	ok, err := staticValidateSriovNetworkNodePolicy(policy)
-	g.Expect(err).To(HaveOccurred())
-	g.Expect(ok).To(BeFalse())
-}
-
 func TestValidatePolicyForNodeStateVirtioVdpaWithNotSupportedVendor(t *testing.T) {
 	state := newNodeState()
 	policy := &SriovNetworkNodePolicy{
@@ -1272,4 +1192,81 @@ func TestValidatePolicyForNodeStateWithValidVFAndNetFilter(t *testing.T) {
 	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(interfaceSelected).To(Equal(true))
+}
+
+func TestValidatePolicyForNodeStateWithExternallyManageAndSwitchdev(t *testing.T) {
+	state := newNodeState()
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				PfNames:     []string{"ens803f0"},
+				RootDevices: []string{"0000:86:00.0"},
+				Vendor:      "8086",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:            4,
+			ResourceName:      "p0",
+			EswitchMode:       "switchdev",
+			ExternallyManaged: true,
+		},
+	}
+	g := NewGomegaWithT(t)
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
+	g.Expect(err).NotTo(HaveOccurred())
+}
+
+func TestValidatePolicyForNodeStateWithExternallyManageAndSwitchdevAndWrongVFCount(t *testing.T) {
+	state := newNodeState()
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				PfNames:     []string{"ens803f0"},
+				RootDevices: []string{"0000:86:00.0"},
+				Vendor:      "8086",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:            30,
+			ResourceName:      "p0",
+			EswitchMode:       "switchdev",
+			ExternallyManaged: true,
+		},
+	}
+	g := NewGomegaWithT(t)
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
+	g.Expect(err).To(MatchError(ContainSubstring("is higher than the virtual functions allocated for the PF externally value")))
+}
+
+func TestValidatePolicyForNodePolicyAllowSwitchdevWithExternallyManage(t *testing.T) {
+	appliedPolicy := newNodePolicy()
+	appliedPolicy.Spec.ExternallyManaged = true
+
+	policy := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "p0",
+		},
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				PfNames: []string{"ens803f1#3-4"},
+				Vendor:  "8086",
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			NumVfs:            63,
+			Priority:          99,
+			ResourceName:      "p0",
+			ExternallyManaged: true,
+			EswitchMode:       ESwithModeSwitchDev,
+		},
+	}
+	g := NewGomegaWithT(t)
+	err := validatePolicyForNodePolicy(policy, appliedPolicy)
+	g.Expect(err).NotTo(HaveOccurred())
 }
