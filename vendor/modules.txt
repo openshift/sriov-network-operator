@@ -279,6 +279,11 @@ github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8
 github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/types
 github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils
 github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils/mocks
+# github.com/k8snetworkplumbingwg/sriovnet v1.2.0
+## explicit; go 1.18
+github.com/k8snetworkplumbingwg/sriovnet
+github.com/k8snetworkplumbingwg/sriovnet/pkg/utils/filesystem
+github.com/k8snetworkplumbingwg/sriovnet/pkg/utils/netlinkops
 # github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de
 ## explicit
 github.com/liggitt/tabwriter
@@ -445,7 +450,7 @@ github.com/safchain/ethtool
 # github.com/shopspring/decimal v1.2.0
 ## explicit; go 1.13
 github.com/shopspring/decimal
-# github.com/spf13/afero v1.9.3
+# github.com/spf13/afero v1.9.4
 ## explicit; go 1.16
 github.com/spf13/afero
 github.com/spf13/afero/internal/common

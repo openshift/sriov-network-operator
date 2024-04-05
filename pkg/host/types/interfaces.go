@@ -1,7 +1,6 @@
 package types
 
 import (
-	"github.com/jaypipes/ghw"
 	"github.com/vishvananda/netlink"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -130,8 +129,6 @@ type SriovInterface interface {
 	// SetSriovNumVfs changes the number of virtual functions allocated for a specific
 	// physical function base on pci address
 	SetSriovNumVfs(pciAddr string, numVfs int) error
-	// GetVfInfo returns the virtual function information is the operator struct from the host information
-	GetVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction
 	// SetVfGUID sets the GUID for a virtual function
 	SetVfGUID(vfAddr string, pfLink netlink.Link) error
 	// VFIsReady returns the interface virtual function if the device is ready

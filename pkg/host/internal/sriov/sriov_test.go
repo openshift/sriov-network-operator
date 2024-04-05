@@ -15,6 +15,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	dputilsMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils/mock"
 	netlinkMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink/mock"
+	sriovnetMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/sriovnet/mock"
 	hostMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/mock"
 	hostStoreMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/store/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
@@ -27,6 +28,7 @@ var _ = Describe("SRIOV", func() {
 		s                types.SriovInterface
 		netlinkLibMock   *netlinkMockPkg.MockNetlinkLib
 		dputilsLibMock   *dputilsMockPkg.MockDPUtilsLib
+		sriovnetLibMock  *sriovnetMockPkg.MockSriovnetLib
 		hostMock         *hostMockPkg.MockHostManagerInterface
 		storeManagerMode *hostStoreMockPkg.MockManagerInterface
 
@@ -38,10 +40,12 @@ var _ = Describe("SRIOV", func() {
 		testCtrl = gomock.NewController(GinkgoT())
 		netlinkLibMock = netlinkMockPkg.NewMockNetlinkLib(testCtrl)
 		dputilsLibMock = dputilsMockPkg.NewMockDPUtilsLib(testCtrl)
+		sriovnetLibMock = sriovnetMockPkg.NewMockSriovnetLib(testCtrl)
+
 		hostMock = hostMockPkg.NewMockHostManagerInterface(testCtrl)
 		storeManagerMode = hostStoreMockPkg.NewMockManagerInterface(testCtrl)
 
-		s = New(nil, hostMock, hostMock, hostMock, hostMock, netlinkLibMock, dputilsLibMock)
+		s = New(nil, hostMock, hostMock, hostMock, hostMock, netlinkLibMock, dputilsLibMock, sriovnetLibMock)
 	})
 
 	AfterEach(func() {
