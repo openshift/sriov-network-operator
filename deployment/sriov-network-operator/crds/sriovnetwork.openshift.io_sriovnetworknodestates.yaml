@@ -49,8 +49,6 @@ spec:
           spec:
             description: SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
             properties:
-              dpConfigVersion:
-                type: string
               interfaces:
                 items:
                   properties:
