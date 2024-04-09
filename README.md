@@ -259,6 +259,59 @@ spec:
 
 > **NOTE**: Currently only `mellanox` plugin can be disabled.
 
+### Parallel draining
+
+It is possible to drain more than one node at a time using this operator.
+
+The configuration is done via the SriovNetworkNodePool, selecting a number of nodes using the node selector and how many
+nodes in parallel from the pool the operator can drain in parallel. maxUnavailable can be a number or a percentage.
+
+> **NOTE**: every node can only be part of one pool, if a node is selected by more than one pool, then it will not be drained
+
+> **NOTE**: If a node is not part of any pool it will have a default configuration of maxUnavailable 1
+
+**Example**:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: worker
+  namespace: sriov-network-operator
+spec:
+  maxUnavailable: 2
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
+```
+
+### Resource Injector Policy
+
+By default, the Resource injector webhook has a failed policy of ignored, this was implemented to not block pod creation
+in case the webhook is not available.
+
+with a feature introduced in Kubernetes 1.28(Beta) called [MatchConditions](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#matching-requests-matchconditions)
+we can move the webhook failed policy to be Fail. In this case the operator configured the Mutating webhook for the resource
+injector only on pods with the secondary network annotation of `k8s.v1.cni.cncf.io/networks`.
+It's possible to enable the feature with a FeatureGate via the SriovOperatorConfig object
+
+> **NOTE**: the feature is disabled by default
+
+**Example**:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovOperatorConfig
+metadata:
+  name: default
+  namespace: sriov-network-operator
+spec:
+  ...
+  featureGates:
+    resourceInjectorMatchCondition: true
+  ...
+```
+
 ## Components and design
 
 This operator is split into 2 components:

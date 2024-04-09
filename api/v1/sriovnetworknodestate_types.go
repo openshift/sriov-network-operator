@@ -25,8 +25,7 @@ import (
 
 // SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
 type SriovNetworkNodeStateSpec struct {
-	DpConfigVersion string     `json:"dpConfigVersion,omitempty"`
-	Interfaces      Interfaces `json:"interfaces,omitempty"`
+	Interfaces Interfaces `json:"interfaces,omitempty"`
 }
 
 type Interfaces []Interface

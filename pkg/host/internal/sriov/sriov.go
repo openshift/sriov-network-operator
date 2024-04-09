@@ -23,7 +23,6 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
-	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
 
 type interfaceToConfigure struct {
@@ -122,6 +121,7 @@ func (s *sriov) GetVfInfo(pciAddr string, devices []*ghw.PCIDevice) sriovnetwork
 		PciAddress: pciAddr,
 		Driver:     driver,
 		VfID:       id,
+		VdpaType:   s.vdpaHelper.DiscoverVDPAType(pciAddr),
 	}
 
 	if name := s.networkHelper.TryGetInterfaceName(pciAddr); name != "" {
@@ -314,18 +314,25 @@ func (s *sriov) configSriovPFDevice(iface *sriovnetworkv1.Interface) error {
 	if err := s.configureHWOptionsForSwitchdev(iface); err != nil {
 		return err
 	}
+	// remove all UDEV rules for the PF before adding new rules to
+	// make sure that rules are always in a consistent state, e.g. there is no
+	// switchdev-related rules for PF in legacy mode
+	if err := s.removeUdevRules(iface.PciAddress); err != nil {
+		log.Log.Error(err, "configSriovPFDevice(): fail to remove udev rules", "device", iface.PciAddress)
+		return err
+	}
 	err := s.addUdevRules(iface)
 	if err != nil {
-		log.Log.Error(err, "configSriovPFDevice(): fail to set add udev rules", "device", iface.PciAddress)
+		log.Log.Error(err, "configSriovPFDevice(): fail to add udev rules", "device", iface.PciAddress)
 		return err
 	}
 	err = s.createVFs(iface)
 	if err != nil {
 		log.Log.Error(err, "configSriovPFDevice(): fail to set NumVfs for device", "device", iface.PciAddress)
-		errRemove := s.removeUdevRules(iface.PciAddress)
-		if errRemove != nil {
-			log.Log.Error(errRemove, "configSriovPFDevice(): fail to remove udev rule", "device", iface.PciAddress)
-		}
+		return err
+	}
+	if err := s.addVfRepresentorUdevRule(iface); err != nil {
+		log.Log.Error(err, "configSriovPFDevice(): fail to add VR representor udev rule", "device", iface.PciAddress)
 		return err
 	}
 	// set PF mtu
@@ -352,8 +359,8 @@ func (s *sriov) configureHWOptionsForSwitchdev(iface *sriovnetworkv1.Interface) 
 	desiredFlowSteeringMode := "smfs"
 	currentFlowSteeringMode, err := s.networkHelper.GetDevlinkDeviceParam(iface.PciAddress, "flow_steering_mode")
 	if err != nil {
-		if errors.Is(err, syscall.EINVAL) {
-			log.Log.V(2).Info("configureHWOptionsForSwitchdev(): software flow steering is not supported by the device, skip configuration",
+		if errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENODEV) {
+			log.Log.V(2).Info("configureHWOptionsForSwitchdev(): device has no flow_steering_mode parameter, skip",
 				"device", iface.PciAddress)
 			return nil
 		}
@@ -368,6 +375,10 @@ func (s *sriov) configureHWOptionsForSwitchdev(iface *sriovnetworkv1.Interface) 
 		s.setEswitchModeAndNumVFs(iface.PciAddress, sriovnetworkv1.ESwithModeLegacy, 0)
 	}
 	if err := s.networkHelper.SetDevlinkDeviceParam(iface.PciAddress, "flow_steering_mode", desiredFlowSteeringMode); err != nil {
+		if errors.Is(err, syscall.ENOTSUP) {
+			log.Log.V(2).Info("configureHWOptionsForSwitchdev(): device doesn't support changing of flow_steering_mode, skip", "device", iface.PciAddress)
+			return nil
+		}
 		log.Log.Error(err, "configureHWOptionsForSwitchdev(): fail to configure flow steering mode for the device", "device", iface.PciAddress)
 		return err
 	}
@@ -570,13 +581,8 @@ func (s *sriov) configSriovDevice(iface *sriovnetworkv1.Interface, skipVFConfigu
 }
 
 func (s *sriov) ConfigSriovInterfaces(storeManager store.ManagerInterface,
-	interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool, skipVFConfiguration bool) error {
-	if s.kernelHelper.IsKernelLockdownMode() && mlx.HasMellanoxInterfacesInSpec(ifaceStatuses, interfaces) {
-		log.Log.Error(nil, "cannot use mellanox devices when in kernel lockdown mode")
-		return fmt.Errorf("cannot use mellanox devices when in kernel lockdown mode")
-	}
-
-	toBeConfigured, toBeResetted, err := s.getConfigureAndReset(storeManager, interfaces, ifaceStatuses, pfsToConfig)
+	interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, skipVFConfiguration bool) error {
+	toBeConfigured, toBeResetted, err := s.getConfigureAndReset(storeManager, interfaces, ifaceStatuses)
 	if err != nil {
 		log.Log.Error(err, "cannot get a list of interfaces to configure")
 		return fmt.Errorf("cannot get a list of interfaces to configure")
@@ -591,6 +597,14 @@ func (s *sriov) ConfigSriovInterfaces(storeManager store.ManagerInterface,
 		log.Log.Error(err, "cannot configure sriov interfaces")
 		return fmt.Errorf("cannot configure sriov interfaces")
 	}
+	if sriovnetworkv1.ContainsSwitchdevInterface(interfaces) && len(toBeConfigured) > 0 {
+		// for switchdev devices we create udev rule that renames VF representors
+		// after VFs are created. Reload rules to update interfaces
+		if err := s.udevHelper.LoadUdevRules(); err != nil {
+			log.Log.Error(err, "cannot reload udev rules")
+			return fmt.Errorf("failed to reload udev rules: %v", err)
+		}
+	}
 
 	if vars.ParallelNicConfig {
 		err = s.resetSriovInterfacesInParallel(storeManager, toBeResetted)
@@ -604,7 +618,8 @@ func (s *sriov) ConfigSriovInterfaces(storeManager store.ManagerInterface,
 	return nil
 }
 
-func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interfaces []sriovnetworkv1.Interface, ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool) ([]interfaceToConfigure, []sriovnetworkv1.InterfaceExt, error) {
+func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interfaces []sriovnetworkv1.Interface,
+	ifaceStatuses []sriovnetworkv1.InterfaceExt) ([]interfaceToConfigure, []sriovnetworkv1.InterfaceExt, error) {
 	toBeConfigured := []interfaceToConfigure{}
 	toBeResetted := []sriovnetworkv1.InterfaceExt{}
 	for _, ifaceStatus := range ifaceStatuses {
@@ -612,11 +627,6 @@ func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interf
 		for _, iface := range interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
-
-				if skip := pfsToConfig[iface.PciAddress]; skip {
-					break
-				}
-
 				skip, err := skipSriovConfig(&iface, &ifaceStatus, storeManager)
 				if err != nil {
 					log.Log.Error(err, "getConfigureAndReset(): failed to check interface")
@@ -632,9 +642,7 @@ func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interf
 		}
 
 		if !configured && ifaceStatus.NumVfs > 0 {
-			if skip := pfsToConfig[ifaceStatus.PciAddress]; !skip {
-				toBeResetted = append(toBeResetted, ifaceStatus)
-			}
+			toBeResetted = append(toBeResetted, ifaceStatus)
 		}
 	}
 	return toBeConfigured, toBeResetted, nil
@@ -891,25 +899,38 @@ func (s *sriov) encapTypeToLinkType(encapType string) string {
 
 // create required udev rules for PF:
 // * rule to disable NetworkManager for VFs - for all modes
-// * rule to rename VF representors - only for switchdev mode
+// * rule to keep PF name after switching to switchdev mode - only for switchdev mode
 func (s *sriov) addUdevRules(iface *sriovnetworkv1.Interface) error {
 	log.Log.V(2).Info("addUdevRules(): add udev rules for device",
 		"device", iface.PciAddress)
-	if err := s.udevHelper.AddUdevRule(iface.PciAddress); err != nil {
+	if err := s.udevHelper.AddDisableNMUdevRule(iface.PciAddress); err != nil {
 		return err
 	}
 	if sriovnetworkv1.GetEswitchModeFromSpec(iface) == sriovnetworkv1.ESwithModeSwitchDev {
+		if err := s.udevHelper.AddPersistPFNameUdevRule(iface.PciAddress, iface.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// add switchdev-specific udev rule that renames representors.
+// this rule relies on phys_port_name and phys_switch_id parameter which
+// on old kernels can be read only after switching PF to switchdev mode.
+// if PF doesn't expose phys_port_name and phys_switch_id, then rule creation will be skipped
+func (s *sriov) addVfRepresentorUdevRule(iface *sriovnetworkv1.Interface) error {
+	if sriovnetworkv1.GetEswitchModeFromSpec(iface) == sriovnetworkv1.ESwithModeSwitchDev {
 		portName, err := s.networkHelper.GetPhysPortName(iface.Name)
 		if err != nil {
-			return err
+			log.Log.Error(err, "addVfRepresentorUdevRule(): WARNING: can't read phys_port_name for device, skip creation of UDEV rule")
+			return nil
 		}
 		switchID, err := s.networkHelper.GetPhysSwitchID(iface.Name)
 		if err != nil {
-			return err
+			log.Log.Error(err, "addVfRepresentorUdevRule(): WARNING: can't read phys_switch_id for device, skip creation of UDEV rule")
+			return nil
 		}
-		if err := s.udevHelper.AddVfRepresentorUdevRule(iface.PciAddress, iface.Name, switchID, portName); err != nil {
-			return err
-		}
+		return s.udevHelper.AddVfRepresentorUdevRule(iface.PciAddress, iface.Name, switchID, portName)
 	}
 	return nil
 }
@@ -918,10 +939,13 @@ func (s *sriov) addUdevRules(iface *sriovnetworkv1.Interface) error {
 func (s *sriov) removeUdevRules(pciAddress string) error {
 	log.Log.V(2).Info("removeUdevRules(): remove udev rules for device",
 		"device", pciAddress)
-	if err := s.udevHelper.RemoveUdevRule(pciAddress); err != nil {
+	if err := s.udevHelper.RemoveDisableNMUdevRule(pciAddress); err != nil {
 		return err
 	}
-	return s.udevHelper.RemoveVfRepresentorUdevRule(pciAddress)
+	if err := s.udevHelper.RemoveVfRepresentorUdevRule(pciAddress); err != nil {
+		return err
+	}
+	return s.udevHelper.RemovePersistPFNameUdevRule(pciAddress)
 }
 
 // create VFs on the PF
