@@ -25,13 +25,10 @@ import (
 	"strings"
 	"time"
 
-	errs "github.com/pkg/errors"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
@@ -49,7 +46,6 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -368,66 +364,6 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 		}
 	}
 	return nil
-}
-
-func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1.DaemonSet) error {
-	terms := nodeSelectorTermsForPolicyList(pl.Items)
-	if len(terms) > 0 {
-		ds.Spec.Template.Spec.Affinity = &corev1.Affinity{
-			NodeAffinity: &corev1.NodeAffinity{
-				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-					NodeSelectorTerms: terms,
-				},
-			},
-		}
-	}
-	return nil
-}
-
-func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePolicy) []corev1.NodeSelectorTerm {
-	terms := []corev1.NodeSelectorTerm{}
-	for _, p := range policies {
-		// Note(adrianc): default policy is deprecated and ignored.
-		if p.Name == constants.DefaultPolicyName {
-			continue
-		}
-
-		if len(p.Spec.NodeSelector) == 0 {
-			continue
-		}
-		expressions := []corev1.NodeSelectorRequirement{}
-		for k, v := range p.Spec.NodeSelector {
-			exp := corev1.NodeSelectorRequirement{
-				Operator: corev1.NodeSelectorOpIn,
-				Key:      k,
-				Values:   []string{v},
-			}
-			expressions = append(expressions, exp)
-		}
-		// sorting is needed to keep the daemon spec stable.
-		// the items are popped in a random order from the map
-		sort.Slice(expressions, func(i, j int) bool {
-			return expressions[i].Key < expressions[j].Key
-		})
-		nodeSelector := corev1.NodeSelectorTerm{
-			MatchExpressions: expressions,
-		}
-		terms = append(terms, nodeSelector)
-	}
-
-	return terms
-}
-
-// renderDsForCR returns a busybox pod with the same name/namespace as the cr
-func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, error) {
-	logger := log.Log.WithName("renderDsForCR")
-	logger.V(1).Info("Start to render objects")
-
-	objs, err := render.RenderDir(path, data)
-	if err != nil {
-		return nil, errs.Wrap(err, "failed to render SR-IOV Network Operator manifests")
-	}
-	return objs, nil
 }
 
 func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx context.Context, pl *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node) (dptypes.ResourceConfList, error) {

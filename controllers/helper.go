@@ -22,9 +22,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
+	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -263,6 +266,66 @@ func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.
 	return nil
 }
 
+func setDsNodeAffinity(pl *sriovnetworkv1.SriovNetworkNodePolicyList, ds *appsv1.DaemonSet) error {
+	terms := nodeSelectorTermsForPolicyList(pl.Items)
+	if len(terms) > 0 {
+		ds.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			NodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: terms,
+				},
+			},
+		}
+	}
+	return nil
+}
+
+func nodeSelectorTermsForPolicyList(policies []sriovnetworkv1.SriovNetworkNodePolicy) []corev1.NodeSelectorTerm {
+	terms := []corev1.NodeSelectorTerm{}
+	for _, p := range policies {
+		// Note(adrianc): default policy is deprecated and ignored.
+		if p.Name == constants.DefaultPolicyName {
+			continue
+		}
+
+		if len(p.Spec.NodeSelector) == 0 {
+			continue
+		}
+		expressions := []corev1.NodeSelectorRequirement{}
+		for k, v := range p.Spec.NodeSelector {
+			exp := corev1.NodeSelectorRequirement{
+				Operator: corev1.NodeSelectorOpIn,
+				Key:      k,
+				Values:   []string{v},
+			}
+			expressions = append(expressions, exp)
+		}
+		// sorting is needed to keep the daemon spec stable.
+		// the items are popped in a random order from the map
+		sort.Slice(expressions, func(i, j int) bool {
+			return expressions[i].Key < expressions[j].Key
+		})
+		nodeSelector := corev1.NodeSelectorTerm{
+			MatchExpressions: expressions,
+		}
+		terms = append(terms, nodeSelector)
+	}
+
+	return terms
+}
+
+// renderDsForCR returns a busybox pod with the same name/namespace as the cr
+func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, error) {
+	logger := log.Log.WithName("renderDsForCR")
+	logger.V(1).Info("Start to render objects")
+
+	objs, err := render.RenderDir(path, data)
+	if err != nil {
+		return nil, errs.Wrap(err, "failed to render SR-IOV Network Operator manifests")
+	}
+	return objs, nil
+}
+
 func syncDaemonSet(ctx context.Context, client k8sclient.Client, scheme *runtime.Scheme, dc *sriovnetworkv1.SriovOperatorConfig, pl *sriovnetworkv1.SriovNetworkNodePolicyList, in *appsv1.DaemonSet) error {
 	logger := log.Log.WithName("syncDaemonSet")
 	logger.V(1).Info("Start to sync DaemonSet", "Namespace", in.Namespace, "Name", in.Name)
@@ -302,17 +365,8 @@ func syncDaemonSet(ctx context.Context, client k8sclient.Client, scheme *runtime
 
 		if equality.Semantic.DeepEqual(in.OwnerReferences, ds.OwnerReferences) &&
 			equality.Semantic.DeepDerivative(in.Spec, ds.Spec) {
-			// DeepDerivative has issue detecting nodeAffinity change
-			// https://bugzilla.redhat.com/show_bug.cgi?id=1914066
-			// DeepDerivative doesn't detect changes in containers args section
-			// This code should be fixed both with NodeAffinity comparation
-			if equality.Semantic.DeepEqual(in.Spec.Template.Spec.Affinity.NodeAffinity,
-				ds.Spec.Template.Spec.Affinity.NodeAffinity) &&
-				equality.Semantic.DeepEqual(in.Spec.Template.Spec.Containers[0].Args,
-					ds.Spec.Template.Spec.Containers[0].Args) {
-				logger.V(1).Info("Daemonset spec did not change, not updating")
-				return nil
-			}
+			logger.V(1).Info("Daemonset spec did not change, not updating")
+			return nil
 		}
 		err = client.Update(ctx, in)
 		if err != nil {
