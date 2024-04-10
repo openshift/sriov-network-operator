@@ -31,6 +31,12 @@ rules:
   verbs:
     - use
 - apiGroups:
+  - machineconfiguration.openshift.io
+  resources:
+  - machineconfigs
+  verbs:
+  - get
+- apiGroups:
   - ""
   resources:
   - configmaps
