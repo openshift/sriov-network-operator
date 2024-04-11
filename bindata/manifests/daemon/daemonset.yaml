@@ -71,6 +71,28 @@ spec:
             - name: os-release
               mountPath: /host/etc/os-release
               readOnly: true
+        {{- if .OVSCNIImage }}
+        - name: ovs-cni
+          image: {{.OVSCNIImage}}
+          command: ["/bin/sh","-c"]
+          args:
+            - >
+              cp /ovs /host/opt/cni/bin/ovs &&
+              cp /ovs-mirror-producer /host/opt/cni/bin/ovs-mirror-producer &&
+              cp /ovs-mirror-consumer /host/opt/cni/bin/ovs-mirror-consumer
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+          volumeMounts:
+            - name: cnibin
+              mountPath: /host/opt/cni/bin
+            - name: os-release
+              mountPath: /host/etc/os-release
+              readOnly: true
+        {{- end }}
       {{- if .UsedSystemdMode}}
         - name: sriov-service-copy
           image: {{.Image}}

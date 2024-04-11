@@ -2,18 +2,14 @@ package utils
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
-	"hash/fnv"
 	"math/rand"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"syscall"
 
-	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -80,22 +76,6 @@ func GenerateRandomGUID() net.HardwareAddr {
 	}
 
 	return guid
-}
-
-func HashConfigMap(cm *corev1.ConfigMap) string {
-	var keys []string
-	for k := range cm.Data {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	hash := fnv.New128()
-	for _, k := range keys {
-		hash.Write([]byte(k))
-		hash.Write([]byte(cm.Data[k]))
-	}
-	hashed := hash.Sum(nil)
-	return hex.EncodeToString(hashed)
 }
 
 func IsCommandNotFound(err error) bool {

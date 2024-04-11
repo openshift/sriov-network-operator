@@ -1,7 +1,6 @@
 package types
 
 import (
-	"github.com/coreos/go-systemd/v22/unit"
 	"github.com/jaypipes/ghw"
 	"github.com/vishvananda/netlink"
 
@@ -119,13 +118,9 @@ type ServiceInterface interface {
 	EnableService(service *Service) error
 	// ReadServiceManifestFile reads the systemd manifest for a specific service
 	ReadServiceManifestFile(path string) (*Service, error)
-	// RemoveFromService removes a systemd service from the host
-	RemoveFromService(service *Service, options ...*unit.UnitOption) (*Service, error)
-	// ReadScriptManifestFile reads the script manifest from a systemd service
-	ReadScriptManifestFile(path string) (*ScriptManifestFile, error)
 	// ReadServiceInjectionManifestFile reads the injection manifest file for the systemd service
 	ReadServiceInjectionManifestFile(path string) (*Service, error)
-	// CompareServices compare two servers and return true if they are equal
+	// CompareServices returns true if serviceA needs update(doesn't contain all fields from service B)
 	CompareServices(serviceA, serviceB *Service) (bool, error)
 	// UpdateSystemService updates a system service on the host
 	UpdateSystemService(serviceObj *Service) error
@@ -159,25 +154,31 @@ type SriovInterface interface {
 	// ConfigSriovInterfaces configure multiple SR-IOV devices with the desired configuration
 	// if skipVFConfiguration flag is set, the function will configure PF and create VFs on it, but will skip VFs configuration
 	ConfigSriovInterfaces(storeManager store.ManagerInterface, interfaces []sriovnetworkv1.Interface,
-		ifaceStatuses []sriovnetworkv1.InterfaceExt, pfsToConfig map[string]bool, skipVFConfiguration bool) error
+		ifaceStatuses []sriovnetworkv1.InterfaceExt, skipVFConfiguration bool) error
 	// ConfigSriovInterfaces configure virtual functions for virtual environments with the desired configuration
 	ConfigSriovDeviceVirtual(iface *sriovnetworkv1.Interface) error
 }
 
 type UdevInterface interface {
-	// WriteSwitchdevConfFile writes the needed switchdev configuration files for HW offload support
-	WriteSwitchdevConfFile(newState *sriovnetworkv1.SriovNetworkNodeState, pfsToSkip map[string]bool) (bool, error)
 	// PrepareNMUdevRule creates the needed udev rules to disable NetworkManager from
 	// our managed SR-IOV virtual functions
 	PrepareNMUdevRule(supportedVfIds []string) error
-	// AddUdevRule adds a udev rule that disables network-manager for VFs on the concrete PF
-	AddUdevRule(pfPciAddress string) error
-	// RemoveUdevRule removes a udev rule that disables network-manager for VFs on the concrete PF
-	RemoveUdevRule(pfPciAddress string) error
+	// PrepareVFRepUdevRule creates a script which helps to configure representor name for the VF
+	PrepareVFRepUdevRule() error
+	// AddDisableNMUdevRule adds udev rule that disables NetworkManager for VFs on the concrete PF:
+	AddDisableNMUdevRule(pfPciAddress string) error
+	// RemoveDisableNMUdevRule removes udev rule that disables NetworkManager for VFs on the concrete PF
+	RemoveDisableNMUdevRule(pfPciAddress string) error
+	// AddPersistPFNameUdevRule add udev rule that preserves PF name after switching to switchdev mode
+	AddPersistPFNameUdevRule(pfPciAddress, pfName string) error
+	// RemovePersistPFNameUdevRule removes udev rule that preserves PF name after switching to switchdev mode
+	RemovePersistPFNameUdevRule(pfPciAddress string) error
 	// AddVfRepresentorUdevRule adds udev rule that renames VF representors on the concrete PF
 	AddVfRepresentorUdevRule(pfPciAddress, pfName, pfSwitchID, pfSwitchPort string) error
 	// RemoveVfRepresentorUdevRule removes udev rule that renames VF representors on the concrete PF
 	RemoveVfRepresentorUdevRule(pfPciAddress string) error
+	// LoadUdevRules triggers udev rules for network subsystem
+	LoadUdevRules() error
 }
 
 type VdpaInterface interface {

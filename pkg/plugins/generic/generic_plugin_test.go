@@ -77,8 +77,6 @@ var _ = Describe("Generic plugin", func() {
 					}},
 				},
 			}
-
-			hostHelper.EXPECT().WriteSwitchdevConfFile(networkNodeState, map[string]bool{"0000:00:00.0": false}).Return(false, nil)
 			needDrain, needReboot, err := genericPlugin.OnNodeStateChange(networkNodeState)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(needReboot).To(BeFalse())
@@ -133,8 +131,6 @@ var _ = Describe("Generic plugin", func() {
 					}},
 				},
 			}
-
-			hostHelper.EXPECT().WriteSwitchdevConfFile(networkNodeState, map[string]bool{"0000:00:00.0": false}).Return(false, nil)
 			needDrain, needReboot, err := genericPlugin.OnNodeStateChange(networkNodeState)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(needReboot).To(BeFalse())

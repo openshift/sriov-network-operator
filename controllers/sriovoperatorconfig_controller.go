@@ -42,6 +42,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	apply "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	consts "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	render "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
@@ -53,6 +54,7 @@ type SriovOperatorConfigReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
 	PlatformHelper platforms.Interface
+	FeatureGate    featuregate.FeatureGate
 }
 
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -86,6 +88,9 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 
 	snolog.SetLogLevel(defaultConfig.Spec.LogLevel)
+
+	r.FeatureGate.Init(defaultConfig.Spec.FeatureGates)
+	logger.Info("enabled featureGates", "featureGates", r.FeatureGate.String())
 
 	if !defaultConfig.Spec.EnableInjector {
 		logger.Info("SR-IOV Network Resource Injector is disabled.")
@@ -162,6 +167,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 	data.Data["Namespace"] = vars.Namespace
 	data.Data["SRIOVCNIImage"] = os.Getenv("SRIOV_CNI_IMAGE")
 	data.Data["SRIOVInfiniBandCNIImage"] = os.Getenv("SRIOV_INFINIBAND_CNI_IMAGE")
+	data.Data["OVSCNIImage"] = os.Getenv("OVS_CNI_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ClusterType"] = vars.ClusterType
 	data.Data["DevMode"] = os.Getenv("DEV_MODE")
@@ -171,10 +177,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 	} else {
 		data.Data["UsedSystemdMode"] = false
 	}
-	data.Data["ParallelNicConfig"] = false
-	if parallelConfig, ok := dc.Spec.FeatureGates[consts.ParallelNicConfigFeatureGate]; ok {
-		data.Data["ParallelNicConfig"] = parallelConfig
-	}
+	data.Data["ParallelNicConfig"] = r.FeatureGate.IsEnabled(consts.ParallelNicConfigFeatureGate)
 
 	envCniBinPath := os.Getenv("SRIOV_CNI_BIN_PATH")
 	if envCniBinPath == "" {
@@ -248,10 +251,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 		}
 
 		// check for ResourceInjectorMatchConditionFeatureGate feature gate
-		data.Data[consts.ResourceInjectorMatchConditionFeatureGate] = false
-		if resourceInjector, ok := dc.Spec.FeatureGates[consts.ResourceInjectorMatchConditionFeatureGate]; ok {
-			data.Data[consts.ResourceInjectorMatchConditionFeatureGate] = resourceInjector
-		}
+		data.Data[consts.ResourceInjectorMatchConditionFeatureGate] = r.FeatureGate.IsEnabled(consts.ResourceInjectorMatchConditionFeatureGate)
 
 		objs, err := render.RenderDir(path, &data)
 		if err != nil {

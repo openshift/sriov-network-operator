@@ -102,7 +102,7 @@ func (s *service) EnableService(service *types.Service) error {
 	return err
 }
 
-// CompareServices compare 2 service and return true if serviceA has all the fields of serviceB
+// CompareServices returns true if serviceA needs update(doesn't contain all fields from service B)
 func (s *service) CompareServices(serviceA, serviceB *types.Service) (bool, error) {
 	optsA, err := unit.Deserialize(strings.NewReader(serviceA.Content))
 	if err != nil {
@@ -125,37 +125,6 @@ OUTER:
 	}
 
 	return false, nil
-}
-
-// RemoveFromService removes given fields from service
-func (s *service) RemoveFromService(service *types.Service, options ...*unit.UnitOption) (*types.Service, error) {
-	opts, err := unit.Deserialize(strings.NewReader(service.Content))
-	if err != nil {
-		return nil, err
-	}
-
-	var newServiceOptions []*unit.UnitOption
-OUTER:
-	for _, opt := range opts {
-		for _, optRemove := range options {
-			if opt.Match(optRemove) {
-				continue OUTER
-			}
-		}
-
-		newServiceOptions = append(newServiceOptions, opt)
-	}
-
-	data, err := io.ReadAll(unit.Serialize(newServiceOptions))
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.Service{
-		Name:    service.Name,
-		Path:    service.Path,
-		Content: string(data),
-	}, nil
 }
 
 // ReadServiceInjectionManifestFile reads service injection file
@@ -194,21 +163,6 @@ func (s *service) ReadServiceManifestFile(path string) (*types.Service, error) {
 		Path:    "/etc/systemd/system/" + serviceFile.Name,
 		Content: serviceFile.Contents,
 	}, nil
-}
-
-// ReadScriptManifestFile reads script file
-func (s *service) ReadScriptManifestFile(path string) (*types.ScriptManifestFile, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var scriptFile *types.ScriptManifestFile
-	if err := yaml.Unmarshal(data, &scriptFile); err != nil {
-		return nil, err
-	}
-
-	return scriptFile, nil
 }
 
 func (s *service) UpdateSystemService(serviceObj *types.Service) error {
