@@ -373,6 +373,11 @@ func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy,
 		return err
 	}
 
+	err = validateRootDevices(current, previous)
+	if err != nil {
+		return err
+	}
+
 	err = validateExludeTopologyField(current, previous)
 	if err != nil {
 		return err
@@ -383,28 +388,18 @@ func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy,
 
 func validatePfNames(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
 	for _, curPf := range current.Spec.NicSelector.PfNames {
-		curName, curRngSt, curRngEnd, err := sriovnetworkv1.ParsePFName(curPf)
+		curName, curRngSt, curRngEnd, err := sriovnetworkv1.ParseVfRange(curPf)
 		if err != nil {
 			return fmt.Errorf("invalid PF name: %s", curPf)
 		}
 		for _, prePf := range previous.Spec.NicSelector.PfNames {
-			// Not validate return err of ParsePFName for previous PF
+			// Not validate return err for previous PF
 			// since it should already be evaluated in previous run.
-			preName, preRngSt, preRngEnd, _ := sriovnetworkv1.ParsePFName(prePf)
+			preName, preRngSt, preRngEnd, _ := sriovnetworkv1.ParseVfRange(prePf)
 			if curName == preName {
-				// reject policy with externallyManage if there is a policy on the same PF without it
-				if current.Spec.ExternallyManaged != previous.Spec.ExternallyManaged {
-					return fmt.Errorf("externallyManage is inconsistent with existing policy %s", previous.GetName())
-				}
-
-				// reject policy with externallyManage if there is a policy on the same PF with switch dev
-				if current.Spec.ExternallyManaged && previous.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-					return fmt.Errorf("externallyManage overlap with switchdev mode in existing policy %s", previous.GetName())
-				}
-
-				// reject policy with externallyManage if there is a policy on the same PF with switch dev
-				if previous.Spec.ExternallyManaged && current.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-					return fmt.Errorf("switchdev overlap with externallyManage mode in existing policy %s", previous.GetName())
+				err = validateExternallyManage(current, previous)
+				if err != nil {
+					return err
 				}
 
 				// Check for overlapping ranges
@@ -416,6 +411,37 @@ func validatePfNames(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *s
 			}
 		}
 	}
+	return nil
+}
+
+func validateRootDevices(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
+	for _, curRootDevice := range current.Spec.NicSelector.RootDevices {
+		for _, preRootDevice := range previous.Spec.NicSelector.RootDevices {
+			// TODO: (SchSeba) implement range for root devices
+			if curRootDevice == preRootDevice {
+				return fmt.Errorf("root device %s is overlapped with existing policy %s", curRootDevice, previous.GetName())
+			}
+		}
+	}
+	return nil
+}
+
+func validateExternallyManage(current, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
+	// reject policy with externallyManage if there is a policy on the same PF without it
+	if current.Spec.ExternallyManaged != previous.Spec.ExternallyManaged {
+		return fmt.Errorf("externallyManage is inconsistent with existing policy %s", previous.GetName())
+	}
+
+	// reject policy with externallyManage if there is a policy on the same PF with switch dev
+	if current.Spec.ExternallyManaged && previous.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
+		return fmt.Errorf("externallyManage overlap with switchdev mode in existing policy %s", previous.GetName())
+	}
+
+	// reject policy with externallyManage if there is a policy on the same PF with switch dev
+	if previous.Spec.ExternallyManaged && current.Spec.EswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
+		return fmt.Errorf("switchdev overlap with externallyManage mode in existing policy %s", previous.GetName())
+	}
+
 	return nil
 }
 
