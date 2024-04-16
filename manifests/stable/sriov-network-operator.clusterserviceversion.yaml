@@ -231,12 +231,6 @@ spec:
           verbs:
           - get
         - apiGroups:
-          - ""
-          resources:
-          - pods/eviction
-          verbs:
-          - create
-        - apiGroups:
           - machineconfiguration.openshift.io
           resources:
           - '*'
@@ -268,6 +262,12 @@ spec:
           - pods
           verbs:
           - '*'
+        - apiGroups:
+          - ""
+          resources:
+          - pods/eviction
+          verbs:
+          - create
         - apiGroups:
           - apps
           resources:
