@@ -194,8 +194,9 @@ var _ = Describe("Config Daemon", func() {
 
 			nodeState := &sriovnetworkv1.SriovNetworkNodeState{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-node",
-					Generation: 123,
+					Name:        "test-node",
+					Generation:  123,
+					Annotations: map[string]string{consts.NodeStateDrainAnnotationCurrent: consts.DrainIdle},
 				},
 				Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{},
 				Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
@@ -253,8 +254,9 @@ var _ = Describe("Config Daemon", func() {
 
 			nodeState1 := &sriovnetworkv1.SriovNetworkNodeState{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-node",
-					Generation: 123,
+					Name:        "test-node",
+					Generation:  123,
+					Annotations: map[string]string{consts.NodeStateDrainAnnotationCurrent: consts.DrainIdle},
 				},
 			}
 			Expect(
@@ -263,8 +265,9 @@ var _ = Describe("Config Daemon", func() {
 
 			nodeState2 := &sriovnetworkv1.SriovNetworkNodeState{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-node",
-					Generation: 777,
+					Name:        "test-node",
+					Generation:  777,
+					Annotations: map[string]string{consts.NodeStateDrainAnnotationCurrent: consts.DrainIdle},
 				},
 			}
 			Expect(
