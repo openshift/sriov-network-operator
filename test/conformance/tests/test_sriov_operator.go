@@ -1015,7 +1015,7 @@ var _ = Describe("[sriov] operator", func() {
 
 				testPod := createTestPod(node, []string{sriovNetworkName})
 
-				recentMultusLogs := getMultusPodLogs(testPod.Spec.NodeName, testPod.ObjectMeta.CreationTimestamp.Time)
+				recentMultusLogs := getMultusPodLogs(testPod.Spec.NodeName, testPod.Status.StartTime.Time)
 
 				Expect(recentMultusLogs).To(
 					ContainElement(
