@@ -484,9 +484,13 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	if reqDrain || !utils.ObjectHasAnnotation(dn.desiredNodeState,
 		consts.NodeStateDrainAnnotationCurrent,
 		consts.DrainIdle) {
-		if err := dn.handleDrain(reqReboot); err != nil {
+		drainInProcess, err := dn.handleDrain(reqReboot)
+		if err != nil {
 			log.Log.Error(err, "failed to handle drain")
 			return err
+		}
+		if drainInProcess {
+			return nil
 		}
 	}
 
@@ -560,20 +564,25 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	return nil
 }
 
-func (dn *Daemon) handleDrain(reqReboot bool) error {
+// handleDrain: adds the right annotation to the node and nodeState object
+// returns true if we need to finish the reconcile loop and wait for a new object
+func (dn *Daemon) handleDrain(reqReboot bool) (bool, error) {
+	// done with the drain we can continue with the configuration
 	if utils.ObjectHasAnnotation(dn.desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainComplete) {
 		log.Log.Info("handleDrain(): the node complete the draining")
-		return nil
+		return false, nil
 	}
 
+	// the operator is still draining the node so we reconcile
 	if utils.ObjectHasAnnotation(dn.desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.Draining) {
 		log.Log.Info("handleDrain(): the node is still draining")
-		return nil
+		return true, nil
 	}
 
+	// drain is disabled we continue with the configuration
 	if dn.disableDrain {
 		log.Log.Info("handleDrain(): drain is disabled in sriovOperatorConfig")
-		return nil
+		return false, nil
 	}
 
 	if reqReboot {
@@ -581,33 +590,35 @@ func (dn *Daemon) handleDrain(reqReboot bool) error {
 		err := utils.AnnotateNode(context.Background(), vars.NodeName, consts.NodeDrainAnnotation, consts.RebootRequired, dn.client)
 		if err != nil {
 			log.Log.Error(err, "applyDrainRequired(): Failed to annotate node")
-			return err
+			return false, err
 		}
 
 		log.Log.Info("handleDrain(): apply 'Reboot_Required' annotation for nodeState")
 		if err := utils.AnnotateObject(context.Background(), dn.desiredNodeState,
 			consts.NodeStateDrainAnnotation,
 			consts.RebootRequired, dn.client); err != nil {
-			return err
+			return false, err
 		}
 
-		return nil
+		// the node was annotated we need to wait for the operator to finish the drain
+		return true, nil
 	}
 	log.Log.Info("handleDrain(): apply 'Drain_Required' annotation for node")
 	err := utils.AnnotateNode(context.Background(), vars.NodeName, consts.NodeDrainAnnotation, consts.DrainRequired, dn.client)
 	if err != nil {
 		log.Log.Error(err, "handleDrain(): Failed to annotate node")
-		return err
+		return false, err
 	}
 
 	log.Log.Info("handleDrain(): apply 'Drain_Required' annotation for nodeState")
 	if err := utils.AnnotateObject(context.Background(), dn.desiredNodeState,
 		consts.NodeStateDrainAnnotation,
 		consts.DrainRequired, dn.client); err != nil {
-		return err
+		return false, err
 	}
 
-	return nil
+	// the node was annotated we need to wait for the operator to finish the drain
+	return true, nil
 }
 
 func (dn *Daemon) restartDevicePluginPod() error {
