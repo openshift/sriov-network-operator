@@ -182,7 +182,7 @@ func callPlugin(setupLog logr.Logger, phase string, conf *systemd.SriovConfig, h
 
 	nodeState, err := getNetworkNodeState(setupLog, conf, hostHelpers)
 	if err != nil {
-		return nil
+		return err
 	}
 	_, _, err = configPlugin.OnNodeStateChange(nodeState)
 	if err != nil {
