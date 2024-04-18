@@ -21,6 +21,21 @@ metadata:
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
     olm.skipRange: '>=4.3.0-0 <4.16.0'
+    operatorframework.io/initialization-resource: |-
+      {
+        "apiVersion": "sriovnetwork.openshift.io/v1",
+        "kind": "SriovOperatorConfig",
+        "metadata": {
+          "name": "default"
+        },
+        "spec": {
+          "configurationMode": "daemon",
+          "disableDrain": false,
+          "enableInjector": true,
+          "enableOperatorWebhook": true,
+          "logLevel": 2
+        }
+      }
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
     operatorframework.io/suggested-namespace-template: |-
       {
@@ -33,6 +48,7 @@ metadata:
           }
         }
       }
+    operators.operatorframework.io/internal-objects: '["sriovnetworknodestates.sriovnetwork.openshift.io"]'
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
     target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
