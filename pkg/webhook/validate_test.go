@@ -777,6 +777,31 @@ func TestValidatePoliciesWithSameExcludeTopologyForTheSameResource(t *testing.T)
 	g.Expect(err).NotTo(HaveOccurred())
 }
 
+func TestValidatePoliciesWithDifferentNumVfForTheSameResourceAndTheSameRootDevice(t *testing.T) {
+	current := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "currentPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName: "resourceX",
+			NumVfs:       10,
+			NicSelector:  SriovNetworkNicSelector{RootDevices: []string{"0000:86:00.1"}},
+		},
+	}
+
+	previous := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "previousPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName: "resourceX",
+			NumVfs:       5,
+			NicSelector:  SriovNetworkNicSelector{RootDevices: []string{"0000:86:00.1"}},
+		},
+	}
+
+	err := validatePolicyForNodePolicy(current, previous)
+
+	g := NewGomegaWithT(t)
+	g.Expect(err).To(MatchError("root device 0000:86:00.1 is overlapped with existing policy previousPolicy"))
+}
+
 func TestStaticValidateSriovNetworkNodePolicyWithValidVendorDevice(t *testing.T) {
 	policy := &SriovNetworkNodePolicy{
 		Spec: SriovNetworkNodePolicySpec{
