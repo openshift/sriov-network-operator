@@ -11,6 +11,21 @@ metadata:
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     olm.skipRange: '>=4.3.0-0 <4.16.0'
+    operatorframework.io/initialization-resource: |-
+      {
+        "apiVersion": "sriovnetwork.openshift.io/v1",
+        "kind": "SriovOperatorConfig",
+        "metadata": {
+          "name": "default"
+        },
+        "spec": {
+          "configurationMode": "daemon",
+          "disableDrain": false,
+          "enableInjector": true,
+          "enableOperatorWebhook": true,
+          "logLevel": 2
+        }
+      }
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
     operatorframework.io/suggested-namespace-template: |-
       {
@@ -23,6 +38,7 @@ metadata:
           }
         }
       }
+    operators.operatorframework.io/internal-objects: '["sriovnetworknodestates.sriovnetwork.openshift.io"]'
     features.operators.openshift.io/disconnected: "true"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "false"
