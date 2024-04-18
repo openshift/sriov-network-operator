@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -xeo pipefail
 
+cluster_version=${CLUSTER_VERSION:-1.29.3}
 cluster_name=${CLUSTER_NAME:-virtual}
 domain_name=$cluster_name.lab
 
@@ -52,6 +53,7 @@ kcli create network -c 192.168.124.0/24 k8s
 kcli create network -c 192.168.${virtual_router_id}.0/24 --nodhcp -i $cluster_name
 
 cat <<EOF > ./${cluster_name}-plan.yaml
+version: $cluster_version
 ctlplane_memory: 4096
 worker_memory: 4096
 pool: default
