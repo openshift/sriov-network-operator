@@ -3,7 +3,7 @@
 # to deploy.  It assumes it is capable of login as a
 # user who has the cluster-admin role
 
-# set -euxo pipefail
+set -eo pipefail
 
 source "$(dirname $0)/common"
 

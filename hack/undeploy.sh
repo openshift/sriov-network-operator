@@ -1,5 +1,6 @@
 #!/bin/bash
-#set -euxo pipefail
+
+set -eo pipefail
 
 source "$(dirname $0)/common"
 
