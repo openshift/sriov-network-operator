@@ -94,18 +94,26 @@ func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// get node object
 	node := &corev1.Node{}
-	err := dr.getObject(ctx, req, node)
+	found, err := dr.getObject(ctx, req, node)
 	if err != nil {
 		reqLogger.Error(err, "failed to get node object")
 		return ctrl.Result{}, err
 	}
+	if !found {
+		reqLogger.Info("node not found don't, requeue the request")
+		return ctrl.Result{}, nil
+	}
 
 	// get sriovNodeNodeState object
 	nodeNetworkState := &sriovnetworkv1.SriovNetworkNodeState{}
-	err = dr.getObject(ctx, req, nodeNetworkState)
+	found, err = dr.getObject(ctx, req, nodeNetworkState)
 	if err != nil {
 		reqLogger.Error(err, "failed to get sriovNetworkNodeState object")
 		return ctrl.Result{}, err
+	}
+	if !found {
+		reqLogger.Info("sriovNetworkNodeState not found, don't requeue the request")
+		return ctrl.Result{}, nil
 	}
 
 	// create the drain state annotation if it doesn't exist in the sriovNetworkNodeState object
@@ -241,22 +249,15 @@ func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	return reconcile.Result{}, fmt.Errorf("unexpected node drain annotation")
 }
 
-func (dr *DrainReconcile) getObject(ctx context.Context, req ctrl.Request, object client.Object) error {
-	reqLogger := log.FromContext(ctx)
-	reqLogger.Info("getObject():")
-
+func (dr *DrainReconcile) getObject(ctx context.Context, req ctrl.Request, object client.Object) (bool, error) {
 	err := dr.Get(ctx, req.NamespacedName, object)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			reqLogger.Error(err, "object doesn't exist", "objectName", req.Name)
-			return nil
+			return false, nil
 		}
-
-		reqLogger.Error(err, "failed to get object from api re-queue the request", "objectName", req.Name)
-		return err
+		return false, err
 	}
-
-	return nil
+	return true, nil
 }
 
 func (dr *DrainReconcile) ensureAnnotationExists(ctx context.Context, object client.Object, key string) (string, error) {
