@@ -172,6 +172,20 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 		},
 	}
 
+	// we want to act fast on new or deleted nodes
+	nodeEvenHandler := handler.Funcs{
+		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+			log.Log.WithName("SriovNetworkNodePolicy").
+				Info("Enqueuing sync for create event", "resource", e.Object.GetName())
+			qHandler(q)
+		},
+		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+			log.Log.WithName("SriovNetworkNodePolicy").
+				Info("Enqueuing sync for delete event", "resource", e.Object.GetName())
+			qHandler(q)
+		},
+	}
+
 	// send initial sync event to trigger reconcile when controller is started
 	var eventChan = make(chan event.GenericEvent, 1)
 	eventChan <- event.GenericEvent{Object: &sriovnetworkv1.SriovNetworkNodePolicy{
@@ -180,6 +194,7 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&sriovnetworkv1.SriovNetworkNodePolicy{}).
+		Watches(&corev1.Node{}, nodeEvenHandler).
 		Watches(&sriovnetworkv1.SriovNetworkNodePolicy{}, delayedEventHandler).
 		WatchesRawSource(&source.Channel{Source: eventChan}, delayedEventHandler).
 		Complete(r)
@@ -278,6 +293,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 				}
 			}
 			if !found {
+				logger.Info("Deleting SriovNetworkNodeState as node with that name doesn't exist", "nodeStateName", ns.Name)
 				err := r.Delete(ctx, &ns, &client.DeleteOptions{})
 				if err != nil {
 					logger.Error(err, "Fail to Delete", "SriovNetworkNodeState CR:", ns.GetName())
