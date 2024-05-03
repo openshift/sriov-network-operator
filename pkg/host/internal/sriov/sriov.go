@@ -18,6 +18,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	dputilsPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils"
+	ghwPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/ghw"
 	netlinkPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink"
 	sriovnetPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/sriovnet"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/store"
@@ -40,6 +41,7 @@ type sriov struct {
 	netlinkLib    netlinkPkg.NetlinkLib
 	dputilsLib    dputilsPkg.DPUtilsLib
 	sriovnetLib   sriovnetPkg.SriovnetLib
+	ghwLib        ghwPkg.GHWLib
 }
 
 func New(utilsHelper utils.CmdInterface,
@@ -49,7 +51,8 @@ func New(utilsHelper utils.CmdInterface,
 	vdpaHelper types.VdpaInterface,
 	netlinkLib netlinkPkg.NetlinkLib,
 	dputilsLib dputilsPkg.DPUtilsLib,
-	sriovnetLib sriovnetPkg.SriovnetLib) types.SriovInterface {
+	sriovnetLib sriovnetPkg.SriovnetLib,
+	ghwLib ghwPkg.GHWLib) types.SriovInterface {
 	return &sriov{utilsHelper: utilsHelper,
 		kernelHelper:  kernelHelper,
 		networkHelper: networkHelper,
@@ -58,6 +61,7 @@ func New(utilsHelper utils.CmdInterface,
 		netlinkLib:    netlinkLib,
 		dputilsLib:    dputilsLib,
 		sriovnetLib:   sriovnetLib,
+		ghwLib:        ghwLib,
 	}
 }
 
@@ -217,7 +221,7 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 	log.Log.V(2).Info("DiscoverSriovDevices")
 	pfList := []sriovnetworkv1.InterfaceExt{}
 
-	pci, err := ghw.PCI()
+	pci, err := s.ghwLib.PCI()
 	if err != nil {
 		return nil, fmt.Errorf("DiscoverSriovDevices(): error getting PCI info: %v", err)
 	}
