@@ -167,6 +167,11 @@ func (p *GenericPlugin) CheckStatusChanges(current *sriovnetworkv1.SriovNetworkN
 		return false, err
 	}
 
+	if len(missingKernelArgs) != 0 {
+		log.Log.V(0).Info("generic-plugin CheckStatusChanges(): kernel args missing",
+			"kernelArgs", missingKernelArgs)
+	}
+
 	return len(missingKernelArgs) != 0, nil
 }
 

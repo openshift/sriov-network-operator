@@ -322,51 +322,58 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		}
 	}
 
-	if vars.UsingSystemdMode && dn.currentNodeState.GetGeneration() == latest && !dn.isDrainCompleted() {
-		serviceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovServicePath)
-		if err != nil {
-			log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config service exist on host")
-			return err
-		}
-		postNetworkServiceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovPostNetworkServicePath)
-		if err != nil {
-			log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config-post-network service exist on host")
-			return err
-		}
-
-		// if the service doesn't exist we should continue to let the k8s plugin to create the service files
-		// this is only for k8s base environments, for openshift the sriov-operator creates a machine config to will apply
-		// the system service and reboot the node the config-daemon doesn't need to do anything.
-		if !(serviceEnabled && postNetworkServiceEnabled) {
-			sriovResult = &systemd.SriovResult{SyncStatus: consts.SyncStatusFailed,
-				LastSyncError: fmt.Sprintf("some sriov systemd services are not available on node: "+
-					"sriov-config available:%t, sriov-config-post-network available:%t", serviceEnabled, postNetworkServiceEnabled)}
-		} else {
-			sriovResult, err = systemd.ReadSriovResult()
+	skipReconciliation := true
+	// if the operator complete the drain operator we should continue the configuration
+	if !dn.isDrainCompleted() {
+		if vars.UsingSystemdMode && dn.currentNodeState.GetGeneration() == latest {
+			serviceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovServicePath)
 			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): failed to load sriov result file from host")
+				log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config service exist on host")
 				return err
 			}
-		}
-		if sriovResult.LastSyncError != "" || sriovResult.SyncStatus == consts.SyncStatusFailed {
-			log.Log.Info("nodeStateSyncHandler(): sync failed systemd service error", "last-sync-error", sriovResult.LastSyncError)
-
-			// add the error but don't requeue
-			dn.refreshCh <- Message{
-				syncStatus:    consts.SyncStatusFailed,
-				lastSyncError: sriovResult.LastSyncError,
+			postNetworkServiceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovPostNetworkServicePath)
+			if err != nil {
+				log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config-post-network service exist on host")
+				return err
 			}
-			<-dn.syncCh
-			return nil
+
+			// if the service doesn't exist we should continue to let the k8s plugin to create the service files
+			// this is only for k8s base environments, for openshift the sriov-operator creates a machine config to will apply
+			// the system service and reboot the node the config-daemon doesn't need to do anything.
+			if !(serviceEnabled && postNetworkServiceEnabled) {
+				sriovResult = &systemd.SriovResult{SyncStatus: consts.SyncStatusFailed,
+					LastSyncError: fmt.Sprintf("some sriov systemd services are not available on node: "+
+						"sriov-config available:%t, sriov-config-post-network available:%t", serviceEnabled, postNetworkServiceEnabled)}
+			} else {
+				sriovResult, err = systemd.ReadSriovResult()
+				if err != nil {
+					log.Log.Error(err, "nodeStateSyncHandler(): failed to load sriov result file from host")
+					return err
+				}
+			}
+			if sriovResult.LastSyncError != "" || sriovResult.SyncStatus == consts.SyncStatusFailed {
+				log.Log.Info("nodeStateSyncHandler(): sync failed systemd service error", "last-sync-error", sriovResult.LastSyncError)
+
+				// add the error but don't requeue
+				dn.refreshCh <- Message{
+					syncStatus:    consts.SyncStatusFailed,
+					lastSyncError: sriovResult.LastSyncError,
+				}
+				<-dn.syncCh
+				return nil
+			}
+		}
+
+		skipReconciliation, err = dn.shouldSkipReconciliation(dn.desiredNodeState)
+		if err != nil {
+			return err
 		}
 	}
 
-	skip, err := dn.shouldSkipReconciliation(dn.desiredNodeState)
-	if err != nil {
-		return err
-	}
-	// Reconcile only when there are changes in the spec or status of managed VFs.
-	if skip {
+	// we are done with the configuration just return here
+	if dn.currentNodeState.GetGeneration() == dn.desiredNodeState.GetGeneration() &&
+		dn.desiredNodeState.Status.SyncStatus == consts.SyncStatusSucceeded && skipReconciliation {
+		log.Log.Info("Current state and desire state are equal together with sync status succeeded nothing to do")
 		return nil
 	}
 
@@ -443,17 +450,6 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	log.Log.V(0).Info("nodeStateSyncHandler(): aggregated daemon",
 		"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", dn.disableDrain)
 
-	for k, p := range dn.loadedPlugins {
-		// Skip both the general and virtual plugin apply them last
-		if k != GenericPluginName && k != VirtualPluginName {
-			err := p.Apply()
-			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): plugin Apply failed", "plugin-name", k)
-				return err
-			}
-		}
-	}
-
 	// handle drain only if the plugin request drain, or we are already in a draining request state
 	if reqDrain || !utils.ObjectHasAnnotation(dn.desiredNodeState,
 		consts.NodeStateDrainAnnotationCurrent,
@@ -468,6 +464,20 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		}
 	}
 
+	// apply the vendor plugins after we are done with drain if needed
+	for k, p := range dn.loadedPlugins {
+		// Skip both the general and virtual plugin apply them last
+		if k != GenericPluginName && k != VirtualPluginName {
+			err := p.Apply()
+			if err != nil {
+				log.Log.Error(err, "nodeStateSyncHandler(): plugin Apply failed", "plugin-name", k)
+				return err
+			}
+		}
+	}
+
+	// if we don't need to reboot, or we are not doing the configuration in systemd
+	// we apply the generic plugin
 	if !reqReboot && !vars.UsingSystemdMode {
 		// For BareMetal machines apply the generic plugin
 		selectedPlugin, ok := dn.loadedPlugins[GenericPluginName]
@@ -539,6 +549,7 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 }
 
 func (dn *Daemon) shouldSkipReconciliation(latestState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+	log.Log.V(0).Info("shouldSkipReconciliation()")
 	var err error
 
 	// Skip when SriovNetworkNodeState object has just been created.
@@ -563,15 +574,18 @@ func (dn *Daemon) shouldSkipReconciliation(latestState *sriovnetworkv1.SriovNetw
 		return true, nil
 	}
 
-	// Verify changes in the spec of the SriovNetworkNodeState CR.
-	if dn.currentNodeState.GetGeneration() == latestState.GetGeneration() && !dn.isDrainCompleted() {
+	// Verify changes in the status of the SriovNetworkNodeState CR.
+	if dn.currentNodeState.GetGeneration() == latestState.GetGeneration() {
+		log.Log.V(0).Info("shouldSkipReconciliation() verifying status change")
 		for _, p := range dn.loadedPlugins {
 			// Verify changes in the status of the SriovNetworkNodeState CR.
+			log.Log.V(0).Info("shouldSkipReconciliation(): verifying status change for plugin", "pluginName", p.Name())
 			changed, err := p.CheckStatusChanges(latestState)
 			if err != nil {
 				return false, err
 			}
 			if changed {
+				log.Log.V(0).Info("shouldSkipReconciliation(): plugin require change", "pluginName", p.Name())
 				return false, nil
 			}
 		}
