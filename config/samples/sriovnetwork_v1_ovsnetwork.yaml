@@ -1,7 +1,15 @@
 apiVersion: sriovnetwork.openshift.io/v1
 kind: OVSNetwork
 metadata:
-  name: ovsnetwork-sample
+  name: example-ovsnetwork
 spec:
-  # Add fields here
-  foo: bar
+  ipam: |
+    {
+      "type": "host-local",
+      "ranges": [[{"subnet": "192.178.0.0/16"}]]
+    }
+  networkNamespace: default
+  resourceName: switchdev-vfs
+  vlan: 100
+  mtu: 1500
+

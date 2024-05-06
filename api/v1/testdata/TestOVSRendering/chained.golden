@@ -9,6 +9,6 @@
     "namespace": "testnamespace"
   },
   "spec": {
-    "config": "{ \"cniVersion\":\"0.3.1\", \"name\":\"test\",\"plugins\": [ {\"type\":\"ovs\",\"mtu\":1500,\"ipam\":{} },\n{ \"type\": \"vrf\", \"vrfname\": \"blue\" }\n] }"
+    "config": "{ \"cniVersion\":\"1.0.0\", \"name\":\"test\",\"plugins\": [ {\"type\":\"ovs\",\"mtu\":1500,\"ipam\":{} },\n{ \"type\": \"vrf\", \"vrfname\": \"blue\" }\n] }"
   }
 }
