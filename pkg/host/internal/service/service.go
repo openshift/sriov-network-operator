@@ -97,8 +97,11 @@ func (s *service) EnableService(service *types.Service) error {
 	}
 	defer exit()
 
-	// Enable service
-	_, _, err = s.utilsHelper.RunCommand("systemctl", "enable", service.Name)
+	// Enable the service
+	// we use reenable command (the command is a combination of disable+enable) to reset
+	// symlinks for the unit and make sure that only symlinks that are currently
+	// configured in the [Install] section exist for the service.
+	_, _, err = s.utilsHelper.RunCommand("systemctl", "reenable", service.Name)
 	return err
 }
 

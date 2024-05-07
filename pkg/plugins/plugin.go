@@ -6,12 +6,14 @@ import (
 
 //go:generate ../../bin/mockgen -destination mock/mock_plugin.go -source plugin.go
 type VendorPlugin interface {
-	// Return the name of plugin
+	// Name returns the name of plugin
 	Name() string
-	// Return the SpecVersion followed by plugin
+	// Spec returns the SpecVersion followed by plugin
 	Spec() string
-	// Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
-	OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error)
+	// OnNodeStateChange is invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
+	OnNodeStateChange(*sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error)
 	// Apply config change
 	Apply() error
+	// CheckStatusChanges checks status changes on the SriovNetworkNodeState CR for configured VFs.
+	CheckStatusChanges(*sriovnetworkv1.SriovNetworkNodeState) (bool, error)
 }

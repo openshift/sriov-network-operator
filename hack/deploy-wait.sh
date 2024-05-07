@@ -20,6 +20,7 @@ done
 
 if ! $ready; then 
     echo "Timed out waiting for features to be ready"
-    oc get nodes
+    kubectl get nodes
+    kubectl cluster-info dump -n ${NAMESPACE}
     exit 1
 fi
