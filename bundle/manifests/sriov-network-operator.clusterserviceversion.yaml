@@ -99,11 +99,21 @@ metadata:
     capabilities: Basic Install
     categories: Networking
     certified: "false"
-    containerImage: quay.io/openshift/origin-sriov-network-operator:4.16
-    createdAt: "2024-04-18T09:27:02Z"
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.15
+    createdAt: "2024-05-07T19:22:27Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
-    olm.skipRange: '>=4.3.0-0 <4.16.0'
+    features.operators.openshift.io/cnf: "false"
+    features.operators.openshift.io/cni: "true"
+    features.operators.openshift.io/csi: "false"
+    features.operators.openshift.io/disconnected: "true"
+    features.operators.openshift.io/fips-compliant: "true"
+    features.operators.openshift.io/proxy-aware: "false"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
+    olm.skipRange: '>=4.3.0-0 <4.15.0'
     operatorframework.io/initialization-resource: |-
       {
         "apiVersion": "sriovnetwork.openshift.io/v1",
@@ -131,16 +141,6 @@ metadata:
           }
         }
       }
-    features.operators.openshift.io/disconnected: "true"
-    features.operators.openshift.io/fips-compliant: "true"
-    features.operators.openshift.io/proxy-aware: "false"
-    features.operators.openshift.io/tls-profiles: "false"
-    features.operators.openshift.io/token-auth-aws: "false"
-    features.operators.openshift.io/token-auth-azure: "false"
-    features.operators.openshift.io/token-auth-gcp: "false"
-    features.operators.openshift.io/cnf: "false"
-    features.operators.openshift.io/cni: "true"
-    features.operators.openshift.io/csi: "false"
     operators.operatorframework.io/builder: operator-sdk-v1.34.1
     operators.operatorframework.io/internal-objects: '["sriovnetworknodestates.sriovnetwork.openshift.io"]'
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
@@ -366,19 +366,19 @@ spec:
                     fieldRef:
                       fieldPath: metadata.annotations['olm.targetNamespaces']
                 - name: SRIOV_CNI_IMAGE
-                  value: quay.io/openshift/origin-sriov-cni:4.16
+                  value: quay.io/openshift/origin-sriov-cni:4.15
                 - name: SRIOV_DEVICE_PLUGIN_IMAGE
-                  value: quay.io/openshift/origin-sriov-network-device-plugin:4.16
+                  value: quay.io/openshift/origin-sriov-network-device-plugin:4.15
                 - name: NETWORK_RESOURCES_INJECTOR_IMAGE
-                  value: quay.io/openshift/origin-sriov-dp-admission-controller:4.16
+                  value: quay.io/openshift/origin-sriov-dp-admission-controller:4.15
                 - name: OPERATOR_NAME
                   value: sriov-network-operator
                 - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-                  value: quay.io/openshift/origin-sriov-network-config-daemon:4.16
+                  value: quay.io/openshift/origin-sriov-network-config-daemon:4.15
                 - name: SRIOV_NETWORK_WEBHOOK_IMAGE
-                  value: quay.io/openshift/origin-sriov-network-webhook:4.16
+                  value: quay.io/openshift/origin-sriov-network-webhook:4.15
                 - name: SRIOV_INFINIBAND_CNI_IMAGE
-                  value: quay.io/openshift/origin-sriov-infiniband-cni:4.16
+                  value: quay.io/openshift/origin-sriov-infiniband-cni:4.15
                 - name: RESOURCE_PREFIX
                   value: openshift.io
                 - name: ADMISSION_CONTROLLERS_ENABLED
@@ -400,8 +400,8 @@ spec:
                     fieldRef:
                       fieldPath: metadata.name
                 - name: RELEASE_VERSION
-                  value: 4.16.0
-                image: quay.io/openshift/origin-sriov-network-operator:4.16
+                  value: 4.15.0
+                image: quay.io/openshift/origin-sriov-network-operator:4.15
                 imagePullPolicy: IfNotPresent
                 livenessProbe:
                   httpGet:
@@ -573,7 +573,7 @@ spec:
   - sriov
   labels:
     olm-owner-enterprise-app: sriov-network-operator
-    olm-status-descriptors: sriov-network-operator.v4.16.0
+    olm-status-descriptors: sriov-network-operator.v4.15.0
   links:
   - name: Source Code
     url: https://github.com/k8snetworkplumbingwg/sriov-network-operator
