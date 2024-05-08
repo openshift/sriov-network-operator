@@ -355,7 +355,7 @@ func generateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 	}
 
 	configStr, err := formatJSON(fmt.Sprintf(
-		`{ "cniVersion":"0.3.1", "name":"%s","type":"sriov","vlan":%d,%s%s"vlanQoS":%d,%s%s%s%s"ipam":%s }`,
+		`{ "cniVersion":"1.0.0", "name":"%s","type":"sriov","vlan":%d,%s%s"vlanQoS":%d,%s%s%s%s"ipam":%s }`,
 		cr.GetName(), cr.Spec.Vlan, spoofchk, trust, vlanQoS, vlanProto, state, logLevel, logFile, ipam))
 	if err != nil {
 		panic(err)

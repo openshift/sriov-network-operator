@@ -46,6 +46,9 @@ jobs:
     - name: test cmd
       run: make test-cmd
 
+    - name: test api
+      run: make test-api
+
     - name: test controllers on opensfhit
       run: CLUSTER_TYPE=openshift make test-controllers
 
@@ -105,6 +108,9 @@ jobs:
 
     - name: test cmd
       run: make test-cmd
+
+    - name: test api
+      run: make test-api
 
     - name: test controllers on opensfhit
       run: CLUSTER_TYPE=openshift make test-controllers

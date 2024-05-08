@@ -313,8 +313,19 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	latest := dn.desiredNodeState.GetGeneration()
 	log.Log.V(0).Info("nodeStateSyncHandler(): new generation", "generation", latest)
 
-	if dn.currentNodeState.GetGeneration() == latest && !dn.isDrainCompleted() {
-		if vars.UsingSystemdMode {
+	// load plugins if it has not loaded
+	if len(dn.loadedPlugins) == 0 {
+		dn.loadedPlugins, err = loadPlugins(dn.desiredNodeState, dn.HostHelpers, dn.disabledPlugins)
+		if err != nil {
+			log.Log.Error(err, "nodeStateSyncHandler(): failed to enable vendor plugins")
+			return err
+		}
+	}
+
+	skipReconciliation := true
+	// if the operator complete the drain operator we should continue the configuration
+	if !dn.isDrainCompleted() {
+		if vars.UsingSystemdMode && dn.currentNodeState.GetGeneration() == latest {
 			serviceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovServicePath)
 			if err != nil {
 				log.Log.Error(err, "nodeStateSyncHandler(): failed to check if sriov-config service exist on host")
@@ -352,38 +363,17 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 				return nil
 			}
 		}
-		log.Log.V(0).Info("nodeStateSyncHandler(): Interface not changed")
-		if dn.desiredNodeState.Status.LastSyncError != "" ||
-			dn.desiredNodeState.Status.SyncStatus != consts.SyncStatusSucceeded {
-			dn.refreshCh <- Message{
-				syncStatus:    consts.SyncStatusSucceeded,
-				lastSyncError: "",
-			}
-			// wait for writer to refresh the status
-			<-dn.syncCh
-		}
 
-		return nil
-	}
-
-	if dn.desiredNodeState.GetGeneration() == 1 && len(dn.desiredNodeState.Spec.Interfaces) == 0 {
-		err = dn.HostHelpers.ClearPCIAddressFolder()
+		skipReconciliation, err = dn.shouldSkipReconciliation(dn.desiredNodeState)
 		if err != nil {
-			log.Log.Error(err, "failed to clear the PCI address configuration")
 			return err
 		}
+	}
 
-		log.Log.V(0).Info(
-			"nodeStateSyncHandler(): interface policy spec not yet set by controller for sriovNetworkNodeState",
-			"name", dn.desiredNodeState.Name)
-		if dn.desiredNodeState.Status.SyncStatus != "Succeeded" {
-			dn.refreshCh <- Message{
-				syncStatus:    "Succeeded",
-				lastSyncError: "",
-			}
-			// wait for writer to refresh status
-			<-dn.syncCh
-		}
+	// we are done with the configuration just return here
+	if dn.currentNodeState.GetGeneration() == dn.desiredNodeState.GetGeneration() &&
+		dn.desiredNodeState.Status.SyncStatus == consts.SyncStatusSucceeded && skipReconciliation {
+		log.Log.Info("Current state and desire state are equal together with sync status succeeded nothing to do")
 		return nil
 	}
 
@@ -403,15 +393,6 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		return err
 	}
 	dn.desiredNodeState.Status = updatedState.Status
-
-	// load plugins if it has not loaded
-	if len(dn.loadedPlugins) == 0 {
-		dn.loadedPlugins, err = loadPlugins(dn.desiredNodeState, dn.HostHelpers, dn.disabledPlugins)
-		if err != nil {
-			log.Log.Error(err, "nodeStateSyncHandler(): failed to enable vendor plugins")
-			return err
-		}
-	}
 
 	reqReboot := false
 	reqDrain := false
@@ -469,17 +450,6 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	log.Log.V(0).Info("nodeStateSyncHandler(): aggregated daemon",
 		"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", dn.disableDrain)
 
-	for k, p := range dn.loadedPlugins {
-		// Skip both the general and virtual plugin apply them last
-		if k != GenericPluginName && k != VirtualPluginName {
-			err := p.Apply()
-			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): plugin Apply failed", "plugin-name", k)
-				return err
-			}
-		}
-	}
-
 	// handle drain only if the plugin request drain, or we are already in a draining request state
 	if reqDrain || !utils.ObjectHasAnnotation(dn.desiredNodeState,
 		consts.NodeStateDrainAnnotationCurrent,
@@ -494,6 +464,20 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		}
 	}
 
+	// apply the vendor plugins after we are done with drain if needed
+	for k, p := range dn.loadedPlugins {
+		// Skip both the general and virtual plugin apply them last
+		if k != GenericPluginName && k != VirtualPluginName {
+			err := p.Apply()
+			if err != nil {
+				log.Log.Error(err, "nodeStateSyncHandler(): plugin Apply failed", "plugin-name", k)
+				return err
+			}
+		}
+	}
+
+	// if we don't need to reboot, or we are not doing the configuration in systemd
+	// we apply the generic plugin
 	if !reqReboot && !vars.UsingSystemdMode {
 		// For BareMetal machines apply the generic plugin
 		selectedPlugin, ok := dn.loadedPlugins[GenericPluginName]
@@ -562,6 +546,65 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	// wait for writer to refresh the status
 	<-dn.syncCh
 	return nil
+}
+
+func (dn *Daemon) shouldSkipReconciliation(latestState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+	log.Log.V(0).Info("shouldSkipReconciliation()")
+	var err error
+
+	// Skip when SriovNetworkNodeState object has just been created.
+	if latestState.GetGeneration() == 1 && len(latestState.Spec.Interfaces) == 0 {
+		err = dn.HostHelpers.ClearPCIAddressFolder()
+		if err != nil {
+			log.Log.Error(err, "failed to clear the PCI address configuration")
+			return false, err
+		}
+
+		log.Log.V(0).Info(
+			"shouldSkipReconciliation(): interface policy spec not yet set by controller for sriovNetworkNodeState",
+			"name", latestState.Name)
+		if latestState.Status.SyncStatus != consts.SyncStatusSucceeded {
+			dn.refreshCh <- Message{
+				syncStatus:    consts.SyncStatusSucceeded,
+				lastSyncError: "",
+			}
+			// wait for writer to refresh status
+			<-dn.syncCh
+		}
+		return true, nil
+	}
+
+	// Verify changes in the status of the SriovNetworkNodeState CR.
+	if dn.currentNodeState.GetGeneration() == latestState.GetGeneration() {
+		log.Log.V(0).Info("shouldSkipReconciliation() verifying status change")
+		for _, p := range dn.loadedPlugins {
+			// Verify changes in the status of the SriovNetworkNodeState CR.
+			log.Log.V(0).Info("shouldSkipReconciliation(): verifying status change for plugin", "pluginName", p.Name())
+			changed, err := p.CheckStatusChanges(latestState)
+			if err != nil {
+				return false, err
+			}
+			if changed {
+				log.Log.V(0).Info("shouldSkipReconciliation(): plugin require change", "pluginName", p.Name())
+				return false, nil
+			}
+		}
+
+		log.Log.V(0).Info("shouldSkipReconciliation(): Interface not changed")
+		if latestState.Status.LastSyncError != "" ||
+			latestState.Status.SyncStatus != consts.SyncStatusSucceeded {
+			dn.refreshCh <- Message{
+				syncStatus:    consts.SyncStatusSucceeded,
+				lastSyncError: "",
+			}
+			// wait for writer to refresh the status
+			<-dn.syncCh
+		}
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // handleDrain: adds the right annotation to the node and nodeState object

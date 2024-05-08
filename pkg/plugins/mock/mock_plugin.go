@@ -48,6 +48,21 @@ func (mr *MockVendorPluginMockRecorder) Apply() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockVendorPlugin)(nil).Apply))
 }
 
+// CheckStatusChanges mocks base method.
+func (m *MockVendorPlugin) CheckStatusChanges(arg0 *v1.SriovNetworkNodeState) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckStatusChanges", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CheckStatusChanges indicates an expected call of CheckStatusChanges.
+func (mr *MockVendorPluginMockRecorder) CheckStatusChanges(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckStatusChanges", reflect.TypeOf((*MockVendorPlugin)(nil).CheckStatusChanges), arg0)
+}
+
 // Name mocks base method.
 func (m *MockVendorPlugin) Name() string {
 	m.ctrl.T.Helper()
@@ -63,9 +78,9 @@ func (mr *MockVendorPluginMockRecorder) Name() *gomock.Call {
 }
 
 // OnNodeStateChange mocks base method.
-func (m *MockVendorPlugin) OnNodeStateChange(new *v1.SriovNetworkNodeState) (bool, bool, error) {
+func (m *MockVendorPlugin) OnNodeStateChange(arg0 *v1.SriovNetworkNodeState) (bool, bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OnNodeStateChange", new)
+	ret := m.ctrl.Call(m, "OnNodeStateChange", arg0)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(bool)
 	ret2, _ := ret[2].(error)
@@ -73,9 +88,9 @@ func (m *MockVendorPlugin) OnNodeStateChange(new *v1.SriovNetworkNodeState) (boo
 }
 
 // OnNodeStateChange indicates an expected call of OnNodeStateChange.
-func (mr *MockVendorPluginMockRecorder) OnNodeStateChange(new interface{}) *gomock.Call {
+func (mr *MockVendorPluginMockRecorder) OnNodeStateChange(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnNodeStateChange", reflect.TypeOf((*MockVendorPlugin)(nil).OnNodeStateChange), new)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnNodeStateChange", reflect.TypeOf((*MockVendorPlugin)(nil).OnNodeStateChange), arg0)
 }
 
 // Spec mocks base method.
