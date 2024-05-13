@@ -49,6 +49,15 @@ resources:
   kind: SriovOperatorConfig
   path: github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: openshift.io
+  group: sriovnetwork
+  kind: OVSNetwork
+  path: github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1
+  version: v1
 version: "3"
 plugins:
   manifests.sdk.operatorframework.io/v2: {}

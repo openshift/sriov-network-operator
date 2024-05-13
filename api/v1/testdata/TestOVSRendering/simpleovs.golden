@@ -1,0 +1,14 @@
+{
+  "apiVersion": "k8s.cni.cncf.io/v1",
+  "kind": "NetworkAttachmentDefinition",
+  "metadata": {
+    "annotations": {
+      "k8s.v1.cni.cncf.io/resourceName": "/testresource"
+    },
+    "name": "test",
+    "namespace": "testnamespace"
+  },
+  "spec": {
+    "config": "{ \"cniVersion\":\"1.0.0\", \"name\":\"test\",\"type\":\"ovs\",\"ipam\":{} }"
+  }
+}

@@ -117,6 +117,7 @@ sync-manifests-%: manifests
 	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworknodestates.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetworknodestate.crd.yaml
 	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovoperatorconfigs.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovoperatorconfig.crd.yaml
 	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_sriovnetworks.yaml | awk 'NF' > manifests/$*/sriov-network-operator-sriovnetwork.crd.yaml
+	sed '2{/---/d}' $(CRD_BASES)/sriovnetwork.openshift.io_ovsnetworks.yaml | awk 'NF' > manifests/$*/sriov-network-operator-ovsnetwork.yaml
 	@echo ""
 	@echo "*************************************************************************************************************************************************"
 	@echo "* Please manually update the sriov-network-operator.v4.7.0.clusterserviceversion.yaml and image-references files in the manifests/$* directory *"
