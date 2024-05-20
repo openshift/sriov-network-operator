@@ -100,10 +100,35 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:4.15
-    createdAt: "2024-02-20T12:55:12Z"
+    createdAt: "2024-05-07T19:22:27Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
+    features.operators.openshift.io/cnf: "false"
+    features.operators.openshift.io/cni: "true"
+    features.operators.openshift.io/csi: "false"
+    features.operators.openshift.io/disconnected: "true"
+    features.operators.openshift.io/fips-compliant: "true"
+    features.operators.openshift.io/proxy-aware: "false"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
     olm.skipRange: '>=4.3.0-0 <4.15.0'
+    operatorframework.io/initialization-resource: |-
+      {
+        "apiVersion": "sriovnetwork.openshift.io/v1",
+        "kind": "SriovOperatorConfig",
+        "metadata": {
+          "name": "default"
+        },
+        "spec": {
+          "configurationMode": "daemon",
+          "disableDrain": false,
+          "enableInjector": true,
+          "enableOperatorWebhook": true,
+          "logLevel": 2
+        }
+      }
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
     operatorframework.io/suggested-namespace-template: |-
       {
@@ -116,17 +141,8 @@ metadata:
           }
         }
       }
-    features.operators.openshift.io/disconnected: "true"
-    features.operators.openshift.io/fips-compliant: "true"
-    features.operators.openshift.io/proxy-aware: "false"
-    features.operators.openshift.io/tls-profiles: "false"
-    features.operators.openshift.io/token-auth-aws: "false"
-    features.operators.openshift.io/token-auth-azure: "false"
-    features.operators.openshift.io/token-auth-gcp: "false"
-    features.operators.openshift.io/cnf: "false"
-    features.operators.openshift.io/cni: "true"
-    features.operators.openshift.io/csi: "false"
     operators.operatorframework.io/builder: operator-sdk-v1.34.1
+    operators.operatorframework.io/internal-objects: '["sriovnetworknodestates.sriovnetwork.openshift.io"]'
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
@@ -134,7 +150,7 @@ metadata:
   labels:
     operatorframework.io/arch.amd64: supported
     operatorframework.io/arch.ppc64le: supported
-  name: sriov-network-operator.v4.15.0
+  name: sriov-network-operator.v4.16.0
   namespace: openshift-sriov-network-operator
 spec:
   apiservicedefinitions: {}
@@ -231,12 +247,6 @@ spec:
           verbs:
           - get
         - apiGroups:
-          - ""
-          resources:
-          - pods/eviction
-          verbs:
-          - create
-        - apiGroups:
           - machineconfiguration.openshift.io
           resources:
           - '*'
@@ -268,6 +278,12 @@ spec:
           - pods
           verbs:
           - '*'
+        - apiGroups:
+          - ""
+          resources:
+          - pods/eviction
+          verbs:
+          - create
         - apiGroups:
           - apps
           resources:
@@ -365,8 +381,12 @@ spec:
                   value: quay.io/openshift/origin-sriov-infiniband-cni:4.15
                 - name: RESOURCE_PREFIX
                   value: openshift.io
-                - name: ENABLE_ADMISSION_CONTROLLER
+                - name: ADMISSION_CONTROLLERS_ENABLED
                   value: "true"
+                - name: ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME
+                  value: operator-webhook-service
+                - name: ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME
+                  value: network-resources-injector-secret
                 - name: NAMESPACE
                   valueFrom:
                     fieldRef:
@@ -562,4 +582,4 @@ spec:
     name: Red Hat
   provider:
     name: Red Hat
-  version: 4.15.0
+  version: 4.16.0

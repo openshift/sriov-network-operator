@@ -25,8 +25,7 @@ import (
 
 // SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
 type SriovNetworkNodeStateSpec struct {
-	DpConfigVersion string     `json:"dpConfigVersion,omitempty"`
-	Interfaces      Interfaces `json:"interfaces,omitempty"`
+	Interfaces Interfaces `json:"interfaces,omitempty"`
 }
 
 type Interfaces []Interface
@@ -82,6 +81,7 @@ type VirtualFunction struct {
 	Vlan       int    `json:"Vlan,omitempty"`
 	Mtu        int    `json:"mtu,omitempty"`
 	VfID       int    `json:"vfID"`
+	VdpaType   string `json:"vdpaType,omitempty"`
 }
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
@@ -94,6 +94,8 @@ type SriovNetworkNodeStateStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:printcolumn:name="Sync Status",type=string,JSONPath=`.status.syncStatus`
+//+kubebuilder:printcolumn:name="Desired Sync State",type=string,JSONPath=`.metadata.annotations.sriovnetwork\.openshift\.io/desired-state`
+//+kubebuilder:printcolumn:name="Current Sync State",type=string,JSONPath=`.metadata.annotations.sriovnetwork\.openshift\.io/current-state`
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // SriovNetworkNodeState is the Schema for the sriovnetworknodestates API

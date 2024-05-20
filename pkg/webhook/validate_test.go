@@ -10,11 +10,11 @@ import (
 
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 
 	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
 )
@@ -141,14 +141,28 @@ func NewNode() *corev1.Node {
 func newDefaultOperatorConfig() *SriovOperatorConfig {
 	return &SriovOperatorConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "default",
+			Name:      "default",
+			Namespace: vars.Namespace,
 		},
 		Spec: SriovOperatorConfigSpec{
 			ConfigDaemonNodeSelector: map[string]string{},
 			DisableDrain:             true,
-			EnableInjector:           func() *bool { b := true; return &b }(),
-			EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
+			EnableInjector:           true,
+			EnableOperatorWebhook:    true,
 			LogLevel:                 2,
+		},
+	}
+}
+
+func newDefaultNetworkPoolConfig() *SriovNetworkPoolConfig {
+	maxUn := intstr.FromInt32(1)
+	return &SriovNetworkPoolConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+		},
+		Spec: SriovNetworkPoolConfigSpec{
+			MaxUnavailable: &maxUn,
+			NodeSelector:   &metav1.LabelSelector{MatchLabels: map[string]string{}},
 		},
 	}
 }
@@ -210,6 +224,41 @@ func TestValidateSriovOperatorConfigDisableDrain(t *testing.T) {
 	g.Expect(ok).To(Equal(true))
 }
 
+func TestValidateSriovNetworkPoolConfigWithDefault(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	config := newDefaultNetworkPoolConfig()
+	snclient = fakesnclientset.NewSimpleClientset()
+
+	ok, _, err := validateSriovNetworkPoolConfig(config, "DELETE")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(Equal(false))
+
+	ok, _, err = validateSriovNetworkPoolConfig(config, "UPDATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+
+	ok, _, err = validateSriovNetworkPoolConfig(config, "CREATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+}
+
+func TestValidateSriovNetworkPoolConfigWithParallelAndHWOffload(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	config := newDefaultNetworkPoolConfig()
+	config.Spec.OvsHardwareOffloadConfig.Name = "test"
+	snclient = fakesnclientset.NewSimpleClientset()
+
+	ok, _, err := validateSriovNetworkPoolConfig(config, "UPDATE")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(BeFalse())
+
+	ok, _, err = validateSriovNetworkPoolConfig(config, "CREATE")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(BeFalse())
+}
+
 func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
 	var err error
 	var ok bool
@@ -226,6 +275,7 @@ func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
 		},
 	}
 	os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
+	vars.Namespace = "openshift-sriov-network-operator"
 	g := NewGomegaWithT(t)
 	ok, _, err = validateSriovNetworkNodePolicy(policy, "DELETE")
 	g.Expect(err).To(HaveOccurred())
@@ -725,6 +775,31 @@ func TestValidatePoliciesWithSameExcludeTopologyForTheSameResource(t *testing.T)
 	g.Expect(err).NotTo(HaveOccurred())
 }
 
+func TestValidatePoliciesWithDifferentNumVfForTheSameResourceAndTheSameRootDevice(t *testing.T) {
+	current := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "currentPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName: "resourceX",
+			NumVfs:       10,
+			NicSelector:  SriovNetworkNicSelector{RootDevices: []string{"0000:86:00.1"}},
+		},
+	}
+
+	previous := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "previousPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName: "resourceX",
+			NumVfs:       5,
+			NicSelector:  SriovNetworkNicSelector{RootDevices: []string{"0000:86:00.1"}},
+		},
+	}
+
+	err := validatePolicyForNodePolicy(current, previous)
+
+	g := NewGomegaWithT(t)
+	g.Expect(err).To(MatchError("root device 0000:86:00.1 is overlapped with existing policy previousPolicy"))
+}
+
 func TestStaticValidateSriovNetworkNodePolicyWithValidVendorDevice(t *testing.T) {
 	policy := &SriovNetworkNodePolicy{
 		Spec: SriovNetworkNodePolicySpec{
@@ -1045,13 +1120,8 @@ func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	var testEnv = &envtest.Environment{}
 
-	cfg, err := testEnv.Start()
-	g.Expect(err).ToNot(HaveOccurred())
-	g.Expect(cfg).ToNot(BeNil())
-	kubeclient = kubernetes.NewForConfigOrDie(cfg)
-	_, err = validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 }
 

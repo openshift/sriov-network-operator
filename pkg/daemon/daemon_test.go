@@ -5,46 +5,32 @@ import (
 	"flag"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakek8s "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+	kclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
 
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
-	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
+	snclient "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	mock_helper "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/fake"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/generic"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
-
-var FakeSupportedNicIDs corev1.ConfigMap = corev1.ConfigMap{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      sriovnetworkv1.SupportedNicIDConfigmap,
-		Namespace: namespace,
-	},
-	Data: map[string]string{
-		"Intel_i40e_XXV710":      "8086 158a 154c",
-		"Nvidia_mlx5_ConnectX-4": "15b3 1013 1014",
-	},
-}
-
-var SriovDevicePluginPod corev1.Pod = corev1.Pod{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:      "sriov-device-plugin-xxxx",
-		Namespace: namespace,
-		Labels: map[string]string{
-			"app": "sriov-device-plugin",
-		},
-	},
-	Spec: corev1.PodSpec{
-		NodeName: "test-node",
-	},
-}
 
 func TestConfigDaemon(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -56,6 +42,13 @@ var _ = BeforeSuite(func() {
 	flag.Set("logtostderr", "true")
 	flag.Set("stderrthreshold", "WARNING")
 	flag.Set("v", "2")
+
+	logf.SetLogger(zap.New(
+		zap.WriteTo(GinkgoWriter),
+		zap.UseDevMode(true),
+		func(o *zap.Options) {
+			o.TimeEncoder = zapcore.RFC3339NanoTimeEncoder
+		}))
 })
 
 var _ = Describe("Config Daemon", func() {
@@ -95,32 +88,84 @@ var _ = Describe("Config Daemon", func() {
 		}
 
 		var err error
-		utils.FilesystemRoot, cleanFakeFs, err = fakeFs.Use()
+		vars.FilesystemRoot, cleanFakeFs, err = fakeFs.Use()
 		Expect(err).ToNot(HaveOccurred())
+
+		vars.UsingSystemdMode = false
+		vars.NodeName = "test-node"
+		vars.Namespace = "sriov-network-operator"
+		vars.PlatformType = consts.Baremetal
+
+		FakeSupportedNicIDs := corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      sriovnetworkv1.SupportedNicIDConfigmap,
+				Namespace: vars.Namespace,
+			},
+			Data: map[string]string{
+				"Intel_i40e_XXV710":      "8086 158a 154c",
+				"Nvidia_mlx5_ConnectX-4": "15b3 1013 1014",
+			},
+		}
+
+		SriovDevicePluginPod := corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "sriov-device-plugin-xxxx",
+				Namespace: vars.Namespace,
+				Labels: map[string]string{
+					"app": "sriov-device-plugin",
+				},
+			},
+			Spec: corev1.PodSpec{
+				NodeName: "test-node",
+			},
+		}
+
+		err = sriovnetworkv1.AddToScheme(scheme.Scheme)
+		Expect(err).ToNot(HaveOccurred())
+		kClient := kclient.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(&corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-node"}},
+			&sriovnetworkv1.SriovNetworkNodeState{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-node",
+					Namespace: vars.Namespace,
+				}}).Build()
 
 		kubeClient := fakek8s.NewSimpleClientset(&FakeSupportedNicIDs, &SriovDevicePluginPod)
-		client := fakesnclientset.NewSimpleClientset()
-
-		err = sriovnetworkv1.InitNicIDMapFromConfigMap(kubeClient, namespace)
+		snclient := snclientset.NewSimpleClientset()
+		err = sriovnetworkv1.InitNicIDMapFromConfigMap(kubeClient, vars.Namespace)
 		Expect(err).ToNot(HaveOccurred())
 
-		er := NewEventRecorder(client, "test-node", kubeClient)
+		er := NewEventRecorder(snclient, kubeClient)
 
-		sut = New("test-node",
-			client,
+		t := GinkgoT()
+		mockCtrl := gomock.NewController(t)
+		platformHelper := mock_platforms.NewMockInterface(mockCtrl)
+		platformHelper.EXPECT().GetFlavor().Return(openshift.OpenshiftFlavorDefault).AnyTimes()
+		platformHelper.EXPECT().IsOpenshiftCluster().Return(false).AnyTimes()
+		platformHelper.EXPECT().IsHypershift().Return(false).AnyTimes()
+
+		vendorHelper := mock_helper.NewMockHostHelpersInterface(mockCtrl)
+		vendorHelper.EXPECT().TryEnableRdma().Return(true, nil).AnyTimes()
+		vendorHelper.EXPECT().TryEnableVhostNet().AnyTimes()
+		vendorHelper.EXPECT().TryEnableTun().AnyTimes()
+		vendorHelper.EXPECT().PrepareNMUdevRule([]string{"0x1014", "0x154c"}).Return(nil).AnyTimes()
+		vendorHelper.EXPECT().PrepareVFRepUdevRule().Return(nil).AnyTimes()
+
+		sut = New(
+			kClient,
+			snclient,
 			kubeClient,
-			&utils.OpenshiftContext{IsOpenShiftCluster: false, OpenshiftFlavor: ""},
+			vendorHelper,
+			platformHelper,
 			exitCh,
 			stopCh,
 			syncCh,
 			refreshCh,
-			utils.Baremetal,
-			false,
 			er,
-			false,
+			nil,
 		)
 
-		sut.enabledPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{}}
+		sut.loadedPlugins = map[string]plugin.VendorPlugin{generic.PluginName: &fake.FakePlugin{PluginName: "fake"}}
 
 		go func() {
 			defer GinkgoRecover()
@@ -149,8 +194,9 @@ var _ = Describe("Config Daemon", func() {
 
 			nodeState := &sriovnetworkv1.SriovNetworkNodeState{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-node",
-					Generation: 123,
+					Name:        "test-node",
+					Generation:  123,
+					Annotations: map[string]string{consts.NodeStateDrainAnnotationCurrent: consts.DrainIdle},
 				},
 				Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{},
 				Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
@@ -172,18 +218,18 @@ var _ = Describe("Config Daemon", func() {
 				},
 			}
 			Expect(
-				createSriovNetworkNodeState(sut.client, nodeState)).
+				createSriovNetworkNodeState(sut.sriovClient, nodeState)).
 				To(BeNil())
 
 			var msg Message
-			Eventually(refreshCh, "10s").Should(Receive(&msg))
+			Eventually(refreshCh, "30s").Should(Receive(&msg))
 			Expect(msg.syncStatus).To(Equal("InProgress"))
 
-			Eventually(refreshCh, "10s").Should(Receive(&msg))
+			Eventually(refreshCh, "30s").Should(Receive(&msg))
 			Expect(msg.syncStatus).To(Equal("Succeeded"))
 
 			Eventually(func() (int, error) {
-				podList, err := sut.kubeClient.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
+				podList, err := sut.kubeClient.CoreV1().Pods(vars.Namespace).List(context.Background(), metav1.ListOptions{
 					LabelSelector: "app=sriov-device-plugin",
 					FieldSelector: "spec.nodeName=test-node",
 				})
@@ -208,22 +254,24 @@ var _ = Describe("Config Daemon", func() {
 
 			nodeState1 := &sriovnetworkv1.SriovNetworkNodeState{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-node",
-					Generation: 123,
+					Name:        "test-node",
+					Generation:  123,
+					Annotations: map[string]string{consts.NodeStateDrainAnnotationCurrent: consts.DrainIdle},
 				},
 			}
 			Expect(
-				createSriovNetworkNodeState(sut.client, nodeState1)).
+				createSriovNetworkNodeState(sut.sriovClient, nodeState1)).
 				To(BeNil())
 
 			nodeState2 := &sriovnetworkv1.SriovNetworkNodeState{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:       "test-node",
-					Generation: 777,
+					Name:        "test-node",
+					Generation:  777,
+					Annotations: map[string]string{consts.NodeStateDrainAnnotationCurrent: consts.DrainIdle},
 				},
 			}
 			Expect(
-				updateSriovNetworkNodeState(sut.client, nodeState2)).
+				updateSriovNetworkNodeState(sut.sriovClient, nodeState2)).
 				To(BeNil())
 
 			var msg Message
@@ -233,81 +281,21 @@ var _ = Describe("Config Daemon", func() {
 			Eventually(refreshCh, "10s").Should(Receive(&msg))
 			Expect(msg.syncStatus).To(Equal("Succeeded"))
 
-			Expect(sut.nodeState.GetGeneration()).To(BeNumerically("==", 777))
-		})
-	})
-
-	Context("isNodeDraining", func() {
-
-		It("for a non-Openshift cluster", func() {
-			sut.openshiftContext = &utils.OpenshiftContext{IsOpenShiftCluster: false}
-
-			sut.node = &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-node",
-					Annotations: map[string]string{}}}
-
-			Expect(sut.isNodeDraining()).To(BeFalse())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-		})
-
-		It("for an Openshift cluster", func() {
-			sut.openshiftContext = &utils.OpenshiftContext{
-				IsOpenShiftCluster: true,
-				OpenshiftFlavor:    utils.OpenshiftFlavorDefault,
-			}
-
-			sut.node = &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-node",
-					Annotations: map[string]string{}}}
-
-			Expect(sut.isNodeDraining()).To(BeFalse())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-		})
-
-		It("for an Openshift Hypershift cluster", func() {
-			sut.openshiftContext = &utils.OpenshiftContext{
-				IsOpenShiftCluster: true,
-				OpenshiftFlavor:    utils.OpenshiftFlavorHypershift,
-			}
-
-			sut.node = &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-node",
-					Annotations: map[string]string{}}}
-
-			Expect(sut.isNodeDraining()).To(BeFalse())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining"
-			Expect(sut.isNodeDraining()).To(BeTrue())
-
-			sut.node.Annotations["sriovnetwork.openshift.io/state"] = "Draining_MCP_Paused"
-			Expect(sut.isNodeDraining()).To(BeTrue())
+			Expect(sut.desiredNodeState.GetGeneration()).To(BeNumerically("==", 777))
 		})
 	})
 })
 
-func createSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+func createSriovNetworkNodeState(c snclient.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	_, err := c.SriovnetworkV1().
-		SriovNetworkNodeStates(namespace).
+		SriovNetworkNodeStates(vars.Namespace).
 		Create(context.Background(), nodeState, metav1.CreateOptions{})
 	return err
 }
 
-func updateSriovNetworkNodeState(c snclientset.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+func updateSriovNetworkNodeState(c snclient.Interface, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	_, err := c.SriovnetworkV1().
-		SriovNetworkNodeStates(namespace).
+		SriovNetworkNodeStates(vars.Namespace).
 		Update(context.Background(), nodeState, metav1.UpdateOptions{})
 	return err
 }

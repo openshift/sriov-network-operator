@@ -228,6 +228,63 @@ This feature was created to support deployments where the user want to use some 
 communication like storage network or out of band managment and the virtual functions must exist on boot and not only
 after the operator and config-daemon are running.
 
+#### Disabling SR-IOV Config Daemon plugins
+
+It is possible to disable SR-IOV network operator config daemon plugins in case their operation
+is not needed or un-desirable.
+
+As an example, some plugins perform vendor specific firmware configuration
+to enable SR-IOV (e.g `mellanox` plugin). certain deployment environments may prefer to perform such configuration
+once during node provisioning, while ensuring the configuration will be compatible with any sriov network node policy
+defined for the particular environment. This will reduce or completely eliminate the need for reboot of nodes during SR-IOV
+configurations by the operator.
+
+This can be done by setting SriovOperatorConfig `default` CR `spec.disablePlugins` with the list of desired plugins
+to disable.
+
+**Example**:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovOperatorConfig
+metadata:
+  name: default
+  namespace: sriov-network-operator
+spec:
+  ...
+  disablePlugins:
+    - mellanox
+  ...
+```
+
+> **NOTE**: Currently only `mellanox` plugin can be disabled.
+
+### Parallel draining
+
+It is possible to drain more than one node at a time using this operator.
+
+The configuration is done via the SriovNetworkNodePool, selecting a number of nodes using the node selector and how many
+nodes in parallel from the pool the operator can drain in parallel. maxUnavailable can be a number of percentage.
+
+> **NOTE**: every node can only be part of one pool, if a node is selected by more then one pool it will not be drained
+
+> **NOTE**: If a node is not part of any pool it will have a default configuration of maxUnavailable 1
+
+**Example**:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: worker
+  namespace: sriov-network-operator
+spec:
+  maxUnavailable: 2
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
+```
+
 ## Components and design
 
 This operator is split into 2 components:

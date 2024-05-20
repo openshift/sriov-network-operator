@@ -43,10 +43,7 @@ spec:
       initContainers:
         - name: sriov-cni
           image: {{.SRIOVCNIImage}}
-          command:
-            - /bin/sh
-            - -c
-            - cp /usr/bin/sriov /host/opt/cni/bin/
+          args: ["--no-sleep"]
           securityContext:
             privileged: true
           resources:
@@ -56,12 +53,12 @@ spec:
           volumeMounts:
             - name: cnibin
               mountPath: /host/opt/cni/bin
+            - name: os-release
+              mountPath: /host/etc/os-release
+              readOnly: true
         - name: sriov-infiniband-cni
           image: {{.SRIOVInfiniBandCNIImage}}
-          command:
-            - /bin/sh
-            - -c
-            - cp /usr/bin/ib-sriov /host/opt/cni/bin/
+          args: ["--no-sleep"]
           securityContext:
             privileged: true
           resources:
@@ -71,6 +68,31 @@ spec:
           volumeMounts:
             - name: cnibin
               mountPath: /host/opt/cni/bin
+            - name: os-release
+              mountPath: /host/etc/os-release
+              readOnly: true
+        {{- if .OVSCNIImage }}
+        - name: ovs-cni
+          image: {{.OVSCNIImage}}
+          command: ["/bin/sh","-c"]
+          args:
+            - >
+              cp /ovs /host/opt/cni/bin/ovs &&
+              cp /ovs-mirror-producer /host/opt/cni/bin/ovs-mirror-producer &&
+              cp /ovs-mirror-consumer /host/opt/cni/bin/ovs-mirror-consumer
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+          volumeMounts:
+            - name: cnibin
+              mountPath: /host/opt/cni/bin
+            - name: os-release
+              mountPath: /host/etc/os-release
+              readOnly: true
+        {{- end }}
       {{- if .UsedSystemdMode}}
         - name: sriov-service-copy
           image: {{.Image}}
@@ -99,6 +121,12 @@ spec:
           - "start"
         {{- if .UsedSystemdMode}}
           - --use-systemd-service
+        {{- end }}
+        {{- with index . "DisablePlugins" }}
+          - --disable-plugins={{.}}
+        {{- end }}
+        {{- if .ParallelNicConfig }}
+          - --parallel-nic-config
         {{- end }}
         env:
           - name: NODE_NAME
@@ -131,3 +159,7 @@ spec:
       - name: cnibin
         hostPath:
           path: {{.CNIBinPath}}
+      - name: os-release
+        hostPath:
+          path: /etc/os-release
+          type: File

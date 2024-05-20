@@ -24,15 +24,6 @@ var (
 	operatorNamespace string
 )
 
-func init() {
-	operatorNamespace = os.Getenv("OPERATOR_NAMESPACE")
-	if operatorNamespace == "" {
-		operatorNamespace = "openshift-sriov-network-operator"
-	}
-
-	clients = testclient.New("")
-}
-
 const (
 	sriovOperatorDeploymentName = "sriov-network-operator"
 	// SriovNetworkNodePolicies contains the name of the sriov network node policies CRD
@@ -44,6 +35,16 @@ const (
 	// sriovOperatorConfigs contains the name of the sriov Operator config CRD
 	sriovOperatorConfigs = "sriovoperatorconfigs.sriovnetwork.openshift.io"
 )
+
+var _ = BeforeSuite(func() {
+	operatorNamespace = os.Getenv("OPERATOR_NAMESPACE")
+	if operatorNamespace == "" {
+		operatorNamespace = "openshift-sriov-network-operator"
+	}
+
+	clients = testclient.New("")
+	Expect(clients).ToNot(BeNil())
+})
 
 var _ = Describe("validation", func() {
 
@@ -86,7 +87,7 @@ var _ = Describe("validation", func() {
 			err := clients.Client.Get(context.TODO(), goclient.ObjectKey{Name: "default", Namespace: operatorNamespace}, operatorConfig)
 			Expect(err).ToNot(HaveOccurred())
 
-			if *operatorConfig.Spec.EnableInjector {
+			if operatorConfig.Spec.EnableInjector {
 				daemonset, err := clients.DaemonSets(operatorNamespace).Get(context.Background(), "network-resources-injector", metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(daemonset.Status.DesiredNumberScheduled).To(Equal(daemonset.Status.NumberReady))
@@ -102,7 +103,7 @@ var _ = Describe("validation", func() {
 			err := clients.Get(context.TODO(), goclient.ObjectKey{Name: "default", Namespace: operatorNamespace}, operatorConfig)
 			Expect(err).ToNot(HaveOccurred())
 
-			if *operatorConfig.Spec.EnableOperatorWebhook {
+			if operatorConfig.Spec.EnableOperatorWebhook {
 				daemonset, err := clients.DaemonSets(operatorNamespace).Get(context.Background(), "operator-webhook", metav1.GetOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(daemonset.Status.DesiredNumberScheduled).To(Equal(daemonset.Status.NumberReady))

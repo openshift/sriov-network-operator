@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	intstrutil "k8s.io/apimachinery/pkg/util/intstr"
 
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -798,6 +799,164 @@ func TestVhostVdpaNodePolicyApply(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expectedInterfaces, tc.currentState.Spec.Interfaces); diff != "" {
 				t.Errorf("SriovNetworkNodeState spec diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGetEswitchModeFromSpec(t *testing.T) {
+	testtable := []struct {
+		tname          string
+		spec           *v1.Interface
+		expectedResult string
+	}{
+		{
+			tname:          "set to legacy",
+			spec:           &v1.Interface{EswitchMode: v1.ESwithModeLegacy},
+			expectedResult: v1.ESwithModeLegacy,
+		},
+		{
+			tname:          "set to switchdev",
+			spec:           &v1.Interface{EswitchMode: v1.ESwithModeSwitchDev},
+			expectedResult: v1.ESwithModeSwitchDev,
+		},
+		{
+			tname:          "not set",
+			spec:           &v1.Interface{},
+			expectedResult: v1.ESwithModeLegacy,
+		},
+	}
+	for _, tc := range testtable {
+		t.Run(tc.tname, func(t *testing.T) {
+			result := v1.GetEswitchModeFromSpec(tc.spec)
+			if diff := cmp.Diff(tc.expectedResult, result); diff != "" {
+				t.Errorf("unexpected result (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGetEswitchModeFromStatus(t *testing.T) {
+	testtable := []struct {
+		tname          string
+		spec           *v1.InterfaceExt
+		expectedResult string
+	}{
+		{
+			tname:          "set to legacy",
+			spec:           &v1.InterfaceExt{EswitchMode: v1.ESwithModeLegacy},
+			expectedResult: v1.ESwithModeLegacy,
+		},
+		{
+			tname:          "set to switchdev",
+			spec:           &v1.InterfaceExt{EswitchMode: v1.ESwithModeSwitchDev},
+			expectedResult: v1.ESwithModeSwitchDev,
+		},
+		{
+			tname:          "not set",
+			spec:           &v1.InterfaceExt{},
+			expectedResult: v1.ESwithModeLegacy,
+		},
+	}
+	for _, tc := range testtable {
+		t.Run(tc.tname, func(t *testing.T) {
+			result := v1.GetEswitchModeFromStatus(tc.spec)
+			if diff := cmp.Diff(tc.expectedResult, result); diff != "" {
+				t.Errorf("unexpected result (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestSriovNetworkPoolConfig_MaxUnavailable(t *testing.T) {
+	testtable := []struct {
+		tname       string
+		maxUn       intstrutil.IntOrString
+		maxUnNil    bool
+		numOfNodes  int
+		expectedNum int
+		expectedErr bool
+	}{
+		{
+			tname:       "valid int MaxUnavailable",
+			maxUn:       intstrutil.FromInt32(1),
+			numOfNodes:  1,
+			expectedNum: 1,
+			expectedErr: false,
+		},
+		{
+			tname:       "invalid string MaxUnavailable",
+			maxUn:       intstrutil.FromString("bla"),
+			numOfNodes:  1,
+			expectedNum: 0,
+			expectedErr: true,
+		},
+		{
+			tname:       "valid string percentage MaxUnavailable",
+			maxUn:       intstrutil.FromString("33%"),
+			numOfNodes:  10,
+			expectedNum: 3,
+			expectedErr: false,
+		},
+		{
+			tname:       "negative int MaxUnavailable",
+			maxUn:       intstrutil.FromInt32(-1),
+			numOfNodes:  10,
+			expectedNum: 0,
+			expectedErr: true,
+		},
+		{
+			tname:       "out of range int MaxUnavailable",
+			maxUn:       intstrutil.FromString("99999999999999999."),
+			numOfNodes:  10,
+			expectedNum: 0,
+			expectedErr: true,
+		},
+		{
+			tname:       "over 100%",
+			maxUn:       intstrutil.FromString("10000%"),
+			numOfNodes:  10,
+			expectedNum: 0,
+			expectedErr: true,
+		},
+		{
+			tname:       "parallel",
+			maxUn:       intstrutil.FromInt32(-1),
+			maxUnNil:    true,
+			numOfNodes:  10,
+			expectedNum: -1,
+			expectedErr: false,
+		},
+		{
+			tname:       "zero",
+			maxUn:       intstrutil.FromString("30%"),
+			maxUnNil:    false,
+			numOfNodes:  1,
+			expectedNum: 0,
+			expectedErr: false,
+		},
+	}
+	for _, tc := range testtable {
+		t.Run(tc.tname, func(t *testing.T) {
+			pool := v1.SriovNetworkPoolConfig{
+				Spec: v1.SriovNetworkPoolConfigSpec{
+					MaxUnavailable: &tc.maxUn,
+				},
+			}
+
+			if tc.maxUnNil {
+				pool.Spec.MaxUnavailable = nil
+			}
+
+			num, err := pool.MaxUnavailable(tc.numOfNodes)
+			if tc.expectedErr && err == nil {
+				t.Errorf("MaxUnavailable expecting error.")
+			} else if !tc.expectedErr && err != nil {
+				t.Errorf("MaxUnavailable error:\n%s", err)
+			}
+
+			if tc.expectedNum != num {
+				t.Errorf("unexpected number of MaxUnavailable.")
 			}
 		})
 	}

@@ -14,6 +14,7 @@ IMAGE_BUILDER?=docker
 IMAGE_BUILD_OPTS?=
 DOCKERFILE?=Dockerfile
 DOCKERFILE_CONFIG_DAEMON?=Dockerfile.sriov-network-config-daemon
+DOCKERFILE_WEBHOOK?=Dockerfile.webhook
 
 CRD_BASES=./config/crd/bases
 
@@ -21,13 +22,15 @@ export APP_NAME?=sriov-network-operator
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
 IMAGE_REPO?=ghcr.io/k8snetworkplumbingwg
 IMAGE_TAG?=$(IMAGE_REPO)/$(APP_NAME):latest
-CONFIG_DAEMON_IMAGE_TAG?=$(IMAGE_REPO)/sriov-network-config-daemon:latest
+CONFIG_DAEMON_IMAGE_TAG?=$(IMAGE_REPO)/$(APP_NAME)-config-daemon:latest
+WEBHOOK_IMAGE_TAG?=$(IMAGE_REPO)/$(APP_NAME)-webhook:latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export WATCH_NAMESPACE?=openshift-sriov-network-operator
 export GOFLAGS+=-mod=vendor
 export GO111MODULE=on
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
+TESTPKGS?=./...
 
 # go source files, ignore vendor directory
 SRC = $(shell find . -type f -name '*.go' -not -path "./vendor/*")
@@ -49,7 +52,7 @@ GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
 # golangci-lint version should be updated periodically
 # we keep it fixed to avoid it from unexpectedly failing on the project
 # in case of a version bump
-GOLANGCI_LINT_VER = v1.51.0
+GOLANGCI_LINT_VER = v1.55.2
 
 GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
 # golangci-lint version should be updated periodically
@@ -60,7 +63,7 @@ GOLANGCI_LINT_VER = v1.46.1
 
 .PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests update-codegen
 
-all: generate vet build
+all: generate lint build
 
 build: manager _build-sriov-network-config-daemon _build-webhook
 
@@ -74,19 +77,20 @@ clean:
 update-codegen:
 	hack/update-codegen.sh
 
-image: ; $(info Building image...)
+image: ; $(info Building images...)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE) -t $(IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE_CONFIG_DAEMON) -t $(CONFIG_DAEMON_IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
+	$(IMAGE_BUILDER) build -f $(DOCKERFILE_WEBHOOK) -t $(WEBHOOK_IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
 
 # Run tests
-test: generate vet manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./... -coverprofile cover.out -v
+test: generate lint manifests envtest
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test -coverprofile cover.out -v ${TESTPKGS}
 
 # Build manager binary
-manager: generate vet _build-manager
+manager: generate _build-manager
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: vet skopeo install
+run: skopeo install
 	hack/run-locally.sh
 
 # Install CRDs into a cluster
@@ -134,10 +138,6 @@ fmt: ## Go fmt your code
 fmt-code:
 	go fmt ./...
 
-# Run go vet against code
-vet:
-	go vet ./...
-
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -159,7 +159,7 @@ envtest: ## Download envtest-setup locally if necessary.
 
 GOMOCK = $(shell pwd)/bin/mockgen
 gomock:
-	$(call go-get-tool,$(GOMOCK),github.com/golang/mock/mockgen@v1.6.0)
+	$(call go-install-tool,$(GOMOCK),github.com/golang/mock/mockgen@v1.6.0)
 
 # go-install-tool will 'go install' any package $2 and install it to $1.
 define go-install-tool
@@ -176,12 +176,11 @@ skopeo:
 fakechroot:
 	if ! which fakechroot; then if [ -f /etc/redhat-release ]; then dnf -y install fakechroot; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install fakechroot; fi; fi
 
-deploy-setup: export ENABLE_ADMISSION_CONTROLLER?=true
+deploy-setup: export ADMISSION_CONTROLLERS_ENABLED?=false
 deploy-setup: skopeo install
 	hack/deploy-setup.sh $(NAMESPACE)
 
 deploy-setup-k8s: export NAMESPACE=sriov-network-operator
-deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER?=false
 deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
 deploy-setup-k8s: export OPERATOR_EXEC=kubectl
 deploy-setup-k8s: export CLUSTER_TYPE=kubernetes
@@ -208,7 +207,7 @@ redeploy-operator-virtual-cluster:
 test-e2e-validation-only:
 	SUITE=./test/validation ./hack/run-e2e-conformance.sh
 
-test-e2e: generate vet manifests skopeo envtest
+test-e2e: generate manifests skopeo envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
 
 test-e2e-k8s: export NAMESPACE=sriov-network-operator
@@ -217,13 +216,8 @@ test-e2e-k8s: test-e2e
 test-bindata-scripts: fakechroot
 	fakechroot ./test/scripts/enable-kargs_test.sh
 
-test-%: generate vet manifests envtest
+test-%: generate manifests envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./$*/... -coverprofile cover-$*.out -coverpkg ./... -v
-
-# deploy-setup-k8s: export NAMESPACE=sriov-network-operator
-# deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
-# deploy-setup-k8s: export CNI_BIN_PATH=/opt/cni/bin
-# test-e2e-k8s: test-e2e
 
 GOCOVMERGE = $(BIN_DIR)/gocovmerge
 gocovmerge: ## Download gocovmerge locally if necessary.
@@ -250,6 +244,12 @@ undeploy-k8s: undeploy
 deps-update:
 	go mod tidy && \
 	go mod vendor
+
+check-deps: deps-update
+	@set +e; git diff --quiet HEAD go.sum go.mod vendor; \
+	if [ $$? -eq 1 ]; \
+	then echo -e "\ngo modules are out of date. Please commit after running 'make deps-update' command\n"; \
+	exit 1; fi
 
 $(GOLANGCI_LINT): ; $(info installing golangci-lint...)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER))

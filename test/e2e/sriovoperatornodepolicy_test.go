@@ -28,6 +28,8 @@ var _ = Describe("Operator", func() {
 
 	execute.BeforeAll(func() {
 		clients := testclient.New("")
+		Expect(clients).ToNot(BeNil())
+
 		Eventually(func() *cluster.EnabledNodes {
 			sriovInfos, _ = cluster.DiscoverSriov(clients, testNamespace)
 			return sriovInfos
@@ -266,7 +268,7 @@ var _ = Describe("Operator", func() {
 							Expect(iface.VfGroups[0].DeviceType).To(Equal(policy.Spec.DeviceType))
 							Expect(iface.VfGroups[0].ResourceName).To(Equal(policy.Spec.ResourceName))
 
-							pfName, rngStart, rngEnd, err := sriovnetworkv1.ParsePFName(policy.Spec.NicSelector.PfNames[0])
+							pfName, rngStart, rngEnd, err := sriovnetworkv1.ParseVfRange(policy.Spec.NicSelector.PfNames[0])
 							Expect(err).NotTo(HaveOccurred())
 							rng := strconv.Itoa(rngStart) + "-" + strconv.Itoa(rngEnd)
 							Expect(iface.Name).To(Equal(pfName))

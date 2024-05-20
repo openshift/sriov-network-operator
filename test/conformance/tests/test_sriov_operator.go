@@ -188,6 +188,94 @@ var _ = Describe("[sriov] operator", func() {
 			})
 		})
 
+		Context("LogLevel affects operator's logs", func() {
+			It("when set to 0 no lifecycle logs are present", func() {
+				if discovery.Enabled() {
+					Skip("Test unsuitable to be run in discovery mode")
+				}
+
+				initialLogLevelValue := getOperatorConfigLogLevel()
+				DeferCleanup(func() {
+					By("Restore LogLevel to its initial value")
+					setOperatorConfigLogLevel(initialLogLevelValue)
+				})
+
+				initialDisableDrain, err := cluster.GetNodeDrainState(clients, operatorNamespace)
+				Expect(err).ToNot(HaveOccurred())
+
+				DeferCleanup(func() {
+					By("Restore DisableDrain to its initial value")
+					Eventually(func() error {
+						return cluster.SetDisableNodeDrainState(clients, operatorNamespace, initialDisableDrain)
+					}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
+				})
+
+				By("Set operator LogLevel to 2")
+				setOperatorConfigLogLevel(2)
+
+				By("Flip DisableDrain to trigger operator activity")
+				since := time.Now().Add(-10 * time.Second)
+				Eventually(func() error {
+					return cluster.SetDisableNodeDrainState(clients, operatorNamespace, !initialDisableDrain)
+				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
+
+				By("Assert logs contains verbose output")
+				Eventually(func(g Gomega) {
+					logs := getOperatorLogs(since)
+					g.Expect(logs).To(
+						ContainElement(And(
+							ContainSubstring("Reconciling SriovOperatorConfig"),
+						)),
+					)
+
+					// Should contain verbose logging
+					g.Expect(logs).To(
+						ContainElement(
+							ContainSubstring("Start to sync webhook objects"),
+						),
+					)
+				}, 1*time.Minute, 5*time.Second).Should(Succeed())
+
+				By("Reduce operator LogLevel to 0")
+				setOperatorConfigLogLevel(0)
+
+				By("Flip DisableDrain again to trigger operator activity")
+				since = time.Now().Add(-10 * time.Second)
+				Eventually(func() error {
+					return cluster.SetDisableNodeDrainState(clients, operatorNamespace, initialDisableDrain)
+				}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
+
+				By("Assert logs contains less operator activity")
+				Eventually(func(g Gomega) {
+					logs := getOperatorLogs(since)
+
+					// time only contains sec, but we can have race here that in the same sec there was a sync
+					afterLogs := []string{}
+					found := false
+					for _, log := range logs {
+						if found {
+							afterLogs = append(afterLogs, log)
+						}
+						if strings.Contains(log, "{\"new-level\": 0, \"current-level\": 2}") {
+							found = true
+						}
+					}
+					g.Expect(found).To(BeTrue())
+					g.Expect(afterLogs).To(
+						ContainElement(And(
+							ContainSubstring("Reconciling SriovOperatorConfig"),
+						)),
+					)
+
+					// Should not contain verbose logging
+					g.Expect(afterLogs).ToNot(
+						ContainElement(
+							ContainSubstring("Start to sync webhook objects"),
+						),
+					)
+				}, 3*time.Minute, 5*time.Second).Should(Succeed())
+			})
+		})
 	})
 
 	Describe("Generic SriovNetworkNodePolicy", func() {
@@ -925,11 +1013,9 @@ var _ = Describe("[sriov] operator", func() {
 				Expect(err).ToNot(HaveOccurred())
 				waitForNetAttachDef(sriovNetworkName, namespaces.Test)
 
-				podDeployTime := time.Now()
-
 				testPod := createTestPod(node, []string{sriovNetworkName})
 
-				recentMultusLogs := getMultusPodLogs(testPod.Spec.NodeName, podDeployTime)
+				recentMultusLogs := getMultusPodLogs(testPod.Spec.NodeName, testPod.Status.StartTime.Time)
 
 				Expect(recentMultusLogs).To(
 					ContainElement(
@@ -2472,18 +2558,18 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 	}, &cfg)
 
 	Expect(err).ToNot(HaveOccurred())
-	if flagName == operatorNetworkInjectorFlag && *cfg.Spec.EnableInjector != flagValue {
-		cfg.Spec.EnableInjector = &flagValue
+	if flagName == operatorNetworkInjectorFlag && cfg.Spec.EnableInjector != flagValue {
+		cfg.Spec.EnableInjector = flagValue
 		err = clients.Update(context.TODO(), &cfg)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(*cfg.Spec.EnableInjector).To(Equal(flagValue))
+		Expect(cfg.Spec.EnableInjector).To(Equal(flagValue))
 	}
 
-	if flagName == operatorWebhookFlag && *cfg.Spec.EnableOperatorWebhook != flagValue {
-		cfg.Spec.EnableOperatorWebhook = &flagValue
+	if flagName == operatorWebhookFlag && cfg.Spec.EnableOperatorWebhook != flagValue {
+		cfg.Spec.EnableOperatorWebhook = flagValue
 		clients.Update(context.TODO(), &cfg)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(*cfg.Spec.EnableOperatorWebhook).To(Equal(flagValue))
+		Expect(cfg.Spec.EnableOperatorWebhook).To(Equal(flagValue))
 	}
 
 	if flagValue {
@@ -2499,6 +2585,66 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 			}
 		}, 1*time.Minute, 10*time.Second).WithOffset(1).Should(Succeed())
 	}
+}
+
+func setOperatorConfigLogLevel(level int) {
+	instantBeforeSettingLogLevel := time.Now()
+
+	Eventually(func(g Gomega) {
+		cfg := sriovv1.SriovOperatorConfig{}
+		err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+			Name:      "default",
+			Namespace: operatorNamespace,
+		}, &cfg)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		if cfg.Spec.LogLevel == level {
+			return
+		}
+
+		cfg.Spec.LogLevel = level
+
+		err = clients.Update(context.TODO(), &cfg)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		logs := getOperatorLogs(instantBeforeSettingLogLevel)
+		g.Expect(logs).To(
+			ContainElement(
+				ContainSubstring(fmt.Sprintf(`"new-level": %d`, level)),
+			),
+		)
+	}, 1*time.Minute, 5*time.Second).Should(Succeed())
+}
+
+func getOperatorConfigLogLevel() int {
+	cfg := sriovv1.SriovOperatorConfig{}
+	err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+		Name:      "default",
+		Namespace: operatorNamespace,
+	}, &cfg)
+	Expect(err).ToNot(HaveOccurred())
+
+	return cfg.Spec.LogLevel
+}
+
+func getOperatorLogs(since time.Time) []string {
+	podList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
+		LabelSelector: "name=sriov-network-operator",
+	})
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
+	ExpectWithOffset(1, podList.Items).To(HaveLen(1), "One operator pod expected")
+
+	pod := podList.Items[0]
+	logStart := metav1.NewTime(since)
+	rawLogs, err := clients.Pods(pod.Namespace).
+		GetLogs(pod.Name, &corev1.PodLogOptions{
+			Container: pod.Spec.Containers[0].Name,
+			SinceTime: &logStart,
+		}).
+		DoRaw(context.Background())
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
+
+	return strings.Split(string(rawLogs), "\n")
 }
 
 func assertObjectIsNotFound(name string, obj runtimeclient.Object) {
