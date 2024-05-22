@@ -1,9 +1,9 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-openshift-4.16 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.21-openshift-4.17 AS builder
 WORKDIR /go/src/github.com/k8snetworkplumbingwg/sriov-network-operator
 COPY . .
 RUN make _build-manager BIN_PATH=build/_output/cmd
 
-FROM registry.ci.openshift.org/ocp/4.16:base-rhel9
+FROM registry.ci.openshift.org/ocp/4.17:base-rhel9
 LABEL io.k8s.display-name="OpenShift sriov-network-operator" \
       io.k8s.description="This is the component that manange and config sriov component in Openshift cluster" \
       io.openshift.tags="openshift,networking,sr-iov" \
