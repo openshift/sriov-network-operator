@@ -10,6 +10,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -163,5 +164,29 @@ func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet, discov
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func AddLabel(cs corev1client.NamespacesGetter, ctx context.Context, namespaceName, key, value string) error {
+	ns, err := cs.Namespaces().Get(context.Background(), namespaceName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get namespace [%s]: %v", namespaceName, err)
+	}
+
+	if ns.Labels == nil {
+		ns.Labels = make(map[string]string)
+	}
+
+	if ns.Labels[key] == value {
+		return nil
+	}
+
+	ns.Labels[key] = value
+
+	_, err = cs.Namespaces().Update(ctx, ns, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update namespace [%s] with label [%s: %s]: %v", namespaceName, key, value, err)
+	}
+
 	return nil
 }
