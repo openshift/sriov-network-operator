@@ -3,7 +3,6 @@ package sriov
 import (
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -574,7 +573,7 @@ func (s *sriov) configSriovDevice(iface *sriovnetworkv1.Interface, skipVFConfigu
 	if err != nil {
 		return err
 	}
-	if pfLink.Attrs().Flags&net.FlagUp == 0 {
+	if !s.netlinkLib.IsLinkAdminStateUp(pfLink) {
 		err = s.netlinkLib.LinkSetUp(pfLink)
 		if err != nil {
 			return err

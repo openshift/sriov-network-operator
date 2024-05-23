@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -375,9 +374,9 @@ func (n *network) GetNetDevLinkAdminState(ifaceName string) string {
 		return ""
 	}
 
-	if link.Attrs().Flags&net.FlagUp == 0 {
-		return "down"
+	if n.netlinkLib.IsLinkAdminStateUp(link) {
+		return consts.LinkAdminStateUp
 	}
 
-	return "up"
+	return consts.LinkAdminStateDown
 }

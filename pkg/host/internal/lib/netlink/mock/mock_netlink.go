@@ -145,6 +145,20 @@ func (mr *MockNetlinkLibMockRecorder) DevlinkSetDeviceParam(bus, device, param, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevlinkSetDeviceParam", reflect.TypeOf((*MockNetlinkLib)(nil).DevlinkSetDeviceParam), bus, device, param, cmode, value)
 }
 
+// IsLinkAdminStateUp mocks base method.
+func (m *MockNetlinkLib) IsLinkAdminStateUp(link netlink.Link) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsLinkAdminStateUp", link)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsLinkAdminStateUp indicates an expected call of IsLinkAdminStateUp.
+func (mr *MockNetlinkLibMockRecorder) IsLinkAdminStateUp(link interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLinkAdminStateUp", reflect.TypeOf((*MockNetlinkLib)(nil).IsLinkAdminStateUp), link)
+}
+
 // LinkByName mocks base method.
 func (m *MockNetlinkLib) LinkByName(name string) (netlink.Link, error) {
 	m.ctrl.T.Helper()

@@ -61,6 +61,8 @@ type NetlinkLib interface {
 	// RdmaLinkByName finds a link by name and returns a pointer to the object if
 	// found and nil error, otherwise returns error code.
 	RdmaLinkByName(name string) (*netlink.RdmaLink, error)
+	// IsLinkAdminStateUp checks if the admin state of a link is up
+	IsLinkAdminStateUp(link Link) bool
 }
 
 type libWrapper struct{}
@@ -150,4 +152,9 @@ func (w *libWrapper) DevlinkSetDeviceParam(bus string, device string, param stri
 // found and nil error, otherwise returns error code.
 func (w *libWrapper) RdmaLinkByName(name string) (*netlink.RdmaLink, error) {
 	return netlink.RdmaLinkByName(name)
+}
+
+// IsLinkAdminStateUp checks if the admin state of a link is up
+func (w *libWrapper) IsLinkAdminStateUp(link Link) bool {
+	return link.Attrs().Flags&net.FlagUp == 1
 }

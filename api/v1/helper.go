@@ -273,7 +273,7 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 		return true
 	}
 
-	if ifaceStatus.LinkAdminState == "down" {
+	if ifaceStatus.LinkAdminState == consts.LinkAdminStateDown {
 		log.V(2).Info("NeedToUpdateSriov(): PF link status needs update", "desired to include", "up", "current", ifaceStatus.LinkAdminState)
 		return true
 	}
