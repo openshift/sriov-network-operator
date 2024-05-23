@@ -26,6 +26,7 @@ import (
 // SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
 type SriovNetworkNodeStateSpec struct {
 	Interfaces Interfaces `json:"interfaces,omitempty"`
+	Bridges    Bridges    `json:"bridges,omitempty"`
 }
 
 type Interfaces []Interface
@@ -71,22 +72,50 @@ type InterfaceExt struct {
 type InterfaceExts []InterfaceExt
 
 type VirtualFunction struct {
-	Name       string `json:"name,omitempty"`
-	Mac        string `json:"mac,omitempty"`
-	Assigned   string `json:"assigned,omitempty"`
-	Driver     string `json:"driver,omitempty"`
+	Name            string `json:"name,omitempty"`
+	Mac             string `json:"mac,omitempty"`
+	Assigned        string `json:"assigned,omitempty"`
+	Driver          string `json:"driver,omitempty"`
+	PciAddress      string `json:"pciAddress"`
+	Vendor          string `json:"vendor,omitempty"`
+	DeviceID        string `json:"deviceID,omitempty"`
+	Vlan            int    `json:"Vlan,omitempty"`
+	Mtu             int    `json:"mtu,omitempty"`
+	VfID            int    `json:"vfID"`
+	VdpaType        string `json:"vdpaType,omitempty"`
+	RepresentorName string `json:"representorName,omitempty"`
+}
+
+// Bridges contains list of bridges
+type Bridges struct {
+	OVS []OVSConfigExt `json:"ovs,omitempty"`
+}
+
+// OVSConfigExt contains configuration for the concrete OVS bridge
+type OVSConfigExt struct {
+	// name of the bridge
+	Name string `json:"name"`
+	// bridge-level configuration for the bridge
+	Bridge OVSBridgeConfig `json:"bridge,omitempty"`
+	// uplink-level bridge configuration for each uplink(PF).
+	// currently must contain only one element
+	Uplinks []OVSUplinkConfigExt `json:"uplinks,omitempty"`
+}
+
+// OVSUplinkConfigExt contains configuration for the concrete OVS uplink(PF)
+type OVSUplinkConfigExt struct {
+	// pci address of the PF
 	PciAddress string `json:"pciAddress"`
-	Vendor     string `json:"vendor,omitempty"`
-	DeviceID   string `json:"deviceID,omitempty"`
-	Vlan       int    `json:"Vlan,omitempty"`
-	Mtu        int    `json:"mtu,omitempty"`
-	VfID       int    `json:"vfID"`
-	VdpaType   string `json:"vdpaType,omitempty"`
+	// name of the PF interface
+	Name string `json:"name,omitempty"`
+	// configuration from the Interface OVS table for the PF
+	Interface OVSInterfaceConfig `json:"interface,omitempty"`
 }
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
 type SriovNetworkNodeStateStatus struct {
 	Interfaces    InterfaceExts `json:"interfaces,omitempty"`
+	Bridges       Bridges       `json:"bridges,omitempty"`
 	SyncStatus    string        `json:"syncStatus,omitempty"`
 	LastSyncError string        `json:"lastSyncError,omitempty"`
 }

@@ -62,6 +62,9 @@ type SriovNetworkNodePolicySpec struct {
 	ExcludeTopology bool `json:"excludeTopology,omitempty"`
 	// don't create the virtual function only allocated them to the device plugin. Defaults to false.
 	ExternallyManaged bool `json:"externallyManaged,omitempty"`
+	// contains bridge configuration for matching PFs,
+	// valid only for eSwitchMode==switchdev
+	Bridge Bridge `json:"bridge,omitempty"`
 }
 
 type SriovNetworkNicSelector struct {
@@ -75,6 +78,53 @@ type SriovNetworkNicSelector struct {
 	PfNames []string `json:"pfNames,omitempty"`
 	// Infrastructure Networking selection filter. Allowed value "openstack/NetworkID:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 	NetFilter string `json:"netFilter,omitempty"`
+}
+
+// contains spec for the bridge
+type Bridge struct {
+	// contains configuration for the OVS bridge,
+	OVS *OVSConfig `json:"ovs,omitempty"`
+}
+
+// IsEmpty return empty if the struct doesn't contain configuration
+func (b *Bridge) IsEmpty() bool {
+	return b.OVS == nil
+}
+
+// OVSConfig optional configuration for OVS bridge and uplink Interface
+type OVSConfig struct {
+	// contains bridge level settings
+	Bridge OVSBridgeConfig `json:"bridge,omitempty"`
+	// contains settings for uplink (PF)
+	Uplink OVSUplinkConfig `json:"uplink,omitempty"`
+}
+
+// OVSBridgeConfig contains some options from the Bridge table in OVSDB
+type OVSBridgeConfig struct {
+	// configure datapath_type field in the Bridge table in OVSDB
+	DatapathType string `json:"datapathType,omitempty"`
+	// IDs to inject to external_ids field in the Bridge table in OVSDB
+	ExternalIDs map[string]string `json:"externalIDs,omitempty"`
+	// additional options to inject to other_config field in the bridge table in OVSDB
+	OtherConfig map[string]string `json:"otherConfig,omitempty"`
+}
+
+// OVSUplinkConfig contains PF interface configuration for the bridge
+type OVSUplinkConfig struct {
+	// contains settings for PF interface in the OVS bridge
+	Interface OVSInterfaceConfig `json:"interface,omitempty"`
+}
+
+// OVSInterfaceConfig contains some options from the Interface table of the OVSDB for PF
+type OVSInterfaceConfig struct {
+	// type field in the Interface table in OVSDB
+	Type string `json:"type,omitempty"`
+	// options field in the Interface table in OVSDB
+	Options map[string]string `json:"options,omitempty"`
+	// external_ids field in the Interface table in OVSDB
+	ExternalIDs map[string]string `json:"externalIDs,omitempty"`
+	// other_config field in the Interface table in OVSDB
+	OtherConfig map[string]string `json:"otherConfig,omitempty"`
 }
 
 // SriovNetworkNodePolicyStatus defines the observed state of SriovNetworkNodePolicy
