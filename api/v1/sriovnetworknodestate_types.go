@@ -64,6 +64,7 @@ type InterfaceExt struct {
 	NumVfs            int               `json:"numVfs,omitempty"`
 	LinkSpeed         string            `json:"linkSpeed,omitempty"`
 	LinkType          string            `json:"linkType,omitempty"`
+	LinkAdminState    string            `json:"linkAdminState,omitempty"`
 	EswitchMode       string            `json:"eSwitchMode,omitempty"`
 	ExternallyManaged bool              `json:"externallyManaged,omitempty"`
 	TotalVfs          int               `json:"totalvfs,omitempty"`
@@ -84,6 +85,7 @@ type VirtualFunction struct {
 	VfID            int    `json:"vfID"`
 	VdpaType        string `json:"vdpaType,omitempty"`
 	RepresentorName string `json:"representorName,omitempty"`
+	GUID            string `json:"guid,omitempty"`
 }
 
 // Bridges contains list of bridges
