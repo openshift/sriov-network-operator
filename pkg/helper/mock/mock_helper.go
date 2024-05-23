@@ -415,6 +415,20 @@ func (mr *MockHostHelpersInterfaceMockRecorder) GetMlxNicFwData(pciAddress inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMlxNicFwData", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetMlxNicFwData), pciAddress)
 }
 
+// GetNetDevLinkAdminState mocks base method.
+func (m *MockHostHelpersInterface) GetNetDevLinkAdminState(ifaceName string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetDevLinkAdminState", ifaceName)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetNetDevLinkAdminState indicates an expected call of GetNetDevLinkAdminState.
+func (mr *MockHostHelpersInterfaceMockRecorder) GetNetDevLinkAdminState(ifaceName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetDevLinkAdminState", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetNetDevLinkAdminState), ifaceName)
+}
+
 // GetNetDevLinkSpeed mocks base method.
 func (m *MockHostHelpersInterface) GetNetDevLinkSpeed(name string) string {
 	m.ctrl.T.Helper()
@@ -441,6 +455,20 @@ func (m *MockHostHelpersInterface) GetNetDevMac(name string) string {
 func (mr *MockHostHelpersInterfaceMockRecorder) GetNetDevMac(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetDevMac", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetNetDevMac), name)
+}
+
+// GetNetDevNodeGUID mocks base method.
+func (m *MockHostHelpersInterface) GetNetDevNodeGUID(pciAddr string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetDevNodeGUID", pciAddr)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetNetDevNodeGUID indicates an expected call of GetNetDevNodeGUID.
+func (mr *MockHostHelpersInterfaceMockRecorder) GetNetDevNodeGUID(pciAddr interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetDevNodeGUID", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetNetDevNodeGUID), pciAddr)
 }
 
 // GetNetdevMTU mocks base method.

@@ -1,7 +1,10 @@
 package network
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -187,6 +190,35 @@ func (n *network) GetNetDevMac(ifaceName string) string {
 	return link.Attrs().HardwareAddr.String()
 }
 
+// GetNetDevNodeGUID returns the network interface node GUID if device is RDMA capable otherwise returns empty string
+func (n *network) GetNetDevNodeGUID(pciAddr string) string {
+	if len(pciAddr) == 0 {
+		return ""
+	}
+
+	rdmaDevicesPath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, "infiniband")
+	rdmaDevices, err := os.ReadDir(rdmaDevicesPath)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			log.Log.Error(err, "GetNetDevNodeGUID(): failed to read RDMA related directory", "pciAddr", pciAddr)
+		}
+		return ""
+	}
+
+	if len(rdmaDevices) != 1 {
+		log.Log.Error(err, "GetNetDevNodeGUID(): expected just one RDMA device", "pciAddr", pciAddr, "numOfDevices", len(rdmaDevices))
+		return ""
+	}
+
+	rdmaLink, err := n.netlinkLib.RdmaLinkByName(rdmaDevices[0].Name())
+	if err != nil {
+		log.Log.Error(err, "GetNetDevNodeGUID(): failed to get RDMA link", "pciAddr", pciAddr)
+		return ""
+	}
+
+	return rdmaLink.Attrs.NodeGuid
+}
+
 func (n *network) GetNetDevLinkSpeed(ifaceName string) string {
 	log.Log.V(2).Info("GetNetDevLinkSpeed(): get LinkSpeed", "device", ifaceName)
 	speedFilePath := filepath.Join(vars.FilesystemRoot, consts.SysClassNet, ifaceName, "speed")
@@ -328,4 +360,24 @@ func (n *network) EnableHwTcOffload(ifaceName string) error {
 	}
 	log.Log.V(0).Info("EnableHwTcOffload(): feature is still disabled, not supported by device", "device", ifaceName)
 	return nil
+}
+
+// GetNetDevLinkAdminState returns the admin state of the interface.
+func (n *network) GetNetDevLinkAdminState(ifaceName string) string {
+	log.Log.V(2).Info("GetNetDevLinkAdminState(): get LinkAdminState", "device", ifaceName)
+	if len(ifaceName) == 0 {
+		return ""
+	}
+
+	link, err := n.netlinkLib.LinkByName(ifaceName)
+	if err != nil {
+		log.Log.Error(err, "GetNetDevLinkAdminState(): failed to get link", "device", ifaceName)
+		return ""
+	}
+
+	if link.Attrs().Flags&net.FlagUp == 0 {
+		return "down"
+	}
+
+	return "up"
 }

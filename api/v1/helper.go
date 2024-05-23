@@ -272,6 +272,12 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 		log.V(2).Info("NeedToUpdateSriov(): NumVfs needs update", "desired", ifaceSpec.NumVfs, "current", ifaceStatus.NumVfs)
 		return true
 	}
+
+	if ifaceStatus.LinkAdminState == "down" {
+		log.V(2).Info("NeedToUpdateSriov(): PF link status needs update", "desired to include", "up", "current", ifaceStatus.LinkAdminState)
+		return true
+	}
+
 	if ifaceSpec.NumVfs > 0 {
 		for _, vfStatus := range ifaceStatus.VFs {
 			ingroup := false
@@ -301,6 +307,16 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 							return true
 						}
 
+						if (strings.EqualFold(ifaceStatus.LinkType, consts.LinkTypeETH) && groupSpec.IsRdma) || strings.EqualFold(ifaceStatus.LinkType, consts.LinkTypeIB) {
+							// We do this check only if a Node GUID is set to ensure that we were able to read the
+							// Node GUID. We intentionally skip empty Node GUID in vfStatus because this may happen
+							// when the VF is allocated to a workload.
+							if vfStatus.GUID == consts.UninitializedNodeGUID {
+								log.V(2).Info("NeedToUpdateSriov(): VF GUID needs update",
+									"vf", vfStatus.VfID, "current", vfStatus.GUID)
+								return true
+							}
+						}
 						// this is needed to be sure the admin mac address is configured as expected
 						if ifaceSpec.ExternallyManaged {
 							log.V(2).Info("NeedToUpdateSriov(): need to update the device as it's externally manage",
