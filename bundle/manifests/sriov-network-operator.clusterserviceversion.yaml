@@ -100,7 +100,7 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:4.15
-    createdAt: "2024-05-07T19:22:27Z"
+    createdAt: "2024-05-23T14:24:29Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     features.operators.openshift.io/cnf: "false"
@@ -150,7 +150,7 @@ metadata:
   labels:
     operatorframework.io/arch.amd64: supported
     operatorframework.io/arch.ppc64le: supported
-  name: sriov-network-operator.v4.16.0
+  name: sriov-network-operator.v4.15.0
   namespace: openshift-sriov-network-operator
 spec:
   apiservicedefinitions: {}
@@ -582,4 +582,4 @@ spec:
     name: Red Hat
   provider:
     name: Red Hat
-  version: 4.16.0
+  version: 4.15.0
