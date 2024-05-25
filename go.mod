@@ -1,6 +1,6 @@
 module github.com/k8snetworkplumbingwg/sriov-network-operator
 
-go 1.21
+go 1.22
 
 require (
 	github.com/Masterminds/sprig/v3 v3.2.2
