@@ -36,6 +36,7 @@ spec:
             description: SriovNetworkNodePolicySpec defines the desired state of SriovNetworkNodePolicy
             properties:
               deviceType:
+                default: netdevice
                 description: The driver type for configured VFs. Allowed value "netdevice",
                   "vfio-pci". Defaults to netdevice.
                 enum:
@@ -51,6 +52,10 @@ spec:
               excludeTopology:
                 description: Exclude device's NUMA node when advertising this resource
                   by SRIOV network device plugin. Default to false.
+                type: boolean
+              externallyManaged:
+                description: don't create the virtual function only allocated them
+                  to the device plugin. Defaults to false.
                 type: boolean
               isRdma:
                 description: RDMA mode. Defaults to false.
