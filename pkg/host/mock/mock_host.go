@@ -339,6 +339,20 @@ func (mr *MockHostManagerInterfaceMockRecorder) GetLinkType(name interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLinkType", reflect.TypeOf((*MockHostManagerInterface)(nil).GetLinkType), name)
 }
 
+// GetNetDevLinkAdminState mocks base method.
+func (m *MockHostManagerInterface) GetNetDevLinkAdminState(ifaceName string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetDevLinkAdminState", ifaceName)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetNetDevLinkAdminState indicates an expected call of GetNetDevLinkAdminState.
+func (mr *MockHostManagerInterfaceMockRecorder) GetNetDevLinkAdminState(ifaceName interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetDevLinkAdminState", reflect.TypeOf((*MockHostManagerInterface)(nil).GetNetDevLinkAdminState), ifaceName)
+}
+
 // GetNetDevLinkSpeed mocks base method.
 func (m *MockHostManagerInterface) GetNetDevLinkSpeed(name string) string {
 	m.ctrl.T.Helper()
@@ -365,6 +379,20 @@ func (m *MockHostManagerInterface) GetNetDevMac(name string) string {
 func (mr *MockHostManagerInterfaceMockRecorder) GetNetDevMac(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetDevMac", reflect.TypeOf((*MockHostManagerInterface)(nil).GetNetDevMac), name)
+}
+
+// GetNetDevNodeGUID mocks base method.
+func (m *MockHostManagerInterface) GetNetDevNodeGUID(pciAddr string) string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNetDevNodeGUID", pciAddr)
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetNetDevNodeGUID indicates an expected call of GetNetDevNodeGUID.
+func (mr *MockHostManagerInterfaceMockRecorder) GetNetDevNodeGUID(pciAddr interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNetDevNodeGUID", reflect.TypeOf((*MockHostManagerInterface)(nil).GetNetDevNodeGUID), pciAddr)
 }
 
 // GetNetdevMTU mocks base method.

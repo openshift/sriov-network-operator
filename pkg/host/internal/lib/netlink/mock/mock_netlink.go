@@ -145,6 +145,20 @@ func (mr *MockNetlinkLibMockRecorder) DevlinkSetDeviceParam(bus, device, param, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevlinkSetDeviceParam", reflect.TypeOf((*MockNetlinkLib)(nil).DevlinkSetDeviceParam), bus, device, param, cmode, value)
 }
 
+// IsLinkAdminStateUp mocks base method.
+func (m *MockNetlinkLib) IsLinkAdminStateUp(link netlink.Link) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsLinkAdminStateUp", link)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsLinkAdminStateUp indicates an expected call of IsLinkAdminStateUp.
+func (mr *MockNetlinkLibMockRecorder) IsLinkAdminStateUp(link interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLinkAdminStateUp", reflect.TypeOf((*MockNetlinkLib)(nil).IsLinkAdminStateUp), link)
+}
+
 // LinkByName mocks base method.
 func (m *MockNetlinkLib) LinkByName(name string) (netlink.Link, error) {
 	m.ctrl.T.Helper()
@@ -228,6 +242,21 @@ func (m *MockNetlinkLib) LinkSetVfPortGUID(link netlink.Link, vf int, portguid n
 func (mr *MockNetlinkLibMockRecorder) LinkSetVfPortGUID(link, vf, portguid interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkSetVfPortGUID", reflect.TypeOf((*MockNetlinkLib)(nil).LinkSetVfPortGUID), link, vf, portguid)
+}
+
+// RdmaLinkByName mocks base method.
+func (m *MockNetlinkLib) RdmaLinkByName(name string) (*netlink0.RdmaLink, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RdmaLinkByName", name)
+	ret0, _ := ret[0].(*netlink0.RdmaLink)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RdmaLinkByName indicates an expected call of RdmaLinkByName.
+func (mr *MockNetlinkLibMockRecorder) RdmaLinkByName(name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RdmaLinkByName", reflect.TypeOf((*MockNetlinkLib)(nil).RdmaLinkByName), name)
 }
 
 // VDPADelDev mocks base method.

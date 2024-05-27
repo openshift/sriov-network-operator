@@ -43,6 +43,11 @@ const (
 	LinkTypeIB  = "IB"
 	LinkTypeETH = "ETH"
 
+	LinkAdminStateUp   = "up"
+	LinkAdminStateDown = "down"
+
+	UninitializedNodeGUID = "0000:0000:0000:0000"
+
 	DeviceTypeVfioPci   = "vfio-pci"
 	DeviceTypeNetDevice = "netdevice"
 	VdpaTypeVirtio      = "virtio"
