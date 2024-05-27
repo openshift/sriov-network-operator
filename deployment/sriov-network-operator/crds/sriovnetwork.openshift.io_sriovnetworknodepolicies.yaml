@@ -41,8 +41,9 @@ spec:
             description: SriovNetworkNodePolicySpec defines the desired state of SriovNetworkNodePolicy
             properties:
               bridge:
-                description: contains bridge configuration for matching PFs, valid
-                  only for eSwitchMode==switchdev
+                description: |-
+                  contains bridge configuration for matching PFs,
+                  valid only for eSwitchMode==switchdev
                 properties:
                   ovs:
                     description: contains configuration for the OVS bridge,

@@ -85,8 +85,9 @@ spec:
                           description: name of the bridge
                           type: string
                         uplinks:
-                          description: uplink-level bridge configuration for each
-                            uplink(PF). currently must contain only one element
+                          description: |-
+                            uplink-level bridge configuration for each uplink(PF).
+                            currently must contain only one element
                           items:
                             description: OVSUplinkConfigExt contains configuration
                               for the concrete OVS uplink(PF)
@@ -210,8 +211,9 @@ spec:
                           description: name of the bridge
                           type: string
                         uplinks:
-                          description: uplink-level bridge configuration for each
-                            uplink(PF). currently must contain only one element
+                          description: |-
+                            uplink-level bridge configuration for each uplink(PF).
+                            currently must contain only one element
                           items:
                             description: OVSUplinkConfigExt contains configuration
                               for the concrete OVS uplink(PF)
