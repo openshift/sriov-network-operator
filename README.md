@@ -28,6 +28,8 @@ The SR-IOV network operator introduces following new CRDs:
 
 - SriovNetwork
 
+- OVSNetwork
+
 - SriovNetworkNodeState
 
 - SriovNetworkNodePolicy
@@ -99,6 +101,42 @@ spec:
       "type": "vrf",
       "vrfname": "red"
     }
+```
+
+### OVSNetwork
+
+A custom resource of OVSNetwork could represent the a layer-2 broadcast domain attached to Open vSwitch that works in HW-offloading mode. 
+It is primarily used to generate a NetworkAttachmentDefinition CR with an OVS CNI plugin configuration. 
+
+The OVSNetwork CR also contains the `resourceName` which is aligned with the `resourceName` of SR-IOV device plugin. One OVSNetwork obj maps to one `resourceName`, but one `resourceName` can be shared by different OVSNetwork CRs.
+
+It is expected that `resourceName` contains name of the resource pool which holds Virtual Functions of a NIC in the switchdev mode. 
+A Physical function of the NIC should be attached to an OVS bridge before any workload which uses OVSNetwork starts.
+
+Example:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: OVSNetwork
+metadata:
+  name: example-network
+  namespace: example-namespace
+spec:
+  ipam: |
+    {
+      "type": "host-local",
+      "subnet": "10.56.217.0/24",
+      "rangeStart": "10.56.217.171",
+      "rangeEnd": "10.56.217.181",
+      "routes": [{
+        "dst": "0.0.0.0/0"
+      }],
+      "gateway": "10.56.217.1"
+    }
+  vlan: 100
+  bridge: my-bridge
+  mtu: 2500
+  resourceName: switchdevnics
 ```
 
 ### SriovNetworkNodeState

@@ -249,6 +249,99 @@ func TestIBRendering(t *testing.T) {
 	}
 }
 
+func TestOVSRendering(t *testing.T) {
+	testtable := []struct {
+		tname   string
+		network v1.OVSNetwork
+	}{
+		{
+			tname: "simpleovs",
+			network: v1.OVSNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: v1.OVSNetworkSpec{
+					NetworkNamespace: "testnamespace",
+					ResourceName:     "testresource",
+				},
+			},
+		},
+		{
+			tname: "chained",
+			network: v1.OVSNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: v1.OVSNetworkSpec{
+					NetworkNamespace: "testnamespace",
+					ResourceName:     "testresource",
+					MTU:              1500,
+					MetaPluginsConfig: `
+					{
+						"type": "vrf",
+						"vrfname": "blue"
+					}
+					`,
+				},
+			},
+		},
+		{
+			tname: "complexconf",
+			network: v1.OVSNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: v1.OVSNetworkSpec{
+					NetworkNamespace: "testnamespace",
+					ResourceName:     "testresource",
+					Capabilities:     `{"foo": "bar"}`,
+					Bridge:           "test",
+					Vlan:             100,
+					MTU:              1500,
+					Trunk: []*v1.TrunkConfig{
+						{
+							ID: func(i uint) *uint { return &i }(120)},
+						{
+							MinID: func(i uint) *uint { return &i }(500),
+							MaxID: func(i uint) *uint { return &i }(550)},
+					},
+					InterfaceType: "netdev",
+					IPAM:          `{"type": "foo"}`,
+				},
+			},
+		},
+	}
+	for _, tc := range testtable {
+		t.Run(tc.tname, func(t *testing.T) {
+			var b bytes.Buffer
+			w := bufio.NewWriter(&b)
+			rendered, err := tc.network.RenderNetAttDef()
+			if err != nil {
+				t.Fatal("failed rendering network attachment definition", err)
+			}
+			encoder := json.NewEncoder(w)
+			encoder.SetIndent("", "  ")
+			encoder.Encode(rendered)
+			w.Flush()
+			gp := filepath.Join("testdata", filepath.FromSlash(t.Name())+".golden")
+			if *update {
+				t.Log("update golden file")
+				if err := os.WriteFile(gp, b.Bytes(), 0644); err != nil {
+					t.Fatalf("failed to update golden file: %s", err)
+				}
+			}
+			g, err := os.ReadFile(gp)
+			if err != nil {
+				t.Fatalf("failed reading .golden: %s", err)
+			}
+			t.Log(b.String())
+			if !bytes.Equal(b.Bytes(), g) {
+				t.Errorf("bytes do not match .golden file")
+			}
+		})
+	}
+}
+
 func TestSriovNetworkNodePolicyApply(t *testing.T) {
 	testtable := []struct {
 		tname              string

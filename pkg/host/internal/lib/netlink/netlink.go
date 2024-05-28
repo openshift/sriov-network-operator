@@ -58,6 +58,11 @@ type NetlinkLib interface {
 	// cmode argument should contain valid cmode value as uint8, modes are define in nl.DEVLINK_PARAM_CMODE_* constants
 	// value argument should have one of the following types: uint8, uint16, uint32, string, bool
 	DevlinkSetDeviceParam(bus string, device string, param string, cmode uint8, value interface{}) error
+	// RdmaLinkByName finds a link by name and returns a pointer to the object if
+	// found and nil error, otherwise returns error code.
+	RdmaLinkByName(name string) (*netlink.RdmaLink, error)
+	// IsLinkAdminStateUp checks if the admin state of a link is up
+	IsLinkAdminStateUp(link Link) bool
 }
 
 type libWrapper struct{}
@@ -141,4 +146,15 @@ func (w *libWrapper) DevlinkGetDeviceParamByName(bus string, device string, para
 // value argument should have one of the following types: uint8, uint16, uint32, string, bool
 func (w *libWrapper) DevlinkSetDeviceParam(bus string, device string, param string, cmode uint8, value interface{}) error {
 	return netlink.DevlinkSetDeviceParam(bus, device, param, cmode, value)
+}
+
+// RdmaLinkByName finds a link by name and returns a pointer to the object if
+// found and nil error, otherwise returns error code.
+func (w *libWrapper) RdmaLinkByName(name string) (*netlink.RdmaLink, error) {
+	return netlink.RdmaLinkByName(name)
+}
+
+// IsLinkAdminStateUp checks if the admin state of a link is up
+func (w *libWrapper) IsLinkAdminStateUp(link Link) bool {
+	return link.Attrs().Flags&net.FlagUp == 1
 }

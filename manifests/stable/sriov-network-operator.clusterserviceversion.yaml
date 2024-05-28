@@ -100,7 +100,7 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:4.16
-    createdAt: "2024-05-07T23:50:52Z"
+    createdAt: "2024-05-27T23:50:24Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     features.operators.openshift.io/cnf: "false"
@@ -156,6 +156,11 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - description: OVSNetwork is the Schema for the ovsnetworks API
+      displayName: OVSNetwork
+      kind: OVSNetwork
+      name: ovsnetworks.sriovnetwork.openshift.io
+      version: v1
     - description: SriovIBNetwork is the Schema for the sriovibnetworks API
       displayName: Sriov IBNetwork
       kind: SriovIBNetwork

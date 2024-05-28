@@ -53,6 +53,87 @@ spec:
           spec:
             description: SriovNetworkNodeStateSpec defines the desired state of SriovNetworkNodeState
             properties:
+              bridges:
+                description: Bridges contains list of bridges
+                properties:
+                  ovs:
+                    items:
+                      description: OVSConfigExt contains configuration for the concrete
+                        OVS bridge
+                      properties:
+                        bridge:
+                          description: bridge-level configuration for the bridge
+                          properties:
+                            datapathType:
+                              description: configure datapath_type field in the Bridge
+                                table in OVSDB
+                              type: string
+                            externalIDs:
+                              additionalProperties:
+                                type: string
+                              description: IDs to inject to external_ids field in
+                                the Bridge table in OVSDB
+                              type: object
+                            otherConfig:
+                              additionalProperties:
+                                type: string
+                              description: additional options to inject to other_config
+                                field in the bridge table in OVSDB
+                              type: object
+                          type: object
+                        name:
+                          description: name of the bridge
+                          type: string
+                        uplinks:
+                          description: |-
+                            uplink-level bridge configuration for each uplink(PF).
+                            currently must contain only one element
+                          items:
+                            description: OVSUplinkConfigExt contains configuration
+                              for the concrete OVS uplink(PF)
+                            properties:
+                              interface:
+                                description: configuration from the Interface OVS
+                                  table for the PF
+                                properties:
+                                  externalIDs:
+                                    additionalProperties:
+                                      type: string
+                                    description: external_ids field in the Interface
+                                      table in OVSDB
+                                    type: object
+                                  options:
+                                    additionalProperties:
+                                      type: string
+                                    description: options field in the Interface table
+                                      in OVSDB
+                                    type: object
+                                  otherConfig:
+                                    additionalProperties:
+                                      type: string
+                                    description: other_config field in the Interface
+                                      table in OVSDB
+                                    type: object
+                                  type:
+                                    description: type field in the Interface table
+                                      in OVSDB
+                                    type: string
+                                type: object
+                              name:
+                                description: name of the PF interface
+                                type: string
+                              pciAddress:
+                                description: pci address of the PF
+                                type: string
+                            required:
+                            - pciAddress
+                            type: object
+                          type: array
+                      required:
+                      - name
+                      type: object
+                    type: array
+                type: object
               interfaces:
                 items:
                   properties:
@@ -98,6 +179,87 @@ spec:
             description: SriovNetworkNodeStateStatus defines the observed state of
               SriovNetworkNodeState
             properties:
+              bridges:
+                description: Bridges contains list of bridges
+                properties:
+                  ovs:
+                    items:
+                      description: OVSConfigExt contains configuration for the concrete
+                        OVS bridge
+                      properties:
+                        bridge:
+                          description: bridge-level configuration for the bridge
+                          properties:
+                            datapathType:
+                              description: configure datapath_type field in the Bridge
+                                table in OVSDB
+                              type: string
+                            externalIDs:
+                              additionalProperties:
+                                type: string
+                              description: IDs to inject to external_ids field in
+                                the Bridge table in OVSDB
+                              type: object
+                            otherConfig:
+                              additionalProperties:
+                                type: string
+                              description: additional options to inject to other_config
+                                field in the bridge table in OVSDB
+                              type: object
+                          type: object
+                        name:
+                          description: name of the bridge
+                          type: string
+                        uplinks:
+                          description: |-
+                            uplink-level bridge configuration for each uplink(PF).
+                            currently must contain only one element
+                          items:
+                            description: OVSUplinkConfigExt contains configuration
+                              for the concrete OVS uplink(PF)
+                            properties:
+                              interface:
+                                description: configuration from the Interface OVS
+                                  table for the PF
+                                properties:
+                                  externalIDs:
+                                    additionalProperties:
+                                      type: string
+                                    description: external_ids field in the Interface
+                                      table in OVSDB
+                                    type: object
+                                  options:
+                                    additionalProperties:
+                                      type: string
+                                    description: options field in the Interface table
+                                      in OVSDB
+                                    type: object
+                                  otherConfig:
+                                    additionalProperties:
+                                      type: string
+                                    description: other_config field in the Interface
+                                      table in OVSDB
+                                    type: object
+                                  type:
+                                    description: type field in the Interface table
+                                      in OVSDB
+                                    type: string
+                                type: object
+                              name:
+                                description: name of the PF interface
+                                type: string
+                              pciAddress:
+                                description: pci address of the PF
+                                type: string
+                            required:
+                            - pciAddress
+                            type: object
+                          type: array
+                      required:
+                      - name
+                      type: object
+                    type: array
+                type: object
               interfaces:
                 items:
                   properties:
@@ -112,6 +274,8 @@ spec:
                             type: string
                           driver:
                             type: string
+                          guid:
+                            type: string
                           mac:
                             type: string
                           mtu:
@@ -119,6 +283,8 @@ spec:
                           name:
                             type: string
                           pciAddress:
+                            type: string
+                          representorName:
                             type: string
                           vdpaType:
                             type: string
@@ -139,6 +305,8 @@ spec:
                       type: string
                     externallyManaged:
                       type: boolean
+                    linkAdminState:
+                      type: string
                     linkSpeed:
                       type: string
                     linkType:

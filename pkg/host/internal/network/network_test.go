@@ -15,6 +15,8 @@ import (
 	ethtoolMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/ethtool/mock"
 	netlinkMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/helpers"
 )
 
 func getDevlinkParam(t uint8, value interface{}) *netlink.DevlinkParam {
@@ -200,6 +202,40 @@ var _ = Describe("Network", func() {
 			ethtoolLibMock.EXPECT().Change("enp216s0f0np0", map[string]bool{"hw-tc-offload": true}).Return(nil)
 			ethtoolLibMock.EXPECT().Features("enp216s0f0np0").Return(nil, testErr)
 			Expect(n.EnableHwTcOffload("enp216s0f0np0")).To(MatchError(testErr))
+		})
+	})
+	Context("GetNetDevNodeGUID", func() {
+		It("Returns empty when pciAddr is empty", func() {
+			Expect(n.GetNetDevNodeGUID("")).To(Equal(""))
+		})
+		It("Returns empty when infiniband directory can't be read", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/sys/bus/pci/devices/0000:4b:00.3/"},
+			})
+			Expect(n.GetNetDevNodeGUID("0000:4b:00.3")).To(Equal(""))
+		})
+		It("Returns empty when more than one RDMA devices are detected for pciAddr", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{
+					"/sys/bus/pci/devices/0000:4b:00.3/infiniband/mlx5_2",
+					"/sys/bus/pci/devices/0000:4b:00.3/infiniband/mlx5_3",
+				},
+			})
+			Expect(n.GetNetDevNodeGUID("0000:4b:00.3")).To(Equal(""))
+		})
+		It("Returns empty when it fails to read RDMA link", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/sys/bus/pci/devices/0000:4b:00.3/infiniband/mlx5_2"},
+			})
+			netlinkLibMock.EXPECT().RdmaLinkByName("mlx5_2").Return(nil, fmt.Errorf("some-error"))
+			Expect(n.GetNetDevNodeGUID("0000:4b:00.3")).To(Equal(""))
+		})
+		It("Returns populated node GUID on correct setup", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/sys/bus/pci/devices/0000:4b:00.3/infiniband/mlx5_2"},
+			})
+			netlinkLibMock.EXPECT().RdmaLinkByName("mlx5_2").Return(&netlink.RdmaLink{Attrs: netlink.RdmaLinkAttrs{NodeGuid: "1122:3344:5566:7788"}}, nil)
+			Expect(n.GetNetDevNodeGUID("0000:4b:00.3")).To(Equal("1122:3344:5566:7788"))
 		})
 	})
 })

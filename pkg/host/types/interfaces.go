@@ -94,6 +94,8 @@ type NetworkInterface interface {
 	SetNetdevMTU(pciAddr string, mtu int) error
 	// GetNetDevMac returns the network interface mac address
 	GetNetDevMac(name string) string
+	// GetNetDevNodeGUID returns the network interface node GUID if device is RDMA capable otherwise returns empty string
+	GetNetDevNodeGUID(pciAddr string) string
 	// GetNetDevLinkSpeed returns the network interface link speed
 	GetNetDevLinkSpeed(name string) string
 	// GetDevlinkDeviceParam returns devlink parameter for the device as a string, if the parameter has multiple values
@@ -105,6 +107,8 @@ type NetworkInterface interface {
 	SetDevlinkDeviceParam(pciAddr, paramName, value string) error
 	// EnableHwTcOffload make sure that hw-tc-offload feature is enabled if device supports it
 	EnableHwTcOffload(ifaceName string) error
+	// GetNetDevLinkAdminState returns the admin state of the interface.
+	GetNetDevLinkAdminState(ifaceName string) string
 }
 
 type ServiceInterface interface {
