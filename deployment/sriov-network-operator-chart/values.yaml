@@ -98,7 +98,7 @@ images:
   sriovConfigDaemon: ghcr.io/k8snetworkplumbingwg/sriov-network-operator-config-daemon
   sriovCni: ghcr.io/k8snetworkplumbingwg/sriov-cni
   ibSriovCni: ghcr.io/k8snetworkplumbingwg/ib-sriov-cni
-  ovsCni: quay.io/kubevirt/ovs-cni-plugin
+  ovsCni: ghcr.io/k8snetworkplumbingwg/ovs-cni-plugin
   sriovDevicePlugin: ghcr.io/k8snetworkplumbingwg/sriov-network-device-plugin
   resourcesInjector: ghcr.io/k8snetworkplumbingwg/network-resources-injector
   webhook: ghcr.io/k8snetworkplumbingwg/sriov-network-operator-webhook
