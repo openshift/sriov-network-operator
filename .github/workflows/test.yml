@@ -74,6 +74,16 @@ jobs:
     - name: check go modules are up to date
       run: make check-deps
 
+  manifests:
+    name: check manifests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: check if the config/ folder is up to date
+      run: make check-manifests
+
   golangci:
     name: Golangci-lint
     runs-on: ubuntu-latest
