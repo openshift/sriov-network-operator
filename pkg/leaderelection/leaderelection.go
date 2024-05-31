@@ -3,9 +3,9 @@ package leaderelection
 import (
 	"time"
 
-	"github.com/golang/glog"
 	"k8s.io/client-go/tools/leaderelection"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
@@ -29,7 +29,7 @@ func GetLeaderElectionConfig(c client.Client, enabled bool) (defaultConfig leade
 	if enabled {
 		isSingleNode, err := utils.IsSingleNodeCluster(c)
 		if err != nil {
-			glog.Warningf("unable to get cluster infrastructure status, using HA cluster values for leader election: %v", err)
+			log.Log.Error(err, "warning, unable to get cluster infrastructure status, using HA cluster values for leader election")
 			return
 		}
 		if isSingleNode {

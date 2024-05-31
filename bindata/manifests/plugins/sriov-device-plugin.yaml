@@ -28,8 +28,9 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        kubernetes.io/os: linux
-        node-role.kubernetes.io/worker:
+        {{- range $key, $value := .NodeSelectorField }}
+          {{ $key }}: {{ $value }}
+        {{- end }}
       tolerations:
       - operator: Exists
       serviceAccountName: sriov-device-plugin
@@ -47,6 +48,9 @@ spec:
         - --log-level=10
         - --resource-prefix={{.ResourcePrefix}}
         - --config-file=/etc/pcidp/$(NODE_NAME)
+        {{- if .UseCDI }}
+        - --use-cdi
+        {{- end }}
         env:
         - name: NODE_NAME
           valueFrom:
@@ -60,21 +64,37 @@ spec:
             memory: 50Mi
         volumeMounts:
         - name: devicesock
-          mountPath: /var/lib/kubelet/
+          mountPath: /var/lib/kubelet/device-plugins
+          readOnly: false
+        - name: plugins-registry
+          mountPath: /var/lib/kubelet/plugins_registry
           readOnly: false
         - name: config-volume
           mountPath: /etc/pcidp/
           readOnly: true
         - name: device-info
           mountPath: /var/run/k8s.cni.cncf.io/devinfo/dp
+        {{- if .UseCDI }}
+        - name: dynamic-cdi
+          mountPath: /var/run/cdi
+        {{- end }}
       volumes:
         - name: devicesock
           hostPath:
-            path: /var/lib/kubelet/
+            path: /var/lib/kubelet/device-plugins
+        - name: plugins-registry
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
         - name: config-volume
-          configMap: 
+          configMap:
             name: device-plugin-config
         - name: device-info
           hostPath:
             path: /var/run/k8s.cni.cncf.io/devinfo/dp
             type: DirectoryOrCreate
+        {{- if .UseCDI }}
+        - name: dynamic-cdi
+          hostPath:
+            path: /var/run/cdi
+            type: DirectoryOrCreate
+        {{- end }}

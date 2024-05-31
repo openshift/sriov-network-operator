@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/golang/glog"
 	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
@@ -21,19 +21,19 @@ func RetriveSupportedNics() error {
 }
 
 func MutateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
-	glog.V(2).Info("mutating custom resource")
+	log.Log.V(2).Info("mutating custom resource")
 
 	cr := map[string]interface{}{}
 
 	raw := ar.Request.Object.Raw
 	err := json.Unmarshal(raw, &cr)
 	if err != nil {
-		glog.Error(err)
+		log.Log.Error(err, "failed to unmarshal object")
 		return toV1AdmissionResponse(err)
 	}
 	var reviewResp *v1.AdmissionResponse
 	if reviewResp, err = mutateSriovNetworkNodePolicy(cr); err != nil {
-		glog.Error(err)
+		log.Log.Error(err, "failed to mutate object")
 		return toV1AdmissionResponse(err)
 	}
 
@@ -41,7 +41,7 @@ func MutateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
 }
 
 func ValidateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
-	glog.V(2).Info("validating custom resource")
+	log.Log.V(2).Info("validating custom resource")
 	var err error
 	var raw []byte
 
@@ -59,7 +59,7 @@ func ValidateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
 
 		err = json.Unmarshal(raw, &policy)
 		if err != nil {
-			glog.Error(err)
+			log.Log.Error(err, "failed to unmarshal object")
 			return toV1AdmissionResponse(err)
 		}
 
@@ -73,11 +73,26 @@ func ValidateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
 
 		err = json.Unmarshal(raw, &config)
 		if err != nil {
-			glog.Error(err)
+			log.Log.Error(err, "failed to unmarshal object")
 			return toV1AdmissionResponse(err)
 		}
 
 		if reviewResponse.Allowed, reviewResponse.Warnings, err = validateSriovOperatorConfig(&config, ar.Request.Operation); err != nil {
+			reviewResponse.Result = &metav1.Status{
+				Reason: metav1.StatusReason(err.Error()),
+			}
+		}
+
+	case "SriovNetworkPoolConfig":
+		config := sriovnetworkv1.SriovNetworkPoolConfig{}
+
+		err = json.Unmarshal(raw, &config)
+		if err != nil {
+			log.Log.Error(err, "failed to unmarshal object")
+			return toV1AdmissionResponse(err)
+		}
+
+		if reviewResponse.Allowed, reviewResponse.Warnings, err = validateSriovNetworkPoolConfig(&config, ar.Request.Operation); err != nil {
 			reviewResponse.Result = &metav1.Status{
 				Reason: metav1.StatusReason(err.Error()),
 			}

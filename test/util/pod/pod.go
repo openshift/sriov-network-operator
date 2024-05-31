@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -29,7 +28,11 @@ func GetDefinition() *corev1.Pod {
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: pointer.Int64Ptr(0),
 			Containers: []corev1.Container{{Name: "test",
-				Image:   images.Test(),
+				Image: images.Test(),
+				SecurityContext: &corev1.SecurityContext{
+					Capabilities: &corev1.Capabilities{
+						Add: []corev1.Capability{"NET_RAW"},
+					}},
 				Command: []string{"/bin/bash", "-c", "sleep INF"}}}}}
 
 	return podObject
@@ -95,6 +98,11 @@ func RedefineWithRestartPolicy(pod *corev1.Pod, restartPolicy corev1.RestartPoli
 	return pod
 }
 
+func RedefineWithCapabilities(pod *corev1.Pod, capabilitiesList []corev1.Capability) *corev1.Pod {
+	pod.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: capabilitiesList}}
+	return pod
+}
+
 // ExecCommand runs command in the pod and returns buffer output
 func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (string, string, error) {
 	var buf, errbuf bytes.Buffer
@@ -107,7 +115,6 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 		VersionedParams(&corev1.PodExecOptions{
 			Container: pod.Spec.Containers[0].Name,
 			Command:   command,
-			Stdin:     true,
 			Stdout:    true,
 			Stderr:    true,
 			TTY:       true,
@@ -119,7 +126,6 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 	}
 
 	err = exec.Stream(remotecommand.StreamOptions{
-		Stdin:  os.Stdin,
 		Stdout: &buf,
 		Stderr: &errbuf,
 		Tty:    true,

@@ -42,6 +42,9 @@ type SriovNetworkSpec struct {
 	// +kubebuilder:validation:Maximum=7
 	// VLAN QoS ID to assign for the VF. Defaults to 0.
 	VlanQoS int `json:"vlanQoS,omitempty"`
+	// +kubebuilder:validation:Enum={"802.1q","802.1Q", "802.1ad", "802.1AD"}
+	// VLAN proto to assign for the VF. Defaults to 802.1q.
+	VlanProto string `json:"vlanProto,omitempty"`
 	// VF spoof check, (on|off)
 	// +kubebuilder:validation:Enum={"on","off"}
 	SpoofChk string `json:"spoofChk,omitempty"`
@@ -60,6 +63,14 @@ type SriovNetworkSpec struct {
 	// MetaPluginsConfig configuration to be used in order to chain metaplugins to the sriov interface returned
 	// by the operator.
 	MetaPluginsConfig string `json:"metaPlugins,omitempty"`
+	// LogLevel sets the log level of the SRIOV CNI plugin - either of panic, error, warning, info, debug. Defaults
+	// to info if left blank.
+	// +kubebuilder:validation:Enum={"panic", "error","warning","info","debug",""}
+	// +kubebuilder:default:= "info"
+	LogLevel string `json:"logLevel,omitempty"`
+	// LogFile sets the log file of the SRIOV CNI plugin logs. If unset (default), this will log to stderr and thus
+	// to multus and container runtime logs.
+	LogFile string `json:"logFile,omitempty"`
 }
 
 // SriovNetworkStatus defines the observed state of SriovNetwork

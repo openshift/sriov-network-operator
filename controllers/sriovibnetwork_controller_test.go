@@ -1,10 +1,11 @@
 package controllers
 
 import (
-	goctx "context"
+	"context"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -21,7 +22,39 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
-var _ = Describe("SriovIBNetwork Controller", func() {
+var _ = Describe("SriovIBNetwork Controller", Ordered, func() {
+	var cancel context.CancelFunc
+	var ctx context.Context
+
+	BeforeAll(func() {
+		By("Setup controller manager")
+		k8sManager, err := setupK8sManagerForTest()
+		Expect(err).ToNot(HaveOccurred())
+
+		err = (&SriovIBNetworkReconciler{
+			Client: k8sManager.GetClient(),
+			Scheme: k8sManager.GetScheme(),
+		}).SetupWithManager(k8sManager)
+		Expect(err).ToNot(HaveOccurred())
+
+		ctx, cancel = context.WithCancel(context.Background())
+
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			By("Start controller manager")
+			err := k8sManager.Start(ctx)
+			Expect(err).ToNot(HaveOccurred())
+		}()
+
+		DeferCleanup(func() {
+			By("Shutdown controller manager")
+			cancel()
+			wg.Wait()
+		})
+	})
 
 	Context("with SriovIBNetwork", func() {
 		specs := map[string]sriovnetworkv1.SriovIBNetworkSpec{
@@ -52,7 +85,7 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 
 				By("Create the SriovIBNetwork Custom Resource")
 				// get global framework variables
-				err = k8sClient.Create(goctx.TODO(), &cr)
+				err = k8sClient.Create(ctx, &cr)
 				Expect(err).NotTo(HaveOccurred())
 				ns := testNamespace
 				if cr.Spec.NetworkNamespace != "" {
@@ -68,9 +101,9 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 
 				By("Delete the SriovIBNetwork Custom Resource")
 				found := &sriovnetworkv1.SriovIBNetwork{}
-				err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
+				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
 				Expect(err).NotTo(HaveOccurred())
-				err = k8sClient.Delete(goctx.TODO(), found, []dynclient.DeleteOption{}...)
+				err = k8sClient.Delete(ctx, found, []dynclient.DeleteOption{}...)
 				Expect(err).NotTo(HaveOccurred())
 
 				netAttDef = &netattdefv1.NetworkAttachmentDefinition{}
@@ -98,11 +131,11 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 		DescribeTable("should be possible to update net-att-def",
 			func(old, new sriovnetworkv1.SriovIBNetwork) {
 				old.Name = new.GetName()
-				err := k8sClient.Create(goctx.TODO(), &old)
+				err := k8sClient.Create(ctx, &old)
 				Expect(err).NotTo(HaveOccurred())
 				defer func() {
 					// Cleanup the test resource
-					Expect(k8sClient.Delete(goctx.TODO(), &old)).To(Succeed())
+					Expect(k8sClient.Delete(ctx, &old)).To(Succeed())
 				}()
 				found := &sriovnetworkv1.SriovIBNetwork{}
 				expect := generateExpectedIBNetConfig(&new)
@@ -110,13 +143,13 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 				retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 					// Retrieve the latest version of SriovIBNetwork before attempting update
 					// RetryOnConflict uses exponential backoff to avoid exhausting the apiserver
-					getErr := k8sClient.Get(goctx.TODO(), types.NamespacedName{Namespace: old.GetNamespace(), Name: old.GetName()}, found)
+					getErr := k8sClient.Get(ctx, types.NamespacedName{Namespace: old.GetNamespace(), Name: old.GetName()}, found)
 					if getErr != nil {
 						io.WriteString(GinkgoWriter, fmt.Sprintf("Failed to get latest version of SriovIBNetwork: %v", getErr))
 					}
 					found.Spec = new.Spec
 					found.Annotations = new.Annotations
-					updateErr := k8sClient.Update(goctx.TODO(), found)
+					updateErr := k8sClient.Update(ctx, found)
 					if getErr != nil {
 						io.WriteString(GinkgoWriter, fmt.Sprintf("Failed to update latest version of SriovIBNetwork: %v", getErr))
 					}
@@ -164,7 +197,7 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 			var err error
 			expect := generateExpectedIBNetConfig(&cr)
 
-			err = k8sClient.Create(goctx.TODO(), &cr)
+			err = k8sClient.Create(ctx, &cr)
 			Expect(err).NotTo(HaveOccurred())
 			ns := testNamespace
 			if cr.Spec.NetworkNamespace != "" {
@@ -174,7 +207,7 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 			err = util.WaitForNamespacedObject(netAttDef, k8sClient, ns, cr.GetName(), util.RetryInterval, util.Timeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = k8sClient.Delete(goctx.TODO(), netAttDef)
+			err = k8sClient.Delete(ctx, netAttDef)
 			Expect(err).NotTo(HaveOccurred())
 			time.Sleep(3 * time.Second)
 			err = util.WaitForNamespacedObject(netAttDef, k8sClient, ns, cr.GetName(), util.RetryInterval, util.Timeout)
@@ -184,9 +217,9 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 			Expect(strings.TrimSpace(netAttDef.Spec.Config)).To(Equal(expect))
 
 			found := &sriovnetworkv1.SriovIBNetwork{}
-			err = k8sClient.Get(goctx.TODO(), types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
+			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: cr.GetNamespace(), Name: cr.GetName()}, found)
 			Expect(err).NotTo(HaveOccurred())
-			err = k8sClient.Delete(goctx.TODO(), found, []dynclient.DeleteOption{}...)
+			err = k8sClient.Delete(ctx, found, []dynclient.DeleteOption{}...)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -207,11 +240,11 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 			var err error
 			expect := generateExpectedIBNetConfig(&cr)
 
-			err = k8sClient.Create(goctx.TODO(), &cr)
+			err = k8sClient.Create(ctx, &cr)
 			Expect(err).NotTo(HaveOccurred())
 
 			DeferCleanup(func() {
-				err = k8sClient.Delete(goctx.TODO(), &cr)
+				err = k8sClient.Delete(ctx, &cr)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -223,11 +256,18 @@ var _ = Describe("SriovIBNetwork Controller", func() {
 			err = k8sClient.Get(ctx, types.NamespacedName{Name: cr.GetName(), Namespace: "ib-ns-xxx"}, netAttDef)
 			Expect(err).To(HaveOccurred())
 
-			err = k8sClient.Create(goctx.TODO(), &corev1.Namespace{
+			// Create Namespace
+			nsObj := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{Name: "ib-ns-xxx"},
-			})
+			}
+			err = k8sClient.Create(ctx, nsObj)
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				err = k8sClient.Delete(ctx, nsObj)
+				Expect(err).NotTo(HaveOccurred())
+			})
 
+			// Check that net-attach-def has been created
 			err = util.WaitForNamespacedObject(netAttDef, k8sClient, "ib-ns-xxx", cr.GetName(), util.RetryInterval, util.Timeout)
 			Expect(err).NotTo(HaveOccurred())
 

@@ -72,8 +72,12 @@ spec:
             value: quay.io/openshift/origin-sriov-infiniband-cni:4.14
           - name: RESOURCE_PREFIX
             value: openshift.io
-          - name: ENABLE_ADMISSION_CONTROLLER
+          - name: ADMISSION_CONTROLLERS_ENABLED
             value: "true"
+          - name: ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME
+            value: operator-webhook-service
+          - name: ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME
+            value: network-resources-injector-secret
           - name: NAMESPACE
             valueFrom:
               fieldRef:

@@ -54,6 +54,8 @@ spec:
               value: $SRIOV_CNI_IMAGE
             - name: SRIOV_INFINIBAND_CNI_IMAGE
               value: $SRIOV_INFINIBAND_CNI_IMAGE
+            - name: OVS_CNI_IMAGE
+              value: $OVS_CNI_IMAGE
             - name: SRIOV_DEVICE_PLUGIN_IMAGE
               value: $SRIOV_DEVICE_PLUGIN_IMAGE
             - name: NETWORK_RESOURCES_INJECTOR_IMAGE
@@ -66,8 +68,6 @@ spec:
               value: $SRIOV_NETWORK_WEBHOOK_IMAGE
             - name: RESOURCE_PREFIX
               value: $RESOURCE_PREFIX
-            - name: ENABLE_ADMISSION_CONTROLLER
-              value: "$ENABLE_ADMISSION_CONTROLLER"
             - name: DEV_MODE
               value: "$DEV_MODE"
             - name: NAMESPACE
@@ -88,5 +88,13 @@ spec:
               value: $CNI_BIN_PATH
             - name: CLUSTER_TYPE
               value: $CLUSTER_TYPE
-            - name: WEBHOOK_CA_BUNDLE
-              value: "$WEBHOOK_CA_BUNDLE"
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME
+              value: $ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME
+              value: $ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_CERT_MANAGER_ENABLED
+              value: "$ADMISSION_CONTROLLERS_CERTIFICATES_CERT_MANAGER_ENABLED"
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_CA_CRT
+              value: $ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_CA_CRT
+            - name: ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT
+              value: $ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT

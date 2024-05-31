@@ -10,11 +10,11 @@ import (
 
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 
 	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
 )
@@ -38,6 +38,7 @@ func TestMain(m *testing.M) {
 		"15b3 101b 101c", // ConnectX-6
 		"15b3 101d 101e", // ConnectX-6 Dx
 		"15b3 a2d6 101e", // MT42822 BlueField-2 integrated ConnectX-6 Dx
+		"15b3 1021 101e", // Nvidia_mlx5_ConnectX-7
 		"14e4 16d7 16dc", // BCM57414 2x25G
 		"14e4 1750 1806", // BCM75508 2x100G
 	}
@@ -140,14 +141,28 @@ func NewNode() *corev1.Node {
 func newDefaultOperatorConfig() *SriovOperatorConfig {
 	return &SriovOperatorConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "default",
+			Name:      "default",
+			Namespace: vars.Namespace,
 		},
 		Spec: SriovOperatorConfigSpec{
 			ConfigDaemonNodeSelector: map[string]string{},
 			DisableDrain:             true,
-			EnableInjector:           func() *bool { b := true; return &b }(),
-			EnableOperatorWebhook:    func() *bool { b := true; return &b }(),
+			EnableInjector:           true,
+			EnableOperatorWebhook:    true,
 			LogLevel:                 2,
+		},
+	}
+}
+
+func newDefaultNetworkPoolConfig() *SriovNetworkPoolConfig {
+	maxUn := intstr.FromInt32(1)
+	return &SriovNetworkPoolConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+		},
+		Spec: SriovNetworkPoolConfigSpec{
+			MaxUnavailable: &maxUn,
+			NodeSelector:   &metav1.LabelSelector{MatchLabels: map[string]string{}},
 		},
 	}
 }
@@ -209,6 +224,41 @@ func TestValidateSriovOperatorConfigDisableDrain(t *testing.T) {
 	g.Expect(ok).To(Equal(true))
 }
 
+func TestValidateSriovNetworkPoolConfigWithDefault(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	config := newDefaultNetworkPoolConfig()
+	snclient = fakesnclientset.NewSimpleClientset()
+
+	ok, _, err := validateSriovNetworkPoolConfig(config, "DELETE")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(Equal(false))
+
+	ok, _, err = validateSriovNetworkPoolConfig(config, "UPDATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+
+	ok, _, err = validateSriovNetworkPoolConfig(config, "CREATE")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+}
+
+func TestValidateSriovNetworkPoolConfigWithParallelAndHWOffload(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	config := newDefaultNetworkPoolConfig()
+	config.Spec.OvsHardwareOffloadConfig.Name = "test"
+	snclient = fakesnclientset.NewSimpleClientset()
+
+	ok, _, err := validateSriovNetworkPoolConfig(config, "UPDATE")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(BeFalse())
+
+	ok, _, err = validateSriovNetworkPoolConfig(config, "CREATE")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(BeFalse())
+}
+
 func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
 	var err error
 	var ok bool
@@ -225,6 +275,7 @@ func TestValidateSriovNetworkNodePolicyWithDefaultPolicy(t *testing.T) {
 		},
 	}
 	os.Setenv("NAMESPACE", "openshift-sriov-network-operator")
+	vars.Namespace = "openshift-sriov-network-operator"
 	g := NewGomegaWithT(t)
 	ok, _, err = validateSriovNetworkNodePolicy(policy, "DELETE")
 	g.Expect(err).To(HaveOccurred())
@@ -258,7 +309,7 @@ func TestValidatePolicyForNodeStateWithValidPolicy(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 }
 
@@ -284,8 +335,8 @@ func TestValidatePolicyForNodeStateWithInvalidNumVfsPolicy(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
-	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("numVfs(%d) in CR %s exceed the maximum allowed value(%d)", policy.Spec.NumVfs, policy.GetName(), state.Status.Interfaces[0].TotalVfs))))
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
+	g.Expect(err).To(MatchError("numVfs(65) in CR p1 exceed the maximum allowed value(64) interface(ens803f0)"))
 }
 
 func TestValidatePolicyForNodeStateWithInvalidNumVfsExternallyCreated(t *testing.T) {
@@ -311,7 +362,7 @@ func TestValidatePolicyForNodeStateWithInvalidNumVfsExternallyCreated(t *testing
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("numVfs(%d) in CR %s is higher than the virtual functions allocated for the PF externally value(%d)", policy.Spec.NumVfs, policy.GetName(), state.Status.Interfaces[0].NumVfs))))
 }
 
@@ -338,7 +389,7 @@ func TestValidatePolicyForNodeStateWithValidNumVfsExternallyCreated(t *testing.T
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 }
 
@@ -365,7 +416,7 @@ func TestValidatePolicyForNodeStateWithValidLowerNumVfsExternallyCreated(t *test
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 }
 
@@ -502,7 +553,7 @@ func TestValidatePolicyForNodeStateWithExternallyManageAndMTU(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 }
 
@@ -530,7 +581,7 @@ func TestValidatePolicyForNodeStateWithExternallyManageAndDifferentMTU(t *testin
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(HaveOccurred())
 }
 
@@ -558,16 +609,16 @@ func TestValidatePolicyForNodeStateWithExternallyManageAndLinkType(t *testing.T)
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 
 	policy.Spec.LinkType = "eth"
-	err = validatePolicyForNodeState(policy, state, NewNode())
+	_, err = validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 
 	policy.Spec.LinkType = "ETH"
 	state.Status.Interfaces[0].LinkType = "eth"
-	err = validatePolicyForNodeState(policy, state, NewNode())
+	_, err = validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).ToNot(HaveOccurred())
 }
 
@@ -596,7 +647,7 @@ func TestValidatePolicyForNodeStateWithExternallyManageAndDifferentLinkType(t *t
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).To(HaveOccurred())
 }
 
@@ -722,6 +773,31 @@ func TestValidatePoliciesWithSameExcludeTopologyForTheSameResource(t *testing.T)
 
 	g := NewGomegaWithT(t)
 	g.Expect(err).NotTo(HaveOccurred())
+}
+
+func TestValidatePoliciesWithDifferentNumVfForTheSameResourceAndTheSameRootDevice(t *testing.T) {
+	current := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "currentPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName: "resourceX",
+			NumVfs:       10,
+			NicSelector:  SriovNetworkNicSelector{RootDevices: []string{"0000:86:00.1"}},
+		},
+	}
+
+	previous := &SriovNetworkNodePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "previousPolicy"},
+		Spec: SriovNetworkNodePolicySpec{
+			ResourceName: "resourceX",
+			NumVfs:       5,
+			NicSelector:  SriovNetworkNicSelector{RootDevices: []string{"0000:86:00.1"}},
+		},
+	}
+
+	err := validatePolicyForNodePolicy(current, previous)
+
+	g := NewGomegaWithT(t)
+	g.Expect(err).To(MatchError("root device 0000:86:00.1 is overlapped with existing policy previousPolicy"))
 }
 
 func TestStaticValidateSriovNetworkNodePolicyWithValidVendorDevice(t *testing.T) {
@@ -996,8 +1072,8 @@ func TestValidatePolicyForNodeStateVirtioVdpaWithNotSupportedVendor(t *testing.T
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
-	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("vendor(%s) in CR %s not supported for vdpa", state.Status.Interfaces[0].Vendor, policy.Name))))
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
+	g.Expect(err).To(MatchError("vendor(8086) in CR p1 not supported for vdpa interface(ens803f0)"))
 }
 
 func TestValidatePolicyForNodeStateVhostVdpaWithNotSupportedVendor(t *testing.T) {
@@ -1023,8 +1099,8 @@ func TestValidatePolicyForNodeStateVhostVdpaWithNotSupportedVendor(t *testing.T)
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
-	g.Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("vendor(%s) in CR %s not supported for vdpa", state.Status.Interfaces[0].Vendor, policy.Name))))
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
+	g.Expect(err).To(MatchError("vendor(8086) in CR p1 not supported for vdpa interface(ens803f0)"))
 }
 
 func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
@@ -1044,13 +1120,8 @@ func TestValidatePolicyForNodeStateWithInvalidDevice(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	var testEnv = &envtest.Environment{}
 
-	cfg, err := testEnv.Start()
-	g.Expect(err).ToNot(HaveOccurred())
-	g.Expect(cfg).ToNot(BeNil())
-	kubeclient = kubernetes.NewForConfigOrDie(cfg)
-	err = validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 }
 
@@ -1072,7 +1143,7 @@ func TestValidatePolicyForNodeStateWithInvalidPfName(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(interfaceSelected).To(Equal(false))
 }
@@ -1095,7 +1166,7 @@ func TestValidatePolicyForNodeStateWithValidPfName(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(interfaceSelected).To(Equal(true))
 }
@@ -1135,7 +1206,7 @@ func TestValidatePolicyForNodeStateWithValidNetFilter(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(interfaceSelected).To(Equal(true))
 }
@@ -1199,7 +1270,7 @@ func TestValidatePolicyForNodeStateWithValidVFAndNetFilter(t *testing.T) {
 		},
 	}
 	g := NewGomegaWithT(t)
-	err := validatePolicyForNodeState(policy, state, NewNode())
+	_, err := validatePolicyForNodeState(policy, state, NewNode())
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(interfaceSelected).To(Equal(true))
 }

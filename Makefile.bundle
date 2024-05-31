@@ -1,0 +1,38 @@
+include Makefile
+# Current Operator version
+VERSION ?= 4.14.0
+# Default bundle image tag
+BUNDLE_IMG ?= controller-bundle:$(VERSION)
+
+
+# download-tool will download any package $2 and install it to $1.
+define download-tool
+@[ -f $(1) ] || { \
+set -e ;\
+echo "Downloading $(2)" ;\
+curl -sL -o $1 $2 ;\
+chmod +x $1 ;\
+}
+endef
+
+OPERATORSDK = $(BIN_DIR)/operator-sdk
+operator-sdk: ## Download operator-sdk locally if necessary.
+	$(call download-tool,$(OPERATORSDK),https://github.com/operator-framework/operator-sdk/releases/download/v1.34.1/operator-sdk_linux_amd64)
+
+# Generate bundle manifests and metadata, then validate generated files.
+.PHONY: bundle
+bundle: manifests kustomize operator-sdk
+	rm -f bundle/manifests/*
+	MANIFEST_YAML=$$(ls manifests/stable/*.yaml | grep -v supported-nic-ids_v1_configmap.yaml) ; \
+	rm -f $$MANIFEST_YAML
+	$(OPERATORSDK) generate kustomize manifests --interactive=false -q
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	$(KUSTOMIZE) build config/manifests | $(OPERATORSDK) generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS) --extra-service-accounts sriov-network-config-daemon
+	$(OPERATORSDK) bundle validate ./bundle
+	BUNDLE_MANIFEST_YAML=$$(ls bundle/manifests/* | grep -v supported-nic-ids_v1_configmap.yaml); \
+	cp $$BUNDLE_MANIFEST_YAML manifests/stable
+
+# Build the bundle image.
+.PHONY: bundle-build
+bundle-build:
+	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .

@@ -18,6 +18,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/nodes"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
@@ -31,8 +32,8 @@ type EnabledNodes struct {
 }
 
 var (
-	supportedPFDrivers = []string{"mlx5_core", "i40e", "ixgbe", "ice"}
-	supportedVFDrivers = []string{"iavf", "vfio-pci", "mlx5_core"}
+	supportedPFDrivers = []string{"mlx5_core", "i40e", "ixgbe", "ice", "igb"}
+	supportedVFDrivers = []string{"iavf", "vfio-pci", "mlx5_core", "igbvf"}
 	mlxVendorID        = "15b3"
 	intelVendorID      = "8086"
 )
@@ -342,7 +343,7 @@ func GetNodeSecureBootState(clients *testclient.ClientSet, nodeName, namespace s
 	podDefinition.Namespace = namespace
 
 	volume := corev1.Volume{Name: "host", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/"}}}
-	mount := corev1.VolumeMount{Name: "host", MountPath: "/host"}
+	mount := corev1.VolumeMount{Name: "host", MountPath: consts.Host}
 	podDefinition = pod.RedefineWithMount(podDefinition, volume, mount)
 	created, err := clients.Pods(namespace).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	if err != nil {
@@ -383,4 +384,11 @@ func GetNodeSecureBootState(clients *testclient.ClientSet, nodeName, namespace s
 	}
 
 	return strings.Contains(stdout, "[integrity]") || strings.Contains(stdout, "[confidentiality]"), nil
+}
+
+func VirtualCluster() bool {
+	if v, exist := os.LookupEnv("CLUSTER_HAS_EMULATED_PF"); exist && v != "" {
+		return true
+	}
+	return false
 }

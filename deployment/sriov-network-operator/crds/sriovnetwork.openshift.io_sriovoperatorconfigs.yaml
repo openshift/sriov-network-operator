@@ -52,6 +52,15 @@ spec:
               disableDrain:
                 description: Flag to disable nodes drain during debugging
                 type: boolean
+              disablePlugins:
+                description: DisablePlugins is a list of sriov-network-config-daemon
+                  plugins to disable
+                items:
+                  description: PluginNameValue defines the plugin name
+                  enum:
+                  - mellanox
+                  type: string
+                type: array
               enableInjector:
                 description: Flag to control whether the network resource injector
                   webhook shall be deployed
@@ -65,6 +74,11 @@ spec:
                   provision switchdev-configuration.service and enable OpenvSwitch
                   hw-offload on nodes.
                 type: boolean
+              featureGates:
+                additionalProperties:
+                  type: boolean
+                description: FeatureGates to enable experimental features
+                type: object
               logLevel:
                 description: Flag to control the log verbose level of the operator.
                   Set to '0' to show only the basic logs. And set to '2' to show all
@@ -72,6 +86,10 @@ spec:
                 maximum: 2
                 minimum: 0
                 type: integer
+              useCDI:
+                description: Flag to enable Container Device Interface mode for SR-IOV
+                  Network Device Plugin
+                type: boolean
             type: object
           status:
             description: SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig

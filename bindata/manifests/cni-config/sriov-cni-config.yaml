@@ -25,6 +25,9 @@ spec:
 {{- if .VlanQoSConfigured -}}
   "vlanQoS":{{.SriovCniVlanQoS}},
 {{- end -}}
+{{- if .VlanProtoConfigured -}}
+  "vlanProto":"{{.SriovCniVlanProto}}",
+{{- end -}}
 {{- if .MinTxRateConfigured -}}
   "min_tx_rate":{{.SriovCniMinTxRate}},
 {{- end -}}
@@ -37,6 +40,12 @@ spec:
 {{- end -}}
 {{- if .StateConfigured -}}
   "link_state":"{{.SriovCniState}}",
+{{- end -}}
+{{- if .LogLevelConfigured -}}
+  "logLevel":"{{.LogLevel}}",
+{{- end -}}
+{{- if .LogFileConfigured -}}
+  "logFile":"{{.LogFile}}",
 {{- end -}}
   {{.SriovCniIpam}}
 }

@@ -65,15 +65,15 @@ func (mr *MockStoreManagerInterfaceMockRecorder) LoadPfsStatus(pciAddress interf
 }
 
 // SaveLastPfAppliedStatus mocks base method.
-func (m *MockStoreManagerInterface) SaveLastPfAppliedStatus(pciAddress string, PfInfo *v1.Interface) error {
+func (m *MockStoreManagerInterface) SaveLastPfAppliedStatus(PfInfo *v1.Interface) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveLastPfAppliedStatus", pciAddress, PfInfo)
+	ret := m.ctrl.Call(m, "SaveLastPfAppliedStatus", PfInfo)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SaveLastPfAppliedStatus indicates an expected call of SaveLastPfAppliedStatus.
-func (mr *MockStoreManagerInterfaceMockRecorder) SaveLastPfAppliedStatus(pciAddress, PfInfo interface{}) *gomock.Call {
+func (mr *MockStoreManagerInterfaceMockRecorder) SaveLastPfAppliedStatus(PfInfo interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveLastPfAppliedStatus", reflect.TypeOf((*MockStoreManagerInterface)(nil).SaveLastPfAppliedStatus), pciAddress, PfInfo)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveLastPfAppliedStatus", reflect.TypeOf((*MockStoreManagerInterface)(nil).SaveLastPfAppliedStatus), PfInfo)
 }

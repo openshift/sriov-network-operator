@@ -1,0 +1,187 @@
+name: Test SR-IOV Operator
+
+on: [push, pull_request]
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.21
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.21.x
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: fmt
+      run: IS_CONTAINER=yes make fmt
+
+    - name: Build
+      run: make all
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.21
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.21.x
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: test pkg
+      run: make test-pkg
+
+    - name: test cmd
+      run: make test-cmd
+
+    - name: test controllers on opensfhit
+      run: CLUSTER_TYPE=openshift make test-controllers
+
+    - name: test controllers on kubernetes
+      run: CLUSTER_TYPE=kubernetes make test-controllers
+
+    - name: test bindata/scripts
+      run: make test-bindata-scripts
+
+  modules:
+    name: check go modules
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.21
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.21.x
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: check go modules are up to date
+      run: make check-deps
+
+  golangci:
+    name: Golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go 1.21
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.21.x
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
+        version: v1.55.2
+
+  test-coverage:
+    name: test-coverage
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.21
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.21.x
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: test pkg
+      run: make test-pkg
+
+    - name: test cmd
+      run: make test-cmd
+
+    - name: test controllers on opensfhit
+      run: CLUSTER_TYPE=openshift make test-controllers
+
+    - name: merge test coverage
+      run: make merge-test-coverage
+
+    - name: Coveralls
+      uses: coverallsapp/github-action@1.1.3
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path-to-lcov: lcov.out
+
+  virtual-k8s-cluster:
+    name: k8s
+    needs: [
+      build,
+      test,
+      golangci,
+    ]
+    runs-on: [ sriov ]
+    env:
+      TEST_REPORT_PATH: k8s-artifacts
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Set up Go 1.21
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.21.x
+
+      - name: run test
+        run: make test-e2e-conformance-virtual-k8s-cluster-ci
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: ${{ env.TEST_REPORT_PATH }}
+          path: ./${{ env.TEST_REPORT_PATH }}
+
+      - name: remove virtual cluster
+        if: always()
+        run: |
+          kcli delete cluster $CLUSTER_NAME -y
+          kcli delete network $CLUSTER_NAME -y
+
+  virtual-ocp:
+    name: ocp
+    needs: [
+      build,
+      test,
+      golangci,
+    ]
+    runs-on: [ ocp ]
+    env:
+      TEST_REPORT_PATH: ocp-artifacts
+    steps:
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+
+      - name: Set up Go 1.21
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.21.x
+
+      - name: run test
+        run: make test-e2e-conformance-virtual-ocp-cluster-ci
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: ${{ env.TEST_REPORT_PATH }}
+          path: ./${{ env.TEST_REPORT_PATH }}
+
+      - name: remove virtual cluster
+        if: always()
+        run: |
+          kcli delete cluster $CLUSTER_NAME -y
+          kcli delete network $CLUSTER_NAME -y

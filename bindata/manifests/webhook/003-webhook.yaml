@@ -6,8 +6,10 @@ metadata:
   annotations:
     {{- if eq .ClusterType "openshift" }}
     service.beta.openshift.io/inject-cabundle: "true"
-    {{- else if and (not .CaBundle) (eq .ClusterType "kubernetes") }}
-    cert-manager.io/inject-ca-from: {{.Namespace}}/network-resources-injector-secret
+    {{- else if and (.CertManagerEnabled) (eq .ClusterType "kubernetes") }}
+    # Limitation: Certificate must be named as the secret it produces to avoid overcomplicating the logic with
+    # more variables.
+    cert-manager.io/inject-ca-from: {{.Namespace}}/{{.InjectorWebhookSecretName}}
     {{- end }}
 webhooks:
   - name: network-resources-injector-config.k8s.io
@@ -19,8 +21,8 @@ webhooks:
         name: network-resources-injector-service
         namespace: {{.Namespace}}
         path: "/mutate"
-      {{- if and (.CaBundle) (eq .ClusterType "kubernetes") }}
-      caBundle: "{{.CaBundle}}"
+      {{- if and (not .CertManagerEnabled) (eq .ClusterType "kubernetes") }}
+      caBundle: "{{.InjectorWebhookCA}}"
       {{- end }}
     rules:
       - operations: [ "CREATE" ]
