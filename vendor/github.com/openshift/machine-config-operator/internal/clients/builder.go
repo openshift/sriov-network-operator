@@ -3,14 +3,16 @@ package clients
 import (
 	"os"
 
-	"github.com/golang/glog"
+	buildclientset "github.com/openshift/client-go/build/clientset/versioned"
 	configclientset "github.com/openshift/client-go/config/clientset/versioned"
+	imageclientset "github.com/openshift/client-go/image/clientset/versioned"
 	operatorclientset "github.com/openshift/client-go/operator/clientset/versioned"
 	mcfgclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
 	apiext "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 )
 
 // Builder can create a variety of kubernetes client interface
@@ -56,6 +58,14 @@ func (cb *Builder) APIExtClientOrDie(name string) apiext.Interface {
 	return apiext.NewForConfigOrDie(rest.AddUserAgent(cb.config, name))
 }
 
+func (cb *Builder) BuildClientOrDie(name string) buildclientset.Interface {
+	return buildclientset.NewForConfigOrDie(rest.AddUserAgent(cb.config, name))
+}
+
+func (cb *Builder) ImageClientOrDie(name string) imageclientset.Interface {
+	return imageclientset.NewForConfigOrDie(rest.AddUserAgent(cb.config, name))
+}
+
 // GetBuilderConfig returns a copy of the builders *rest.Config
 func (cb *Builder) GetBuilderConfig() *rest.Config {
 	return rest.CopyConfig(cb.config)
@@ -71,10 +81,10 @@ func NewBuilder(kubeconfig string) (*Builder, error) {
 	}
 
 	if kubeconfig != "" {
-		glog.V(4).Infof("Loading kube client config from path %q", kubeconfig)
+		klog.V(4).Infof("Loading kube client config from path %q", kubeconfig)
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	} else {
-		glog.V(4).Infof("Using in-cluster kube client config")
+		klog.V(4).Infof("Using in-cluster kube client config")
 		config, err = rest.InClusterConfig()
 	}
 	if err != nil {

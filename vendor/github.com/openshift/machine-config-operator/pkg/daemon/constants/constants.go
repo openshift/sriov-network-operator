@@ -8,6 +8,11 @@ const (
 	//
 	// XXX
 
+	// CurrentImageAnnotationKey is used to get the current OS image pullspec for a machine
+	CurrentImageAnnotationKey = "machineconfiguration.openshift.io/currentImage"
+	// DesiredImageAnnotationKey is used to specify the desired OS image pullspec for a machine
+	DesiredImageAnnotationKey = "machineconfiguration.openshift.io/desiredImage"
+
 	// CurrentMachineConfigAnnotationKey is used to fetch current MachineConfig for a machine
 	CurrentMachineConfigAnnotationKey = "machineconfiguration.openshift.io/currentConfig"
 	// DesiredMachineConfigAnnotationKey is used to specify the desired MachineConfig for a machine
@@ -27,6 +32,8 @@ const (
 	ClusterControlPlaneTopologyAnnotationKey = "machineconfiguration.openshift.io/controlPlaneTopology"
 	// OpenShiftOperatorManagedLabel is used to filter out kube objects that don't need to be synced by the MCO
 	OpenShiftOperatorManagedLabel = "openshift.io/operator-managed"
+	// ControllerConfigResourceVersionKey is used for the certificate writer to indicate the last controllerconfig object it synced upon
+	ControllerConfigResourceVersionKey = "machineconfiguration.openshift.io/lastSyncedControllerConfigResourceVersion"
 
 	// GeneratedByVersionAnnotationKey is used to tag the controllerconfig to synchronize the MCO and MCC
 	GeneratedByVersionAnnotationKey = "machineconfiguration.openshift.io/generated-by-version"
@@ -59,9 +66,6 @@ const (
 	// For more information, see https://github.com/openshift/pivot/pull/25/commits/c77788a35d7ee4058d1410e89e6c7937bca89f6c#diff-04c6e90faac2675aa89e2176d2eec7d8R44
 	EtcPivotFile = "/etc/pivot/image-pullspec"
 
-	// HostSelfBinary is the path where we copy our own binary to the host
-	HostSelfBinary = "/run/bin/machine-config-daemon"
-
 	// MachineConfigEncapsulatedPath contains all of the data from a MachineConfig object
 	// except the Spec/Config object; this supports inverting+encapsulating a MachineConfig
 	// object so that Ignition can process it on first boot, and then the MCD can act on
@@ -84,4 +88,13 @@ const (
 
 	// changes to registries.conf will cause a crio reload and require extra logic about whether to drain
 	ContainerRegistryConfPath = "/etc/containers/registries.conf"
+
+	// SSH Keys for user "core" will only be written at /home/core/.ssh
+	CoreUserSSHPath = "/home/" + CoreUserName + "/.ssh"
+
+	// SSH keys in RHCOS 8 will be written to /home/core/.ssh/authorized_keys
+	RHCOS8SSHKeyPath = CoreUserSSHPath + "/authorized_keys"
+
+	// SSH keys in RHCOS 9 / FCOS / SCOS will be written to /home/core/.ssh/authorized_keys.d/ignition
+	RHCOS9SSHKeyPath = CoreUserSSHPath + "/authorized_keys.d/ignition"
 )
