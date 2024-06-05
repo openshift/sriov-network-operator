@@ -109,6 +109,11 @@ manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=$(CRD_BASES)
 	cp ./config/crd/bases/* ./deployment/sriov-network-operator/crds/
 
+check-manifests: manifests
+	@set +e; git diff --quiet config; \
+	if [ $$? -eq 1 ]; \
+	then echo -e "\n`config` folder is out of date. Please run `make manifests` and commit your changes"; \
+	exit 1; fi
 
 sync-manifests-%: manifests
 	@mkdir -p manifests/$*
