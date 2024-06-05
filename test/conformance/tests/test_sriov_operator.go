@@ -1128,7 +1128,7 @@ var _ = Describe("[sriov] operator", func() {
 					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 				})
 
-				It("Should be possible to create a vfio-pci resource", func() {
+				It("Should be possible to create a vfio-pci resource and allocate to a pod", func() {
 					By("creating a vfio-pci node policy")
 					resourceName := "testvfio"
 					_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name, vfioNode, 5, resourceName, "vfio-pci")
@@ -1157,6 +1157,36 @@ var _ = Describe("[sriov] operator", func() {
 						allocatable, _ := resNum.AsInt64()
 						return allocatable
 					}, 10*time.Minute, time.Second).Should(Equal(int64(5)))
+
+					By("Creating sriov network to use the vfio device")
+					sriovNetwork := &sriovv1.SriovNetwork{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-vfionetwork",
+							Namespace: operatorNamespace,
+						},
+						Spec: sriovv1.SriovNetworkSpec{
+							ResourceName:     resourceName,
+							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+							NetworkNamespace: namespaces.Test,
+						}}
+
+					err = clients.Create(context.Background(), sriovNetwork)
+					Expect(err).ToNot(HaveOccurred())
+					waitForNetAttachDef("test-vfionetwork", namespaces.Test)
+
+					podDefinition := pod.DefineWithNetworks([]string{"test-vfionetwork"})
+					firstPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(func() corev1.PodPhase {
+						firstPod, _ = clients.Pods(namespaces.Test).Get(context.Background(), firstPod.Name, metav1.GetOptions{})
+						return firstPod.Status.Phase
+					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+					By("Checking MTU in pod network status annotation")
+					networkStatusJSON, exist := firstPod.Annotations["k8s.v1.cni.cncf.io/network-status"]
+					Expect(exist).To(BeTrue())
+					Expect(networkStatusJSON).To(ContainSubstring(fmt.Sprintf("\"mtu\": %d", vfioNic.Mtu)))
 				})
 			})
 
@@ -1618,6 +1648,11 @@ var _ = Describe("[sriov] operator", func() {
 						firstPod, _ = clients.Pods(namespaces.Test).Get(context.Background(), firstPod.Name, metav1.GetOptions{})
 						return firstPod.Status.Phase
 					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+					By("Checking MTU in pod network status annotation")
+					networkStatusJSON, exist := firstPod.Annotations["k8s.v1.cni.cncf.io/network-status"]
+					Expect(exist).To(BeTrue())
+					Expect(networkStatusJSON).To(ContainSubstring("\"mtu\": 9000"))
 
 					var stdout, stderr string
 					Eventually(func() error {
