@@ -9,9 +9,9 @@ GITHUB_TOKEN=${GITHUB_TOKEN:-}
 GITHUB_TAG=${GITHUB_TAG:-}
 
 BASE=${PWD}
-HELM_CHART=${BASE}/deployment/sriov-network-operator
+HELM_CHART=${BASE}/deployment/sriov-network-operator-chart
 HELM_CHART_VERSION=${GITHUB_TAG#"v"}
-HELM_CHART_TARBALL="sriov-network-operator-${HELM_CHART_VERSION}.tgz"
+HELM_CHART_TARBALL="sriov-network-operator-chart-${HELM_CHART_VERSION}.tgz"
 
 # make sure helm is installed
 set +e

@@ -10,8 +10,8 @@ GITHUB_REPO_OWNER=${GITHUB_REPO_OWNER:-}
 
 BASE=${PWD}
 YQ_CMD="${BASE}/bin/yq"
-HELM_VALUES=${BASE}/deployment/sriov-network-operator/values.yaml
-HELM_CHART=${BASE}/deployment/sriov-network-operator/Chart.yaml
+HELM_VALUES=${BASE}/deployment/sriov-network-operator-chart/values.yaml
+HELM_CHART=${BASE}/deployment/sriov-network-operator-chart/Chart.yaml
 
 
 if [ -z "$GITHUB_TAG" ]; then

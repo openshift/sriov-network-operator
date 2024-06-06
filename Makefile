@@ -107,7 +107,7 @@ uninstall: manifests kustomize
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=$(CRD_BASES)
-	cp ./config/crd/bases/* ./deployment/sriov-network-operator/crds/
+	cp ./config/crd/bases/* ./deployment/sriov-network-operator-chart/crds/
 
 check-manifests: manifests
 	@set +e; git diff --quiet config; \
@@ -274,4 +274,3 @@ chart-prepare-release: | $(YQ) ; ## prepare chart for release
 .PHONY: chart-push-release
 chart-push-release: ## push release chart
 	@GITHUB_TAG=$(GITHUB_TAG) GITHUB_TOKEN=$(GITHUB_TOKEN) GITHUB_REPO_OWNER=$(GITHUB_REPO_OWNER) hack/release/chart-push.sh
-
