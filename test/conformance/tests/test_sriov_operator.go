@@ -1035,12 +1035,12 @@ var _ = Describe("[sriov] operator", func() {
 				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
 			})
 
-			It("should reconcile managed VF if status changes", func() {
+			It("should reconcile managed VF if status is changed", func() {
 				originalMtu := sriovDevice.Mtu
-				newMtu := 1000
+				lowerMtu := originalMtu - 500
 
-				By("manually changing the MTU")
-				_, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", newMtu, sriovDevice.PciAddress, sriovDevice.Name))
+				By("manually decreasing the MTU")
+				_, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", lowerMtu, sriovDevice.PciAddress, sriovDevice.Name))
 				Expect(err).ToNot(HaveOccurred())
 				Expect(errOutput).To(Equal(""))
 
@@ -1053,7 +1053,7 @@ var _ = Describe("[sriov] operator", func() {
 					IgnoreExtras,
 					Fields{
 						"Name":       Equal(sriovDevice.Name),
-						"Mtu":        Equal(newMtu),
+						"Mtu":        Equal(lowerMtu),
 						"PciAddress": Equal(sriovDevice.PciAddress),
 						"NumVfs":     Equal(sriovDevice.NumVfs),
 					})))
@@ -1064,6 +1064,74 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).ToNot(HaveOccurred())
 					return nodeState.Status.Interfaces
 				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(originalMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				higherMtu := originalMtu + 500
+
+				By("manually increasing the MTU")
+				_, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", higherMtu, sriovDevice.PciAddress, sriovDevice.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+
+				By("waiting for the mtu to be updated in the status")
+				Eventually(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(higherMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("expecting the mtu to consistently stay at the new higher level")
+				Consistently(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 15*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(higherMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("manually returning the MTU to the original level")
+				_, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", originalMtu, sriovDevice.PciAddress, sriovDevice.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+
+				By("waiting for the mtu to be updated in the status")
+				Eventually(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(originalMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("expecting the mtu to consistently stay at the original level")
+				Consistently(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 15*time.Second).Should(ContainElement(MatchFields(
 					IgnoreExtras,
 					Fields{
 						"Name":       Equal(sriovDevice.Name),
