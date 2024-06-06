@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
@@ -23,6 +24,7 @@ var (
 )
 
 func init() {
+	klog.InitFlags(nil)
 	snolog.BindFlags(flag.CommandLine)
 	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 }
