@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -xeo pipefail
 
-OCP_VERSION=${OCP_VERSION:-4.16.0-rc.1}
+OCP_VERSION=${OCP_VERSION:-4.16.0-rc.2}
 cluster_name=${CLUSTER_NAME:-ocp-virt}
 domain_name=lab
 
@@ -206,6 +206,25 @@ podman build -t "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}" -f "${root}/Dockerfile.sr
 echo "## build webhook image"
 podman build -t "${SRIOV_NETWORK_WEBHOOK_IMAGE}" -f "${root}/Dockerfile.webhook" "${root}"
 
+echo "## wait for the all cluster to be stable"
+MAX_RETRIES=20
+DELAY_SECONDS=10
+retries=0
+until [ $retries -ge $MAX_RETRIES ]; do
+  # wait for all the openshift cluster operators to be running
+  if [ $(kubectl get clusteroperator --no-headers | awk '{print $3}' | grep True | wc -l) -eq 33 ]; then
+    break
+  fi
+  retries=$((retries+1))
+  echo "cluster operators are not ready. Retrying... (Attempt $retries/$MAX_RETRIES)"
+  sleep $DELAY_SECONDS
+done
+
+if [ $retries -eq $MAX_RETRIES ]; then
+  echo "Max retries reached. Exiting..."
+  exit 1
+fi
+
 echo "## wait for registry to be available"
 kubectl wait configs.imageregistry.operator.openshift.io/cluster --for=condition=Available --timeout=120s
 
@@ -216,8 +235,9 @@ auth=`echo ${auth} | base64 -d`
 echo ${auth} > registry-login.conf
 
 internal_registry="image-registry.openshift-image-registry.svc:5000"
-pass=$( jq .\"$internal_registry\".password registry-login.conf )
-podman login -u serviceaccount -p ${pass:1:-1} $registry --tls-verify=false
+pass=$( jq .\"image-registry.openshift-image-registry.svc:5000\".auth registry-login.conf  )
+pass=`echo ${pass:1:-1} | base64 -d`
+podman login -u serviceaccount -p ${pass:15} $registry --tls-verify=false
 
 MAX_RETRIES=20
 DELAY_SECONDS=10
