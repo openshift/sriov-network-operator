@@ -59,7 +59,7 @@ $YQ_CMD -i ".images.webhook = \"ghcr.io/${OPERATOR_REPO}/sriov-network-operator-
 # other images that sriov-network-operator uses:
 $YQ_CMD -i ".images.sriovCni = \"ghcr.io/k8snetworkplumbingwg/sriov-cni:${SRIOV_CNI_TAG}\"" ${HELM_VALUES}
 $YQ_CMD -i ".images.ibSriovCni = \"ghcr.io/k8snetworkplumbingwg/ib-sriov-cni:${IB_SRIOV_CNI_TAG}\"" ${HELM_VALUES}
-$YQ_CMD -i ".images.ovsCni = \"ghcr.io/k8snetworkplumbingwg/ovs-cni:${OVS_CNI_TAG}\"" ${HELM_VALUES}
+$YQ_CMD -i ".images.ovsCni = \"ghcr.io/k8snetworkplumbingwg/ovs-cni-plugin:${OVS_CNI_TAG}\"" ${HELM_VALUES}
 $YQ_CMD -i ".images.sriovDevicePlugin = \"ghcr.io/k8snetworkplumbingwg/sriov-network-device-plugin:${SRIOV_DEVICE_PLUGIN_TAG}\"" ${HELM_VALUES}
 $YQ_CMD -i ".images.resourcesInjector = \"ghcr.io/k8snetworkplumbingwg/network-resources-injector:${NETWORK_RESOURCE_INJECTOR_TAG}\"" ${HELM_VALUES}
 
