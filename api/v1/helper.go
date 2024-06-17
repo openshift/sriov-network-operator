@@ -257,7 +257,7 @@ func GetEswitchModeFromStatus(ifaceStatus *InterfaceExt) string {
 func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 	if ifaceSpec.Mtu > 0 {
 		mtu := ifaceSpec.Mtu
-		if mtu != ifaceStatus.Mtu {
+		if mtu > ifaceStatus.Mtu {
 			log.V(2).Info("NeedToUpdateSriov(): MTU needs update", "desired", mtu, "current", ifaceStatus.Mtu)
 			return true
 		}
