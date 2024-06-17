@@ -38,9 +38,20 @@ For additional information and methods for installing Helm, refer to the officia
 
 ### Deploy SR-IOV Network Operator
 
+#### Deploy from OCI repo
+
 ```
+$ helm install -n sriov-network-operator --create-namespace --version 1.3.0 --set sriovOperatorConfig.deploy=true sriov-network-operator oci://ghcr.io/k8snetworkplumbingwg/sriov-network-operator-chart
+```
+
+#### Deploy from project sources
+
+```
+# Clone project
+$ git clone https://github.com/k8snetworkplumbingwg/sriov-network-operator.git ; cd sriov-network-operator
+
 # Install Operator
-$ helm install -n sriov-network-operator --create-namespace --wait sriov-network-operator ./
+$ helm install -n sriov-network-operator --create-namespace --wait --set sriovOperatorConfig.deploy=true sriov-network-operator ./deployment/sriov-network-operator-chart
 
 # View deployed resources
 $ kubectl -n sriov-network-operator get pods
