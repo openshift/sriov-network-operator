@@ -2283,3 +2283,25 @@ func waitForNetAttachDef(name, namespace string) {
 		return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: name, Namespace: namespace}, netAttDef)
 	}, (10+snoTimeoutMultiplier*110)*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
 }
+
+// assertNodeStateHasVFMatching asserts that the given node state has at least one VF matching the given fields
+func assertNodeStateHasVFMatching(nodeName string, fields Fields) {
+	EventuallyWithOffset(1, func(g Gomega) sriovv1.InterfaceExts {
+		nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), nodeName, metav1.GetOptions{})
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(nodeState.Status.SyncStatus).To(Equal("Succeeded"))
+		return nodeState.Status.Interfaces
+	}, 3*time.Minute, 1*time.Second).
+		Should(
+			ContainElement(
+				MatchFields(
+					IgnoreExtras,
+					Fields{
+						"VFs": ContainElement(
+							MatchFields(IgnoreExtras, fields),
+						),
+					},
+				),
+			),
+		)
+}
