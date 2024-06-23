@@ -2,13 +2,16 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
 
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -388,6 +391,52 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(injectorCfg.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("ca-bundle-2\n")))
 			}, "1s").Should(Succeed())
+		})
+		It("should reconcile to a converging state when multiple node policies are set", func() {
+			By("Creating a consistent number of node policies")
+			for i := 0; i < 30; i++ {
+				p := &sriovnetworkv1.SriovNetworkNodePolicy{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: fmt.Sprintf("p%d", i)},
+					Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+						Priority:     99,
+						NodeSelector: map[string]string{"foo": fmt.Sprintf("v%d", i)},
+					},
+				}
+				err := k8sClient.Create(context.Background(), p)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			By("Triggering a the reconcile loop")
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			err := k8sClient.Get(context.Background(), types.NamespacedName{Name: "default", Namespace: testNamespace}, config)
+			Expect(err).NotTo(HaveOccurred())
+			if config.ObjectMeta.Labels == nil {
+				config.ObjectMeta.Labels = make(map[string]string)
+			}
+			config.ObjectMeta.Labels["trigger-test"] = "test-reconcile-daemonset"
+			err = k8sClient.Update(context.Background(), config)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Wait until device-plugin Daemonset's affinity has been calculated")
+			var expectedAffinity *corev1.Affinity
+
+			Eventually(func(g Gomega) {
+				daemonSet := &appsv1.DaemonSet{}
+				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: "sriov-device-plugin", Namespace: testNamespace}, daemonSet)
+				g.Expect(err).NotTo(HaveOccurred())
+				// Wait until the last policy (with NodeSelector foo=v29) has been considered at least one time
+				g.Expect(daemonSet.Spec.Template.Spec.Affinity.String()).To(ContainSubstring("v29"))
+				expectedAffinity = daemonSet.Spec.Template.Spec.Affinity
+			}, "3s", "1s").Should(Succeed())
+
+			By("Verify device-plugin Daemonset's affinity doesn't change over time")
+			Consistently(func(g Gomega) {
+				daemonSet := &appsv1.DaemonSet{}
+				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: "sriov-device-plugin", Namespace: testNamespace}, daemonSet)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(daemonSet.Spec.Template.Spec.Affinity).
+					To(Equal(expectedAffinity))
+			}, "3s", "1s").Should(Succeed())
 		})
 	})
 })
