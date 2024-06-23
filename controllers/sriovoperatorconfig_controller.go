@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -131,6 +132,11 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+	// Sort the policies with priority, higher priority ones is applied later
+	// We need to use the sort so we always get the policies in the same order
+	// That is needed so when we create the node Affinity for the sriov-device plugin
+	// it will remain in the same order and not trigger a pod recreation
+	sort.Sort(sriovnetworkv1.ByPriority(policyList.Items))
 
 	defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{}
 	err = r.Get(ctx, types.NamespacedName{Name: consts.DefaultPolicyName, Namespace: vars.Namespace}, defaultPolicy)
