@@ -91,6 +91,8 @@ var _ = Describe("SRIOV", func() {
 				EncapType:    "ether",
 			}).MinTimes(1)
 			hostMock.EXPECT().GetNetDevLinkSpeed("enp216s0f0np0").Return("100000 Mb/s")
+			hostMock.EXPECT().GetNetDevLinkAdminState("enp216s0f0np0").Return("up")
+			hostMock.EXPECT().GetNetDevNodeGUID("0000:d8:00.2").Return("guid1")
 			storeManagerMode.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(nil, false, nil)
 
 			dputilsLibMock.EXPECT().IsSriovPF("0000:d8:00.0").Return(true)
@@ -130,6 +132,7 @@ var _ = Describe("SRIOV", func() {
 				NumVfs:            1,
 				LinkSpeed:         "100000 Mb/s",
 				LinkType:          "ETH",
+				LinkAdminState:    "up",
 				EswitchMode:       "switchdev",
 				ExternallyManaged: false,
 				TotalVfs:          1,
@@ -143,6 +146,7 @@ var _ = Describe("SRIOV", func() {
 					Mtu:             1500,
 					VfID:            0,
 					RepresentorName: "enp216s0f0np0_0",
+					GUID:            "guid1",
 				}},
 			}))
 		})
