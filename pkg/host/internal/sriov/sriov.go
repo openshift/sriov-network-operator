@@ -151,7 +151,7 @@ func (s *sriov) getVfInfo(vfAddr string, pfName string, eswitchMode string, devi
 			vf.Mac = link.Attrs().HardwareAddr.String()
 		}
 	}
-	vf.GUID = s.networkHelper.GetNetDevNodeGUID(pciAddr)
+	vf.GUID = s.networkHelper.GetNetDevNodeGUID(vfAddr)
 
 	for _, device := range devices {
 		if vfAddr == device.Address {
