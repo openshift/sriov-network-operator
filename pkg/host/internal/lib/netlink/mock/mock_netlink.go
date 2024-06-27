@@ -159,6 +159,21 @@ func (mr *MockNetlinkLibMockRecorder) IsLinkAdminStateUp(link interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsLinkAdminStateUp", reflect.TypeOf((*MockNetlinkLib)(nil).IsLinkAdminStateUp), link)
 }
 
+// LinkByIndex mocks base method.
+func (m *MockNetlinkLib) LinkByIndex(index int) (netlink.Link, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkByIndex", index)
+	ret0, _ := ret[0].(netlink.Link)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LinkByIndex indicates an expected call of LinkByIndex.
+func (mr *MockNetlinkLibMockRecorder) LinkByIndex(index interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkByIndex", reflect.TypeOf((*MockNetlinkLib)(nil).LinkByIndex), index)
+}
+
 // LinkByName mocks base method.
 func (m *MockNetlinkLib) LinkByName(name string) (netlink.Link, error) {
 	m.ctrl.T.Helper()

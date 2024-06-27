@@ -238,4 +238,37 @@ var _ = Describe("Network", func() {
 			Expect(n.GetNetDevNodeGUID("0000:4b:00.3")).To(Equal("1122:3344:5566:7788"))
 		})
 	})
+	Context("GetInterfaceIndex", func() {
+		It("should return valid index", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{
+					"/sys/bus/pci/devices/0000:4b:00.3/net/eth0/",
+					"/sys/class/net/eth0/",
+				},
+				Files: map[string][]byte{
+					"/sys/bus/pci/devices/0000:4b:00.3/net/eth0/ifindex": []byte("42"),
+					"/sys/class/net/eth0/phys_switch_id":                 {},
+				},
+			})
+			dputilsLibMock.EXPECT().GetNetNames("0000:4b:00.3").Return([]string{"eth0"}, nil)
+			index, err := n.GetInterfaceIndex("0000:4b:00.3")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(index).To(Equal(42))
+		})
+		It("should return invalid index", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{
+					"/sys/bus/pci/devices/0000:4b:00.3/net/eth0",
+					"/sys/class/net/eth0/",
+				},
+				Files: map[string][]byte{
+					"/sys/class/net/eth0/phys_switch_id": {},
+				},
+			})
+			dputilsLibMock.EXPECT().GetNetNames("0000:4b:00.3").Return([]string{"eth0"}, nil)
+			index, err := n.GetInterfaceIndex("0000:4b:00.3")
+			Expect(err).To(HaveOccurred())
+			Expect(index).To(Equal(-1))
+		})
+	})
 })
