@@ -8,7 +8,6 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	ghw "github.com/jaypipes/ghw"
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	store "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/store"
 	types "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
@@ -466,20 +465,6 @@ func (m *MockHostManagerInterface) GetPhysSwitchID(name string) (string, error) 
 func (mr *MockHostManagerInterfaceMockRecorder) GetPhysSwitchID(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPhysSwitchID", reflect.TypeOf((*MockHostManagerInterface)(nil).GetPhysSwitchID), name)
-}
-
-// GetVfInfo mocks base method.
-func (m *MockHostManagerInterface) GetVfInfo(pciAddr string, devices []*ghw.PCIDevice) v1.VirtualFunction {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetVfInfo", pciAddr, devices)
-	ret0, _ := ret[0].(v1.VirtualFunction)
-	return ret0
-}
-
-// GetVfInfo indicates an expected call of GetVfInfo.
-func (mr *MockHostManagerInterfaceMockRecorder) GetVfInfo(pciAddr, devices interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVfInfo", reflect.TypeOf((*MockHostManagerInterface)(nil).GetVfInfo), pciAddr, devices)
 }
 
 // HasDriver mocks base method.

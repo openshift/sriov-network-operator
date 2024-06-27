@@ -261,6 +261,70 @@ metadata:
 	g.Expect(s).To(ConsistOf("foo"))
 }
 
+func TestMergeWebHookCABundle(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	cur := UnstructuredFromYaml(t, `
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: webhook-1
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
+webhooks:
+  - name: webhook-name-1
+    sideEffects: None
+    admissionReviewVersions: ["v1", "v1beta1"]
+    failurePolicy: Fail
+    clientConfig:
+      service:
+        name: service1
+        namespace: ns1
+        path: "/path"
+      caBundle: BASE64CABUNDLE
+    rules:
+      - operations: [ "CREATE", "UPDATE", "DELETE" ]
+        apiGroups: ["sriovnetwork.openshift.io"]
+        apiVersions: ["v1"]`)
+
+	upd := UnstructuredFromYaml(t, `
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: webhook-1
+  annotations:
+    service.beta.openshift.io/inject-cabundle: "true"
+webhooks:
+  - name: webhook-name-1
+    sideEffects: None
+    admissionReviewVersions: ["v1", "v1beta1"]
+    failurePolicy: Fail
+    clientConfig:
+      service:
+        name: service1
+        namespace: ns1
+        path: "/path"
+    rules:
+      - operations: [ "CREATE", "UPDATE", "DELETE" ]
+        apiGroups: ["sriovnetwork.openshift.io"]
+        apiVersions: ["v1"]`)
+
+	err := MergeObjectForUpdate(cur, upd)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	webhooks, ok, err := uns.NestedSlice(upd.Object, "webhooks")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(BeTrue())
+	g.Expect(len(webhooks)).To(Equal(1))
+
+	webhook0, ok := webhooks[0].(map[string]interface{})
+	g.Expect(ok).To(BeTrue())
+	caBundle, ok, err := uns.NestedString(webhook0, "clientConfig", "caBundle")
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(BeTrue())
+	g.Expect(caBundle).To(Equal("BASE64CABUNDLE"))
+}
+
 // UnstructuredFromYaml creates an unstructured object from a raw yaml string
 func UnstructuredFromYaml(t *testing.T, obj string) *uns.Unstructured {
 	t.Helper()

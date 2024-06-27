@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -xeo pipefail
 
-OCP_VERSION=${OCP_VERSION:-4.14.0-rc.6}
+OCP_VERSION=${OCP_VERSION:-4.16.0-rc.2}
 cluster_name=${CLUSTER_NAME:-ocp-virt}
 domain_name=lab
 
@@ -206,6 +206,25 @@ podman build -t "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}" -f "${root}/Dockerfile.sr
 echo "## build webhook image"
 podman build -t "${SRIOV_NETWORK_WEBHOOK_IMAGE}" -f "${root}/Dockerfile.webhook" "${root}"
 
+echo "## wait for the all cluster to be stable"
+MAX_RETRIES=20
+DELAY_SECONDS=10
+retries=0
+until [ $retries -ge $MAX_RETRIES ]; do
+  # wait for all the openshift cluster operators to be running
+  if [ $(kubectl get clusteroperator --no-headers | awk '{print $3}' | grep True | wc -l) -eq 33 ]; then
+    break
+  fi
+  retries=$((retries+1))
+  echo "cluster operators are not ready. Retrying... (Attempt $retries/$MAX_RETRIES)"
+  sleep $DELAY_SECONDS
+done
+
+if [ $retries -eq $MAX_RETRIES ]; then
+  echo "Max retries reached. Exiting..."
+  exit 1
+fi
+
 echo "## wait for registry to be available"
 kubectl wait configs.imageregistry.operator.openshift.io/cluster --for=condition=Available --timeout=120s
 
@@ -216,8 +235,9 @@ auth=`echo ${auth} | base64 -d`
 echo ${auth} > registry-login.conf
 
 internal_registry="image-registry.openshift-image-registry.svc:5000"
-pass=$( jq .\"$internal_registry\".password registry-login.conf )
-podman login -u serviceaccount -p ${pass:1:-1} $registry --tls-verify=false
+pass=$( jq .\"image-registry.openshift-image-registry.svc:5000\".auth registry-login.conf  )
+pass=`echo ${pass:1:-1} | base64 -d`
+podman login -u serviceaccount -p ${pass:15} $registry --tls-verify=false
 
 MAX_RETRIES=20
 DELAY_SECONDS=10
@@ -283,8 +303,20 @@ if [[ -v LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE ]]; then
   export NETWORK_RESOURCES_INJECTOR_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/network-resources-injector:latest"
 fi
 
+if [[ -v LOCAL_SRIOV_NETWORK_METRICS_EXPORTER_IMAGE ]]; then
+  podman_tag_and_push ${LOCAL_SRIOV_NETWORK_METRICS_EXPORTER_IMAGE} "$registry/$NAMESPACE/sriov-network-metrics-exporter:latest"
+  export METRICS_EXPORTER_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-metrics-exporter:latest"
+fi
+
 echo "## deploying SRIOV Network Operator"
 hack/deploy-setup.sh $NAMESPACE
+
+function cluster_info {
+  if [[ -v TEST_REPORT_PATH ]]; then
+    kubectl cluster-info dump --namespaces ${NAMESPACE},${MULTUS_NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
+  fi
+}
+trap cluster_info ERR
 
 echo "## wait for sriov operator to be ready"
 hack/deploy-wait.sh
@@ -296,17 +328,5 @@ if [ -z $SKIP_TEST ]; then
     export JUNIT_OUTPUT="${root}/${TEST_REPORT_PATH}/conformance-test-report"
   fi
 
-  # Disable exit on error temporarily to gather cluster information
-  set +e
   SUITE=./test/conformance hack/run-e2e-conformance.sh
-  TEST_EXITE_CODE=$?
-  set -e
-
-  if [[ -v TEST_REPORT_PATH ]]; then
-    kubectl cluster-info dump --namespaces ${NAMESPACE},${MULTUS_NAMESPACE} --output-directory "${root}/${TEST_REPORT_PATH}/cluster-info"
-  fi
-
-  if [[ $TEST_EXITE_CODE -ne 0 ]]; then
-    exit $TEST_EXITE_CODE
-  fi
 fi

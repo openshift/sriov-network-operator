@@ -306,6 +306,29 @@ var _ = Describe("[sriov] operator", func() {
 				g.Expect(newLease.Spec.HolderIdentity).ToNot(Equal(oldLease.Spec.HolderIdentity))
 			}, 30*time.Second, 5*time.Second).Should(Succeed())
 		})
+
+		Context("SriovNetworkMetricsExporter", func() {
+			It("should be deployed if the feature gate is enabled", func() {
+				if discovery.Enabled() {
+					Skip("Test unsuitable to be run in discovery mode")
+				}
+
+				initialValue := isFeatureFlagEnabled("metricsExporter")
+				DeferCleanup(func() {
+					By("Restoring initial feature flag value")
+					setFeatureFlag("metricsExporter", initialValue)
+				})
+
+				By("Enabling `metricsExporter` feature flag")
+				setFeatureFlag("metricsExporter", true)
+
+				By("Checking that a daemon is scheduled on selected node")
+				Eventually(func() bool {
+					return isDaemonsetScheduledOnNodes("node-role.kubernetes.io/worker", "app=sriov-network-metrics-exporter")
+				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
+
+			})
+		})
 	})
 
 	Describe("Generic SriovNetworkNodePolicy", func() {
@@ -1035,12 +1058,12 @@ var _ = Describe("[sriov] operator", func() {
 				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
 			})
 
-			It("should reconcile managed VF if status changes", func() {
+			It("should reconcile managed VF if status is changed", func() {
 				originalMtu := sriovDevice.Mtu
-				newMtu := 1000
+				lowerMtu := originalMtu - 500
 
-				By("manually changing the MTU")
-				_, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", newMtu, sriovDevice.PciAddress, sriovDevice.Name))
+				By("manually decreasing the MTU")
+				_, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", lowerMtu, sriovDevice.PciAddress, sriovDevice.Name))
 				Expect(err).ToNot(HaveOccurred())
 				Expect(errOutput).To(Equal(""))
 
@@ -1053,7 +1076,7 @@ var _ = Describe("[sriov] operator", func() {
 					IgnoreExtras,
 					Fields{
 						"Name":       Equal(sriovDevice.Name),
-						"Mtu":        Equal(newMtu),
+						"Mtu":        Equal(lowerMtu),
 						"PciAddress": Equal(sriovDevice.PciAddress),
 						"NumVfs":     Equal(sriovDevice.NumVfs),
 					})))
@@ -1064,6 +1087,74 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).ToNot(HaveOccurred())
 					return nodeState.Status.Interfaces
 				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(originalMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				higherMtu := originalMtu + 500
+
+				By("manually increasing the MTU")
+				_, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", higherMtu, sriovDevice.PciAddress, sriovDevice.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+
+				By("waiting for the mtu to be updated in the status")
+				Eventually(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(higherMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("expecting the mtu to consistently stay at the new higher level")
+				Consistently(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 15*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(higherMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("manually returning the MTU to the original level")
+				_, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", originalMtu, sriovDevice.PciAddress, sriovDevice.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+
+				By("waiting for the mtu to be updated in the status")
+				Eventually(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(originalMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("expecting the mtu to consistently stay at the original level")
+				Consistently(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 15*time.Second).Should(ContainElement(MatchFields(
 					IgnoreExtras,
 					Fields{
 						"Name":       Equal(sriovDevice.Name),
@@ -1128,7 +1219,7 @@ var _ = Describe("[sriov] operator", func() {
 					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 				})
 
-				It("Should be possible to create a vfio-pci resource", func() {
+				It("Should be possible to create a vfio-pci resource and allocate to a pod", func() {
 					By("creating a vfio-pci node policy")
 					resourceName := "testvfio"
 					_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name, vfioNode, 5, resourceName, "vfio-pci")
@@ -1157,6 +1248,36 @@ var _ = Describe("[sriov] operator", func() {
 						allocatable, _ := resNum.AsInt64()
 						return allocatable
 					}, 10*time.Minute, time.Second).Should(Equal(int64(5)))
+
+					By("Creating sriov network to use the vfio device")
+					sriovNetwork := &sriovv1.SriovNetwork{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-vfionetwork",
+							Namespace: operatorNamespace,
+						},
+						Spec: sriovv1.SriovNetworkSpec{
+							ResourceName:     resourceName,
+							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+							NetworkNamespace: namespaces.Test,
+						}}
+
+					err = clients.Create(context.Background(), sriovNetwork)
+					Expect(err).ToNot(HaveOccurred())
+					waitForNetAttachDef("test-vfionetwork", namespaces.Test)
+
+					podDefinition := pod.DefineWithNetworks([]string{"test-vfionetwork"})
+					firstPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+					Expect(err).ToNot(HaveOccurred())
+
+					Eventually(func() corev1.PodPhase {
+						firstPod, _ = clients.Pods(namespaces.Test).Get(context.Background(), firstPod.Name, metav1.GetOptions{})
+						return firstPod.Status.Phase
+					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+					By("Checking MTU in pod network status annotation")
+					networkStatusJSON, exist := firstPod.Annotations["k8s.v1.cni.cncf.io/network-status"]
+					Expect(exist).To(BeTrue())
+					Expect(networkStatusJSON).To(ContainSubstring(fmt.Sprintf("\"mtu\": %d", vfioNic.Mtu)))
 				})
 			})
 
@@ -1618,6 +1739,11 @@ var _ = Describe("[sriov] operator", func() {
 						firstPod, _ = clients.Pods(namespaces.Test).Get(context.Background(), firstPod.Name, metav1.GetOptions{})
 						return firstPod.Status.Phase
 					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+					By("Checking MTU in pod network status annotation")
+					networkStatusJSON, exist := firstPod.Annotations["k8s.v1.cni.cncf.io/network-status"]
+					Expect(exist).To(BeTrue())
+					Expect(networkStatusJSON).To(ContainSubstring("\"mtu\": 9000"))
 
 					var stdout, stderr string
 					Eventually(func() error {
@@ -2427,13 +2553,17 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 }
 
 func daemonsScheduledOnNodes(selector string) bool {
+	return isDaemonsetScheduledOnNodes(selector, "app=sriov-network-config-daemon")
+}
+
+func isDaemonsetScheduledOnNodes(nodeSelector, daemonsetLabelSelector string) bool {
 	nn, err := clients.CoreV1Interface.Nodes().List(context.Background(), metav1.ListOptions{
-		LabelSelector: selector,
+		LabelSelector: nodeSelector,
 	})
 	Expect(err).ToNot(HaveOccurred())
 	nodes := nn.Items
 
-	daemons, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=sriov-network-config-daemon"})
+	daemons, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: daemonsetLabelSelector})
 	Expect(err).ToNot(HaveOccurred())
 	for _, d := range daemons.Items {
 		foundNode := false
@@ -2703,6 +2833,43 @@ func getOperatorConfigLogLevel() int {
 	Expect(err).ToNot(HaveOccurred())
 
 	return cfg.Spec.LogLevel
+}
+
+func isFeatureFlagEnabled(featureFlag string) bool {
+	cfg := sriovv1.SriovOperatorConfig{}
+	err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+		Name:      "default",
+		Namespace: operatorNamespace,
+	}, &cfg)
+	Expect(err).ToNot(HaveOccurred())
+
+	ret, ok := cfg.Spec.FeatureGates[featureFlag]
+	return ok && ret
+}
+
+func setFeatureFlag(featureFlag string, value bool) {
+	Eventually(func(g Gomega) {
+		cfg := sriovv1.SriovOperatorConfig{}
+		err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+			Name:      "default",
+			Namespace: operatorNamespace,
+		}, &cfg)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		if cfg.Spec.FeatureGates == nil {
+			cfg.Spec.FeatureGates = make(map[string]bool)
+		}
+
+		previousValue, ok := cfg.Spec.FeatureGates[featureFlag]
+		if ok && previousValue == value {
+			return
+		}
+
+		cfg.Spec.FeatureGates[featureFlag] = value
+
+		err = clients.Update(context.TODO(), &cfg)
+		g.Expect(err).ToNot(HaveOccurred())
+	}, 1*time.Minute, 5*time.Second).Should(Succeed())
 }
 
 func getOperatorPod() corev1.Pod {

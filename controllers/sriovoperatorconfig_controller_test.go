@@ -2,12 +2,16 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strings"
 	"sync"
 
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -21,6 +25,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	util "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
@@ -326,6 +331,149 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				return true, nil
 			})
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should deploy the metrics-exporter when the feature gate is enabled", func() {
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
+
+			daemonSet := &appsv1.DaemonSet{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: "sriov-metrics-exporter", Namespace: testNamespace}, daemonSet)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+
+			By("Turn `metricsExporter` feature gate on")
+			config.Spec.FeatureGates = map[string]bool{constants.MetricsExporterFeatureGate: true}
+			err = k8sClient.Update(ctx, config)
+			Expect(err).NotTo(HaveOccurred())
+
+			DeferCleanup(func() {
+				config.Spec.FeatureGates = map[string]bool{}
+				err = k8sClient.Update(ctx, config)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			err = util.WaitForNamespacedObject(&appsv1.DaemonSet{}, k8sClient, testNamespace, "sriov-network-metrics-exporter", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = util.WaitForNamespacedObject(&corev1.Service{}, k8sClient, testNamespace, "sriov-network-metrics-exporter-service", util.RetryInterval, util.APITimeout)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("Turn `metricsExporter` feature gate off")
+			config.Spec.FeatureGates = map[string]bool{}
+			err = k8sClient.Update(ctx, config)
+
+			err = util.WaitForNamespacedObjectDeleted(&appsv1.DaemonSet{}, k8sClient, testNamespace, "sriov-network-metrics-exporter", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = util.WaitForNamespacedObjectDeleted(&corev1.Service{}, k8sClient, testNamespace, "sriov-network-metrics-exporter-service", util.RetryInterval, util.APITimeout)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		// This test verifies that the CABundle field in the webhook configuration  added by third party components is not
+		// removed during the reconciliation loop. This is important when dealing with OpenShift certificate mangement:
+		// https://docs.openshift.com/container-platform/4.15/security/certificates/service-serving-certificate.html
+		// and when CertManager is used
+		It("should not remove the field Spec.ClientConfig.CABundle from webhook configuration when reconciling", func() {
+			validateCfg := &admv1.ValidatingWebhookConfiguration{}
+			err := util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", util.RetryInterval, util.APITimeout*3)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Simulate a third party component updating the webhook CABundle")
+			validateCfg.Webhooks[0].ClientConfig.CABundle = []byte("some-base64-ca-bundle-value")
+
+			err = k8sClient.Update(ctx, validateCfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Trigger a controller reconciliation")
+			err = util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verify the operator did not remove the CABundle from the webhook configuration")
+			Consistently(func(g Gomega) {
+				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "sriov-operator-webhook-config"}, validateCfg)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(validateCfg.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("some-base64-ca-bundle-value")))
+			}, "1s").Should(Succeed())
+		})
+
+		It("should update the webhook CABundle if `ADMISSION_CONTROLLERS_CERTIFICATES environment variable are set` ", func() {
+			DeferCleanup(os.Setenv, "ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_CA_CRT", os.Getenv("ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_CA_CRT"))
+			// echo "ca-bundle-1" | base64 -w 0
+			os.Setenv("ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_CA_CRT", "Y2EtYnVuZGxlLTEK")
+
+			DeferCleanup(os.Setenv, "ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT", os.Getenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT"))
+			// echo "ca-bundle-2" | base64 -w 0
+			os.Setenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT", "Y2EtYnVuZGxlLTIK")
+
+			DeferCleanup(func(old string) { vars.ClusterType = old }, vars.ClusterType)
+			vars.ClusterType = consts.ClusterTypeKubernetes
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				validateCfg := &admv1.ValidatingWebhookConfiguration{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "sriov-operator-webhook-config"}, validateCfg)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(validateCfg.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("ca-bundle-1\n")))
+
+				mutateCfg := &admv1.MutatingWebhookConfiguration{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "sriov-operator-webhook-config"}, mutateCfg)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(mutateCfg.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("ca-bundle-1\n")))
+
+				injectorCfg := &admv1.MutatingWebhookConfiguration{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "network-resources-injector-config"}, injectorCfg)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(injectorCfg.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("ca-bundle-2\n")))
+			}, "1s").Should(Succeed())
+		})
+		It("should reconcile to a converging state when multiple node policies are set", func() {
+			By("Creating a consistent number of node policies")
+			for i := 0; i < 30; i++ {
+				p := &sriovnetworkv1.SriovNetworkNodePolicy{
+					ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: fmt.Sprintf("p%d", i)},
+					Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+						Priority:     99,
+						NodeSelector: map[string]string{"foo": fmt.Sprintf("v%d", i)},
+					},
+				}
+				err := k8sClient.Create(context.Background(), p)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			By("Triggering a the reconcile loop")
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			err := k8sClient.Get(context.Background(), types.NamespacedName{Name: "default", Namespace: testNamespace}, config)
+			Expect(err).NotTo(HaveOccurred())
+			if config.ObjectMeta.Labels == nil {
+				config.ObjectMeta.Labels = make(map[string]string)
+			}
+			config.ObjectMeta.Labels["trigger-test"] = "test-reconcile-daemonset"
+			err = k8sClient.Update(context.Background(), config)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Wait until device-plugin Daemonset's affinity has been calculated")
+			var expectedAffinity *corev1.Affinity
+
+			Eventually(func(g Gomega) {
+				daemonSet := &appsv1.DaemonSet{}
+				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: "sriov-device-plugin", Namespace: testNamespace}, daemonSet)
+				g.Expect(err).NotTo(HaveOccurred())
+				// Wait until the last policy (with NodeSelector foo=v29) has been considered at least one time
+				g.Expect(daemonSet.Spec.Template.Spec.Affinity.String()).To(ContainSubstring("v29"))
+				expectedAffinity = daemonSet.Spec.Template.Spec.Affinity
+			}, "3s", "1s").Should(Succeed())
+
+			By("Verify device-plugin Daemonset's affinity doesn't change over time")
+			Consistently(func(g Gomega) {
+				daemonSet := &appsv1.DaemonSet{}
+				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: "sriov-device-plugin", Namespace: testNamespace}, daemonSet)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(daemonSet.Spec.Template.Spec.Affinity).
+					To(Equal(expectedAffinity))
+			}, "3s", "1s").Should(Succeed())
 		})
 	})
 })
