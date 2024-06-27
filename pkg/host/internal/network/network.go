@@ -73,6 +73,7 @@ func (n *network) TryToGetVirtualInterfaceName(pciAddr string) string {
 func (n *network) TryGetInterfaceName(pciAddr string) string {
 	names, err := n.dputilsLib.GetNetNames(pciAddr)
 	if err != nil || len(names) < 1 {
+		log.Log.Error(err, "TryGetInterfaceName(): failed to get interface name")
 		return ""
 	}
 	netDevName := names[0]
@@ -93,8 +94,31 @@ func (n *network) TryGetInterfaceName(pciAddr string) string {
 		return name
 	}
 
-	log.Log.V(2).Info("tryGetInterfaceName()", "name", netDevName)
+	log.Log.V(2).Info("TryGetInterfaceName()", "name", netDevName)
 	return netDevName
+}
+
+// GetInterfaceIndex returns network interface index base on pci address or error if occurred
+func (n *network) GetInterfaceIndex(pciAddr string) (int, error) {
+	ifName := n.TryGetInterfaceName(pciAddr)
+	if ifName == "" {
+		return -1, fmt.Errorf("failed to get interface name")
+	}
+
+	// read the ifindex file from the interface folder
+	indexFile := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, "net", ifName, "ifindex")
+	ifIndex, err := os.ReadFile(indexFile)
+	if err != nil {
+		log.Log.Error(err, "GetInterfaceIndex(): failed to read ifindex file", "indexFile", indexFile)
+		return -1, err
+	}
+
+	intIfIndex, err := strconv.Atoi(strings.TrimSpace(string(ifIndex)))
+	if err != nil {
+		log.Log.Error(err, "GetInterfaceIndex(): failed to parse ifindex file content", "ifIndex", string(ifIndex))
+		return -1, err
+	}
+	return intIfIndex, nil
 }
 
 func (n *network) GetPhysSwitchID(name string) (string, error) {
