@@ -370,6 +370,21 @@ func (mr *MockHostHelpersInterfaceMockRecorder) GetDriverByBusAndDevice(bus, dev
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDriverByBusAndDevice", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetDriverByBusAndDevice), bus, device)
 }
 
+// GetInterfaceIndex mocks base method.
+func (m *MockHostHelpersInterface) GetInterfaceIndex(pciAddr string) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaceIndex", pciAddr)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInterfaceIndex indicates an expected call of GetInterfaceIndex.
+func (mr *MockHostHelpersInterfaceMockRecorder) GetInterfaceIndex(pciAddr interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceIndex", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetInterfaceIndex), pciAddr)
+}
+
 // GetLinkType mocks base method.
 func (m *MockHostHelpersInterface) GetLinkType(name string) string {
 	m.ctrl.T.Helper()
