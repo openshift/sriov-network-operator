@@ -10,7 +10,9 @@ import (
 	// "testing"
 	"time"
 
+	"github.com/google/uuid"
 	dptypes "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/types"
+
 	// "github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	appsv1 "k8s.io/api/apps/v1"
 	// corev1 "k8s.io/api/core/v1"
@@ -196,6 +198,23 @@ func ValidateDevicePluginConfig(nps []*sriovnetworkv1.SriovNetworkNodePolicy, ra
 		}
 	}
 	return nil
+}
+
+// TriggerSriovOperatorConfigReconcile edits a test label of the default SriovOperatorConfig object to
+// trigger the reconciliation logic of the controller.
+func TriggerSriovOperatorConfigReconcile(client client.Client, operatorNamespace string) error {
+	config := &sriovnetworkv1.SriovOperatorConfig{}
+	err := client.Get(goctx.Background(), types.NamespacedName{Name: "default", Namespace: operatorNamespace}, config)
+	if err != nil {
+		return err
+	}
+
+	if config.ObjectMeta.Labels == nil {
+		config.ObjectMeta.Labels = make(map[string]string)
+	}
+
+	config.ObjectMeta.Labels["trigger-test"] = uuid.NewString()
+	return client.Update(goctx.Background(), config)
 }
 
 func validateSelector(rc *dptypes.NetDeviceSelectors, ns *sriovnetworkv1.SriovNetworkNicSelector) bool {
