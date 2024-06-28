@@ -177,6 +177,12 @@ skopeo:
 fakechroot:
 	if ! which fakechroot; then if [ -f /etc/redhat-release ]; then dnf -y install fakechroot; elif [ -f /etc/lsb-release ]; then sudo apt-get -y update; sudo apt-get -y install fakechroot; fi; fi
 
+$(BIN_DIR)/helm helm:
+	mkdir -p $(BIN_DIR)
+	curl -fsSL -o $(BIN_DIR)/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+	chmod 700 $(BIN_DIR)/get_helm.sh
+	HELM_INSTALL_DIR=$(BIN_DIR) $(BIN_DIR)/get_helm.sh
+
 deploy-setup: export ADMISSION_CONTROLLERS_ENABLED?=false
 deploy-setup: skopeo install
 	hack/deploy-setup.sh $(NAMESPACE)
