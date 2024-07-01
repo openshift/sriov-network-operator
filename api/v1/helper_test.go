@@ -1054,3 +1054,71 @@ func TestSriovNetworkPoolConfig_MaxUnavailable(t *testing.T) {
 		})
 	}
 }
+
+func TestNeedToUpdateSriov(t *testing.T) {
+	type args struct {
+		ifaceSpec   *v1.Interface
+		ifaceStatus *v1.InterfaceExt
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "number of VFs changed",
+			args: args{
+				ifaceSpec:   &v1.Interface{NumVfs: 1},
+				ifaceStatus: &v1.InterfaceExt{NumVfs: 0},
+			},
+			want: true,
+		},
+		{
+			name: "no update",
+			args: args{
+				ifaceSpec:   &v1.Interface{NumVfs: 1},
+				ifaceStatus: &v1.InterfaceExt{NumVfs: 1},
+			},
+			want: false,
+		},
+		{
+			name: "vfio-pci VF is not configured for any group",
+			args: args{
+				ifaceSpec: &v1.Interface{
+					NumVfs: 3,
+					VfGroups: []v1.VfGroup{
+						{
+							VfRange:    "1-2",
+							DeviceType: consts.DeviceTypeNetDevice,
+						},
+					},
+				},
+				ifaceStatus: &v1.InterfaceExt{
+					NumVfs: 3,
+					VFs: []v1.VirtualFunction{
+						{
+							VfID:   0,
+							Driver: "vfio-pci",
+						},
+						{
+							VfID:   1,
+							Driver: "iavf",
+						},
+						{
+							VfID:   2,
+							Driver: "iavf",
+						},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := v1.NeedToUpdateSriov(tt.args.ifaceSpec, tt.args.ifaceStatus); got != tt.want {
+				t.Errorf("NeedToUpdateSriov() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

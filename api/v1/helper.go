@@ -280,10 +280,8 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 
 	if ifaceSpec.NumVfs > 0 {
 		for _, vfStatus := range ifaceStatus.VFs {
-			ingroup := false
 			for _, groupSpec := range ifaceSpec.VfGroups {
 				if IndexInRange(vfStatus.VfID, groupSpec.VfRange) {
-					ingroup = true
 					if vfStatus.Driver == "" {
 						log.V(2).Info("NeedToUpdateSriov(): Driver needs update - has no driver",
 							"desired", groupSpec.DeviceType)
@@ -331,12 +329,6 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 					}
 					break
 				}
-			}
-			if !ingroup && (StringInArray(vfStatus.Driver, vars.DpdkDrivers) || vfStatus.VdpaType != "") {
-				// need to reset VF if it is not a part of a group and:
-				// a. has DPDK driver loaded
-				// b. has VDPA device
-				return true
 			}
 		}
 	}
