@@ -144,3 +144,13 @@ This section contains general parameters that apply to both the operator and dae
 | `images.webhook` | Operator Webhook image |
 | `images.metricsExporter` | Network Metrics Exporter image |
 | `images.metricsExporterKubeRbacProxy` | Kube RBAC Proxy image used for metrics exporter |
+
+### Extra objects parameters
+
+**Disclaimer**:
+
+Please note that any resources deployed using the `extraDeploy` in this Helm chart are the sole responsibility of the user. It is important to review and understand the implications of these deployed resources. The maintainers of this Helm chart take no responsibility for any issues or damages caused by the deployment or operation of these resources.
+
+| Name | description |
+| ---- | ------------|
+|`extraDeploy`| Array of extra objects to deploy with the release |

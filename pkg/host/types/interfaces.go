@@ -81,6 +81,8 @@ type NetworkInterface interface {
 	TryToGetVirtualInterfaceName(pciAddr string) string
 	// TryGetInterfaceName tries to find the SR-IOV virtual interface name base on pci address
 	TryGetInterfaceName(pciAddr string) string
+	// GetInterfaceIndex returns network interface index base on pci address or error if occurred
+	GetInterfaceIndex(pciAddr string) (int, error)
 	// GetPhysSwitchID returns the physical switch ID for a specific pci address
 	GetPhysSwitchID(name string) (string, error)
 	// GetPhysPortName returns the physical port name for a specific pci address

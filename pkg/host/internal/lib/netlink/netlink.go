@@ -24,6 +24,8 @@ type NetlinkLib interface {
 	LinkSetVfPortGUID(link Link, vf int, portguid net.HardwareAddr) error
 	// LinkByName finds a link by name and returns a pointer to the object.
 	LinkByName(name string) (Link, error)
+	// LinkByIndex finds a link by index and returns a pointer to the object.
+	LinkByIndex(index int) (Link, error)
 	// LinkSetVfHardwareAddr sets the hardware address of a vf for the link.
 	// Equivalent to: `ip link set $link vf $vf mac $hwaddr`
 	LinkSetVfHardwareAddr(link Link, vf int, hwaddr net.HardwareAddr) error
@@ -79,9 +81,14 @@ func (w *libWrapper) LinkSetVfPortGUID(link Link, vf int, portguid net.HardwareA
 	return netlink.LinkSetVfPortGUID(link, vf, portguid)
 }
 
-// LinkByName finds a link by name and returns a pointer to the object.// LinkByName finds a link by name and returns a pointer to the object.
+// LinkByName finds a link by name and returns a pointer to the object.
 func (w *libWrapper) LinkByName(name string) (Link, error) {
 	return netlink.LinkByName(name)
+}
+
+// LinkByIndex finds a link by index and returns a pointer to the object.
+func (w *libWrapper) LinkByIndex(index int) (Link, error) {
+	return netlink.LinkByIndex(index)
 }
 
 // LinkSetVfHardwareAddr sets the hardware address of a vf for the link.
