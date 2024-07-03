@@ -73,7 +73,7 @@ spec:
             - name: METRICS_EXPORTER_SECRET_NAME
               value: {{ .Values.operator.admissionControllers.certificates.secretNames.metricsExporter }}
             - name: METRICS_EXPORTER_PORT
-              value: {{ .Values.operator.metricsExporter.port }}
+              value: "{{ .Values.operator.metricsExporter.port }}"
             - name: METRICS_EXPORTER_SECRET_NAME
               value: {{ .Values.operator.metricsExporter.certificates.secretName }}
             - name: METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE
