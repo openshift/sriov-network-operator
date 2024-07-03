@@ -236,7 +236,12 @@ func (r *SriovOperatorConfigReconciler) syncMetricsExporter(ctx context.Context,
 	data.Data["MetricsExporterSecretName"] = os.Getenv("METRICS_EXPORTER_SECRET_NAME")
 	data.Data["MetricsExporterPort"] = os.Getenv("METRICS_EXPORTER_PORT")
 	data.Data["MetricsExporterKubeRbacProxyImage"] = os.Getenv("METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE")
-	data.Data["ClusterType"] = vars.ClusterType
+	data.Data["IsOpenshift"] = r.PlatformHelper.IsOpenshiftCluster()
+
+	data.Data["IsPrometheusOperatorInstalled"] = strings.ToLower(os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED")) == trueString
+	data.Data["PrometheusOperatorServiceAccount"] = os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_SERVICE_ACCOUNT")
+	data.Data["PrometheusOperatorNamespace"] = os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_NAMESPACE")
+
 	data.Data["NodeSelectorField"] = GetDefaultNodeSelector()
 	if dc.Spec.ConfigDaemonNodeSelector != nil {
 		data.Data["NodeSelectorField"] = dc.Spec.ConfigDaemonNodeSelector
@@ -248,8 +253,7 @@ func (r *SriovOperatorConfigReconciler) syncMetricsExporter(ctx context.Context,
 		return err
 	}
 
-	deployMetricsExporter, ok := dc.Spec.FeatureGates[consts.MetricsExporterFeatureGate]
-	if ok && deployMetricsExporter {
+	if r.FeatureGate.IsEnabled(consts.MetricsExporterFeatureGate) {
 		for _, obj := range objs {
 			err = r.syncK8sResource(ctx, dc, obj)
 			if err != nil {
@@ -257,14 +261,13 @@ func (r *SriovOperatorConfigReconciler) syncMetricsExporter(ctx context.Context,
 				return err
 			}
 		}
+
 		return nil
 	}
 
-	for _, obj := range objs {
-		err = r.deleteK8sResource(ctx, obj)
-		if err != nil {
-			return err
-		}
+	err = r.deleteK8sResources(ctx, objs)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -356,6 +359,16 @@ func (r *SriovOperatorConfigReconciler) deleteWebhookObject(ctx context.Context,
 func (r *SriovOperatorConfigReconciler) deleteK8sResource(ctx context.Context, in *uns.Unstructured) error {
 	if err := apply.DeleteObject(ctx, r.Client, in); err != nil {
 		return fmt.Errorf("failed to delete object %v with err: %v", in, err)
+	}
+	return nil
+}
+
+func (r *SriovOperatorConfigReconciler) deleteK8sResources(ctx context.Context, objs []*uns.Unstructured) error {
+	for _, obj := range objs {
+		err := r.deleteK8sResource(ctx, obj)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

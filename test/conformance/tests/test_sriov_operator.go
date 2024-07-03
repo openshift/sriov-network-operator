@@ -308,7 +308,7 @@ var _ = Describe("[sriov] operator", func() {
 		})
 
 		Context("SriovNetworkMetricsExporter", func() {
-			It("should be deployed if the feature gate is enabled", func() {
+			BeforeEach(func() {
 				if discovery.Enabled() {
 					Skip("Test unsuitable to be run in discovery mode")
 				}
@@ -321,12 +321,26 @@ var _ = Describe("[sriov] operator", func() {
 
 				By("Enabling `metricsExporter` feature flag")
 				setFeatureFlag("metricsExporter", true)
+			})
 
+			It("should be deployed if the feature gate is enabled", func() {
 				By("Checking that a daemon is scheduled on selected node")
 				Eventually(func() bool {
 					return isDaemonsetScheduledOnNodes("node-role.kubernetes.io/worker", "app=sriov-network-metrics-exporter")
 				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
+			})
 
+			It("should deploy ServiceMonitor if the Promethueus operator is installed", func() {
+				_, err := clients.ServiceMonitors(operatorNamespace).List(context.Background(), metav1.ListOptions{})
+				if k8serrors.IsNotFound(err) {
+					Skip("Prometheus operator not available in the cluster")
+				}
+
+				By("Checking ServiceMonitor is deployed if needed")
+				Eventually(func(g Gomega) {
+					_, err := clients.ServiceMonitors(operatorNamespace).Get(context.Background(), "sriov-network-metrics-exporter", metav1.GetOptions{})
+					g.Expect(err).ToNot(HaveOccurred())
+				}).Should(Succeed())
 			})
 		})
 	})
