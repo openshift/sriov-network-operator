@@ -21,7 +21,7 @@ operator:
             matchExpressions:
               - key: "node-role.kubernetes.io/control-plane"
                 operator: In
-                values: [ "" ]
+                values: [""]
   nameOverride: ""
   fullnameOverride: ""
   resourcePrefix: "openshift.io"
@@ -110,3 +110,4 @@ images:
   metricsExporterKubeRbacProxy: gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0
 
 imagePullSecrets: []
+extraDeploy: []
