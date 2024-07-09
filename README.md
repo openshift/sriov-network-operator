@@ -211,6 +211,10 @@ VF groups** (when #-notation is used in pfName field) are merged, otherwise only
 the highest priority policy is applied. In case of same-priority policies and
 overlapping VF groups, only the last processed policy is applied.
 
+When using #-notation to define VF group, no actions are taken on virtual functions that
+are not mentioned in any policy (e.g. if a policy defines a `vfio-pci` device group for a device, when 
+it is deleted the VF are not reset to the default driver).
+
 #### Externally Manage virtual functions
 
 When `ExternallyManage` is request on a policy the operator will only skip the virtual function creation.
