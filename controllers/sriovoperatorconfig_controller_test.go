@@ -368,6 +368,8 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				It("should deploy extra configuration when the Prometheus operator is installed", func() {
 					DeferCleanup(os.Setenv, "METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED", os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED"))
 					os.Setenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED", "true")
+					DeferCleanup(os.Setenv, "METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES", os.Getenv("METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES"))
+					os.Setenv("METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES", "true")
 
 					err := util.WaitForNamespacedObject(&rbacv1.Role{}, k8sClient, testNamespace, "prometheus-k8s", util.RetryInterval, util.APITimeout)
 					Expect(err).ToNot(HaveOccurred())
@@ -382,6 +384,14 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 							Version: "v1",
 						},
 						client.ObjectKey{Namespace: testNamespace, Name: "sriov-network-metrics-exporter"})
+
+					assertResourceExists(
+						schema.GroupVersionKind{
+							Group:   "monitoring.coreos.com",
+							Kind:    "PrometheusRule",
+							Version: "v1",
+						},
+						client.ObjectKey{Namespace: testNamespace, Name: "sriov-vf-rules"})
 				})
 			})
 		})
