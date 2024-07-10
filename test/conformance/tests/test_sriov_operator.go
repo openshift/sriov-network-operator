@@ -307,8 +307,12 @@ var _ = Describe("[sriov] operator", func() {
 				node = sriovInfos.Nodes[0]
 				createVanillaNetworkPolicy(node, sriovInfos, numVfs, resourceName)
 				WaitForSRIOVStable()
-				sriovDevice, err = sriovInfos.FindOneSriovDevice(node)
+
+				// Update info
+				sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
 				Expect(err).ToNot(HaveOccurred())
+				sriovDevice = findInterface(sriovInfos, node)
+
 				By("Using device " + sriovDevice.Name + " on node " + node)
 
 				Eventually(func() int64 {
@@ -999,6 +1003,112 @@ var _ = Describe("[sriov] operator", func() {
 					Expect(err).ToNot(HaveOccurred())
 					return runningPodB.Status.Phase
 				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+			})
+
+			It("should reconcile managed VF if status is changed", func() {
+				originalMtu := sriovDevice.Mtu
+				lowerMtu := originalMtu - 500
+
+				By("manually decreasing the MTU")
+				_, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", lowerMtu, sriovDevice.PciAddress, sriovDevice.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+
+				By("waiting for the mtu to be updated in the status")
+				Eventually(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(lowerMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("waiting for the mtu to be restored")
+				Eventually(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(originalMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				higherMtu := originalMtu + 500
+
+				By("manually increasing the MTU")
+				_, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", higherMtu, sriovDevice.PciAddress, sriovDevice.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+
+				By("waiting for the mtu to be updated in the status")
+				Eventually(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(higherMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("expecting the mtu to consistently stay at the new higher level")
+				Consistently(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 15*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(higherMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("manually returning the MTU to the original level")
+				_, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo %d > /sys/bus/pci/devices/%s/net/%s/mtu", originalMtu, sriovDevice.PciAddress, sriovDevice.Name))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(errOutput).To(Equal(""))
+
+				By("waiting for the mtu to be updated in the status")
+				Eventually(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(originalMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
+
+				By("expecting the mtu to consistently stay at the original level")
+				Consistently(func() sriovv1.InterfaceExts {
+					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					return nodeState.Status.Interfaces
+				}, 3*time.Minute, 15*time.Second).Should(ContainElement(MatchFields(
+					IgnoreExtras,
+					Fields{
+						"Name":       Equal(sriovDevice.Name),
+						"Mtu":        Equal(originalMtu),
+						"PciAddress": Equal(sriovDevice.PciAddress),
+						"NumVfs":     Equal(sriovDevice.NumVfs),
+					})))
 			})
 		})
 
@@ -2486,8 +2596,7 @@ func WaitForSRIOVStable() {
 	}, waitingTime, 1*time.Second).Should(BeTrue())
 }
 
-func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, numVfs int, resourceName string) {
-	// For the context of tests is better to use a Mellanox card
+func findInterface(sriovInfos *cluster.EnabledNodes, node string) *sriovv1.InterfaceExt { // For the context of tests is better to use a Mellanox card
 	// as they support all the virtual function flags
 	// if we don't find a Mellanox card we fall back to any sriov
 	// capability interface and skip the rate limit test.
@@ -2496,6 +2605,12 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 		intf, err = sriovInfos.FindOneSriovDevice(node)
 		Expect(err).ToNot(HaveOccurred())
 	}
+
+	return intf
+}
+
+func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, numVfs int, resourceName string) {
+	intf := findInterface(sriovInfos, node)
 
 	config := &sriovv1.SriovNetworkNodePolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2509,6 +2624,7 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 			},
 			NumVfs:       numVfs,
 			ResourceName: resourceName,
+			Mtu:          1500,
 			Priority:     99,
 			NicSelector: sriovv1.SriovNetworkNicSelector{
 				PfNames: []string{intf.Name},
