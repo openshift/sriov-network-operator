@@ -243,6 +243,7 @@ func (r *SriovOperatorConfigReconciler) syncMetricsExporter(ctx context.Context,
 	data.Data["IsOpenshift"] = r.PlatformHelper.IsOpenshiftCluster()
 
 	data.Data["IsPrometheusOperatorInstalled"] = strings.ToLower(os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED")) == trueString
+	data.Data["PrometheusOperatorDeployRules"] = strings.ToLower(os.Getenv("METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES")) == trueString
 	data.Data["PrometheusOperatorServiceAccount"] = os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_SERVICE_ACCOUNT")
 	data.Data["PrometheusOperatorNamespace"] = os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_NAMESPACE")
 
