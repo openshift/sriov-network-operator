@@ -347,6 +347,7 @@ var _ = Describe("SRIOV", func() {
 				PciAddress: "0000:d8:00.0",
 				NumVfs:     2,
 			}, true, nil)
+			storeManagerMode.EXPECT().RemovePfAppliedStatus("0000:d8:00.0").Return(nil)
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(
 				&netlink.DevlinkDevice{Attrs: netlink.DevlinkDevAttrs{Eswitch: netlink.DevlinkDevEswitchAttr{Mode: "legacy"}}},
 				nil)
@@ -374,6 +375,7 @@ var _ = Describe("SRIOV", func() {
 				NumVfs:            2,
 				ExternallyManaged: true,
 			}, true, nil)
+			storeManagerMode.EXPECT().RemovePfAppliedStatus("0000:d8:00.0").Return(nil)
 			Expect(s.ConfigSriovInterfaces(storeManagerMode,
 				[]sriovnetworkv1.Interface{},
 				[]sriovnetworkv1.InterfaceExt{
