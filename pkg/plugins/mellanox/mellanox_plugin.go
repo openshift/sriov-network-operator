@@ -143,6 +143,11 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 		processedNics[pciPrefix] = true
 		pciAddress := pciPrefix + "0"
 
+		// Skip devices not configured by the operator
+		if p.nicNotConfiguredByOperator(portsMap) {
+			continue
+		}
+
 		// Skip externally managed NICs
 		if p.nicHasExternallyManagedPFs(portsMap) {
 			continue
@@ -201,6 +206,22 @@ func (p *MellanoxPlugin) nicHasExternallyManagedPFs(nicPortsMap map[string]sriov
 		}
 		if pfStatus.ExternallyManaged {
 			log.Log.V(2).Info("PF is extenally managed, skip FW TotalVfs reset")
+			return true
+		}
+	}
+	return false
+}
+
+// nicNotConfiguredByOperator returns true if one of the ports(interface) of the NIC is not configured by operator
+func (p *MellanoxPlugin) nicNotConfiguredByOperator(nicPortsMap map[string]sriovnetworkv1.InterfaceExt) bool {
+	for _, iface := range nicPortsMap {
+		_, exist, err := p.helpers.LoadPfsStatus(iface.PciAddress)
+		if err != nil {
+			log.Log.Error(err, "failed to load PF status from disk", "address", iface.PciAddress)
+			continue
+		}
+		if exist {
+			log.Log.V(2).Info("PF configured by the operator", "interface", iface)
 			return true
 		}
 	}
