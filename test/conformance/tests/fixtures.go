@@ -1,16 +1,16 @@
 package tests
 
 import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/clean"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 var sriovInfos *cluster.EnabledNodes
-
 
 var _ = BeforeSuite(func() {
 	err := clean.All()

@@ -375,16 +375,7 @@ var _ = Describe("[sriov] operator", func() {
 				created, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred())
 
-				var runningPod *corev1.Pod
-				Eventually(func() corev1.PodPhase {
-					runningPod, err = clients.Pods(namespaces.Test).Get(context.Background(), created.Name, metav1.GetOptions{})
-					if k8serrors.IsNotFound(err) {
-						return corev1.PodUnknown
-					}
-					Expect(err).ToNot(HaveOccurred())
-
-					return runningPod.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+				runningPod := waitForPodRunning(created)
 
 				var downwardVolume *corev1.Volume
 				for _, v := range runningPod.Spec.Volumes {
@@ -438,16 +429,7 @@ var _ = Describe("[sriov] operator", func() {
 				created, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred())
 
-				var runningPod *corev1.Pod
-				Eventually(func() corev1.PodPhase {
-					runningPod, err = clients.Pods(namespaces.Test).Get(context.Background(), created.Name, metav1.GetOptions{})
-					if k8serrors.IsNotFound(err) {
-						return corev1.PodUnknown
-					}
-					Expect(err).ToNot(HaveOccurred())
-
-					return runningPod.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+				runningPod := waitForPodRunning(created)
 
 				var downwardVolume *corev1.Volume
 				for _, v := range runningPod.Spec.Volumes {
@@ -484,11 +466,8 @@ var _ = Describe("[sriov] operator", func() {
 				podObj := pod.RedefineWithNodeSelector(pod.DefineWithNetworks(networks), node)
 				err := clients.Create(context.Background(), podObj)
 				Expect(err).ToNot(HaveOccurred())
-				Eventually(func() corev1.PodPhase {
-					podObj, err = clients.Pods(namespaces.Test).Get(context.Background(), podObj.Name, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					return podObj.Status.Phase
-				}, 5*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+				podObj = waitForPodRunning(podObj)
 
 				vfIndex, err := podVFIndexInHost(hostNetPod, podObj, "net1")
 				Expect(err).ToNot(HaveOccurred())
@@ -543,11 +522,8 @@ var _ = Describe("[sriov] operator", func() {
 				hostNetPod = pod.DefineWithHostNetwork(node)
 				err := clients.Create(context.Background(), hostNetPod)
 				Expect(err).ToNot(HaveOccurred())
-				Eventually(func() corev1.PodPhase {
-					hostNetPod, err = clients.Pods(namespaces.Test).Get(context.Background(), hostNetPod.Name, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					return hostNetPod.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+
+				hostNetPod = waitForPodRunning(hostNetPod)
 			})
 
 			// 25959
@@ -976,11 +952,8 @@ var _ = Describe("[sriov] operator", func() {
 				runningPodA, err := clients.Pods(testPodA.Namespace).Create(context.Background(), testPodA, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodA.Name))
 				By("Checking that first Pod is in Running state")
-				Eventually(func() corev1.PodPhase {
-					runningPodA, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodA.Name, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					return runningPodA.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+				runningPodA = waitForPodRunning(runningPodA)
+
 				By("Create second Pod which consumes one more VF")
 
 				testPodB := pod.RedefineWithNodeSelector(
@@ -1014,11 +987,7 @@ var _ = Describe("[sriov] operator", func() {
 				})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to delete pod %s", runningPodA.Name))
 				By("Checking that second pod is able to use released VF")
-				Eventually(func() corev1.PodPhase {
-					runningPodB, err = clients.Pods(namespaces.Test).Get(context.Background(), runningPodB.Name, metav1.GetOptions{})
-					Expect(err).ToNot(HaveOccurred())
-					return runningPodB.Status.Phase
-				}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+				waitForPodRunning(runningPodB)
 			})
 
 			It("should reconcile managed VF if status is changed", func() {
@@ -1920,14 +1889,7 @@ func createCustomTestPod(node string, networks []string, hostNetwork bool, podCa
 	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 	Expect(err).ToNot(HaveOccurred())
 
-	Eventually(func() corev1.PodPhase {
-		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
-		Expect(err).ToNot(HaveOccurred())
-		return runningPod.Status.Phase
-	}, 5*time.Minute, 1*time.Second).Should(Equal(corev1.PodRunning))
-	podObj, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
-	Expect(err).ToNot(HaveOccurred())
-	return podObj
+	return waitForPodRunning(createdPod)
 }
 
 func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
@@ -2245,6 +2207,18 @@ func waitForNetAttachDef(name, namespace string) {
 		netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
 		return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: name, Namespace: namespace}, netAttDef)
 	}, (10+snoTimeoutMultiplier*110)*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+}
+
+func waitForPodRunning(p *corev1.Pod) *corev1.Pod {
+	var ret *corev1.Pod
+	Eventually(func(g Gomega) corev1.PodPhase {
+		var err error
+		ret, err = clients.Pods(p.Namespace).Get(context.Background(), p.Name, metav1.GetOptions{})
+		g.Expect(err).ToNot(HaveOccurred())
+		return ret.Status.Phase
+	}, 3*time.Minute, 1*time.Second).Should(Equal(corev1.PodRunning), "Pod [%s/%s] should be running", p.Namespace, p.Name)
+
+	return ret
 }
 
 // assertNodeStateHasVFMatching asserts that the given node state has at least one VF matching the given fields

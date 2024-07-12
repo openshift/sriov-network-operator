@@ -102,10 +102,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					firstPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 					Expect(err).ToNot(HaveOccurred())
 
-					Eventually(func() corev1.PodPhase {
-						firstPod, _ = clients.Pods(namespaces.Test).Get(context.Background(), firstPod.Name, metav1.GetOptions{})
-						return firstPod.Status.Phase
-					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+					firstPod = waitForPodRunning(firstPod)
 
 					By("Checking MTU in pod network status annotation")
 					networkStatusJSON, exist := firstPod.Annotations["k8s.v1.cni.cncf.io/network-status"]
@@ -629,10 +626,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					firstPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 					Expect(err).ToNot(HaveOccurred())
 
-					Eventually(func() corev1.PodPhase {
-						firstPod, _ = clients.Pods(namespaces.Test).Get(context.Background(), firstPod.Name, metav1.GetOptions{})
-						return firstPod.Status.Phase
-					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+					firstPod = waitForPodRunning(firstPod)
 
 					By("Checking MTU in pod network status annotation")
 					networkStatusJSON, exist := firstPod.Annotations["k8s.v1.cni.cncf.io/network-status"]
@@ -661,10 +655,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					secondPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 					Expect(err).ToNot(HaveOccurred())
 
-					Eventually(func() corev1.PodPhase {
-						secondPod, _ = clients.Pods(namespaces.Test).Get(context.Background(), secondPod.Name, metav1.GetOptions{})
-						return secondPod.Status.Phase
-					}, 3*time.Minute, time.Second).Should(Equal(corev1.PodRunning))
+					secondPod = waitForPodRunning(secondPod)
 
 					stdout, stderr, err = pod.ExecCommand(clients, secondPod,
 						"ping", firstPodIPs[0], "-s", "8972", "-M", "do", "-c", "2")
