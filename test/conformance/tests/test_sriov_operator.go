@@ -29,7 +29,6 @@ import (
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/clean"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/execute"
@@ -70,42 +69,6 @@ func init() {
 }
 
 var _ = Describe("[sriov] operator", func() {
-	var sriovInfos *cluster.EnabledNodes
-	var initPassed bool
-	execute.BeforeAll(func() {
-		isSingleNode, err := cluster.IsSingleNode(clients)
-		Expect(err).ToNot(HaveOccurred())
-		if isSingleNode {
-			disableDrainState, err := cluster.GetNodeDrainState(clients, operatorNamespace)
-			Expect(err).ToNot(HaveOccurred())
-			if discovery.Enabled() {
-				if !disableDrainState {
-					Skip("SriovOperatorConfig DisableDrain property must be enabled in a single node environment")
-				}
-			}
-			snoTimeoutMultiplier = 1
-			if !disableDrainState {
-				err = cluster.SetDisableNodeDrainState(clients, operatorNamespace, true)
-				Expect(err).ToNot(HaveOccurred())
-				clean.RestoreNodeDrainState = true
-			}
-		}
-
-		Expect(clients).NotTo(BeNil(), "Client misconfigured, check the $KUBECONFIG env variable")
-		err = namespaces.Create(namespaces.Test, clients)
-		Expect(err).ToNot(HaveOccurred())
-		err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
-		Expect(err).ToNot(HaveOccurred())
-		WaitForSRIOVStable()
-		sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
-		Expect(err).ToNot(HaveOccurred())
-		initPassed = true
-	})
-
-	BeforeEach(func() {
-		Expect(initPassed).To(BeTrue(), "Global setup failed")
-	})
-
 	Describe("No SriovNetworkNodePolicy", func() {
 		Context("SR-IOV network config daemon can be set by nodeselector", func() {
 			// 26186
