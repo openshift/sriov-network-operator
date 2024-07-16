@@ -39,6 +39,23 @@ const (
 
 	// MachineConfigPoolMaster is the MachineConfigPool name given to the master
 	MachineConfigPoolMaster = "master"
+
 	// MachineConfigPoolWorker is the MachineConfigPool name given to the worker
 	MachineConfigPoolWorker = "worker"
+
+	// LayeringEnabledPoolLabel is the label that enables the "layered" workflow path for a pool.
+	LayeringEnabledPoolLabel = "machineconfiguration.openshift.io/layering-enabled"
+
+	// ExperimentalNewestLayeredImageEquivalentConfigAnnotationKey is the annotation that signifies which rendered config
+	// TODO(zzlotnik): Determine if we should use this still.
+	ExperimentalNewestLayeredImageEquivalentConfigAnnotationKey = "machineconfiguration.openshift.io/newestImageEquivalentConfig"
+
+	OSImageBuildPodLabel = "machineconfiguration.openshift.io/buildPod"
+
+	// InternalMCOIgnitionVersion is the ignition version that the MCO converts everything to internally. The intent here is that
+	// we should be able to update this constant when we bump the internal ignition version instead of having to hunt down all of
+	// the version references and figure out "was this supposed to be explicitly 3.4.0 or just the default version which happens
+	// to be 3.4.0 currently". Ideally if you find an explicit "3.4.0", it's supposed to be "3.4.0" version. If it's this constant,
+	// it's supposed to be the internal default version.
+	InternalMCOIgnitionVersion = "3.4.0"
 )
