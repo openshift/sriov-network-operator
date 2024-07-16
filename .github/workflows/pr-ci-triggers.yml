@@ -10,12 +10,12 @@ jobs:
         env:
           MESSAGE: >-
             Thanks for your PR,\n
-            To run vendors CIs use one of:\n
+            To run vendors CIs, Maintainers can use one of:\n
             * `/test-all`: To run all tests for all vendors.\n
             * `/test-e2e-all`: To run all E2E tests for all vendors.\n
             * `/test-e2e-nvidia-all`: To run all E2E tests for NVIDIA vendor.\n
             \n
-            To skip the vendors CIs use one of:\n
+            To skip the vendors CIs, Maintainers can use one of:\n
             * `/skip-all`: To skip all tests for all vendors.\n
             * `/skip-e2e-all`: To skip all E2E tests for all vendors.\n
             * `/skip-e2e-nvidia-all`: To skip all E2E tests for NVIDIA vendor.\n
