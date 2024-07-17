@@ -193,3 +193,14 @@ type VdpaInterface interface {
 	// returns empty string if VDPA device not found or unknown driver is in use
 	DiscoverVDPAType(pciAddr string) string
 }
+
+type BridgeInterface interface {
+	// DiscoverBridges returns information about managed bridges on the host
+	DiscoverBridges() (sriovnetworkv1.Bridges, error)
+	// ConfigureBridge configure managed bridges for the host
+	ConfigureBridges(bridgesSpec sriovnetworkv1.Bridges, bridgesStatus sriovnetworkv1.Bridges) error
+	// DetachInterfaceFromManagedBridge detach interface from a managed bridge,
+	// this step is required before applying some configurations to PF, e.g. changing of eSwitch mode.
+	// The function detach interface from managed bridges only.
+	DetachInterfaceFromManagedBridge(pciAddr string) error
+}

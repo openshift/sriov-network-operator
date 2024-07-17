@@ -54,6 +54,9 @@ var (
 	// FilesystemRoot used by test to mock interactions with filesystem
 	FilesystemRoot = ""
 
+	// OVSDBSocketPath path to OVSDB socket
+	OVSDBSocketPath = "unix:///var/run/openvswitch/db.sock"
+
 	//Cluster variables
 	Config *rest.Config    = nil
 	Scheme *runtime.Scheme = nil
