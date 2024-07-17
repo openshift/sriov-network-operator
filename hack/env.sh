@@ -11,6 +11,9 @@ if [ -z $SKIP_VAR_SET ]; then
         # OVS_CNI_IMAGE can be explicitly set to empty value, use default only if the var is not set
         OVS_CNI_IMAGE_DIGEST=$(skopeo inspect docker://quay.io/kubevirt/ovs-cni-plugin | jq --raw-output '.Digest')
         export OVS_CNI_IMAGE=${OVS_CNI_IMAGE:-quay.io/kubevirt/ovs-cni-plugin@${OVS_CNI_IMAGE_DIGEST}}
+        # RDMA_CNI_IMAGE can be explicitly set to empty value, use default only if the var is not set
+        RDMA_CNI_IMAGE_DIGEST=$(skopeo inspect docker://quay.io/openshift/origin-rdma-cni | jq --raw-output '.Digest')
+        export RDMA_CNI_IMAGE=${RDMA_CNI_IMAGE-quay.io/openshift/origin-rdma-cni@${RDMA_CNI_IMAGE_DIGEST}}
         DP_IMAGE_DIGEST=$(skopeo inspect docker://quay.io/openshift/origin-sriov-network-device-plugin | jq --raw-output '.Digest')
         export SRIOV_DEVICE_PLUGIN_IMAGE=${SRIOV_DEVICE_PLUGIN_IMAGE:-quay.io/openshift/origin-sriov-network-device-plugin@${DP_IMAGE_DIGEST}}
         INJECTOR_IMAGE_DIGEST=$(skopeo inspect docker://quay.io/openshift/origin-sriov-dp-admission-controller | jq --raw-output '.Digest')
@@ -28,6 +31,8 @@ if [ -z $SKIP_VAR_SET ]; then
 else
         # ensure that OVS_CNI_IMAGE is set, empty string is a valid value
         OVS_CNI_IMAGE=${OVS_CNI_IMAGE:-}
+        # ensure that RDMA_CNI_IMAGE is set, empty string is a valid value
+        RDMA_CNI_IMAGE=${$RDMA_CNI_IMAGE:-}
         METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE=${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE:-}
         [ -z $SRIOV_CNI_IMAGE ] && echo "SRIOV_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
         [ -z $SRIOV_INFINIBAND_CNI_IMAGE ] && echo "SRIOV_INFINIBAND_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1

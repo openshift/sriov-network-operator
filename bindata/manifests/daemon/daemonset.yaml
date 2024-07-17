@@ -93,6 +93,23 @@ spec:
               mountPath: /host/etc/os-release
               readOnly: true
         {{- end }}
+        {{- if .RDMACNIImage }}
+        - name: rdma-cni
+          image: {{.RDMACNIImage}}
+          args: ["--no-sleep"]
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 10Mi
+          volumeMounts:
+            - name: cnibin
+              mountPath: /host/opt/cni/bin
+            - name: os-release
+              mountPath: /host/etc/os-release
+              readOnly: true
+        {{- end }}
       {{- if .UsedSystemdMode}}
         - name: sriov-service-copy
           image: {{.Image}}

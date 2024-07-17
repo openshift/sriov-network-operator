@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -xeo pipefail
 
-OCP_VERSION=${OCP_VERSION:-4.16.0-rc.2}
+OCP_VERSION=${OCP_VERSION:-4.16.0}
 cluster_name=${CLUSTER_NAME:-ocp-virt}
 domain_name=lab
 
@@ -237,7 +237,11 @@ echo ${auth} > registry-login.conf
 internal_registry="image-registry.openshift-image-registry.svc:5000"
 pass=$( jq .\"image-registry.openshift-image-registry.svc:5000\".auth registry-login.conf  )
 pass=`echo ${pass:1:-1} | base64 -d`
-podman login -u serviceaccount -p ${pass:15} $registry --tls-verify=false
+
+# dockercfg password is in the form `<token>:password`. We need to trim the `<token>:` prefix
+pass=${pass#"<token>:"}
+
+podman login -u serviceaccount -p ${pass} $registry --tls-verify=false
 
 MAX_RETRIES=20
 DELAY_SECONDS=10
