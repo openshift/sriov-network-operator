@@ -817,6 +817,13 @@ func (s *sriov) checkForConfigAndReset(ifaceStatus sriovnetworkv1.InterfaceExt, 
 		log.Log.V(2).Info("checkForConfigAndReset(): PF name with pci address was externally created skipping the device reset",
 			"pf-name", ifaceStatus.Name,
 			"address", ifaceStatus.PciAddress)
+
+		// remove pf status from host
+		err = storeManager.RemovePfAppliedStatus(ifaceStatus.PciAddress)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	}
 	err = s.removeUdevRules(ifaceStatus.PciAddress)
@@ -825,6 +832,12 @@ func (s *sriov) checkForConfigAndReset(ifaceStatus sriovnetworkv1.InterfaceExt, 
 	}
 
 	if err = s.ResetSriovDevice(ifaceStatus); err != nil {
+		return err
+	}
+
+	// remove pf status from host
+	err = storeManager.RemovePfAppliedStatus(ifaceStatus.PciAddress)
+	if err != nil {
 		return err
 	}
 
