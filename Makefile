@@ -27,6 +27,7 @@ WEBHOOK_IMAGE_TAG?=$(IMAGE_REPO)/$(APP_NAME)-webhook:latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export WATCH_NAMESPACE?=openshift-sriov-network-operator
+export HOME?=$(PWD)
 export GO111MODULE=on
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 TESTPKGS?=./...
