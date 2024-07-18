@@ -73,6 +73,8 @@ spec:
             value: quay.io/openshift/origin-sriov-network-webhook:4.17
           - name: SRIOV_INFINIBAND_CNI_IMAGE
             value: quay.io/openshift/origin-sriov-infiniband-cni:4.17
+          - name: RDMA_CNI_IMAGE
+            value: quay.io/openshift/origin-rdma-cni:4.17
           - name: RESOURCE_PREFIX
             value: openshift.io
           - name: ADMISSION_CONTROLLERS_ENABLED
