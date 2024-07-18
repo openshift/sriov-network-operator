@@ -249,11 +249,10 @@ undeploy-k8s: export OPERATOR_EXEC=kubectl
 undeploy-k8s: undeploy
 
 deps-update:
-	go mod tidy && \
-	go mod vendor
+	go mod tidy
 
 check-deps: deps-update
-	@set +e; git diff --quiet HEAD go.sum go.mod vendor; \
+	@set +e; git diff --quiet HEAD go.sum go.mod; \
 	if [ $$? -eq 1 ]; \
 	then echo -e "\ngo modules are out of date. Please commit after running 'make deps-update' command\n"; \
 	exit 1; fi
