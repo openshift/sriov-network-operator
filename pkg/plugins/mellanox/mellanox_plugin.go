@@ -6,6 +6,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
@@ -144,12 +145,24 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 		pciAddress := pciPrefix + "0"
 
 		// Skip devices not configured by the operator
-		if p.nicNotConfiguredByOperator(portsMap) {
+		isConfigured, err := p.nicConfiguredByOperator(portsMap)
+		if err != nil {
+			return false, false, err
+		}
+		if !isConfigured {
+			log.Log.V(2).Info("None of the ports are configured by the operator skipping firmware reset",
+				"portMap", portsMap)
 			continue
 		}
 
 		// Skip externally managed NICs
-		if p.nicHasExternallyManagedPFs(portsMap) {
+		hasExternally, err := p.nicHasExternallyManagedPFs(portsMap)
+		if err != nil {
+			return false, false, err
+		}
+		if hasExternally {
+			log.Log.V(2).Info("One of the ports is configured as externally managed skipping firmware reset",
+				"portMap", portsMap)
 			continue
 		}
 
@@ -194,36 +207,45 @@ func (p *MellanoxPlugin) Apply() error {
 
 // nicHasExternallyManagedPFs returns true if one of the ports(interface) of the NIC is marked as externally managed
 // in StoreManagerInterface.
-func (p *MellanoxPlugin) nicHasExternallyManagedPFs(nicPortsMap map[string]sriovnetworkv1.InterfaceExt) bool {
+func (p *MellanoxPlugin) nicHasExternallyManagedPFs(nicPortsMap map[string]sriovnetworkv1.InterfaceExt) (bool, error) {
 	for _, iface := range nicPortsMap {
 		pfStatus, exist, err := p.helpers.LoadPfsStatus(iface.PciAddress)
 		if err != nil {
-			log.Log.Error(err, "failed to load PF status from disk", "address", iface.PciAddress)
-			continue
+			// nolint:goconst
+			log.Log.Error(err, "failed to load PF status from disk. "+
+				"This should not happen, to overcome config daemon stuck, "+
+				"please remove the PCI file on the host under the operator configuration path",
+				"path", consts.PfAppliedConfig, "pciAddress", iface.PciAddress)
+			return false, err
 		}
 		if !exist {
 			continue
 		}
 		if pfStatus.ExternallyManaged {
 			log.Log.V(2).Info("PF is extenally managed, skip FW TotalVfs reset")
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
-// nicNotConfiguredByOperator returns true if one of the ports(interface) of the NIC is not configured by operator
-func (p *MellanoxPlugin) nicNotConfiguredByOperator(nicPortsMap map[string]sriovnetworkv1.InterfaceExt) bool {
+// nicConfiguredByOperator returns true if one of the ports(interface) of the NIC is configured by operator
+func (p *MellanoxPlugin) nicConfiguredByOperator(nicPortsMap map[string]sriovnetworkv1.InterfaceExt) (bool, error) {
 	for _, iface := range nicPortsMap {
 		_, exist, err := p.helpers.LoadPfsStatus(iface.PciAddress)
 		if err != nil {
-			log.Log.Error(err, "failed to load PF status from disk", "address", iface.PciAddress)
-			continue
+			// nolint:goconst
+			log.Log.Error(err, "failed to load PF status from disk. "+
+				"This should not happen, to overcome config daemon stuck, "+
+				"please remove the PCI file on the host under the operator configuration path",
+				"path", consts.PfAppliedConfig, "pciAddress", iface.PciAddress)
+			return false, err
 		}
 		if exist {
 			log.Log.V(2).Info("PF configured by the operator", "interface", iface)
-			return true
+			return true, nil
 		}
 	}
-	return false
+
+	return false, nil
 }
