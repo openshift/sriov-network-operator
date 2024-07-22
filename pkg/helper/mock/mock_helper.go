@@ -209,6 +209,20 @@ func (mr *MockHostHelpersInterfaceMockRecorder) ConfigSriovInterfaces(storeManag
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovInterfaces", reflect.TypeOf((*MockHostHelpersInterface)(nil).ConfigSriovInterfaces), storeManager, interfaces, ifaceStatuses, skipVFConfiguration)
 }
 
+// ConfigureBridges mocks base method.
+func (m *MockHostHelpersInterface) ConfigureBridges(bridgesSpec, bridgesStatus v1.Bridges) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfigureBridges", bridgesSpec, bridgesStatus)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ConfigureBridges indicates an expected call of ConfigureBridges.
+func (mr *MockHostHelpersInterfaceMockRecorder) ConfigureBridges(bridgesSpec, bridgesStatus interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigureBridges", reflect.TypeOf((*MockHostHelpersInterface)(nil).ConfigureBridges), bridgesSpec, bridgesStatus)
+}
+
 // ConfigureVfGUID mocks base method.
 func (m *MockHostHelpersInterface) ConfigureVfGUID(vfAddr, pfAddr string, vfID int, pfLink netlink.Link) error {
 	m.ctrl.T.Helper()
@@ -249,6 +263,35 @@ func (m *MockHostHelpersInterface) DeleteVDPADevice(pciAddr string) error {
 func (mr *MockHostHelpersInterfaceMockRecorder) DeleteVDPADevice(pciAddr interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVDPADevice", reflect.TypeOf((*MockHostHelpersInterface)(nil).DeleteVDPADevice), pciAddr)
+}
+
+// DetachInterfaceFromManagedBridge mocks base method.
+func (m *MockHostHelpersInterface) DetachInterfaceFromManagedBridge(pciAddr string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DetachInterfaceFromManagedBridge", pciAddr)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DetachInterfaceFromManagedBridge indicates an expected call of DetachInterfaceFromManagedBridge.
+func (mr *MockHostHelpersInterfaceMockRecorder) DetachInterfaceFromManagedBridge(pciAddr interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachInterfaceFromManagedBridge", reflect.TypeOf((*MockHostHelpersInterface)(nil).DetachInterfaceFromManagedBridge), pciAddr)
+}
+
+// DiscoverBridges mocks base method.
+func (m *MockHostHelpersInterface) DiscoverBridges() (v1.Bridges, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DiscoverBridges")
+	ret0, _ := ret[0].(v1.Bridges)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DiscoverBridges indicates an expected call of DiscoverBridges.
+func (mr *MockHostHelpersInterfaceMockRecorder) DiscoverBridges() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverBridges", reflect.TypeOf((*MockHostHelpersInterface)(nil).DiscoverBridges))
 }
 
 // DiscoverSriovDevices mocks base method.
