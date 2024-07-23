@@ -9,6 +9,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
 
@@ -211,7 +212,10 @@ func (p *MellanoxPlugin) Apply() error {
 	if err := p.helpers.MlxConfigFW(attributesToChange); err != nil {
 		return err
 	}
-	return p.helpers.MlxResetFW(pciAddressesToReset)
+	if vars.MlxPluginFwReset {
+		return p.helpers.MlxResetFW(pciAddressesToReset)
+	}
+	return nil
 }
 
 // nicHasExternallyManagedPFs returns true if one of the ports(interface) of the NIC is marked as externally managed
