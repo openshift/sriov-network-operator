@@ -3,8 +3,6 @@ package utils
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,19 +61,6 @@ func (u *utilsHelper) RunCommand(command string, args ...string) (string, string
 	err := cmd.Run()
 	log.Log.V(2).Info("RunCommand()", "output", stdout.String(), "error", err)
 	return stdout.String(), stderr.String(), err
-}
-
-func GenerateRandomGUID() net.HardwareAddr {
-	guid := make(net.HardwareAddr, 8)
-
-	// First field is 0x01 - xfe to avoid all zero and all F invalid guids
-	guid[0] = byte(1 + rand.Intn(0xfe))
-
-	for i := 1; i < len(guid); i++ {
-		guid[i] = byte(rand.Intn(0x100))
-	}
-
-	return guid
 }
 
 func IsCommandNotFound(err error) bool {

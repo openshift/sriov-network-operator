@@ -35,8 +35,7 @@ var _ = Describe("SRIOV", func() {
 		ghwLibMock       *ghwMockPkg.MockGHWLib
 		hostMock         *hostMockPkg.MockHostManagerInterface
 		storeManagerMode *hostStoreMockPkg.MockManagerInterface
-
-		testCtrl *gomock.Controller
+		testCtrl         *gomock.Controller
 
 		testError = fmt.Errorf("test")
 	)
@@ -50,7 +49,7 @@ var _ = Describe("SRIOV", func() {
 		hostMock = hostMockPkg.NewMockHostManagerInterface(testCtrl)
 		storeManagerMode = hostStoreMockPkg.NewMockManagerInterface(testCtrl)
 
-		s = New(nil, hostMock, hostMock, hostMock, hostMock, netlinkLibMock, dputilsLibMock, sriovnetLibMock, ghwLibMock)
+		s = New(nil, hostMock, hostMock, hostMock, hostMock, hostMock, netlinkLibMock, dputilsLibMock, sriovnetLibMock, ghwLibMock)
 	})
 
 	AfterEach(func() {
@@ -295,15 +294,14 @@ var _ = Describe("SRIOV", func() {
 			netlinkLibMock.EXPECT().IsLinkAdminStateUp(pfLinkMock).Return(false)
 			netlinkLibMock.EXPECT().LinkSetUp(pfLinkMock).Return(nil)
 
-			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.2").Return(0, nil).Times(2)
-			hostMock.EXPECT().Unbind("0000:d8:00.2").Return(nil)
+			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.2").Return(0, nil).Times(1)
 			hostMock.EXPECT().HasDriver("0000:d8:00.2").Return(true, "test").Times(2)
 			hostMock.EXPECT().UnbindDriverIfNeeded("0000:d8:00.2", true).Return(nil)
 			hostMock.EXPECT().BindDefaultDriver("0000:d8:00.2").Return(nil)
 			hostMock.EXPECT().SetNetdevMTU("0000:d8:00.2", 2000).Return(nil)
-			vf0LinkMock := netlinkMockPkg.NewMockLink(testCtrl)
-			netlinkLibMock.EXPECT().LinkSetVfNodeGUID(vf0LinkMock, 0, gomock.Any()).Return(nil)
-			netlinkLibMock.EXPECT().LinkSetVfPortGUID(vf0LinkMock, 0, gomock.Any()).Return(nil)
+			hostMock.EXPECT().ConfigureVfGUID(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+
+			hostMock.EXPECT().Unbind(gomock.Any()).Return(nil).Times(1)
 
 			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil)
 
@@ -397,6 +395,7 @@ var _ = Describe("SRIOV", func() {
 
 		It("externally managed - wrong VF count", func() {
 			dputilsLibMock.EXPECT().GetVFconfigured("0000:d8:00.0").Return(0)
+
 			Expect(s.ConfigSriovInterfaces(storeManagerMode,
 				[]sriovnetworkv1.Interface{{
 					Name:              "enp216s0f0np0",
@@ -421,6 +420,7 @@ var _ = Describe("SRIOV", func() {
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(
 				&netlink.DevlinkDevice{Attrs: netlink.DevlinkDevAttrs{Eswitch: netlink.DevlinkDevEswitchAttr{Mode: "legacy"}}},
 				nil)
+
 			hostMock.EXPECT().GetNetdevMTU("0000:d8:00.0")
 			Expect(s.ConfigSriovInterfaces(storeManagerMode,
 				[]sriovnetworkv1.Interface{{

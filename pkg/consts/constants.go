@@ -138,6 +138,9 @@ const (
 
 	// ManageSoftwareBridgesFeatureGate: enables management of software bridges by the operator
 	ManageSoftwareBridgesFeatureGate = "manageSoftwareBridges"
+
+	// The path to the file on the host filesystem that contains the IB GUID distribution for IB VFs
+	InfinibandGUIDConfigFilePath = SriovConfBasePath + "/infiniband/guids"
 )
 
 const (
