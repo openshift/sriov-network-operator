@@ -135,6 +135,9 @@ const (
 
 	// MetricsExporterFeatureGate: enable SriovNetworkMetricsExporter on the same node as where the config-daemon run
 	MetricsExporterFeatureGate = "metricsExporter"
+
+	// ManageSoftwareBridgesFeatureGate: enables management of software bridges by the operator
+	ManageSoftwareBridgesFeatureGate = "manageSoftwareBridges"
 )
 
 const (

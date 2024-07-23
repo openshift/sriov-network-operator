@@ -79,11 +79,12 @@ var (
 	}
 
 	startOpts struct {
-		kubeconfig        string
-		nodeName          string
-		systemd           bool
-		disabledPlugins   stringList
-		parallelNicConfig bool
+		kubeconfig            string
+		nodeName              string
+		systemd               bool
+		disabledPlugins       stringList
+		parallelNicConfig     bool
+		manageSoftwareBridges bool
 	}
 )
 
@@ -94,6 +95,7 @@ func init() {
 	startCmd.PersistentFlags().BoolVar(&startOpts.systemd, "use-systemd-service", false, "use config daemon in systemd mode")
 	startCmd.PersistentFlags().VarP(&startOpts.disabledPlugins, "disable-plugins", "", "comma-separated list of plugins to disable")
 	startCmd.PersistentFlags().BoolVar(&startOpts.parallelNicConfig, "parallel-nic-config", false, "perform NIC configuration in parallel")
+	startCmd.PersistentFlags().BoolVar(&startOpts.manageSoftwareBridges, "manage-software-bridges", false, "enable management of software bridges")
 }
 
 func runStartCmd(cmd *cobra.Command, args []string) error {
@@ -108,6 +110,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	vars.ParallelNicConfig = startOpts.parallelNicConfig
+	vars.ManageSoftwareBridges = startOpts.manageSoftwareBridges
 
 	if startOpts.nodeName == "" {
 		name, ok := os.LookupEnv("NODE_NAME")
