@@ -27,7 +27,8 @@ WEBHOOK_IMAGE_TAG?=$(IMAGE_REPO)/$(APP_NAME)-webhook:latest
 MAIN_PKG=cmd/manager/main.go
 export NAMESPACE?=openshift-sriov-network-operator
 export WATCH_NAMESPACE?=openshift-sriov-network-operator
-export GOFLAGS+=-mod=vendor
+export HOME?=$(PWD)
+export GOPATH?=$(shell go env GOPATH)
 export GO111MODULE=on
 PKGS=$(shell go list ./... | grep -v -E '/vendor/|/test|/examples')
 TESTPKGS?=./...
@@ -162,12 +163,16 @@ GOMOCK = $(shell pwd)/bin/mockgen
 gomock:
 	$(call go-install-tool,$(GOMOCK),github.com/golang/mock/mockgen@v1.6.0)
 
+GINKGO = $(BIN_DIR)/ginkgo
+ginkgo:
+	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo)
+
 # go-install-tool will 'go install' any package $2 and install it to $1.
 define go-install-tool
 @[ -f $(1) ] || { \
 set -e ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(BIN_DIR) go install -mod=mod $(2) ;\
+GOBIN=$(BIN_DIR) go install $(2) ;\
 }
 endef
 
@@ -193,25 +198,25 @@ deploy-setup-k8s: export OPERATOR_EXEC=kubectl
 deploy-setup-k8s: export CLUSTER_TYPE=kubernetes
 deploy-setup-k8s: deploy-setup
 
-test-e2e-conformance:
+test-e2e-conformance: ginkgo
 	SUITE=./test/conformance ./hack/run-e2e-conformance.sh
 
-test-e2e-conformance-virtual-k8s-cluster-ci:
+test-e2e-conformance-virtual-k8s-cluster-ci: ginkgo
 	./hack/run-e2e-conformance-virtual-cluster.sh
 
-test-e2e-conformance-virtual-k8s-cluster:
+test-e2e-conformance-virtual-k8s-cluster: ginkgo
 	SKIP_DELETE=TRUE ./hack/run-e2e-conformance-virtual-cluster.sh
 
-test-e2e-conformance-virtual-ocp-cluster-ci:
+test-e2e-conformance-virtual-ocp-cluster-ci: ginkgo
 	./hack/run-e2e-conformance-virtual-ocp.sh
 
-test-e2e-conformance-virtual-ocp-cluster:
+test-e2e-conformance-virtual-ocp-cluster: ginkgo
 	SKIP_DELETE=TRUE ./hack/run-e2e-conformance-virtual-ocp.sh
 
 redeploy-operator-virtual-cluster:
 	./hack/virtual-cluster-redeploy.sh
 
-test-e2e-validation-only:
+test-e2e-validation-only: ginkgo
 	SUITE=./test/validation ./hack/run-e2e-conformance.sh	
 
 test-e2e: generate manifests skopeo envtest
@@ -249,11 +254,10 @@ undeploy-k8s: export OPERATOR_EXEC=kubectl
 undeploy-k8s: undeploy
 
 deps-update:
-	go mod tidy && \
-	go mod vendor
+	go mod tidy
 
 check-deps: deps-update
-	@set +e; git diff --quiet HEAD go.sum go.mod vendor; \
+	@set +e; git diff --quiet HEAD go.sum go.mod; \
 	if [ $$? -eq 1 ]; \
 	then echo -e "\ngo modules are out of date. Please commit after running 'make deps-update' command\n"; \
 	exit 1; fi
