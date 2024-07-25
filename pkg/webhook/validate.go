@@ -96,10 +96,6 @@ func validateSriovNetworkPoolConfig(cr *sriovnetworkv1.SriovNetworkPoolConfig, o
 	log.Log.V(2).Info("validateSriovNetworkPoolConfig", "object", cr)
 	var warnings []string
 
-	if cr.GetName() == consts.DefaultConfigName && operation == v1.Delete {
-		return false, warnings, fmt.Errorf("default SriovOperatorConfig shouldn't be deleted")
-	}
-
 	if (cr.Spec.MaxUnavailable != nil || cr.Spec.NodeSelector != nil) && cr.Spec.OvsHardwareOffloadConfig.Name != "" {
 		return false, warnings, fmt.Errorf("SriovOperatorConfig can't have both parallel configuration and OvsHardwareOffloadConfig")
 	}
