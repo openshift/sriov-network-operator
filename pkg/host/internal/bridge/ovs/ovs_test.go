@@ -22,6 +22,8 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	ovsStoreMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/bridge/ovs/store/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/helpers"
 )
 
 func getManagedBridges() map[string]*sriovnetworkv1.OVSConfigExt {
@@ -162,6 +164,14 @@ var _ = Describe("OVS", func() {
 	)
 	BeforeEach(func() {
 		ctx = context.Background()
+		origInChroot := vars.InChroot
+		origSocketValue := vars.OVSDBSocketPath
+		origFSRoot := vars.FilesystemRoot
+		DeferCleanup(func() {
+			vars.InChroot = origInChroot
+			vars.OVSDBSocketPath = origSocketValue
+			vars.FilesystemRoot = origFSRoot
+		})
 	})
 	Context("setDefaultTimeout", func() {
 		It("use default", func() {
@@ -179,7 +189,7 @@ var _ = Describe("OVS", func() {
 			timeoutCtx, timeoutFunc := context.WithTimeout(ctx, time.Millisecond*100)
 			defer timeoutFunc()
 			newCtx, _ := setDefaultTimeout(timeoutCtx)
-			time.Sleep(time.Millisecond * 200)
+			time.Sleep(time.Second)
 			Expect(newCtx.Err()).To(MatchError(context.DeadlineExceeded))
 		})
 		It("use explicit timeout - should return noop cancel function", func() {
@@ -212,6 +222,56 @@ var _ = Describe("OVS", func() {
 		})
 	})
 
+	Context("client", func() {
+		It("can't find socket", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{})
+			c, err := getClient(ctx)
+			Expect(c).To(BeNil())
+			Expect(err).To(MatchError(ContainSubstring("can't find OVSDB socket")))
+		})
+		Context("getDBSocketPath()", func() {
+			It("tcp socket", func() {
+				vars.OVSDBSocketPath = "tcp://127.0.0.1:4444"
+				sock, err := getDBSocketPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(sock).To(Equal("tcp://127.0.0.1:4444"))
+			})
+			It("unix socket - in container", func() {
+				helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+					Dirs:  []string{"/host/ovs"},
+					Files: map[string][]byte{"/host/ovs/ovsdb.sock": {}},
+				})
+				vars.InChroot = false
+				vars.OVSDBSocketPath = "unix:///ovs/ovsdb.sock"
+				sock, err := getDBSocketPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(sock).To(Equal("unix://" + vars.FilesystemRoot + "/host/ovs/ovsdb.sock"))
+			})
+			It("unix socket - host", func() {
+				helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+					Dirs:  []string{"/ovs"},
+					Files: map[string][]byte{"/ovs/ovsdb.sock": {}},
+				})
+				vars.InChroot = true
+				vars.OVSDBSocketPath = "unix:///ovs/ovsdb.sock"
+				sock, err := getDBSocketPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(sock).To(Equal("unix://" + vars.FilesystemRoot + "/ovs/ovsdb.sock"))
+			})
+			It("unix socket - alternative /var/run path", func() {
+				helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+					Dirs:  []string{"/host/run/ovs"},
+					Files: map[string][]byte{"/host/run/ovs/ovsdb.sock": {}},
+				})
+				vars.InChroot = false
+				vars.OVSDBSocketPath = "unix:///var/run/ovs/ovsdb.sock"
+				sock, err := getDBSocketPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(sock).To(Equal("unix://" + vars.FilesystemRoot + "/host/run/ovs/ovsdb.sock"))
+			})
+		})
+	})
+
 	Context("manage bridges", func() {
 		var (
 			store            *ovsStoreMockPkg.MockStore
@@ -224,6 +284,7 @@ var _ = Describe("OVS", func() {
 			ovs              Interface
 		)
 		BeforeEach(func() {
+			vars.InChroot = true
 			tempDir, err = os.MkdirTemp("", "sriov-operator-ovs-test-dir*")
 			testServerSocket = filepath.Join(tempDir, "ovsdb.sock")
 			Expect(err).NotTo(HaveOccurred())
@@ -231,13 +292,7 @@ var _ = Describe("OVS", func() {
 			store = ovsStoreMockPkg.NewMockStore(testCtrl)
 			_ = store
 			stopServerFunc = startServer("unix", testServerSocket)
-
-			origSocketValue := vars.OVSDBSocketPath
 			vars.OVSDBSocketPath = "unix://" + testServerSocket
-			DeferCleanup(func() {
-				vars.OVSDBSocketPath = origSocketValue
-			})
-
 			ovsClient, err = getClient(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			ovs = New(store)
