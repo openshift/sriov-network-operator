@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +19,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	ovsStorePkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/bridge/ovs/store"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -627,6 +630,35 @@ func updateMap(old, new map[string]string) map[string]string {
 	return result
 }
 
+// returns path for the OVDSB socket
+// for unix sockets it is taking into account current FS root and possible symlinks
+func getDBSocketPath() (string, error) {
+	if !strings.HasPrefix(vars.OVSDBSocketPath, "unix://") {
+		// no need to apply modifications to tcp sockets
+		return vars.OVSDBSocketPath, nil
+	}
+	origPathNoPrefix, _ := strings.CutPrefix(vars.OVSDBSocketPath, "unix://")
+	resolvedPath := utils.GetHostExtensionPath(origPathNoPrefix)
+
+	// in some OSes /var/run is an absolute symlink to /run,
+	// this can be a problem when we are trying to access OVSDB socket from the daemon POD.
+	// first we a trying to use original path, if we can't find the OVSDB socket,
+	// we try to replace /var/run with /run in the socket path
+	var err error
+	_, err = os.Stat(resolvedPath)
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	if os.IsNotExist(err) {
+		resolvedPath = strings.Replace(resolvedPath, "/var/run/", "/run/", 1)
+		_, err = os.Stat(resolvedPath)
+		if err != nil {
+			return "", err
+		}
+	}
+	return "unix://" + resolvedPath, nil
+}
+
 // initialize and return OVSDB client
 func getClient(ctx context.Context) (client.Client, error) {
 	openvSwitchEntry := &OpenvSwitchEntry{}
@@ -638,8 +670,13 @@ func getClient(ctx context.Context) (client.Client, error) {
 		return nil, fmt.Errorf("can't create client DB model: %v", err)
 	}
 
+	socketPath, err := getDBSocketPath()
+	if err != nil {
+		return nil, fmt.Errorf("can't find OVSDB socket %s: %v", vars.OVSDBSocketPath, err)
+	}
+
 	dbClient, err := client.NewOVSDBClient(clientDBModel,
-		client.WithEndpoint(vars.OVSDBSocketPath),
+		client.WithEndpoint(socketPath),
 		client.WithLogger(&log.Log))
 	if err != nil {
 		return nil, fmt.Errorf("can't create DB client: %v", err)
