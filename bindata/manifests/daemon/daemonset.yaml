@@ -24,6 +24,7 @@ spec:
       annotations:
         kubectl.kubernetes.io/default-container: sriov-network-config-daemon
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        openshift.io/required-scc: privileged
     spec:
       hostNetwork: true
       hostPID: true
