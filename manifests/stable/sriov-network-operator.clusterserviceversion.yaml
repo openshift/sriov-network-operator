@@ -100,7 +100,7 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:4.17
-    createdAt: "2024-05-30T16:54:58Z"
+    createdAt: "2024-07-17T16:58:50Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     features.operators.openshift.io/cnf: "false"
@@ -384,6 +384,8 @@ spec:
                   value: quay.io/openshift/origin-sriov-network-webhook:4.17
                 - name: SRIOV_INFINIBAND_CNI_IMAGE
                   value: quay.io/openshift/origin-sriov-infiniband-cni:4.17
+                - name: RDMA_CNI_IMAGE
+                  value: quay.io/openshift/origin-rdma-cni:4.17
                 - name: RESOURCE_PREFIX
                   value: openshift.io
                 - name: ADMISSION_CONTROLLERS_ENABLED
