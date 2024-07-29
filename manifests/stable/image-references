@@ -32,6 +32,6 @@ spec:
       kind: DockerImage
       name: quay.io/openshift/origin-sriov-infiniband-cni:4.17
   - name: rdma-cni
-      from:
-        kind: DockerImage
-        name: quay.io/openshift/origin-rdma-cni:4.17
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-rdma-cni:4.17
