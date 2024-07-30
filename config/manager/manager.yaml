@@ -21,6 +21,8 @@ spec:
     metadata:
       labels:
         control-plane: controller-manager
+      annotations:
+        openshift.io/required-scc: restricted-v2
     spec:
       securityContext:
         runAsNonRoot: true

@@ -23,6 +23,7 @@ spec:
         openshift.io/component: network
       annotations:
         kubectl.kubernetes.io/default-container: sriov-network-config-daemon
+        openshift.io/required-scc: privileged
     spec:
       hostNetwork: true
       hostPID: true

@@ -22,6 +22,8 @@ spec:
     metadata:
       labels:
         app: operator-webhook
+      annotations:
+        openshift.io/required-scc: restricted-v2
     spec:
       securityContext:
         runAsNonRoot: true
