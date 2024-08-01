@@ -79,7 +79,7 @@ var _ = Describe("K8s plugin", func() {
 		testCtrl = gomock.NewController(GinkgoT())
 
 		hostHelper = mock_helper.NewMockHostHelpersInterface(testCtrl)
-		realHostMgr := host.NewHostManager(hostHelper)
+		realHostMgr, _ := host.NewHostManager(hostHelper)
 
 		// proxy some functions to real host manager to simplify testing and to additionally validate manifests
 		for _, f := range []string{

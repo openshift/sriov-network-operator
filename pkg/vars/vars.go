@@ -51,6 +51,9 @@ var (
 	// ParallelNicConfig global variable to perform NIC configuration in parallel
 	ParallelNicConfig = false
 
+	// ManageSoftwareBridges global variable which reflects state of manageSoftwareBridges feature
+	ManageSoftwareBridges = false
+
 	// FilesystemRoot used by test to mock interactions with filesystem
 	FilesystemRoot = ""
 

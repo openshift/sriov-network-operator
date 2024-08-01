@@ -1,0 +1,56 @@
+{{ if .IsPrometheusOperatorInstalled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sriov-network-metrics-exporter
+  namespace: {{.Namespace}}
+spec:
+  endpoints:
+    - interval: 30s
+      port: sriov-network-metrics
+      bearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      scheme: "https"
+      honorLabels: true
+      tlsConfig:
+        serverName: sriov-network-metrics-exporter-service.{{.Namespace}}.svc
+        caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
+        insecureSkipVerify: false
+  namespaceSelector:
+    matchNames:
+      - {{.Namespace}}
+  selector:
+    matchLabels:
+      name: sriov-network-metrics-exporter-service
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prometheus-k8s
+  namespace: {{.Namespace}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prometheus-k8s
+subjects:
+- kind: ServiceAccount
+  name: {{.PrometheusOperatorServiceAccount}}
+  namespace: {{.PrometheusOperatorNamespace}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-k8s
+  namespace: {{.Namespace}}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - endpoints
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+{{ end }}

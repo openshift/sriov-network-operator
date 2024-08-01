@@ -110,6 +110,8 @@ type NetworkInterface interface {
 	EnableHwTcOffload(ifaceName string) error
 	// GetNetDevLinkAdminState returns the admin state of the interface.
 	GetNetDevLinkAdminState(ifaceName string) string
+	// GetPciAddressFromInterfaceName parses sysfs to get pci address of an interface by name
+	GetPciAddressFromInterfaceName(interfaceName string) (string, error)
 }
 
 type ServiceInterface interface {
@@ -135,8 +137,6 @@ type SriovInterface interface {
 	// SetSriovNumVfs changes the number of virtual functions allocated for a specific
 	// physical function base on pci address
 	SetSriovNumVfs(pciAddr string, numVfs int) error
-	// SetVfGUID sets the GUID for a virtual function
-	SetVfGUID(vfAddr string, pfLink netlink.Link) error
 	// VFIsReady returns the interface virtual function if the device is ready
 	VFIsReady(pciAddr string) (netlink.Link, error)
 	// SetVfAdminMac sets the virtual function administrative mac address via the physical function
@@ -203,4 +203,9 @@ type BridgeInterface interface {
 	// this step is required before applying some configurations to PF, e.g. changing of eSwitch mode.
 	// The function detach interface from managed bridges only.
 	DetachInterfaceFromManagedBridge(pciAddr string) error
+}
+
+type InfinibandInterface interface {
+	// ConfigureVfGUID configures and sets a GUID for an IB VF device
+	ConfigureVfGUID(vfAddr string, pfAddr string, vfID int, pfLink netlink.Link) error
 }

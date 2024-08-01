@@ -404,3 +404,20 @@ func (n *network) GetNetDevLinkAdminState(ifaceName string) string {
 
 	return consts.LinkAdminStateDown
 }
+
+// GetPciAddressFromInterfaceName parses sysfs to get pci address of an interface by name
+func (n *network) GetPciAddressFromInterfaceName(interfaceName string) (string, error) {
+	log.Log.V(2).Info("GetPciAddressFromInterfaceName(): get pci address", "interface", interfaceName)
+	sysfsPath := filepath.Join(vars.FilesystemRoot, consts.SysClassNet, interfaceName, "device")
+
+	pciDevDir, err := os.Readlink(sysfsPath)
+
+	if err != nil {
+		log.Log.Error(err, "GetPciAddressFromInterfaceName(): failed to get pci device dir", "interface", interfaceName)
+		return "", err
+	}
+
+	pciAddress := filepath.Base(pciDevDir)
+	log.Log.V(2).Info("GetPciAddressFromInterfaceName(): result", "interface", interfaceName, "pci address", pciAddress)
+	return pciAddress, nil
+}

@@ -1110,6 +1110,70 @@ func TestStaticValidateSriovNetworkNodePolicyWithInvalidNicSelector(t *testing.T
 	g.Expect(ok).To(Equal(false))
 }
 
+func TestStaticValidateSriovNetworkNodePolicyWithInvalidLinkTypeForSwitchdev(t *testing.T) {
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType:  "netdevice",
+			LinkType:    "ib",
+			IsRdma:      true,
+			EswitchMode: "switchdev",
+			NicSelector: SriovNetworkNicSelector{
+				PfNames: []string{"ens803f1"},
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			ResourceName: "p0",
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(Equal(false))
+}
+
+func TestStaticValidateSriovNetworkNodePolicyWithBridgeConfigWithoutSwitchdev(t *testing.T) {
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			Bridge:     Bridge{OVS: &OVSConfig{}},
+			NicSelector: SriovNetworkNicSelector{
+				PfNames: []string{"ens803f1"},
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			ResourceName: "p0",
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(Equal(false))
+}
+
+func TestStaticValidateSriovNetworkNodePolicyWithBridgeConfigWithExternallyManaged(t *testing.T) {
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType:        "netdevice",
+			Bridge:            Bridge{OVS: &OVSConfig{}},
+			EswitchMode:       "switchdev",
+			ExternallyManaged: true,
+			NicSelector: SriovNetworkNicSelector{
+				PfNames: []string{"ens803f1"},
+			},
+			NodeSelector: map[string]string{
+				"feature.node.kubernetes.io/network-sriov.capable": "true",
+			},
+			ResourceName: "p0",
+		},
+	}
+	g := NewGomegaWithT(t)
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(ok).To(Equal(false))
+}
+
 func TestValidatePolicyForNodeStateWithValidNetFilter(t *testing.T) {
 	interfaceSelected = false
 	state := newNodeState()
