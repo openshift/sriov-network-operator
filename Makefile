@@ -178,7 +178,7 @@ define go-install-tool
 @[ -f $(1) ] || { \
 set -e ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(BIN_DIR) go install $(2) ;\
+GOBIN=$(BIN_DIR) GOFLAGS="" go install $(2) ;\
 }
 endef
 
