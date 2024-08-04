@@ -215,6 +215,29 @@ var _ = Describe("Operator", func() {
 				},
 			},
 		}
+		policy3 := &sriovnetworkv1.SriovNetworkNodePolicy{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "SriovNetworkNodePolicy",
+				APIVersion: "sriovnetwork.openshift.io/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "policy-1",
+				Namespace: testNamespace,
+			},
+			Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+				ResourceName: "resource_1",
+				NodeSelector: map[string]string{
+					"feature.node.kubernetes.io/network-sriov.capable": "true",
+				},
+				Priority: 99,
+				Mtu:      9000,
+				NumVfs:   6,
+				NicSelector: sriovnetworkv1.SriovNetworkNicSelector{
+					PfNames: []string{"#2-4"},
+				},
+				DeviceType: "vfio-pci",
+			},
+		}
 
 		JustBeforeEach(func() {
 			By("wait for the node state ready")
@@ -257,6 +280,9 @@ var _ = Describe("Operator", func() {
 				err = WaitForDaemonSetReady(dpDaemonSet, k8sClient, testNamespace, "sriov-device-plugin", RetryInterval, Timeout)
 				Expect(err).NotTo(HaveOccurred())
 
+				pfName, rngStart, rngEnd, err := sriovnetworkv1.ParseVfRange(policy.Spec.NicSelector.PfNames[0])
+				Expect(err).NotTo(HaveOccurred())
+
 				By("update the spec of SriovNetworkNodeState CR")
 				found := false
 				for _, address := range policy.Spec.NicSelector.RootDevices {
@@ -268,8 +294,6 @@ var _ = Describe("Operator", func() {
 							Expect(iface.VfGroups[0].DeviceType).To(Equal(policy.Spec.DeviceType))
 							Expect(iface.VfGroups[0].ResourceName).To(Equal(policy.Spec.ResourceName))
 
-							pfName, rngStart, rngEnd, err := sriovnetworkv1.ParseVfRange(policy.Spec.NicSelector.PfNames[0])
-							Expect(err).NotTo(HaveOccurred())
 							rng := strconv.Itoa(rngStart) + "-" + strconv.Itoa(rngEnd)
 							Expect(iface.Name).To(Equal(pfName))
 							Expect(iface.VfGroups[0].VfRange).To(Equal(rng))
@@ -287,7 +311,10 @@ var _ = Describe("Operator", func() {
 							Expect(iface.NumVfs).To(Equal(policy.Spec.NumVfs))
 							Expect(iface.Mtu).To(Equal(policy.Spec.Mtu))
 							Expect(len(iface.VFs)).To(Equal(policy.Spec.NumVfs))
-							for _, vf := range iface.VFs {
+							for i, vf := range iface.VFs {
+								if i < rngStart || rngEnd < i {
+									continue
+								}
 								if policy.Spec.DeviceType == "netdevice" || policy.Spec.DeviceType == "" {
 									Expect(vf.Mtu).To(Equal(policy.Spec.Mtu))
 								}
@@ -301,8 +328,9 @@ var _ = Describe("Operator", func() {
 				}
 				Expect(found).To(BeTrue())
 			},
-			Entry("Set one PF with VF range", policy1),
-			Entry("Set one PF with VF range", policy2),
+			Entry("Set one vfio PF with VF range #0-5", policy1),
+			Entry("Set one netdevice PF with VF range #0-0", policy2),
+			Entry("Set one vfio PF with VF range #2-4", policy3),
 		)
 	})
 

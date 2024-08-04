@@ -21,6 +21,7 @@ metadata:
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
     olm.skipRange: '>=4.3.0-0 <4.17.0'
+    operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/initialization-resource: |-
       {
         "apiVersion": "sriovnetwork.openshift.io/v1",

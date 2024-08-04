@@ -364,6 +364,12 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 				if err != nil {
 					return err
 				}
+				if r.FeatureGate.IsEnabled(constants.ManageSoftwareBridgesFeatureGate) {
+					err = p.ApplyBridgeConfig(newVersion)
+					if err != nil {
+						return err
+					}
+				}
 				// record the evaluated policy priority for next loop
 				ppp = p.Spec.Priority
 			}

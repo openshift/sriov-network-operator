@@ -1122,3 +1122,415 @@ func TestNeedToUpdateSriov(t *testing.T) {
 		})
 	}
 }
+
+func TestSriovNetworkNodePolicyApplyBridgeConfig(t *testing.T) {
+	testtable := []struct {
+		tname           string
+		currentState    *v1.SriovNetworkNodeState
+		policy          *v1.SriovNetworkNodePolicy
+		expectedBridges v1.Bridges
+		expectedErr     bool
+	}{
+		{
+			tname:        "no selectors",
+			currentState: newNodeState(),
+			policy: &v1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "p1",
+				},
+				Spec: v1.SriovNetworkNodePolicySpec{
+					DeviceType:  consts.DeviceTypeNetDevice,
+					NicSelector: v1.SriovNetworkNicSelector{},
+					NodeSelector: map[string]string{
+						"feature.node.kubernetes.io/network-sriov.capable": "true",
+					},
+					NumVfs:       2,
+					Priority:     99,
+					EswitchMode:  "switchdev",
+					ResourceName: "p1res",
+					Bridge:       v1.Bridge{OVS: &v1.OVSConfig{}},
+				},
+			},
+			expectedBridges: v1.Bridges{},
+		},
+		{
+			tname:        "not switchdev config",
+			currentState: newNodeState(),
+			policy: &v1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "p1",
+				},
+				Spec: v1.SriovNetworkNodePolicySpec{
+					DeviceType: consts.DeviceTypeNetDevice,
+					NicSelector: v1.SriovNetworkNicSelector{
+						RootDevices: []string{"0000:86:00.0"},
+					},
+					NodeSelector: map[string]string{
+						"feature.node.kubernetes.io/network-sriov.capable": "true",
+					},
+					NumVfs:       2,
+					Priority:     99,
+					EswitchMode:  "legacy",
+					ResourceName: "p1res",
+					Bridge:       v1.Bridge{OVS: &v1.OVSConfig{}},
+				},
+			},
+			expectedBridges: v1.Bridges{},
+			expectedErr:     true,
+		},
+		{
+			tname:        "bad linkType",
+			currentState: newNodeState(),
+			policy: &v1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "p1",
+				},
+				Spec: v1.SriovNetworkNodePolicySpec{
+					DeviceType: consts.DeviceTypeNetDevice,
+					NicSelector: v1.SriovNetworkNicSelector{
+						RootDevices: []string{"0000:86:00.0"},
+					},
+					NodeSelector: map[string]string{
+						"feature.node.kubernetes.io/network-sriov.capable": "true",
+					},
+					NumVfs:       2,
+					Priority:     99,
+					EswitchMode:  "switchdev",
+					LinkType:     "ib",
+					ResourceName: "p1res",
+					Bridge:       v1.Bridge{OVS: &v1.OVSConfig{}},
+				},
+			},
+			expectedBridges: v1.Bridges{},
+			expectedErr:     true,
+		},
+		{
+			tname:        "externally managed",
+			currentState: newNodeState(),
+			policy: &v1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "p1",
+				},
+				Spec: v1.SriovNetworkNodePolicySpec{
+					DeviceType: consts.DeviceTypeNetDevice,
+					NicSelector: v1.SriovNetworkNicSelector{
+						RootDevices: []string{"0000:86:00.0"},
+					},
+					NodeSelector: map[string]string{
+						"feature.node.kubernetes.io/network-sriov.capable": "true",
+					},
+					NumVfs:            2,
+					Priority:          99,
+					EswitchMode:       "switchdev",
+					ExternallyManaged: true,
+					ResourceName:      "p1res",
+					Bridge:            v1.Bridge{OVS: &v1.OVSConfig{}},
+				},
+			},
+			expectedBridges: v1.Bridges{},
+			expectedErr:     true,
+		},
+		{
+			tname:        "single policy multi match",
+			currentState: newNodeState(),
+			policy: &v1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "p1",
+				},
+				Spec: v1.SriovNetworkNodePolicySpec{
+					DeviceType: consts.DeviceTypeNetDevice,
+					NicSelector: v1.SriovNetworkNicSelector{
+						RootDevices: []string{"0000:86:00.0", "0000:86:00.2"},
+					},
+					NodeSelector: map[string]string{
+						"feature.node.kubernetes.io/network-sriov.capable": "true",
+					},
+					NumVfs:       2,
+					Priority:     99,
+					EswitchMode:  "switchdev",
+					ResourceName: "p1res",
+					Bridge: v1.Bridge{OVS: &v1.OVSConfig{
+						Bridge: v1.OVSBridgeConfig{DatapathType: "test"},
+						Uplink: v1.OVSUplinkConfig{
+							Interface: v1.OVSInterfaceConfig{
+								Type: "test",
+							}},
+					}},
+				},
+			},
+			expectedBridges: v1.Bridges{OVS: []v1.OVSConfigExt{
+				{
+					Name:   "br-0000_86_00.0",
+					Bridge: v1.OVSBridgeConfig{DatapathType: "test"},
+					Uplinks: []v1.OVSUplinkConfigExt{{
+						Name:       "ens803f0",
+						PciAddress: "0000:86:00.0",
+						Interface:  v1.OVSInterfaceConfig{Type: "test"},
+					}},
+				},
+				{
+					Name:   "br-0000_86_00.2",
+					Bridge: v1.OVSBridgeConfig{DatapathType: "test"},
+					Uplinks: []v1.OVSUplinkConfigExt{{
+						Name:       "ens803f2",
+						PciAddress: "0000:86:00.2",
+						Interface:  v1.OVSInterfaceConfig{Type: "test"},
+					}},
+				},
+			}},
+		},
+		{
+			tname: "update bridge set by policy with lover priority",
+			currentState: &v1.SriovNetworkNodeState{
+				Spec: v1.SriovNetworkNodeStateSpec{
+					Bridges: v1.Bridges{OVS: []v1.OVSConfigExt{
+						{
+							Name:   "br-0000_86_00.0",
+							Bridge: v1.OVSBridgeConfig{DatapathType: "foo"},
+							Uplinks: []v1.OVSUplinkConfigExt{{
+								Name:       "ens803f0",
+								PciAddress: "0000:86:00.0",
+								Interface:  v1.OVSInterfaceConfig{Type: "test"},
+							}},
+						},
+					}},
+				},
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{
+						{
+							VFs: []v1.VirtualFunction{
+								{},
+							},
+							DeviceID:   "158b",
+							Driver:     "i40e",
+							Mtu:        1500,
+							Name:       "ens803f0",
+							PciAddress: "0000:86:00.0",
+							Vendor:     "8086",
+							NumVfs:     4,
+							TotalVfs:   64,
+						},
+					},
+				}},
+			policy: &v1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "p1",
+				},
+				Spec: v1.SriovNetworkNodePolicySpec{
+					DeviceType: consts.DeviceTypeNetDevice,
+					NicSelector: v1.SriovNetworkNicSelector{
+						RootDevices: []string{"0000:86:00.0"},
+					},
+					NodeSelector: map[string]string{
+						"feature.node.kubernetes.io/network-sriov.capable": "true",
+					},
+					NumVfs:       2,
+					Priority:     99,
+					EswitchMode:  "switchdev",
+					ResourceName: "p1res",
+					Bridge: v1.Bridge{OVS: &v1.OVSConfig{
+						Bridge: v1.OVSBridgeConfig{DatapathType: "test"},
+						Uplink: v1.OVSUplinkConfig{
+							Interface: v1.OVSInterfaceConfig{
+								Type: "test",
+							}},
+					}},
+				},
+			},
+			expectedBridges: v1.Bridges{OVS: []v1.OVSConfigExt{
+				{
+					Name:   "br-0000_86_00.0",
+					Bridge: v1.OVSBridgeConfig{DatapathType: "test"},
+					Uplinks: []v1.OVSUplinkConfigExt{{
+						Name:       "ens803f0",
+						PciAddress: "0000:86:00.0",
+						Interface:  v1.OVSInterfaceConfig{Type: "test"},
+					}},
+				},
+			}},
+		},
+		{
+			tname: "remove bridge set by policy with lover priority",
+			currentState: &v1.SriovNetworkNodeState{
+				Spec: v1.SriovNetworkNodeStateSpec{
+					Bridges: v1.Bridges{OVS: []v1.OVSConfigExt{
+						{
+							Name:   "br-0000_86_00.0",
+							Bridge: v1.OVSBridgeConfig{DatapathType: "foo"},
+							Uplinks: []v1.OVSUplinkConfigExt{{
+								Name:       "ens803f0",
+								PciAddress: "0000:86:00.0",
+								Interface:  v1.OVSInterfaceConfig{Type: "test"},
+							}},
+						},
+					}},
+				},
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{
+						{
+							VFs: []v1.VirtualFunction{
+								{},
+							},
+							DeviceID:   "158b",
+							Driver:     "i40e",
+							Mtu:        1500,
+							Name:       "ens803f0",
+							PciAddress: "0000:86:00.0",
+							Vendor:     "8086",
+							NumVfs:     4,
+							TotalVfs:   64,
+						},
+					},
+				}},
+			policy: &v1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "p1",
+				},
+				Spec: v1.SriovNetworkNodePolicySpec{
+					DeviceType: consts.DeviceTypeNetDevice,
+					NicSelector: v1.SriovNetworkNicSelector{
+						RootDevices: []string{"0000:86:00.0"},
+					},
+					NodeSelector: map[string]string{
+						"feature.node.kubernetes.io/network-sriov.capable": "true",
+					},
+					NumVfs:       2,
+					Priority:     99,
+					EswitchMode:  "switchdev",
+					ResourceName: "p1res",
+				},
+			},
+			expectedBridges: v1.Bridges{},
+		},
+		{
+			tname: "keep bridge set by other policy",
+			currentState: &v1.SriovNetworkNodeState{
+				Spec: v1.SriovNetworkNodeStateSpec{
+					Bridges: v1.Bridges{OVS: []v1.OVSConfigExt{
+						{
+							Name:   "br-0000_86_00.2",
+							Bridge: v1.OVSBridgeConfig{DatapathType: "foo"},
+							Uplinks: []v1.OVSUplinkConfigExt{{
+								Name:       "ens803f2",
+								PciAddress: "0000:86:00.2",
+								Interface:  v1.OVSInterfaceConfig{Type: "bar"},
+							}},
+						},
+					},
+					}},
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{
+						{
+							VFs: []v1.VirtualFunction{
+								{},
+							},
+							DeviceID:   "158b",
+							Driver:     "i40e",
+							Mtu:        1500,
+							Name:       "ens803f0",
+							PciAddress: "0000:86:00.0",
+							Vendor:     "8086",
+							NumVfs:     4,
+							TotalVfs:   64,
+						},
+					},
+				}},
+			policy: &v1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "p1",
+				},
+				Spec: v1.SriovNetworkNodePolicySpec{
+					DeviceType: consts.DeviceTypeNetDevice,
+					NicSelector: v1.SriovNetworkNicSelector{
+						RootDevices: []string{"0000:86:00.0"},
+					},
+					NodeSelector: map[string]string{
+						"feature.node.kubernetes.io/network-sriov.capable": "true",
+					},
+					NumVfs:       2,
+					Priority:     99,
+					EswitchMode:  "switchdev",
+					ResourceName: "p1res",
+					Bridge: v1.Bridge{OVS: &v1.OVSConfig{
+						Bridge: v1.OVSBridgeConfig{DatapathType: "test"},
+						Uplink: v1.OVSUplinkConfig{
+							Interface: v1.OVSInterfaceConfig{
+								Type: "test",
+							}},
+					}},
+				},
+			},
+			expectedBridges: v1.Bridges{OVS: []v1.OVSConfigExt{
+				{
+					Name:   "br-0000_86_00.0",
+					Bridge: v1.OVSBridgeConfig{DatapathType: "test"},
+					Uplinks: []v1.OVSUplinkConfigExt{{
+						Name:       "ens803f0",
+						PciAddress: "0000:86:00.0",
+						Interface:  v1.OVSInterfaceConfig{Type: "test"},
+					}},
+				},
+				{
+					Name:   "br-0000_86_00.2",
+					Bridge: v1.OVSBridgeConfig{DatapathType: "foo"},
+					Uplinks: []v1.OVSUplinkConfigExt{{
+						Name:       "ens803f2",
+						PciAddress: "0000:86:00.2",
+						Interface:  v1.OVSInterfaceConfig{Type: "bar"},
+					}},
+				},
+			}},
+		},
+	}
+	for _, tc := range testtable {
+		t.Run(tc.tname, func(t *testing.T) {
+			err := tc.policy.ApplyBridgeConfig(tc.currentState)
+			if tc.expectedErr && err == nil {
+				t.Errorf("ApplyBridgeConfig expecting error.")
+			} else if !tc.expectedErr && err != nil {
+				t.Errorf("ApplyBridgeConfig error:\n%s", err)
+			}
+			if diff := cmp.Diff(tc.expectedBridges, tc.currentState.Spec.Bridges); diff != "" {
+				t.Errorf("SriovNetworkNodeState spec diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGenerateBridgeName(t *testing.T) {
+	result := v1.GenerateBridgeName(&v1.InterfaceExt{PciAddress: "0000:86:00.2"})
+	expected := "br-0000_86_00.2"
+	if result != expected {
+		t.Errorf("GenerateBridgeName unexpected result, expected: %s, actual: %s", expected, result)
+	}
+}
+
+func TestNeedToUpdateBridges(t *testing.T) {
+	testtable := []struct {
+		tname          string
+		specBridge     *v1.Bridges
+		statusBridge   *v1.Bridges
+		expectedResult bool
+	}{
+		{
+			tname:          "no update required",
+			specBridge:     &v1.Bridges{OVS: []v1.OVSConfigExt{{Bridge: v1.OVSBridgeConfig{DatapathType: "test"}}}},
+			statusBridge:   &v1.Bridges{OVS: []v1.OVSConfigExt{{Bridge: v1.OVSBridgeConfig{DatapathType: "test"}}}},
+			expectedResult: false,
+		},
+		{
+			tname:          "update required",
+			specBridge:     &v1.Bridges{OVS: []v1.OVSConfigExt{{Bridge: v1.OVSBridgeConfig{DatapathType: "test"}}}},
+			statusBridge:   &v1.Bridges{OVS: []v1.OVSConfigExt{}},
+			expectedResult: true,
+		},
+	}
+	for _, tc := range testtable {
+		t.Run(tc.tname, func(t *testing.T) {
+			result := v1.NeedToUpdateBridges(tc.specBridge, tc.statusBridge)
+			if result != tc.expectedResult {
+				t.Errorf("unexpected result want: %t got: %t", tc.expectedResult, result)
+			}
+		})
+	}
+}

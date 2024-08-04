@@ -33,15 +33,16 @@ type interfaceToConfigure struct {
 }
 
 type sriov struct {
-	utilsHelper   utils.CmdInterface
-	kernelHelper  types.KernelInterface
-	networkHelper types.NetworkInterface
-	udevHelper    types.UdevInterface
-	vdpaHelper    types.VdpaInterface
-	netlinkLib    netlinkPkg.NetlinkLib
-	dputilsLib    dputilsPkg.DPUtilsLib
-	sriovnetLib   sriovnetPkg.SriovnetLib
-	ghwLib        ghwPkg.GHWLib
+	utilsHelper      utils.CmdInterface
+	kernelHelper     types.KernelInterface
+	networkHelper    types.NetworkInterface
+	udevHelper       types.UdevInterface
+	vdpaHelper       types.VdpaInterface
+	infinibandHelper types.InfinibandInterface
+	netlinkLib       netlinkPkg.NetlinkLib
+	dputilsLib       dputilsPkg.DPUtilsLib
+	sriovnetLib      sriovnetPkg.SriovnetLib
+	ghwLib           ghwPkg.GHWLib
 }
 
 func New(utilsHelper utils.CmdInterface,
@@ -49,19 +50,21 @@ func New(utilsHelper utils.CmdInterface,
 	networkHelper types.NetworkInterface,
 	udevHelper types.UdevInterface,
 	vdpaHelper types.VdpaInterface,
+	infinibandHelper types.InfinibandInterface,
 	netlinkLib netlinkPkg.NetlinkLib,
 	dputilsLib dputilsPkg.DPUtilsLib,
 	sriovnetLib sriovnetPkg.SriovnetLib,
 	ghwLib ghwPkg.GHWLib) types.SriovInterface {
 	return &sriov{utilsHelper: utilsHelper,
-		kernelHelper:  kernelHelper,
-		networkHelper: networkHelper,
-		udevHelper:    udevHelper,
-		vdpaHelper:    vdpaHelper,
-		netlinkLib:    netlinkLib,
-		dputilsLib:    dputilsLib,
-		sriovnetLib:   sriovnetLib,
-		ghwLib:        ghwLib,
+		kernelHelper:     kernelHelper,
+		networkHelper:    networkHelper,
+		udevHelper:       udevHelper,
+		vdpaHelper:       vdpaHelper,
+		infinibandHelper: infinibandHelper,
+		netlinkLib:       netlinkLib,
+		dputilsLib:       dputilsLib,
+		sriovnetLib:      sriovnetLib,
+		ghwLib:           ghwLib,
 	}
 }
 
@@ -161,27 +164,6 @@ func (s *sriov) getVfInfo(vfAddr string, pfName string, eswitchMode string, devi
 		}
 	}
 	return vf
-}
-
-func (s *sriov) SetVfGUID(vfAddr string, pfLink netlink.Link) error {
-	log.Log.Info("SetVfGUID()", "vf", vfAddr)
-	vfID, err := s.dputilsLib.GetVFID(vfAddr)
-	if err != nil {
-		log.Log.Error(err, "SetVfGUID(): unable to get VF id", "address", vfAddr)
-		return err
-	}
-	guid := utils.GenerateRandomGUID()
-	if err := s.netlinkLib.LinkSetVfNodeGUID(pfLink, vfID, guid); err != nil {
-		return err
-	}
-	if err := s.netlinkLib.LinkSetVfPortGUID(pfLink, vfID, guid); err != nil {
-		return err
-	}
-	if err = s.kernelHelper.Unbind(vfAddr); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *sriov) VFIsReady(pciAddr string) (netlink.Link, error) {
@@ -491,7 +473,10 @@ func (s *sriov) configSriovVFDevices(iface *sriovnetworkv1.Interface) error {
 					linkType = s.GetLinkType(iface.Name)
 				}
 				if strings.EqualFold(linkType, consts.LinkTypeIB) {
-					if err = s.SetVfGUID(addr, pfLink); err != nil {
+					if err := s.infinibandHelper.ConfigureVfGUID(addr, iface.PciAddress, vfID, pfLink); err != nil {
+						return err
+					}
+					if err := s.kernelHelper.Unbind(iface.PciAddress); err != nil {
 						return err
 					}
 				} else {

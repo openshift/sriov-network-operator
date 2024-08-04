@@ -35,3 +35,12 @@ spec:
     from:
       kind: DockerImage
       name: quay.io/openshift/origin-rdma-cni:4.17
+  - name: sriov-network-metrics-exporter
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-sriov-network-metrics-exporter:4.17
+  - name: kube-rbac-proxy
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-kube-rbac-proxy:4.17      
+

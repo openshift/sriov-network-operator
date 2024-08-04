@@ -78,6 +78,14 @@ spec:
               value: {{ .Values.operator.metricsExporter.certificates.secretName }}
             - name: METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE
               value: {{ .Values.images.metricsExporterKubeRbacProxy }}
+            {{- if .Values.operator.metricsExporter.prometheusOperator.enabled }}
+            - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED
+              value: {{ .Values.operator.metricsExporter.prometheusOperator.enabled | quote}}
+            - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_SERVICE_ACCOUNT
+              value: {{ .Values.operator.metricsExporter.prometheusOperator.serviceAccount }}
+            - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_NAMESPACE
+              value: {{ .Values.operator.metricsExporter.prometheusOperator.namespace }}
+            {{- end }}
             - name: RESOURCE_PREFIX
               value: {{ .Values.operator.resourcePrefix }}
             - name: IMAGE_PULL_SECRETS
