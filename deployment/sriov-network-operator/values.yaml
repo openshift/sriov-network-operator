@@ -27,6 +27,14 @@ operator:
   resourcePrefix: "openshift.io"
   cniBinPath: "/opt/cni/bin"
   clusterType: "kubernetes"
+  metricsExporter:
+    port: "9110"
+    certificates:
+      secretName: "metrics-exporter-cert"
+    prometheusOperator:
+      enabled: false
+      serviceAccount: "prometheus-k8s"
+      namespace: "monitoring"
   admissionControllers:
     enabled: false
     certificates:
@@ -99,5 +107,7 @@ images:
   sriovDevicePlugin: ghcr.io/k8snetworkplumbingwg/sriov-network-device-plugin
   resourcesInjector: ghcr.io/k8snetworkplumbingwg/network-resources-injector
   webhook: ghcr.io/k8snetworkplumbingwg/sriov-network-operator-webhook
+  metricsExporter: ghcr.io/k8snetworkplumbingwg/sriov-network-metrics-exporter
+  metricsExporterKubeRbacProxy: gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0
 
 imagePullSecrets: []

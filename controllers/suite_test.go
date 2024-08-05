@@ -41,6 +41,7 @@ import (
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	openshiftconfigv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	//+kubebuilder:scaffold:imports
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -123,6 +124,18 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("OPERATOR_NAME", "sriov-network-operator")
 	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_SECRET_NAME", "metrics-exporter-cert")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_PORT", "9110")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_SERVICE_ACCOUNT", "k8s-prometheus")
+	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_NAMESPACE", "default")
+	Expect(err).NotTo(HaveOccurred())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -144,6 +157,8 @@ var _ = BeforeSuite(func() {
 	err = mcfgv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = openshiftconfigv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = monitoringv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	vars.Config = cfg

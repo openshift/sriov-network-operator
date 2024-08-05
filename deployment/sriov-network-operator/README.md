@@ -72,6 +72,11 @@ We have introduced the following Chart parameters.
 | `operator.resourcePrefix` | string | `openshift.io` | Device plugin resource prefix |
 | `operator.cniBinPath` | string | `/opt/cni/bin` | Path for CNI binary |
 | `operator.clustertype` | string | `kubernetes` | Cluster environment type |
+| `operator.metricsExporter.port` | string | `9110` | Port where the Network Metrics Exporter listen |
+| `operator.metricsExporter.certificates.secretName` | string | `metrics-exporter-cert` | Secret name to serve metrics via TLS. The secret must have the same fields as `operator.admissionControllers.certificates.secretNames` |
+| `operator.metricsExporter.prometheusOperator.enabled` | bool | false | Wheter the operator shoud configure Prometheus resources or not (e.g. `ServiceMonitors`). |
+| `operator.metricsExporter.prometheusOperator.serviceAccount` | string | `prometheus-k8s` | The service account used by the Prometheus Operator. This is used to give Prometheus the permission to list resource in the SR-IOV operator namespace |
+| `operator.metricsExporter.prometheusOperator.namespace` | string | `monitoring` | The namespace where the Prometheus Operator is installed. Setting this variable makes the operator deploy `monitoring.coreos.com` resources. |
 
 #### Admission Controllers parameters
 
@@ -128,3 +133,5 @@ This section contains general parameters that apply to both the operator and dae
 | `images.sriovDevicePlugin` | SR-IOV device plugin image |
 | `images.resourcesInjector` | Resources Injector image |
 | `images.webhook` | Operator Webhook image |
+| `images.metricsExporter` | Network Metrics Exporter image |
+| `images.metricsExporterKubeRbacProxy` | Kube RBAC Proxy image used for metrics exporter |

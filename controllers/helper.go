@@ -376,3 +376,24 @@ func syncDaemonSet(ctx context.Context, client k8sclient.Client, scheme *runtime
 	}
 	return nil
 }
+
+func updateDaemonsetNodeSelector(obj *uns.Unstructured, nodeSelector map[string]string) error {
+	if len(nodeSelector) == 0 {
+		return nil
+	}
+
+	ds := &appsv1.DaemonSet{}
+	scheme := kscheme.Scheme
+	err := scheme.Convert(obj, ds, nil)
+	if err != nil {
+		return fmt.Errorf("failed to convert Unstructured [%s] to DaemonSet: %v", obj.GetName(), err)
+	}
+
+	ds.Spec.Template.Spec.NodeSelector = nodeSelector
+
+	err = scheme.Convert(ds, obj, nil)
+	if err != nil {
+		return fmt.Errorf("failed to convert DaemonSet [%s] to Unstructured: %v", obj.GetName(), err)
+	}
+	return nil
+}

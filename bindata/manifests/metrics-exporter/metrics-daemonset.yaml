@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: sriov-network-metrics-exporter
+  name: sriov-network-metrics-exporter
+  namespace: {{.Namespace}}
+spec:
+  selector:
+    matchLabels:
+      app: sriov-network-metrics-exporter
+  template:
+    metadata:
+      labels:
+        app: sriov-network-metrics-exporter
+    spec:
+      hostNetwork: true
+      serviceAccountName: metrics-exporter-sa
+      {{- if .ImagePullSecrets }}
+      imagePullSecrets:
+      {{- range .ImagePullSecrets }}
+      - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      containers:
+      - name: metrics-exporter
+        args:
+        - --web.listen-address=127.0.0.1:{{.MetricsExporterPort}}
+        - --path.kubecgroup=/sys/fs/cgroup
+        - --path.sysbuspci=/host/sys/bus/pci/devices/
+        - --path.sysclassnet=/host/sys/class/net/
+        - --path.cpucheckpoint=/host/cpu_manager_state
+        - --path.kubeletsocket=/host/kubelet.sock
+        - --collector.kubepoddevice=true
+        - --collector.vfstatspriority=netlink,sysfs
+        image: {{.Image}}
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            memory: 100Mi
+            cpu: 100m
+        securityContext:
+          capabilities:
+            drop:
+              - ALL      
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+        volumeMounts:
+        - mountPath: /host/kubelet.sock
+          name: kubeletsocket
+        - mountPath: /host/sys/bus/pci/devices
+          name: sysbuspcidevices
+          readOnly: true
+        - mountPath: /host/sys/devices
+          name: sysdevices
+          readOnly: true
+        - mountPath: /host/sys/class/net
+          name: sysclassnet
+          readOnly: true
+        - mountPath: /host/cpu_manager_state
+          name: cpucheckpoint
+          readOnly: true
+      - name: kube-rbac-proxy
+        image: '{{.MetricsExporterKubeRbacProxyImage}}'
+        imagePullPolicy: IfNotPresent
+        args:
+          - --logtostderr
+          - --secure-listen-address=[$(HOST_IP)]:{{.MetricsExporterPort}}
+          - --tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+          - --upstream=http://127.0.0.1:{{.MetricsExporterPort}}/
+          - --tls-private-key-file=/etc/metrics/tls.key
+          - --tls-cert-file=/etc/metrics/tls.crt
+        ports:
+          - containerPort: {{.MetricsExporterPort}}
+            name: https-metrics
+        env:
+          - name: HOST_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 20Mi
+        volumeMounts:
+          - name: metrics-certs
+            mountPath: /etc/metrics
+            readOnly: true
+      nodeSelector:
+        {{- range $key, $value := .NodeSelectorField }}
+          {{ $key }}: {{ $value }}
+        {{- end }}
+      restartPolicy: Always
+      volumes:
+      - hostPath:
+          path: /var/lib/kubelet/pod-resources/kubelet.sock
+          type: "Socket"
+        name: kubeletsocket
+      - hostPath:
+          path: /var/lib/kubelet/cpu_manager_state
+          type: "File"
+        name: cpucheckpoint
+      - hostPath:
+          path: /sys/class/net
+          type: "Directory"
+        name: sysclassnet
+      - hostPath:
+          path: /sys/bus/pci/devices
+          type: "Directory"
+        name: sysbuspcidevices
+      - hostPath:
+          path: /sys/devices
+          type: "Directory"
+        name: sysdevices
+      - name: metrics-certs
+        secret:
+          defaultMode: 420
+          secretName: {{ .MetricsExporterSecretName }}
