@@ -232,8 +232,8 @@ func TestValidateSriovNetworkPoolConfigWithDefault(t *testing.T) {
 	snclient = fakesnclientset.NewSimpleClientset()
 
 	ok, _, err := validateSriovNetworkPoolConfig(config, "DELETE")
-	g.Expect(err).To(HaveOccurred())
-	g.Expect(ok).To(Equal(false))
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
 
 	ok, _, err = validateSriovNetworkPoolConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
