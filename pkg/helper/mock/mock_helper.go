@@ -929,6 +929,20 @@ func (mr *MockHostHelpersInterfaceMockRecorder) RemovePersistPFNameUdevRule(pfPc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePersistPFNameUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).RemovePersistPFNameUdevRule), pfPciAddress)
 }
 
+// RemovePfAppliedStatus mocks base method.
+func (m *MockHostHelpersInterface) RemovePfAppliedStatus(pciAddress string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemovePfAppliedStatus", pciAddress)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemovePfAppliedStatus indicates an expected call of RemovePfAppliedStatus.
+func (mr *MockHostHelpersInterfaceMockRecorder) RemovePfAppliedStatus(pciAddress interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePfAppliedStatus", reflect.TypeOf((*MockHostHelpersInterface)(nil).RemovePfAppliedStatus), pciAddress)
+}
+
 // RemoveVfRepresentorUdevRule mocks base method.
 func (m *MockHostHelpersInterface) RemoveVfRepresentorUdevRule(pfPciAddress string) error {
 	m.ctrl.T.Helper()

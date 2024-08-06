@@ -79,6 +79,20 @@ func (mr *MockManagerInterfaceMockRecorder) LoadPfsStatus(pciAddress interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadPfsStatus", reflect.TypeOf((*MockManagerInterface)(nil).LoadPfsStatus), pciAddress)
 }
 
+// RemovePfAppliedStatus mocks base method.
+func (m *MockManagerInterface) RemovePfAppliedStatus(pciAddress string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemovePfAppliedStatus", pciAddress)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemovePfAppliedStatus indicates an expected call of RemovePfAppliedStatus.
+func (mr *MockManagerInterfaceMockRecorder) RemovePfAppliedStatus(pciAddress interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePfAppliedStatus", reflect.TypeOf((*MockManagerInterface)(nil).RemovePfAppliedStatus), pciAddress)
+}
+
 // SaveLastPfAppliedStatus mocks base method.
 func (m *MockManagerInterface) SaveLastPfAppliedStatus(PfInfo *v1.Interface) error {
 	m.ctrl.T.Helper()
