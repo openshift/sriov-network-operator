@@ -387,6 +387,8 @@ spec:
                   value: quay.io/openshift/origin-sriov-infiniband-cni:4.17
                 - name: RDMA_CNI_IMAGE
                   value: quay.io/openshift/origin-rdma-cni:4.17
+                - name: OVS_CNI_IMAGE
+                  value: ghcr.io/k8snetworkplumbingwg/ovs-cni-plugin
                 - name: RESOURCE_PREFIX
                   value: openshift.io
                 - name: ADMISSION_CONTROLLERS_ENABLED
