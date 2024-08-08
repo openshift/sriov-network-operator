@@ -121,6 +121,21 @@ func (mr *MockHostManagerInterfaceMockRecorder) BindDriverByBusAndDevice(bus, de
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BindDriverByBusAndDevice", reflect.TypeOf((*MockHostManagerInterface)(nil).BindDriverByBusAndDevice), bus, device, driver)
 }
 
+// CheckRDMAEnabled mocks base method.
+func (m *MockHostManagerInterface) CheckRDMAEnabled() (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckRDMAEnabled")
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CheckRDMAEnabled indicates an expected call of CheckRDMAEnabled.
+func (mr *MockHostManagerInterfaceMockRecorder) CheckRDMAEnabled() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckRDMAEnabled", reflect.TypeOf((*MockHostManagerInterface)(nil).CheckRDMAEnabled))
+}
+
 // CompareServices mocks base method.
 func (m *MockHostManagerInterface) CompareServices(serviceA, serviceB *types.Service) (bool, error) {
 	m.ctrl.T.Helper()
@@ -247,36 +262,6 @@ func (m *MockHostManagerInterface) EnableHwTcOffload(ifaceName string) error {
 func (mr *MockHostManagerInterfaceMockRecorder) EnableHwTcOffload(ifaceName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableHwTcOffload", reflect.TypeOf((*MockHostManagerInterface)(nil).EnableHwTcOffload), ifaceName)
-}
-
-// EnableRDMA mocks base method.
-func (m *MockHostManagerInterface) EnableRDMA(conditionFilePath, serviceName, packageManager string) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnableRDMA", conditionFilePath, serviceName, packageManager)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// EnableRDMA indicates an expected call of EnableRDMA.
-func (mr *MockHostManagerInterfaceMockRecorder) EnableRDMA(conditionFilePath, serviceName, packageManager interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableRDMA", reflect.TypeOf((*MockHostManagerInterface)(nil).EnableRDMA), conditionFilePath, serviceName, packageManager)
-}
-
-// EnableRDMAOnRHELMachine mocks base method.
-func (m *MockHostManagerInterface) EnableRDMAOnRHELMachine() (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnableRDMAOnRHELMachine")
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// EnableRDMAOnRHELMachine indicates an expected call of EnableRDMAOnRHELMachine.
-func (mr *MockHostManagerInterfaceMockRecorder) EnableRDMAOnRHELMachine() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableRDMAOnRHELMachine", reflect.TypeOf((*MockHostManagerInterface)(nil).EnableRDMAOnRHELMachine))
 }
 
 // EnableService mocks base method.
@@ -451,21 +436,6 @@ func (mr *MockHostManagerInterfaceMockRecorder) GetNicSriovMode(pciAddr interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNicSriovMode", reflect.TypeOf((*MockHostManagerInterface)(nil).GetNicSriovMode), pciAddr)
 }
 
-// GetOSPrettyName mocks base method.
-func (m *MockHostManagerInterface) GetOSPrettyName() (string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOSPrettyName")
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetOSPrettyName indicates an expected call of GetOSPrettyName.
-func (mr *MockHostManagerInterfaceMockRecorder) GetOSPrettyName() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOSPrettyName", reflect.TypeOf((*MockHostManagerInterface)(nil).GetOSPrettyName))
-}
-
 // GetPciAddressFromInterfaceName mocks base method.
 func (m *MockHostManagerInterface) GetPciAddressFromInterfaceName(interfaceName string) (string, error) {
 	m.ctrl.T.Helper()
@@ -526,35 +496,6 @@ func (mr *MockHostManagerInterfaceMockRecorder) HasDriver(pciAddr interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasDriver", reflect.TypeOf((*MockHostManagerInterface)(nil).HasDriver), pciAddr)
 }
 
-// InstallRDMA mocks base method.
-func (m *MockHostManagerInterface) InstallRDMA(packageManager string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallRDMA", packageManager)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// InstallRDMA indicates an expected call of InstallRDMA.
-func (mr *MockHostManagerInterfaceMockRecorder) InstallRDMA(packageManager interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallRDMA", reflect.TypeOf((*MockHostManagerInterface)(nil).InstallRDMA), packageManager)
-}
-
-// IsCoreOS mocks base method.
-func (m *MockHostManagerInterface) IsCoreOS() (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsCoreOS")
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// IsCoreOS indicates an expected call of IsCoreOS.
-func (mr *MockHostManagerInterfaceMockRecorder) IsCoreOS() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsCoreOS", reflect.TypeOf((*MockHostManagerInterface)(nil).IsCoreOS))
-}
-
 // IsKernelArgsSet mocks base method.
 func (m *MockHostManagerInterface) IsKernelArgsSet(cmdLine, karg string) bool {
 	m.ctrl.T.Helper()
@@ -596,21 +537,6 @@ func (m *MockHostManagerInterface) IsKernelModuleLoaded(name string) (bool, erro
 func (mr *MockHostManagerInterfaceMockRecorder) IsKernelModuleLoaded(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsKernelModuleLoaded", reflect.TypeOf((*MockHostManagerInterface)(nil).IsKernelModuleLoaded), name)
-}
-
-// IsRHELSystem mocks base method.
-func (m *MockHostManagerInterface) IsRHELSystem() (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsRHELSystem")
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// IsRHELSystem indicates an expected call of IsRHELSystem.
-func (mr *MockHostManagerInterfaceMockRecorder) IsRHELSystem() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsRHELSystem", reflect.TypeOf((*MockHostManagerInterface)(nil).IsRHELSystem))
 }
 
 // IsServiceEnabled mocks base method.
@@ -655,21 +581,6 @@ func (m *MockHostManagerInterface) IsSwitchdev(name string) bool {
 func (mr *MockHostManagerInterfaceMockRecorder) IsSwitchdev(name interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSwitchdev", reflect.TypeOf((*MockHostManagerInterface)(nil).IsSwitchdev), name)
-}
-
-// IsUbuntuSystem mocks base method.
-func (m *MockHostManagerInterface) IsUbuntuSystem() (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsUbuntuSystem")
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// IsUbuntuSystem indicates an expected call of IsUbuntuSystem.
-func (mr *MockHostManagerInterfaceMockRecorder) IsUbuntuSystem() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsUbuntuSystem", reflect.TypeOf((*MockHostManagerInterface)(nil).IsUbuntuSystem))
 }
 
 // LoadKernelModule mocks base method.
@@ -733,21 +644,6 @@ func (mr *MockHostManagerInterfaceMockRecorder) PrepareVFRepUdevRule() *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareVFRepUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).PrepareVFRepUdevRule))
 }
 
-// RdmaIsLoaded mocks base method.
-func (m *MockHostManagerInterface) RdmaIsLoaded() (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RdmaIsLoaded")
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// RdmaIsLoaded indicates an expected call of RdmaIsLoaded.
-func (mr *MockHostManagerInterfaceMockRecorder) RdmaIsLoaded() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RdmaIsLoaded", reflect.TypeOf((*MockHostManagerInterface)(nil).RdmaIsLoaded))
-}
-
 // ReadService mocks base method.
 func (m *MockHostManagerInterface) ReadService(servicePath string) (*types.Service, error) {
 	m.ctrl.T.Helper()
@@ -805,20 +701,6 @@ func (m *MockHostManagerInterface) RebindVfToDefaultDriver(pciAddr string) error
 func (mr *MockHostManagerInterfaceMockRecorder) RebindVfToDefaultDriver(pciAddr interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RebindVfToDefaultDriver", reflect.TypeOf((*MockHostManagerInterface)(nil).RebindVfToDefaultDriver), pciAddr)
-}
-
-// ReloadDriver mocks base method.
-func (m *MockHostManagerInterface) ReloadDriver(driver string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReloadDriver", driver)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ReloadDriver indicates an expected call of ReloadDriver.
-func (mr *MockHostManagerInterfaceMockRecorder) ReloadDriver(driver interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReloadDriver", reflect.TypeOf((*MockHostManagerInterface)(nil).ReloadDriver), driver)
 }
 
 // RemoveDisableNMUdevRule mocks base method.
@@ -945,35 +827,6 @@ func (m *MockHostManagerInterface) SetVfAdminMac(vfAddr string, pfLink, vfLink n
 func (mr *MockHostManagerInterfaceMockRecorder) SetVfAdminMac(vfAddr, pfLink, vfLink interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVfAdminMac", reflect.TypeOf((*MockHostManagerInterface)(nil).SetVfAdminMac), vfAddr, pfLink, vfLink)
-}
-
-// TriggerUdevEvent mocks base method.
-func (m *MockHostManagerInterface) TriggerUdevEvent() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TriggerUdevEvent")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// TriggerUdevEvent indicates an expected call of TriggerUdevEvent.
-func (mr *MockHostManagerInterfaceMockRecorder) TriggerUdevEvent() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TriggerUdevEvent", reflect.TypeOf((*MockHostManagerInterface)(nil).TriggerUdevEvent))
-}
-
-// TryEnableRdma mocks base method.
-func (m *MockHostManagerInterface) TryEnableRdma() (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TryEnableRdma")
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// TryEnableRdma indicates an expected call of TryEnableRdma.
-func (mr *MockHostManagerInterfaceMockRecorder) TryEnableRdma() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TryEnableRdma", reflect.TypeOf((*MockHostManagerInterface)(nil).TryEnableRdma))
 }
 
 // TryEnableTun mocks base method.

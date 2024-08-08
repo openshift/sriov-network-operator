@@ -158,7 +158,7 @@ var _ = Describe("Service", func() {
 				"/etc/sriov-operator/sriov-interface-result.yaml":   []byte("something"),
 			},
 		})
-		hostHelpers.EXPECT().TryEnableRdma().Return(true, nil)
+		hostHelpers.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelpers.EXPECT().TryEnableTun().Return()
 		hostHelpers.EXPECT().TryEnableVhostNet().Return()
 		hostHelpers.EXPECT().DiscoverSriovDevices(hostHelpers).Return([]sriovnetworkv1.InterfaceExt{{
@@ -183,7 +183,7 @@ var _ = Describe("Service", func() {
 				"/etc/sriov-operator/sriov-interface-result.yaml":   []byte("something"),
 			},
 		})
-		hostHelpers.EXPECT().TryEnableRdma().Return(true, nil)
+		hostHelpers.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelpers.EXPECT().TryEnableTun().Return()
 		hostHelpers.EXPECT().TryEnableVhostNet().Return()
 
@@ -211,7 +211,7 @@ var _ = Describe("Service", func() {
 				"/etc/sriov-operator/sriov-interface-result.yaml":   []byte("something"),
 			},
 		})
-		hostHelpers.EXPECT().TryEnableRdma().Return(true, nil)
+		hostHelpers.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelpers.EXPECT().TryEnableTun().Return()
 		hostHelpers.EXPECT().TryEnableVhostNet().Return()
 		hostHelpers.EXPECT().DiscoverSriovDevices(hostHelpers).Return([]sriovnetworkv1.InterfaceExt{{

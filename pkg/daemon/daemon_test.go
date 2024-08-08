@@ -145,7 +145,7 @@ var _ = Describe("Config Daemon", func() {
 		platformHelper.EXPECT().IsHypershift().Return(false).AnyTimes()
 
 		vendorHelper := mock_helper.NewMockHostHelpersInterface(mockCtrl)
-		vendorHelper.EXPECT().TryEnableRdma().Return(true, nil).AnyTimes()
+		vendorHelper.EXPECT().CheckRDMAEnabled().Return(true, nil).AnyTimes()
 		vendorHelper.EXPECT().TryEnableVhostNet().AnyTimes()
 		vendorHelper.EXPECT().TryEnableTun().AnyTimes()
 		vendorHelper.EXPECT().PrepareNMUdevRule([]string{"0x1014", "0x154c"}).Return(nil).AnyTimes()

@@ -11,7 +11,6 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
@@ -259,318 +258,41 @@ func (k *kernel) GetDriverByBusAndDevice(bus, device string) (string, error) {
 	return getDriverByBusAndDevice(bus, device)
 }
 
-func (k *kernel) TryEnableRdma() (bool, error) {
-	log.Log.V(2).Info("tryEnableRdma()")
+// CheckRDMAEnabled returns true if RDMA modules are loaded on host
+func (k *kernel) CheckRDMAEnabled() (bool, error) {
+	log.Log.V(2).Info("CheckRDMAEnabled()")
 	chrootDefinition := utils.GetChrootExtension()
 
-	// check if the driver is already loaded in to the system
-	_, stderr, mlx4Err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("grep --quiet 'mlx4_en' <(%s lsmod)", chrootDefinition))
-	if mlx4Err != nil && len(stderr) != 0 {
-		log.Log.Error(mlx4Err, "tryEnableRdma(): failed to check for kernel module 'mlx4_en'", "stderr", stderr)
-		return false, fmt.Errorf(stderr)
-	}
-
-	_, stderr, mlx5Err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("grep --quiet 'mlx5_core' <(%s lsmod)", chrootDefinition))
+	_, stderr, mlx5Err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("%s lsmod | grep --quiet 'mlx5_core'", chrootDefinition))
 	if mlx5Err != nil && len(stderr) != 0 {
-		log.Log.Error(mlx5Err, "tryEnableRdma(): failed to check for kernel module 'mlx5_core'", "stderr", stderr)
+		log.Log.Error(mlx5Err, "CheckRDMAEnabled(): failed to check for kernel module 'mlx5_core'", "stderr", stderr)
 		return false, fmt.Errorf(stderr)
 	}
 
-	if mlx4Err != nil && mlx5Err != nil {
-		log.Log.Error(nil, "tryEnableRdma(): no RDMA capable devices")
+	if mlx5Err != nil {
+		log.Log.Error(nil, "CheckRDMAEnabled(): no RDMA capable devices")
 		return false, nil
 	}
-
-	isRhelSystem, err := k.IsRHELSystem()
-	if err != nil {
-		log.Log.Error(err, "tryEnableRdma(): failed to check if the machine is base on RHEL")
-		return false, err
-	}
-
-	// RHEL check
-	if isRhelSystem {
-		return k.EnableRDMAOnRHELMachine()
-	}
-
-	isUbuntuSystem, err := k.IsUbuntuSystem()
-	if err != nil {
-		log.Log.Error(err, "tryEnableRdma(): failed to check if the machine is base on Ubuntu")
-		return false, err
-	}
-
-	if isUbuntuSystem {
-		return k.EnableRDMAOnUbuntuMachine()
-	}
-
-	osName, err := k.GetOSPrettyName()
-	if err != nil {
-		log.Log.Error(err, "tryEnableRdma(): failed to check OS name")
-		return false, err
-	}
-
-	log.Log.Error(nil, "tryEnableRdma(): Unsupported OS", "name", osName)
-	return false, fmt.Errorf("unable to load RDMA unsupported OS: %s", osName)
+	return k.rdmaModulesAreLoaded()
 }
 
-func (k *kernel) EnableRDMAOnRHELMachine() (bool, error) {
-	log.Log.Info("EnableRDMAOnRHELMachine()")
-	isCoreOsSystem, err := k.IsCoreOS()
-	if err != nil {
-		log.Log.Error(err, "EnableRDMAOnRHELMachine(): failed to check if the machine runs CoreOS")
-		return false, err
-	}
-
-	// CoreOS check
-	if isCoreOsSystem {
-		isRDMALoaded, err := k.RdmaIsLoaded()
-		if err != nil {
-			log.Log.Error(err, "EnableRDMAOnRHELMachine(): failed to check if RDMA kernel modules are loaded")
-			return false, err
-		}
-
-		return isRDMALoaded, nil
-	}
-
-	// RHEL
-	log.Log.Info("EnableRDMAOnRHELMachine(): enabling RDMA on RHEL machine")
-	isRDMAEnable, err := k.EnableRDMA(internal.RhelRDMAConditionFile, internal.RhelRDMAServiceName, internal.RhelPackageManager)
-	if err != nil {
-		log.Log.Error(err, "EnableRDMAOnRHELMachine(): failed to enable RDMA on RHEL machine")
-		return false, err
-	}
-
-	// check if we need to install rdma-core package
-	if isRDMAEnable {
-		isRDMALoaded, err := k.RdmaIsLoaded()
-		if err != nil {
-			log.Log.Error(err, "EnableRDMAOnRHELMachine(): failed to check if RDMA kernel modules are loaded")
-			return false, err
-		}
-
-		// if ib kernel module is not loaded trigger a loading
-		if isRDMALoaded {
-			err = k.TriggerUdevEvent()
-			if err != nil {
-				log.Log.Error(err, "EnableRDMAOnRHELMachine() failed to trigger udev event")
-				return false, err
-			}
-		}
-	}
-
-	return true, nil
-}
-
-func (k *kernel) EnableRDMAOnUbuntuMachine() (bool, error) {
-	log.Log.Info("EnableRDMAOnUbuntuMachine(): enabling RDMA on RHEL machine")
-	isRDMAEnable, err := k.EnableRDMA(internal.UbuntuRDMAConditionFile, internal.UbuntuRDMAServiceName, internal.UbuntuPackageManager)
-	if err != nil {
-		log.Log.Error(err, "EnableRDMAOnUbuntuMachine(): failed to enable RDMA on Ubuntu machine")
-		return false, err
-	}
-
-	// check if we need to install rdma-core package
-	if isRDMAEnable {
-		isRDMALoaded, err := k.RdmaIsLoaded()
-		if err != nil {
-			log.Log.Error(err, "EnableRDMAOnUbuntuMachine(): failed to check if RDMA kernel modules are loaded")
-			return false, err
-		}
-
-		// if ib kernel module is not loaded trigger a loading
-		if isRDMALoaded {
-			err = k.TriggerUdevEvent()
-			if err != nil {
-				log.Log.Error(err, "EnableRDMAOnUbuntuMachine() failed to trigger udev event")
-				return false, err
-			}
-		}
-	}
-
-	return true, nil
-}
-
-func (k *kernel) IsRHELSystem() (bool, error) {
-	log.Log.Info("IsRHELSystem(): checking for RHEL machine")
-	path := internal.RedhatReleaseFile
-	if !vars.UsingSystemdMode {
-		path = filepath.Join(internal.HostPathFromDaemon, path)
-	}
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			log.Log.V(2).Info("IsRHELSystem() not a RHEL machine")
-			return false, nil
-		}
-
-		log.Log.Error(err, "IsRHELSystem() failed to check for os release file", "path", path)
-		return false, err
-	}
-
-	return true, nil
-}
-
-func (k *kernel) IsCoreOS() (bool, error) {
-	log.Log.Info("IsCoreOS(): checking for CoreOS machine")
-	path := internal.RedhatReleaseFile
-	if !vars.UsingSystemdMode {
-		path = filepath.Join(internal.HostPathFromDaemon, path)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		log.Log.Error(err, "IsCoreOS(): failed to read RHEL release file on path", "path", path)
-		return false, err
-	}
-
-	if strings.Contains(string(data), "CoreOS") {
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func (k *kernel) IsUbuntuSystem() (bool, error) {
-	log.Log.Info("IsUbuntuSystem(): checking for Ubuntu machine")
-	path := internal.GenericOSReleaseFile
-	if !vars.UsingSystemdMode {
-		path = filepath.Join(internal.HostPathFromDaemon, path)
-	}
-
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			log.Log.Error(nil, "IsUbuntuSystem() os-release on path doesn't exist", "path", path)
-			return false, err
-		}
-
-		log.Log.Error(err, "IsUbuntuSystem() failed to check for os release file", "path", path)
-		return false, err
-	}
-
-	stdout, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("grep -i --quiet 'ubuntu' %s", path))
-	if err != nil && len(stderr) != 0 {
-		log.Log.Error(err, "IsUbuntuSystem(): failed to check for ubuntu operating system name in os-releasae file", "stderr", stderr)
-		return false, fmt.Errorf(stderr)
-	}
-
-	if len(stdout) > 0 {
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func (k *kernel) RdmaIsLoaded() (bool, error) {
-	log.Log.V(2).Info("RdmaIsLoaded()")
+func (k *kernel) rdmaModulesAreLoaded() (bool, error) {
+	log.Log.V(2).Info("rdmaModulesAreLoaded()")
 	chrootDefinition := utils.GetChrootExtension()
 
 	// check if the driver is already loaded in to the system
-	_, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("grep --quiet '\\(^ib\\|^rdma\\)' <(%s lsmod)", chrootDefinition))
+	_, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("%s lsmod | grep --quiet '\\(^ib\\|^rdma\\)'", chrootDefinition))
 	if err != nil && len(stderr) != 0 {
-		log.Log.Error(err, "RdmaIsLoaded(): fail to check if ib and rdma kernel modules are loaded", "stderr", stderr)
+		log.Log.Error(err, "rdmaModulesAreLoaded(): fail to check if ib and rdma kernel modules are loaded", "stderr", stderr)
 		return false, fmt.Errorf(stderr)
 	}
 
 	if err != nil {
+		log.Log.Error(nil, "rdmaModulesAreLoaded(): RDMA modules are not loaded, you may need to install rdma-core package")
 		return false, nil
 	}
-
+	log.Log.V(2).Info("rdmaModulesAreLoaded(): RDMA modules are loaded")
 	return true, nil
-}
-
-func (k *kernel) EnableRDMA(conditionFilePath, serviceName, packageManager string) (bool, error) {
-	path := conditionFilePath
-	if !vars.UsingSystemdMode {
-		path = filepath.Join(internal.HostPathFromDaemon, path)
-	}
-	log.Log.Info("EnableRDMA(): checking for service file", "path", path)
-
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			log.Log.V(2).Info("EnableRDMA(): RDMA server doesn't exist")
-			err = k.InstallRDMA(packageManager)
-			if err != nil {
-				log.Log.Error(err, "EnableRDMA() failed to install RDMA package")
-				return false, err
-			}
-
-			err = k.TriggerUdevEvent()
-			if err != nil {
-				log.Log.Error(err, "EnableRDMA() failed to trigger udev event")
-				return false, err
-			}
-
-			return false, nil
-		}
-
-		log.Log.Error(err, "EnableRDMA() failed to check for os release file", "path", path)
-		return false, err
-	}
-
-	log.Log.Info("EnableRDMA(): service installed", "name", serviceName)
-	return true, nil
-}
-
-func (k *kernel) InstallRDMA(packageManager string) error {
-	log.Log.Info("InstallRDMA(): installing RDMA")
-	chrootDefinition := utils.GetChrootExtension()
-
-	stdout, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("%s %s install -y rdma-core", chrootDefinition, packageManager))
-	if err != nil && len(stderr) != 0 {
-		log.Log.Error(err, "InstallRDMA(): failed to install RDMA package", "stdout", stdout, "stderr", stderr)
-		return err
-	}
-
-	return nil
-}
-
-func (k *kernel) TriggerUdevEvent() error {
-	log.Log.Info("TriggerUdevEvent(): installing RDMA")
-
-	err := k.ReloadDriver("mlx4_en")
-	if err != nil {
-		return err
-	}
-
-	err = k.ReloadDriver("mlx5_core")
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (k *kernel) ReloadDriver(driverName string) error {
-	log.Log.Info("ReloadDriver(): reload driver", "name", driverName)
-	chrootDefinition := utils.GetChrootExtension()
-
-	_, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("%s modprobe -r %s && %s modprobe %s", chrootDefinition, driverName, chrootDefinition, driverName))
-	if err != nil && len(stderr) != 0 {
-		log.Log.Error(err, "ReloadDriver(): failed to reload kernel module",
-			"name", driverName, "stderr", stderr)
-		return err
-	}
-
-	return nil
-}
-
-func (k *kernel) GetOSPrettyName() (string, error) {
-	path := internal.GenericOSReleaseFile
-	if !vars.UsingSystemdMode {
-		path = filepath.Join(internal.HostPathFromDaemon, path)
-	}
-
-	log.Log.Info("GetOSPrettyName(): getting os name from os-release file")
-
-	stdout, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("cat %s | grep PRETTY_NAME | cut -c 13-", path))
-	if err != nil && len(stderr) != 0 {
-		log.Log.Error(err, "GetOSPrettyName(): failed to check for operating system name in os-release file", "stderr", stderr)
-		return "", fmt.Errorf(stderr)
-	}
-
-	if len(stdout) > 0 {
-		return stdout, nil
-	}
-
-	return "", fmt.Errorf("failed to find pretty operating system name")
 }
 
 // IsKernelLockdownMode returns true when kernel lockdown mode is enabled
