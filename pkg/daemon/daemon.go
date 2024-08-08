@@ -129,7 +129,7 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 
 	if !vars.UsingSystemdMode {
 		log.Log.V(0).Info("Run(): daemon running in daemon mode")
-		dn.HostHelpers.TryEnableRdma()
+		dn.HostHelpers.CheckRDMAEnabled()
 		dn.HostHelpers.TryEnableTun()
 		dn.HostHelpers.TryEnableVhostNet()
 		err := systemd.CleanSriovFilesFromHost(vars.ClusterType == consts.ClusterTypeOpenshift)
