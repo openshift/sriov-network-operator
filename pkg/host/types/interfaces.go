@@ -12,12 +12,8 @@ type KernelInterface interface {
 	TryEnableTun()
 	// TryEnableVhostNet load the vhost-net kernel module
 	TryEnableVhostNet()
-	// TryEnableRdma tries to enable RDMA on the machine base on the operating system
-	// if the package doesn't exist it will also will try to install it
-	// supported operating systems are RHEL RHCOS and ubuntu
-	TryEnableRdma() (bool, error)
-	// TriggerUdevEvent triggers a udev event
-	TriggerUdevEvent() error
+	// CheckRDMAEnabled returns true if RDMA modules are loaded on host
+	CheckRDMAEnabled() (bool, error)
 	// GetCurrentKernelArgs reads the /proc/cmdline to check the current kernel arguments
 	GetCurrentKernelArgs() (string, error)
 	// IsKernelArgsSet check is the requested kernel arguments are set
@@ -52,26 +48,8 @@ type KernelInterface interface {
 	LoadKernelModule(name string, args ...string) error
 	// IsKernelModuleLoaded returns try if the requested kernel module is loaded
 	IsKernelModuleLoaded(name string) (bool, error)
-	// ReloadDriver reloads a requested driver
-	ReloadDriver(driver string) error
 	// IsKernelLockdownMode returns true if the kernel is in lockdown mode
 	IsKernelLockdownMode() bool
-	// IsRHELSystem returns try if the system is a RHEL base
-	IsRHELSystem() (bool, error)
-	// IsUbuntuSystem returns try if the system is an ubuntu base
-	IsUbuntuSystem() (bool, error)
-	// IsCoreOS returns true if the system is a CoreOS or RHCOS base
-	IsCoreOS() (bool, error)
-	// RdmaIsLoaded returns try if RDMA kernel modules are loaded
-	RdmaIsLoaded() (bool, error)
-	// EnableRDMA enable RDMA on the system
-	EnableRDMA(conditionFilePath, serviceName, packageManager string) (bool, error)
-	// InstallRDMA install RDMA packages on the system
-	InstallRDMA(packageManager string) error
-	// EnableRDMAOnRHELMachine enable RDMA on a RHEL base system
-	EnableRDMAOnRHELMachine() (bool, error)
-	// GetOSPrettyName returns OS name
-	GetOSPrettyName() (string, error)
 }
 
 type NetworkInterface interface {
