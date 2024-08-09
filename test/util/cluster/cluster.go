@@ -153,6 +153,34 @@ func (n *EnabledNodes) FindSriovDevices(node string) ([]*sriovv1.InterfaceExt, e
 	return filteredDevices, nil
 }
 
+// FindSriovDevicesAndNode retrieves the node with the most number of SRIOV devices after filtering by `SRIOV_NODE_AND_DEVICE_NAME_FILTER` environment variable.
+func (n *EnabledNodes) FindSriovDevicesAndNode() (string, []*sriovv1.InterfaceExt, error ){
+	errs := []error{}
+
+	retNode := ""
+	retDevices := []*sriovv1.InterfaceExt{}
+
+
+	for _, node := range n.Nodes {
+		devices, err := n.FindSriovDevices(node)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		if len(devices) > len(retDevices) {
+			retNode = node
+			retDevices = devices
+		}	
+	}
+
+	if len(retDevices) == 0 {
+		return "", nil, fmt.Errorf("can't find any SR-IOV devices in cluster's nodes: %w", errors.Join(errs...))
+	}
+
+	return retNode, retDevices, nil
+}
+
 // FindSriovDevicesIgnoreFilters retrieves all valid sriov devices for the given node.
 func (n *EnabledNodes) FindSriovDevicesIgnoreFilters(node string) ([]*sriovv1.InterfaceExt, error) {
 	devices := []*sriovv1.InterfaceExt{}
