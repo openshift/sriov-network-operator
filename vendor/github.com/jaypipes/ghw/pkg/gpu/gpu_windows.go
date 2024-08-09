@@ -15,14 +15,13 @@ import (
 	"github.com/jaypipes/ghw/pkg/util"
 )
 
-const wqlVideoController = "SELECT Caption, CreationClassName, Description, DeviceID, DriverVersion, Name, PNPDeviceID, SystemCreationClassName, SystemName, VideoArchitecture, VideoMemoryType, VideoModeDescription, VideoProcessor FROM Win32_VideoController"
+const wqlVideoController = "SELECT Caption, CreationClassName, Description, DeviceID, Name, PNPDeviceID, SystemCreationClassName, SystemName, VideoArchitecture, VideoMemoryType, VideoModeDescription, VideoProcessor FROM Win32_VideoController"
 
 type win32VideoController struct {
 	Caption                 string
 	CreationClassName       string
 	Description             string
 	DeviceID                string
-	DriverVersion           string
 	Name                    string
 	PNPDeviceID             string
 	SystemCreationClassName string
@@ -76,7 +75,6 @@ func (i *Info) load() error {
 			Index:      0,
 			DeviceInfo: GetDevice(description.PNPDeviceID, win32PnPDescriptions),
 		}
-		card.DeviceInfo.Driver = description.DriverVersion
 		cards = append(cards, card)
 	}
 	i.GraphicsCards = cards
