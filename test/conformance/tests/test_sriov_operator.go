@@ -2011,7 +2011,7 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 		})))
 }
 
-func runCommandOnConfigDaemon(nodeName string, command ...string) (string, string, error) {
+func getConfigDaemonPod(nodeName string) *corev1.Pod {
 	pods := &corev1.PodList{}
 	label, err := labels.Parse("app=sriov-network-config-daemon")
 	Expect(err).ToNot(HaveOccurred())
@@ -2020,8 +2020,13 @@ func runCommandOnConfigDaemon(nodeName string, command ...string) (string, strin
 	err = clients.List(context.Background(), pods, &runtimeclient.ListOptions{Namespace: operatorNamespace, LabelSelector: label, FieldSelector: field})
 	Expect(err).ToNot(HaveOccurred())
 	Expect(len(pods.Items)).To(Equal(1))
+	return &pods.Items[0]
+}
 
-	output, errOutput, err := pod.ExecCommand(clients, &pods.Items[0], command...)
+func runCommandOnConfigDaemon(nodeName string, command ...string) (string, string, error) {
+	
+
+	output, errOutput, err := pod.ExecCommand(clients, getConfigDaemonPod(nodeName), command...)
 	return output, errOutput, err
 }
 

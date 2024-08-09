@@ -48,13 +48,14 @@ type DriverState struct {
 type DriverStateMapType map[uint]*DriverState
 
 type GenericPlugin struct {
-	PluginName          string
-	SpecVersion         string
-	DesireState         *sriovnetworkv1.SriovNetworkNodeState
-	DriverStateMap      DriverStateMapType
-	DesiredKernelArgs   map[string]bool
-	helpers             helper.HostHelpersInterface
-	skipVFConfiguration bool
+	PluginName              string
+	SpecVersion             string
+	DesireState             *sriovnetworkv1.SriovNetworkNodeState
+	DriverStateMap          DriverStateMapType
+	DesiredKernelArgs       map[string]bool
+	helpers                 helper.HostHelpersInterface
+	skipVFConfiguration     bool
+	skipBridgeConfiguration bool
 }
 
 type Option = func(c *genericPluginOptions)
@@ -68,8 +69,16 @@ func WithSkipVFConfiguration() Option {
 	}
 }
 
+// WithSkipBridgeConfiguration configures generic_plugin to skip configuration of the managed bridges
+func WithSkipBridgeConfiguration() Option {
+	return func(c *genericPluginOptions) {
+		c.skipBridgeConfiguration = true
+	}
+}
+
 type genericPluginOptions struct {
-	skipVFConfiguration bool
+	skipVFConfiguration     bool
+	skipBridgeConfiguration bool
 }
 
 const scriptsPath = "bindata/scripts/enable-kargs.sh"
@@ -103,12 +112,13 @@ func NewGenericPlugin(helpers helper.HostHelpersInterface, options ...Option) (p
 		DriverLoaded:   false,
 	}
 	return &GenericPlugin{
-		PluginName:          PluginName,
-		SpecVersion:         "1.0",
-		DriverStateMap:      driverStateMap,
-		DesiredKernelArgs:   make(map[string]bool),
-		helpers:             helpers,
-		skipVFConfiguration: cfg.skipVFConfiguration,
+		PluginName:              PluginName,
+		SpecVersion:             "1.0",
+		DriverStateMap:          driverStateMap,
+		DesiredKernelArgs:       make(map[string]bool),
+		helpers:                 helpers,
+		skipVFConfiguration:     cfg.skipVFConfiguration,
+		skipBridgeConfiguration: cfg.skipBridgeConfiguration,
 	}, nil
 }
 
@@ -127,7 +137,7 @@ func (p *GenericPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeSt
 	log.Log.Info("generic plugin OnNodeStateChange()")
 	p.DesireState = new
 
-	needDrain = p.needDrainNode(new.Spec.Interfaces, new.Status.Interfaces)
+	needDrain = p.needDrainNode(new.Spec, new.Status)
 	needReboot, err = p.needRebootNode(new)
 	if err != nil {
 		return needDrain, needReboot, err
@@ -158,6 +168,13 @@ func (p *GenericPlugin) CheckStatusChanges(current *sriovnetworkv1.SriovNetworkN
 		}
 		if !found {
 			log.Log.Info("CheckStatusChanges(): no status found for interface", "address", iface.PciAddress)
+		}
+	}
+
+	if p.shouldConfigureBridges() {
+		if sriovnetworkv1.NeedToUpdateBridges(&current.Spec.Bridges, &current.Status.Bridges) {
+			log.Log.Info("CheckStatusChanges(): bridge configuration needs to be updated")
+			return true, nil
 		}
 	}
 
@@ -213,6 +230,12 @@ func (p *GenericPlugin) Apply() error {
 			p.addToDesiredKernelArgs(consts.KernelArgPciRealloc)
 		}
 		return err
+	}
+
+	if p.shouldConfigureBridges() {
+		if err := p.helpers.ConfigureBridges(p.DesireState.Spec.Bridges, p.DesireState.Status.Bridges); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -323,13 +346,13 @@ func (p *GenericPlugin) syncDesiredKernelArgs(kargs []string) (bool, error) {
 	return needReboot, nil
 }
 
-func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current sriovnetworkv1.InterfaceExts) (needDrain bool) {
+func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.SriovNetworkNodeStateSpec, current sriovnetworkv1.SriovNetworkNodeStateStatus) (needDrain bool) {
 	log.Log.V(2).Info("generic plugin needDrainNode()", "current", current, "desired", desired)
 
 	needDrain = false
-	for _, ifaceStatus := range current {
+	for _, ifaceStatus := range current.Interfaces {
 		configured := false
-		for _, iface := range desired {
+		for _, iface := range desired.Interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
 				if ifaceStatus.NumVfs == 0 {
@@ -376,7 +399,17 @@ func (p *GenericPlugin) needDrainNode(desired sriovnetworkv1.Interfaces, current
 			return
 		}
 	}
+	if p.shouldConfigureBridges() {
+		if sriovnetworkv1.NeedToUpdateBridges(&desired.Bridges, &current.Bridges) {
+			log.Log.V(2).Info("generic plugin needDrainNode(): need drain since bridge configuration needs to be updated")
+			needDrain = true
+		}
+	}
 	return
+}
+
+func (p *GenericPlugin) shouldConfigureBridges() bool {
+	return vars.ManageSoftwareBridges && !p.skipBridgeConfiguration
 }
 
 func (p *GenericPlugin) addVfioDesiredKernelArg(state *sriovnetworkv1.SriovNetworkNodeState) {

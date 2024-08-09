@@ -38,7 +38,6 @@ func restoreOrigFuncs() {
 
 func getTestSriovInterfaceConfig(platform int) []byte {
 	return []byte(fmt.Sprintf(`spec:
-    dpconfigversion: ""
     interfaces:
         - pciaddress: 0000:d8:00.0
           numvfs: 4
@@ -57,6 +56,7 @@ func getTestSriovInterfaceConfig(platform int) []byte {
           externallymanaged: false
 unsupportedNics: false
 platformType: %d
+manageSoftwareBridges: true
 `, platform))
 }
 
@@ -239,6 +239,7 @@ var _ = Describe("Service", func() {
 		hostHelpers.EXPECT().DiscoverSriovDevices(hostHelpers).Return([]sriovnetworkv1.InterfaceExt{{
 			Name: "enp216s0f0np0",
 		}}, nil)
+		hostHelpers.EXPECT().DiscoverBridges().Return(sriovnetworkv1.Bridges{}, nil)
 		genericPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil)
 		genericPlugin.EXPECT().Apply().Return(nil)
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).NotTo(HaveOccurred())
