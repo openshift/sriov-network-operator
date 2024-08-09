@@ -25,6 +25,8 @@ spec:
         component: network
         type: infra
         openshift.io/component: network
+      annotations:
+        openshift.io/required-scc: restricted-v2
     spec:
       securityContext:
         runAsNonRoot: true
