@@ -139,6 +139,9 @@ const (
 	// ManageSoftwareBridgesFeatureGate: enables management of software bridges by the operator
 	ManageSoftwareBridgesFeatureGate = "manageSoftwareBridges"
 
+	// MellanoxFirmwareResetFeatureGate: enables the firmware reset via mstfwreset before a reboot
+	MellanoxFirmwareResetFeatureGate = "mellanoxFirmwareReset"
+
 	// The path to the file on the host filesystem that contains the IB GUID distribution for IB VFs
 	InfinibandGUIDConfigFilePath = SriovConfBasePath + "/infiniband/guids"
 )
