@@ -327,19 +327,37 @@ spec:
       node-role.kubernetes.io/worker: ""
 ```
 
-### Resource Injector Policy
+## Feature Gates
 
-By default, the Resource injector webhook has a failed policy of ignored, this was implemented to not block pod creation
-in case the webhook is not available.
+Feature gates are used to enable or disable specific features in the operator.
 
-with a feature introduced in Kubernetes 1.28(Beta) called [MatchConditions](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#matching-requests-matchconditions)
-we can move the webhook failed policy to be Fail. In this case the operator configured the Mutating webhook for the resource
-injector only on pods with the secondary network annotation of `k8s.v1.cni.cncf.io/networks`.
-It's possible to enable the feature with a FeatureGate via the SriovOperatorConfig object
+> **NOTE**: As features mature and graduate to stable status, default settings may change, and feature gates might be removed in future releases. Keep this in mind when configuring feature gates and ensure your environment is compatible with any updates.
 
-> **NOTE**: the feature is disabled by default
+### Available Feature Gates
 
-**Example**:
+1. **Parallel NIC Configuration** (`parallelNicConfig`)
+  - **Description:** Allows the configuration of NICs in parallel, which can potentially reduce the time required for network setup.
+  - **Default:** Disabled
+
+2. **Resource Injector Match Condition** (`resourceInjectorMatchCondition`)
+  - **Description:** Switches the resource injector's webhook failure policy from "Ignore" to "Fail" by utilizing the `MatchConditions` feature introduced in Kubernetes 1.28. This ensures the webhook only targets pods with the `k8s.v1.cni.cncf.io/networks` annotation, improving reliability without affecting other pods.
+  - **Default:** Disabled
+
+3. **Metrics Exporter** (`metricsExporter`)
+  - **Description:** Enables the metrics exporter on the same node where the config-daemon is running. This helps in collecting and exporting metrics related to SR-IOV network devices.
+  - **Default:** Disabled
+
+4. **Manage Software Bridges** (`manageSoftwareBridges`)
+  - **Description:** Allows the operator to manage software bridges. This feature gate is useful for environments where bridge management is required.
+  - **Default:** Disabled
+
+5. **Mellanox Firmware Reset** (`mellanoxFirmwareReset`)
+  - **Description:** Enables the firmware reset via `mstfwreset` before a system reboot. This feature is specific to Mellanox network devices and is used to ensure that the firmware is properly reset during system maintenance.
+  - **Default:** Disabled
+
+### Enabling Feature Gates
+
+To enable a feature gate, add it to your configuration file or command line with the desired state. For example, to enable the `resourceInjectorMatchCondition` feature gate, you would specify:
 
 ```yaml
 apiVersion: sriovnetwork.openshift.io/v1
@@ -348,7 +366,6 @@ metadata:
   name: default
   namespace: sriov-network-operator
 spec:
-  ...
   featureGates:
     resourceInjectorMatchCondition: true
   ...
