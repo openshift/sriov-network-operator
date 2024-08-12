@@ -1199,7 +1199,7 @@ var _ = Describe("[sriov] operator", func() {
 				It("Should be possible to create a vfio-pci resource and allocate to a pod", func() {
 					By("creating a vfio-pci node policy")
 					resourceName := "testvfio"
-					_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name, vfioNode, 5, resourceName, "vfio-pci")
+					vfioPolicy, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name, vfioNode, 5, resourceName, "vfio-pci")
 					Expect(err).ToNot(HaveOccurred())
 
 					By("waiting for the node state to be updated")
@@ -1225,6 +1225,11 @@ var _ = Describe("[sriov] operator", func() {
 						allocatable, _ := resNum.AsInt64()
 						return allocatable
 					}, 10*time.Minute, time.Second).Should(Equal(int64(5)))
+
+					By("validate the pf info exist on host")
+					output, _, err := runCommandOnConfigDaemon(vfioNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
+					Expect(err).ToNot(HaveOccurred())
+					Expect(output).ToNot(Equal("1"))
 
 					By("Creating sriov network to use the vfio device")
 					sriovNetwork := &sriovv1.SriovNetwork{
@@ -1255,6 +1260,25 @@ var _ = Describe("[sriov] operator", func() {
 					networkStatusJSON, exist := firstPod.Annotations["k8s.v1.cni.cncf.io/network-status"]
 					Expect(exist).To(BeTrue())
 					Expect(networkStatusJSON).To(ContainSubstring(fmt.Sprintf("\"mtu\": %d", vfioNic.Mtu)))
+
+					By("deleting the policy")
+					err = clients.Delete(context.Background(), vfioPolicy, &runtimeclient.DeleteOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					WaitForSRIOVStable()
+
+					Eventually(func() int64 {
+						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
+						Expect(err).ToNot(HaveOccurred())
+						resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
+						allocatable, _ := resNum.AsInt64()
+						return allocatable
+					}, 2*time.Minute, time.Second).Should(Equal(int64(0)))
+
+					By("validate the pf info doesn't exist on the host anymore")
+					output, _, err = runCommandOnConfigDaemon(vfioNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
+					Expect(err).ToNot(HaveOccurred())
+					Expect(output).ToNot(Equal("0"))
+
 				})
 			})
 
@@ -2173,15 +2197,19 @@ var _ = Describe("[sriov] operator", func() {
 		Context("ExternallyManaged Validation", func() {
 			numVfs := 5
 			var node string
-			var nic *sriovv1.InterfaceExt
+			var nic sriovv1.InterfaceExt
 			externallyManage := func(policy *sriovv1.SriovNetworkNodePolicy) {
 				policy.Spec.ExternallyManaged = true
 			}
 
 			execute.BeforeAll(func() {
-				var err error
-				node, nic, err = sriovInfos.FindOneSriovNodeAndDevice()
-				Expect(err).ToNot(HaveOccurred())
+				node, nic = sriovInfos.FindOneVfioSriovDevice()
+			})
+
+			BeforeEach(func() {
+				if node == "" {
+					Skip("not suitable device found for the test")
+				}
 
 				By("Using device " + nic.Name + " on node " + node)
 			})
@@ -2242,6 +2270,11 @@ var _ = Describe("[sriov] operator", func() {
 					return allocatable
 				}, 3*time.Minute, time.Second).Should(Equal(int64(numVfs)))
 
+				By("validate the pf info exist on host")
+				output, _, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(output).ToNot(Equal("1"))
+
 				By("deleting the policy")
 				err = clients.Delete(context.Background(), sriovPolicy, &runtimeclient.DeleteOptions{})
 				Expect(err).ToNot(HaveOccurred())
@@ -2256,10 +2289,15 @@ var _ = Describe("[sriov] operator", func() {
 				}, 2*time.Minute, time.Second).Should(Equal(int64(0)))
 
 				By("checking the virtual functions are still on the host")
-				output, errOutput, err := runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("cat /host/sys/class/net/%s/device/sriov_numvfs", nic.Name))
+				output, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("cat /host/sys/class/net/%s/device/sriov_numvfs", nic.Name))
 				Expect(err).ToNot(HaveOccurred())
 				Expect(errOutput).To(Equal(""))
 				Expect(output).To(ContainSubstring("5"))
+
+				By("validate the pf info doesn't exist on the host anymore")
+				output, _, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(output).ToNot(Equal("0"))
 
 				By("cleaning the manual sriov created")
 				_, errOutput, err = runCommandOnConfigDaemon(node, "/bin/bash", "-c", fmt.Sprintf("echo 0 > /host/sys/class/net/%s/device/sriov_numvfs", nic.Name))
