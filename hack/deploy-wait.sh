@@ -16,6 +16,10 @@ do
         sleep $sleep_time
     fi
     (( ATTEMPTS++ ))
+
+    if [[ $ATTEMPTS -eq 25 ]]; then 
+       oc delete pods -n openshift-sriov-network-operator --all
+    fi
 done
 
 if ! $ready; then 
