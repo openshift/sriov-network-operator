@@ -20,6 +20,7 @@ import (
 type ManagerInterface interface {
 	ClearPCIAddressFolder() error
 	SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) error
+	RemovePfAppliedStatus(pciAddress string) error
 	LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interface, bool, error)
 
 	GetCheckPointNodeState() (*sriovnetworkv1.SriovNetworkNodeState, error)
@@ -109,6 +110,17 @@ func (s *manager) SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) erro
 	pathFile := filepath.Join(hostExtension, consts.PfAppliedConfig, PfInfo.PciAddress)
 	err = os.WriteFile(pathFile, data, 0644)
 	return err
+}
+
+func (s *manager) RemovePfAppliedStatus(pciAddress string) error {
+	hostExtension := utils.GetHostExtension()
+	pathFile := filepath.Join(hostExtension, consts.PfAppliedConfig, pciAddress)
+	err := os.RemoveAll(pathFile)
+	if err != nil {
+		log.Log.Error(err, "failed to remove PF status", "pathFile", pathFile)
+		return err
+	}
+	return nil
 }
 
 // LoadPfsStatus convert the /etc/sriov-operator/pci/<pci-address> json to pfstatus
