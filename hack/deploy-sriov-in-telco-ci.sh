@@ -3,6 +3,7 @@ set -xeo pipefail
 
 # load variables
 PR=${PR:-""}
+BRANCH=${BRANCH:-"master"}
 OPERATOR_NAMESPACE="openshift-sriov-network-operator"
 BUILD_POD_NAMESPACE="openshift-config"
 
@@ -79,6 +80,7 @@ PULL_SECRET="/var/run/secrets/openshift.io/pull/.dockerconfigjson"
 
 REPO=${REPO:-"https://github.com/openshift/sriov-network-operator.git"}
 BRANCH=${BRANCH:-"master"}
+PR=${PR:-""}
 
 OPERATOR_NAMESPACE="openshift-sriov-network-operator"
 BUILD_POD_NAMESPACE="openshift-config"
@@ -105,6 +107,7 @@ if [ -n "$PR" ]; then
   echo "cloning sriov repo from PR ${PR}"
   git fetch origin pull/$PR/head:pr
   git checkout pr
+  git rebase $BRANCH
 fi
 
 mkdir bin || true
@@ -178,6 +181,8 @@ spec:
       env:
       - name: PR
         value: "${PR}"
+      - name: BRANCH
+        value: "${BRANCH}"
       command:
       - /bin/bash
       - -c
@@ -226,6 +231,9 @@ do
     ATTEMPTS=$((ATTEMPTS+1))
 done
 
+# print pod yaml
+oc -n ${BUILD_POD_NAMESPACE} get po podman -oyaml
+# run logs
 oc -n ${BUILD_POD_NAMESPACE} logs -f podman
 
 # if the pod didn't completed
