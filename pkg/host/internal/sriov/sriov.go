@@ -986,6 +986,68 @@ func (s *sriov) createVFs(iface *sriovnetworkv1.Interface) error {
 	return s.setEswitchModeAndNumVFs(iface.PciAddress, expectedEswitchMode, iface.NumVfs)
 }
 
+func (s *sriov) setEswitchModeAndNumVFs(pciAddr string, desiredEswitchMode string, numVFs int) error {
+	pfDriverName, err := s.dputilsLib.GetDriverName(pciAddr)
+	if err != nil {
+		return err
+	}
+
+	type setEswitchModeAndNumVFsFn func (string, string, int) error
+
+	var setEswitchModeAndNumVFsByDriverName map[string]setEswitchModeAndNumVFsFn = map[string]setEswitchModeAndNumVFsFn{
+		"ice": s.setEswitchModeAndNumVFsIce,
+		"mlx5_core": s.setEswitchModeAndNumVFsMlx,
+	}
+	
+	fn, ok := setEswitchModeAndNumVFsByDriverName[pfDriverName]
+	if !ok {
+		// Fallback to mlx5 driver
+		fn = s.setEswitchModeAndNumVFsMlx
+	}
+
+	return fn(pciAddr, desiredEswitchMode, numVFs)
+}
+
+func (s *sriov) setEswitchModeAndNumVFsMlx(pciAddr string, desiredEswitchMode string, numVFs int) error {
+	log.Log.V(2).Info("setEswitchModeAndNumVFsMlx(): configure VFs for device",
+		"device", pciAddr, "count", numVFs, "mode", desiredEswitchMode)
+
+	// always switch NIC to the legacy mode before creating VFs. This is required because some drivers
+	// may not support VF creation in the switchdev mode
+	if s.GetNicSriovMode(pciAddr) != sriovnetworkv1.ESwithModeLegacy {
+		if err := s.setEswitchMode(pciAddr, sriovnetworkv1.ESwithModeLegacy); err != nil {
+			return err
+		}
+	}
+
+	if err := s.SetSriovNumVfs(pciAddr, numVFs); err != nil {
+		return err
+	}
+
+	if desiredEswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
+		return s.setEswitchMode(pciAddr, sriovnetworkv1.ESwithModeSwitchDev)
+	}
+
+	return nil
+}
+
+func (s *sriov) setEswitchModeAndNumVFsIce(pciAddr string, desiredEswitchMode string, numVFs int) error {
+	log.Log.V(2).Info("setEswitchModeAndNumVFsIce(): configure VFs for device",
+		"device", pciAddr, "count", numVFs, "mode", desiredEswitchMode)
+	
+	if desiredEswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
+		if err := s.setEswitchMode(pciAddr, sriovnetworkv1.ESwithModeSwitchDev); err != nil {
+			return err
+		}
+	}
+
+	if err := s.SetSriovNumVfs(pciAddr, numVFs); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *sriov) setEswitchMode(pciAddr, eswitchMode string) error {
 	log.Log.V(2).Info("setEswitchMode(): set eswitch mode", "device", pciAddr, "mode", eswitchMode)
 	if err := s.unbindAllVFsOnPF(pciAddr); err != nil {
@@ -996,27 +1058,6 @@ func (s *sriov) setEswitchMode(pciAddr, eswitchMode string) error {
 		err = fmt.Errorf("failed to switch NIC to SRIOV %s mode: %v", eswitchMode, err)
 		log.Log.Error(err, "setEswitchMode(): failed to set mode", "device", pciAddr, "mode", eswitchMode)
 		return err
-	}
-	return nil
-}
-
-func (s *sriov) setEswitchModeAndNumVFs(pciAddr string, desiredEswitchMode string, numVFs int) error {
-	log.Log.V(2).Info("setEswitchModeAndNumVFs(): configure VFs for device",
-		"device", pciAddr, "count", numVFs, "mode", desiredEswitchMode)
-
-	// always switch NIC to the legacy mode before creating VFs. This is required because some drivers
-	// may not support VF creation in the switchdev mode
-	if s.GetNicSriovMode(pciAddr) != sriovnetworkv1.ESwithModeLegacy {
-		if err := s.setEswitchMode(pciAddr, sriovnetworkv1.ESwithModeLegacy); err != nil {
-			return err
-		}
-	}
-	if err := s.SetSriovNumVfs(pciAddr, numVFs); err != nil {
-		return err
-	}
-
-	if desiredEswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-		return s.setEswitchMode(pciAddr, sriovnetworkv1.ESwithModeSwitchDev)
 	}
 	return nil
 }
@@ -1035,3 +1076,5 @@ func (s *sriov) unbindAllVFsOnPF(addr string) error {
 	}
 	return nil
 }
+
+
