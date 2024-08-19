@@ -15,6 +15,13 @@ root="$(readlink --canonicalize "$here/..")"
 NUM_OF_WORKERS=${NUM_OF_WORKERS:-2}
 total_number_of_nodes=$((1 + NUM_OF_WORKERS))
 
+## Global configuration
+export NAMESPACE="sriov-network-operator"
+export OPERATOR_NAMESPACE="sriov-network-operator"
+export SKIP_VAR_SET=""
+export OPERATOR_EXEC=kubectl
+export CLUSTER_HAS_EMULATED_PF=TRUE
+
 if [ "$NUM_OF_WORKERS" -lt 2 ]; then
     echo "Min number of workers is 2"
     exit 1
@@ -364,36 +371,8 @@ do
     ATTEMPTS=$((ATTEMPTS+1))
 done
 
-
-source hack/env.sh
-
-export ADMISSION_CONTROLLERS_ENABLED=true
-export ADMISSION_CONTROLLERS_CERTIFICATES_CERT_MANAGER_ENABLED=true
-export SKIP_VAR_SET=""
-export NAMESPACE="sriov-network-operator"
-export OPERATOR_NAMESPACE="sriov-network-operator"
-export CNI_BIN_PATH=/opt/cni/bin
-export OPERATOR_EXEC=kubectl
-export CLUSTER_HAS_EMULATED_PF=TRUE
-
-
-HELM_VALUES_OPTS="\
-  --set images.operator=${SRIOV_NETWORK_OPERATOR_IMAGE} \
-  --set images.sriovConfigDaemon=${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE} \
-  --set images.sriovCni=${SRIOV_CNI_IMAGE} \
-  --set images.sriovDevicePlugin=${SRIOV_DEVICE_PLUGIN_IMAGE} \
-  --set images.resourcesInjector=${NETWORK_RESOURCES_INJECTOR_IMAGE} \
-  --set images.webhook=${SRIOV_NETWORK_WEBHOOK_IMAGE} \
-  --set operator.admissionControllers.enabled=${ADMISSION_CONTROLLERS_ENABLED} \
-  --set operator.admissionControllers.certificates.certManager.enabled=${ADMISSION_CONTROLLERS_CERTIFICATES_CERT_MANAGER_ENABLED} \
-  --set sriovOperatorConfig.deploy=true"
-
-PATH=$PATH:${root}/bin
-make helm
-helm  install -n ${NAMESPACE} --create-namespace \
-  $HELM_VALUES_OPTS \
-  --wait sriov-network-operator ./deployment/sriov-network-operator-chart
-
+# Deploy the sriov operator via helm
+hack/deploy-operator-helm.sh
 
 echo "## create certificates for webhook"
 cat <<EOF | kubectl apply -f -
