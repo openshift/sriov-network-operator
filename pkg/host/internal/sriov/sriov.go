@@ -898,9 +898,14 @@ func (s *sriov) SetNicSriovMode(pciAddress string, mode string) error {
 
 	dev, err := s.netlinkLib.DevLinkGetDeviceByName("pci", pciAddress)
 	if err != nil {
-		return err
+		return fmt.Errorf("can't get devlink device [%s] to set eSwitch to [%s]: %w", pciAddress, mode, err)
 	}
-	return s.netlinkLib.DevLinkSetEswitchMode(dev, mode)
+
+	err = s.netlinkLib.DevLinkSetEswitchMode(dev, mode)
+	if err != nil {
+		return fmt.Errorf("can't set eSwitch mode to [%s] on device [%s]: %w", mode, pciAddress, err)
+	}
+	return nil
 }
 
 func (s *sriov) GetLinkType(name string) string {
@@ -989,22 +994,41 @@ func (s *sriov) createVFs(iface *sriovnetworkv1.Interface) error {
 	return s.setEswitchModeAndNumVFs(iface.PciAddress, expectedEswitchMode, iface.NumVfs)
 }
 
-func (s *sriov) setEswitchMode(pciAddr, eswitchMode string) error {
-	log.Log.V(2).Info("setEswitchMode(): set eswitch mode", "device", pciAddr, "mode", eswitchMode)
-	if err := s.unbindAllVFsOnPF(pciAddr); err != nil {
-		log.Log.Error(err, "setEswitchMode(): failed to unbind VFs", "device", pciAddr, "mode", eswitchMode)
-		return err
-	}
-	if err := s.SetNicSriovMode(pciAddr, eswitchMode); err != nil {
-		err = fmt.Errorf("failed to switch NIC to SRIOV %s mode: %v", eswitchMode, err)
-		log.Log.Error(err, "setEswitchMode(): failed to set mode", "device", pciAddr, "mode", eswitchMode)
-		return err
-	}
-	return nil
-}
+type setEswitchModeAndNumVFsFn func(string, string, int) error
 
 func (s *sriov) setEswitchModeAndNumVFs(pciAddr string, desiredEswitchMode string, numVFs int) error {
+	pfDriverName, err := s.dputilsLib.GetDriverName(pciAddr)
+	if err != nil {
+		return err
+	}
+
 	log.Log.V(2).Info("setEswitchModeAndNumVFs(): configure VFs for device",
+		"device", pciAddr, "count", numVFs, "mode", desiredEswitchMode, "driver", pfDriverName)
+
+	setEswitchModeAndNumVFsByDriverName := map[string]setEswitchModeAndNumVFsFn{
+		"ice":       s.setEswitchModeAndNumVFsIce,
+		"mlx5_core": s.setEswitchModeAndNumVFsMlx,
+	}
+
+	fn, ok := setEswitchModeAndNumVFsByDriverName[pfDriverName]
+	if !ok {
+		log.Log.V(2).Info("setEswitchModeAndNumVFs(): driver not found in the support list. Using fallback implementation",
+			"device", pciAddr, "driver", pfDriverName)
+
+		// Fallback to mlx5 driver
+		fn = s.setEswitchModeAndNumVFsMlx
+	}
+
+	return fn(pciAddr, desiredEswitchMode, numVFs)
+}
+
+// setEswitchModeAndNumVFsMlx configures PF eSwitch and sriov_numvfs in the following order:
+// a. set eSwitchMode to legacy
+// b. set the desired number of Virtual Functions
+// c. unbind driver of all VFs
+// d. set eSwitchMode to `switchdev` if requested
+func (s *sriov) setEswitchModeAndNumVFsMlx(pciAddr string, desiredEswitchMode string, numVFs int) error {
+	log.Log.V(2).Info("setEswitchModeAndNumVFsMlx(): configure VFs for device",
 		"device", pciAddr, "count", numVFs, "mode", desiredEswitchMode)
 
 	// always switch NIC to the legacy mode before creating VFs. This is required because some drivers
@@ -1015,7 +1039,11 @@ func (s *sriov) setEswitchModeAndNumVFs(pciAddr string, desiredEswitchMode strin
 		if err := s.detachPFFromBridge(pciAddr); err != nil {
 			return err
 		}
-		if err := s.setEswitchMode(pciAddr, sriovnetworkv1.ESwithModeLegacy); err != nil {
+		if err := s.unbindAllVFsOnPF(pciAddr); err != nil {
+			log.Log.Error(err, "setEswitchModeAndNumVFsMlx(): failed to unbind VFs", "device", pciAddr, "mode", desiredEswitchMode)
+			return err
+		}
+		if err := s.SetNicSriovMode(pciAddr, sriovnetworkv1.ESwithModeLegacy); err != nil {
 			return err
 		}
 	}
@@ -1024,8 +1052,39 @@ func (s *sriov) setEswitchModeAndNumVFs(pciAddr string, desiredEswitchMode strin
 	}
 
 	if desiredEswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
-		return s.setEswitchMode(pciAddr, sriovnetworkv1.ESwithModeSwitchDev)
+		if err := s.unbindAllVFsOnPF(pciAddr); err != nil {
+			log.Log.Error(err, "setEswitchModeAndNumVFsMlx(): failed to unbind VFs", "device", pciAddr, "mode", desiredEswitchMode)
+			return err
+		}
+		if err := s.SetNicSriovMode(pciAddr, desiredEswitchMode); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+// setEswitchModeAndNumVFsIce configures PF eSwitch and sriov_numvfs in the following order:
+// a. set eSwitchMode to the desired mode if needed
+// a1. set sriov_numvfs to 0 before updating the eSwitchMode
+// b. set sriov_numvfs to the desired number of VFs
+func (s *sriov) setEswitchModeAndNumVFsIce(pciAddr string, desiredEswitchMode string, numVFs int) error {
+	log.Log.V(2).Info("setEswitchModeAndNumVFsIce(): configure VFs for device",
+		"device", pciAddr, "count", numVFs, "mode", desiredEswitchMode)
+
+	if s.GetNicSriovMode(pciAddr) != desiredEswitchMode {
+		if err := s.SetSriovNumVfs(pciAddr, 0); err != nil {
+			return err
+		}
+
+		if err := s.SetNicSriovMode(pciAddr, desiredEswitchMode); err != nil {
+			return err
+		}
+	}
+
+	if err := s.SetSriovNumVfs(pciAddr, numVFs); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1047,11 +1106,11 @@ func (s *sriov) unbindAllVFsOnPF(addr string) error {
 	log.Log.V(2).Info("unbindAllVFsOnPF(): unbind all VFs on PF", "device", addr)
 	vfAddrs, err := s.dputilsLib.GetVFList(addr)
 	if err != nil {
-		return fmt.Errorf("failed to read VF list: %v", err)
+		return fmt.Errorf("failed to read VF list for pci[%s]: %w", addr, err)
 	}
 	for _, vfAddr := range vfAddrs {
 		if err := s.kernelHelper.Unbind(vfAddr); err != nil {
-			return fmt.Errorf("failed to unbind VF from the driver: %v", err)
+			return fmt.Errorf("failed to unbind VF from the driver PF[%s], PF[%s]: %w", addr, vfAddr, err)
 		}
 	}
 	return nil
