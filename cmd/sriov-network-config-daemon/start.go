@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -41,6 +42,7 @@ import (
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
@@ -276,6 +278,18 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 	}
 	go nodeWriter.Run(stopCh, refreshCh, syncCh)
 
+	// Init feature gates once to prevent race conditions.
+	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
+	err = kClient.Get(context.Background(), types.NamespacedName{Namespace: vars.Namespace, Name: consts.DefaultConfigName}, defaultConfig)
+	if err != nil {
+		log.Log.Error(err, "Failed to get default SriovOperatorConfig object")
+		return err
+	}
+	featureGates := featuregate.New()
+	featureGates.Init(defaultConfig.Spec.FeatureGates)
+	vars.MlxPluginFwReset = featureGates.IsEnabled(consts.MellanoxFirmwareResetFeatureGate)
+	log.Log.Info("Enabled featureGates", "featureGates", featureGates.String())
+
 	setupLog.V(0).Info("Starting SriovNetworkConfigDaemon")
 	err = daemon.New(
 		kClient,
@@ -288,6 +302,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		syncCh,
 		refreshCh,
 		eventRecorder,
+		featureGates,
 		startOpts.disabledPlugins,
 	).Run(stopCh, exitCh)
 	if err != nil {
