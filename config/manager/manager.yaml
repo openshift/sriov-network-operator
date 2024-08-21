@@ -33,7 +33,7 @@ spec:
         operator: Exists
       containers:
       - name: sriov-network-operator
-        image: quay.io/openshift/origin-sriov-network-operator:4.17
+        image: quay.io/openshift/origin-sriov-network-operator:4.18
         command:
         - sriov-network-operator
         args:
@@ -60,21 +60,21 @@ spec:
               fieldRef:
                 fieldPath: metadata.namespace
           - name: SRIOV_CNI_IMAGE
-            value: quay.io/openshift/origin-sriov-cni:4.17
+            value: quay.io/openshift/origin-sriov-cni:4.18
           - name: SRIOV_DEVICE_PLUGIN_IMAGE
-            value: quay.io/openshift/origin-sriov-network-device-plugin:4.17
+            value: quay.io/openshift/origin-sriov-network-device-plugin:4.18
           - name: NETWORK_RESOURCES_INJECTOR_IMAGE
-            value: quay.io/openshift/origin-sriov-dp-admission-controller:4.17
+            value: quay.io/openshift/origin-sriov-dp-admission-controller:4.18
           - name: OPERATOR_NAME
             value: sriov-network-operator
           - name: SRIOV_NETWORK_CONFIG_DAEMON_IMAGE
-            value: quay.io/openshift/origin-sriov-network-config-daemon:4.17
+            value: quay.io/openshift/origin-sriov-network-config-daemon:4.18
           - name: SRIOV_NETWORK_WEBHOOK_IMAGE
-            value: quay.io/openshift/origin-sriov-network-webhook:4.17
+            value: quay.io/openshift/origin-sriov-network-webhook:4.18
           - name: SRIOV_INFINIBAND_CNI_IMAGE
-            value: quay.io/openshift/origin-sriov-infiniband-cni:4.17
+            value: quay.io/openshift/origin-sriov-infiniband-cni:4.18
           - name: RDMA_CNI_IMAGE
-            value: quay.io/openshift/origin-rdma-cni:4.17
+            value: quay.io/openshift/origin-rdma-cni:4.18
           - name: RESOURCE_PREFIX
             value: openshift.io
           - name: ADMISSION_CONTROLLERS_ENABLED
@@ -84,9 +84,9 @@ spec:
           - name: ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME
             value: network-resources-injector-secret
           - name: METRICS_EXPORTER_IMAGE
-            value: quay.io/openshift/origin-sriov-network-metrics-exporter:4.17
+            value: quay.io/openshift/origin-sriov-network-metrics-exporter:4.18
           - name: METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE
-            value: quay.io/openshift/origin-kube-rbac-proxy:4.17
+            value: quay.io/openshift/origin-kube-rbac-proxy:4.18
           - name: METRICS_EXPORTER_SECRET_NAME
             value: metrics-exporter-cert
           - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED
@@ -110,4 +110,4 @@ spec:
               fieldRef:
                 fieldPath: metadata.name
           - name: RELEASE_VERSION
-            value: 4.17.0
+            value: 4.18.0
