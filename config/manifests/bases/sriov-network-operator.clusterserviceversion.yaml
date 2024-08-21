@@ -6,7 +6,7 @@ metadata:
     capabilities: Basic Install
     categories: Networking
     certified: "false"
-    containerImage: quay.io/openshift/origin-sriov-network-operator:4.17
+    containerImage: quay.io/openshift/origin-sriov-network-operator:4.18
     createdAt: 2019/04/30
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
@@ -20,7 +20,7 @@ metadata:
     features.operators.openshift.io/token-auth-aws: "false"
     features.operators.openshift.io/token-auth-azure: "false"
     features.operators.openshift.io/token-auth-gcp: "false"
-    olm.skipRange: '>=4.3.0-0 <4.17.0'
+    olm.skipRange: '>=4.3.0-0 <4.18.0'
     operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/initialization-resource: |-
       {
@@ -147,7 +147,7 @@ spec:
   - sriov
   labels:
     olm-owner-enterprise-app: sriov-network-operator
-    olm-status-descriptors: sriov-network-operator.v4.17.0
+    olm-status-descriptors: sriov-network-operator.v4.18.0
   links:
   - name: Source Code
     url: https://github.com/k8snetworkplumbingwg/sriov-network-operator
@@ -156,4 +156,4 @@ spec:
     name: Red Hat
   provider:
     name: Red Hat
-  version: 4.17.0
+  version: 4.18.0
