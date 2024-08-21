@@ -107,7 +107,6 @@ if [ -n "$PR" ]; then
   echo "cloning sriov repo from PR ${PR}"
   git fetch origin pull/$PR/head:pr
   git checkout pr
-  git rebase $BRANCH
 fi
 
 mkdir bin || true
