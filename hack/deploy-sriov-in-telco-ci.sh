@@ -48,6 +48,33 @@ do
     ATTEMPTS=$((ATTEMPTS+1))
 done
 
+# Debug Kubelet
+cat <<EOF | oc apply -f -
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: 99-master-kubelet-loglevel
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    systemd:
+      units:
+        - name: kubelet.service
+          enabled: true
+          dropins:
+            - name: 30-logging.conf
+              contents: |
+                [Service]
+                Environment="KUBELET_LOG_LEVEL=4"
+---
+EOF
+
+sleep 600
+
 # create sriov namespace
 cat <<EOF | oc apply -f -
 ---
