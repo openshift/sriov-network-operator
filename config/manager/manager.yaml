@@ -81,6 +81,20 @@ spec:
             value: operator-webhook-service
           - name: ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME
             value: network-resources-injector-secret
+          - name: METRICS_EXPORTER_IMAGE
+            value: quay.io/openshift/origin-sriov-network-metrics-exporter:4.16
+          - name: METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE
+            value: quay.io/openshift/origin-kube-rbac-proxy:4.16
+          - name: METRICS_EXPORTER_SECRET_NAME
+            value: metrics-exporter-cert
+          - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED
+            value: "true"
+          - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_NAMESPACE
+            value: openshift-monitoring
+          - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_SERVICE_ACCOUNT
+            value: prometheus-k8s
+          - name: METRICS_EXPORTER_PORT
+            value: "9110"
           - name: NAMESPACE
             valueFrom:
               fieldRef:

@@ -306,6 +306,43 @@ var _ = Describe("[sriov] operator", func() {
 				g.Expect(newLease.Spec.HolderIdentity).ToNot(Equal(oldLease.Spec.HolderIdentity))
 			}, 30*time.Second, 5*time.Second).Should(Succeed())
 		})
+
+		Context("SriovNetworkMetricsExporter", func() {
+			BeforeEach(func() {
+				if discovery.Enabled() {
+					Skip("Test unsuitable to be run in discovery mode")
+				}
+
+				initialValue := isFeatureFlagEnabled("metricsExporter")
+				DeferCleanup(func() {
+					By("Restoring initial feature flag value")
+					setFeatureFlag("metricsExporter", initialValue)
+				})
+
+				By("Enabling `metricsExporter` feature flag")
+				setFeatureFlag("metricsExporter", true)
+			})
+
+			It("should be deployed if the feature gate is enabled", func() {
+				By("Checking that a daemon is scheduled on selected node")
+				Eventually(func() bool {
+					return isDaemonsetScheduledOnNodes("node-role.kubernetes.io/worker", "app=sriov-network-metrics-exporter")
+				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
+			})
+
+			It("should deploy ServiceMonitor if the Promethueus operator is installed", func() {
+				_, err := clients.ServiceMonitors(operatorNamespace).List(context.Background(), metav1.ListOptions{})
+				if k8serrors.IsNotFound(err) {
+					Skip("Prometheus operator not available in the cluster")
+				}
+
+				By("Checking ServiceMonitor is deployed if needed")
+				Eventually(func(g Gomega) {
+					_, err := clients.ServiceMonitors(operatorNamespace).Get(context.Background(), "sriov-network-metrics-exporter", metav1.GetOptions{})
+					g.Expect(err).ToNot(HaveOccurred())
+				}).Should(Succeed())
+			})
+		})
 	})
 
 	Describe("Generic SriovNetworkNodePolicy", func() {
@@ -2568,13 +2605,17 @@ func podVFIndexInHost(hostNetPod *corev1.Pod, targetPod *corev1.Pod, interfaceNa
 }
 
 func daemonsScheduledOnNodes(selector string) bool {
+	return isDaemonsetScheduledOnNodes(selector, "app=sriov-network-config-daemon")
+}
+
+func isDaemonsetScheduledOnNodes(nodeSelector, daemonsetLabelSelector string) bool {
 	nn, err := clients.CoreV1Interface.Nodes().List(context.Background(), metav1.ListOptions{
-		LabelSelector: selector,
+		LabelSelector: nodeSelector,
 	})
 	Expect(err).ToNot(HaveOccurred())
 	nodes := nn.Items
 
-	daemons, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app=sriov-network-config-daemon"})
+	daemons, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{LabelSelector: daemonsetLabelSelector})
 	Expect(err).ToNot(HaveOccurred())
 	for _, d := range daemons.Items {
 		foundNode := false
@@ -2844,6 +2885,43 @@ func getOperatorConfigLogLevel() int {
 	Expect(err).ToNot(HaveOccurred())
 
 	return cfg.Spec.LogLevel
+}
+
+func isFeatureFlagEnabled(featureFlag string) bool {
+	cfg := sriovv1.SriovOperatorConfig{}
+	err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+		Name:      "default",
+		Namespace: operatorNamespace,
+	}, &cfg)
+	Expect(err).ToNot(HaveOccurred())
+
+	ret, ok := cfg.Spec.FeatureGates[featureFlag]
+	return ok && ret
+}
+
+func setFeatureFlag(featureFlag string, value bool) {
+	Eventually(func(g Gomega) {
+		cfg := sriovv1.SriovOperatorConfig{}
+		err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+			Name:      "default",
+			Namespace: operatorNamespace,
+		}, &cfg)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		if cfg.Spec.FeatureGates == nil {
+			cfg.Spec.FeatureGates = make(map[string]bool)
+		}
+
+		previousValue, ok := cfg.Spec.FeatureGates[featureFlag]
+		if ok && previousValue == value {
+			return
+		}
+
+		cfg.Spec.FeatureGates[featureFlag] = value
+
+		err = clients.Update(context.TODO(), &cfg)
+		g.Expect(err).ToNot(HaveOccurred())
+	}, 1*time.Minute, 5*time.Second).Should(Succeed())
 }
 
 func getOperatorPod() corev1.Pod {

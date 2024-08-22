@@ -10,10 +10,14 @@ import (
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
@@ -21,7 +25,6 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
@@ -37,7 +40,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		By("Create SriovOperatorConfig controller k8s objs")
 		config := &sriovnetworkv1.SriovOperatorConfig{}
 		config.SetNamespace(testNamespace)
-		config.SetName(constants.DefaultConfigName)
+		config.SetName(consts.DefaultConfigName)
 		config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 			EnableInjector:           true,
 			EnableOperatorWebhook:    true,
@@ -105,7 +108,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 	})
 
 	Context("When is up", func() {
-		JustBeforeEach(func() {
+		BeforeEach(func() {
 			config := &sriovnetworkv1.SriovOperatorConfig{}
 			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
@@ -333,6 +336,56 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		Context("metricsExporter feature gate", func() {
+			When("is disabled", func() {
+				It("should not deploy the daemonset", func() {
+					daemonSet := &appsv1.DaemonSet{}
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: "sriov-metrics-exporter", Namespace: testNamespace}, daemonSet)
+					Expect(err).To(HaveOccurred())
+					Expect(errors.IsNotFound(err)).To(BeTrue())
+				})
+			})
+
+			When("is enabled", func() {
+				BeforeEach(func() {
+					config := &sriovnetworkv1.SriovOperatorConfig{}
+					Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
+
+					By("Turn `metricsExporter` feature gate on")
+					config.Spec.FeatureGates = map[string]bool{consts.MetricsExporterFeatureGate: true}
+					err := k8sClient.Update(ctx, config)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should deploy the sriov-network-metrics-exporter DaemonSet", func() {
+					err := util.WaitForNamespacedObject(&appsv1.DaemonSet{}, k8sClient, testNamespace, "sriov-network-metrics-exporter", util.RetryInterval, util.APITimeout)
+					Expect(err).NotTo(HaveOccurred())
+
+					err = util.WaitForNamespacedObject(&corev1.Service{}, k8sClient, testNamespace, "sriov-network-metrics-exporter-service", util.RetryInterval, util.APITimeout)
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("should deploy extra configuration when the Prometheus operator is installed", func() {
+					DeferCleanup(os.Setenv, "METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED", os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED"))
+					os.Setenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED", "true")
+
+					err := util.WaitForNamespacedObject(&rbacv1.Role{}, k8sClient, testNamespace, "prometheus-k8s", util.RetryInterval, util.APITimeout)
+					Expect(err).ToNot(HaveOccurred())
+
+					err = util.WaitForNamespacedObject(&rbacv1.RoleBinding{}, k8sClient, testNamespace, "prometheus-k8s", util.RetryInterval, util.APITimeout)
+					Expect(err).ToNot(HaveOccurred())
+
+					assertResourceExists(
+						schema.GroupVersionKind{
+							Group:   "monitoring.coreos.com",
+							Kind:    "ServiceMonitor",
+							Version: "v1",
+						},
+						client.ObjectKey{Namespace: testNamespace, Name: "sriov-network-metrics-exporter"})
+				})
+			})
+		})
+
 		// This test verifies that the CABundle field in the webhook configuration  added by third party components is not
 		// removed during the reconciliation loop. This is important when dealing with OpenShift certificate mangement:
 		// https://docs.openshift.com/container-platform/4.15/security/certificates/service-serving-certificate.html
@@ -392,6 +445,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				g.Expect(injectorCfg.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("ca-bundle-2\n")))
 			}, "1s").Should(Succeed())
 		})
+
 		It("should reconcile to a converging state when multiple node policies are set", func() {
 			By("Creating a consistent number of node policies")
 			for i := 0; i < 30; i++ {
@@ -440,3 +494,10 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		})
 	})
 })
+
+func assertResourceExists(gvk schema.GroupVersionKind, key client.ObjectKey) {
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(gvk)
+	err := k8sClient.Get(context.Background(), key, u)
+	Expect(err).NotTo(HaveOccurred())
+}
