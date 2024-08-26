@@ -241,7 +241,10 @@ var _ = Describe("[sriov] operator", func() {
 			})
 		})
 
-		It("should gracefully restart quickly", func() {
+		DescribeTable("should gracefully restart quickly", func(webookEnabled bool) {
+			DeferCleanup(setSriovOperatorSpecFlag(operatorNetworkInjectorFlag, webookEnabled))
+			DeferCleanup(setSriovOperatorSpecFlag(operatorWebhookFlag, webookEnabled))
+
 			// This test case ensure leader election process runs smoothly when the operator's pod is restarted.
 			oldLease, err := clients.CoordinationV1Interface.Leases(operatorNamespace).Get(context.Background(), consts.LeaderElectionID, metav1.GetOptions{})
 			if k8serrors.IsNotFound(err) {
@@ -268,7 +271,10 @@ var _ = Describe("[sriov] operator", func() {
 
 				g.Expect(newLease.Spec.HolderIdentity).ToNot(Equal(oldLease.Spec.HolderIdentity))
 			}, 30*time.Second, 5*time.Second).Should(Succeed())
-		})
+		},
+			Entry("webhooks enabled", true),
+			Entry("webhooks disabled", true),
+		)
 
 		Context("SriovNetworkMetricsExporter", func() {
 			BeforeEach(func() {
@@ -2136,12 +2142,14 @@ func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {
 	return policy.Spec.DeviceType == "netdevice"
 }
 
-func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
+func setSriovOperatorSpecFlag(flagName string, flagValue bool) func() {
 	cfg := sriovv1.SriovOperatorConfig{}
 	err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
 		Name:      "default",
 		Namespace: operatorNamespace,
 	}, &cfg)
+
+	ret := func() {}
 
 	Expect(err).ToNot(HaveOccurred())
 	if flagName == operatorNetworkInjectorFlag && cfg.Spec.EnableInjector != flagValue {
@@ -2149,6 +2157,9 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 		err = clients.Update(context.TODO(), &cfg)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.Spec.EnableInjector).To(Equal(flagValue))
+		ret = func() {
+			setSriovOperatorSpecFlag(flagName, !flagValue)
+		}
 	}
 
 	if flagName == operatorWebhookFlag && cfg.Spec.EnableOperatorWebhook != flagValue {
@@ -2156,6 +2167,9 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 		clients.Update(context.TODO(), &cfg)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.Spec.EnableOperatorWebhook).To(Equal(flagValue))
+		ret = func() {
+			setSriovOperatorSpecFlag(flagName, !flagValue)
+		}
 	}
 
 	if flagValue {
@@ -2171,6 +2185,8 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 			}
 		}, 1*time.Minute, 10*time.Second).WithOffset(1).Should(Succeed())
 	}
+
+	return ret
 }
 
 func setOperatorConfigLogLevel(level int) {
