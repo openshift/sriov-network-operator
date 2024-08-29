@@ -242,12 +242,9 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 		It("should be able to update the node selector of sriov-network-config-daemon", func() {
 			By("specify the configDaemonNodeSelector")
-			config := &sriovnetworkv1.SriovOperatorConfig{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
-
-			config.Spec.ConfigDaemonNodeSelector = map[string]string{"node-role.kubernetes.io/worker": ""}
-			err := k8sClient.Update(ctx, config)
-			Expect(err).NotTo(HaveOccurred())
+			nodeSelector := map[string]string{"node-role.kubernetes.io/worker": ""}
+			restore := updateConfigDaemonNodeSelector(nodeSelector)
+			DeferCleanup(restore)
 
 			daemonSet := &appsv1.DaemonSet{}
 			Eventually(func() map[string]string {
@@ -257,19 +254,17 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 					return nil
 				}
 				return daemonSet.Spec.Template.Spec.NodeSelector
-			}, util.APITimeout, util.RetryInterval).Should(Equal(config.Spec.ConfigDaemonNodeSelector))
+			}, util.APITimeout, util.RetryInterval).Should(Equal(nodeSelector))
 		})
 
 		It("should be able to do multiple updates to the node selector of sriov-network-config-daemon", func() {
 			By("changing the configDaemonNodeSelector")
-			config := &sriovnetworkv1.SriovOperatorConfig{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
-			config.Spec.ConfigDaemonNodeSelector = map[string]string{"labelA": "", "labelB": "", "labelC": ""}
-			err := k8sClient.Update(ctx, config)
-			Expect(err).NotTo(HaveOccurred())
-			config.Spec.ConfigDaemonNodeSelector = map[string]string{"labelA": "", "labelB": ""}
-			err = k8sClient.Update(ctx, config)
-			Expect(err).NotTo(HaveOccurred())
+			firstNodeSelector := map[string]string{"labelA": "", "labelB": "", "labelC": ""}
+			restore := updateConfigDaemonNodeSelector(firstNodeSelector)
+			DeferCleanup(restore)
+
+			secondNodeSelector := map[string]string{"labelA": "", "labelB": ""}
+			updateConfigDaemonNodeSelector(secondNodeSelector)
 
 			daemonSet := &appsv1.DaemonSet{}
 			Eventually(func() map[string]string {
@@ -278,7 +273,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 					return nil
 				}
 				return daemonSet.Spec.Template.Spec.NodeSelector
-			}, util.APITimeout, util.RetryInterval).Should(Equal(config.Spec.ConfigDaemonNodeSelector))
+			}, util.APITimeout, util.RetryInterval).Should(Equal(secondNodeSelector))
 		})
 
 		It("should not render disable-plugins cmdline flag of sriov-network-config-daemon if disablePlugin not provided in spec", func() {
@@ -379,6 +374,23 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 					err = util.WaitForNamespacedObject(&corev1.Service{}, k8sClient, testNamespace, "sriov-network-metrics-exporter-service", util.RetryInterval, util.APITimeout)
 					Expect(err).ToNot(HaveOccurred())
+				})
+
+				It("should deploy the sriov-network-metrics-exporter using the Spec.ConfigDaemonNodeSelector field", func() {
+					nodeSelector := map[string]string{
+						"node-role.kubernetes.io/worker": "",
+						"bool-key":                       "true",
+					}
+
+					restore := updateConfigDaemonNodeSelector(nodeSelector)
+					DeferCleanup(restore)
+
+					Eventually(func(g Gomega) {
+						metricsDaemonset := appsv1.DaemonSet{}
+						err := util.WaitForNamespacedObject(&metricsDaemonset, k8sClient, testNamespace, "sriov-network-metrics-exporter", util.RetryInterval, util.APITimeout)
+						g.Expect(err).NotTo(HaveOccurred())
+						g.Expect(metricsDaemonset.Spec.Template.Spec.NodeSelector).To((Equal(nodeSelector)))
+					}).Should(Succeed())
 				})
 
 				It("should deploy extra configuration when the Prometheus operator is installed", func() {
@@ -553,4 +565,21 @@ func assertResourceDoesNotExist(gvk schema.GroupVersionKind, key client.ObjectKe
 		WithPolling(100*time.Millisecond).
 		WithTimeout(2*time.Second).
 		Should(Succeed(), "Resource type[%s] name[%s] still present in the cluster", gvk.String(), key.String())
+}
+
+func updateConfigDaemonNodeSelector(newValue map[string]string) func() {
+	config := &sriovnetworkv1.SriovOperatorConfig{}
+	err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)
+	Expect(err).NotTo(HaveOccurred())
+
+	previousValue := config.Spec.ConfigDaemonNodeSelector
+	ret := func() {
+		updateConfigDaemonNodeSelector(previousValue)
+	}
+
+	config.Spec.ConfigDaemonNodeSelector = newValue
+	err = k8sClient.Update(context.Background(), config)
+	Expect(err).NotTo(HaveOccurred())
+
+	return ret
 }
