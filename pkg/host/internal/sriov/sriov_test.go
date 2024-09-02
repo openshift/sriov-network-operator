@@ -49,7 +49,7 @@ var _ = Describe("SRIOV", func() {
 		hostMock = hostMockPkg.NewMockHostManagerInterface(testCtrl)
 		storeManagerMode = hostStoreMockPkg.NewMockManagerInterface(testCtrl)
 
-		s = New(nil, hostMock, hostMock, hostMock, hostMock, hostMock, netlinkLibMock, dputilsLibMock, sriovnetLibMock, ghwLibMock)
+		s = New(nil, hostMock, hostMock, hostMock, hostMock, hostMock, netlinkLibMock, dputilsLibMock, sriovnetLibMock, ghwLibMock, hostMock)
 	})
 
 	AfterEach(func() {

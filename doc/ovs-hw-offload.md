@@ -9,20 +9,38 @@ host net-device. The VF representor plays the same role as TAP devices
 in Para-Virtual (PV) setup. A packet sent through the VF representor on the host
 arrives to the VF, and a packet sent through the VF is received by its representor.
 
+OVS Hardware Offloading requires NIC to be configured in `switchdev` mode.
+
+The operator can automate the creation and configuration of OVS bridges when the "manageSoftwareBridges" featureGate is activated.
+
 ## Supported Ethernet controllers
 
 The following manufacturers are known to work:
 
 - Mellanox ConnectX-5 and above
 
-## Instructions for Mellanox ConnectX-5
-
 ## Prerequisites
 
 - OpenVswitch installed
-- Network Manager installed
+
+### Activate "manageSoftwareBridges" featureGate
+
+```
+kubectl patch sriovoperatorconfigs.sriovnetwork.openshift.io -n network-operator default --patch '{ "spec": { "featureGates": { "manageSoftwareBridges": true  } } }' --type='merge'
+```
+
 
 ### Deploy SriovNetworkNodePolicy
+
+The example policy below selects all NVIDIA ConnectX-6 Dx devices on all worker nodes.
+
+The following actions will apply to selected NICs:
+
+* set NIC's eswitch mode to `switchdev`
+
+* create 5 Virtual Functions on each Physical Function
+
+* create a separate OVS bridge (with default configuration that is suitable for HW-offloading with OVS-kernel dataplane) for each Physical Function (PF)
 
 ```yaml
 apiVersion: sriovnetwork.openshift.io/v1
@@ -31,40 +49,107 @@ metadata:
   name: ovs-hw-offload
   namespace: sriov-network-operator
 spec:
-  deviceType: netdevice
-  nicSelector:
-    deviceID: "1017"
-    rootDevices:
-    - 0000:02:00.0
-    - 0000:02:00.1
-    vendor: "15b3"
-  nodeSelector:
-    feature.node.kubernetes.io/network-sriov.capable: "true"
-  numVfs: 8
-  priority: 10
-  resourceName: cx5_sriov_switchdev
-  isRdma: true
   eSwitchMode: switchdev
-  linkType: eth
+  mtu: 1500
+  nicSelector:
+    deviceID: 101d
+    vendor: 15b3
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
+  numVfs: 5
+  resourceName: switchdev
+  bridge:
+    ovs: {}
 ```
 
-### Create NetworkAttachmentDefinition CRD with OVS CNI config
+_Note: `spec.bridge.ovs: {}` - means use default settings (suitable for HW-offloading with OVS-kernel dataplane)
+The fields defined in the [Bridge type](https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/api/v1/sriovnetworknodepolicy_types.go#L84) can be used to configure advanced bridge and interface level options._
+
+The spec above will render to the similar SriovNetworkNodeState for matching nodes.
 
 ```yaml
-apiVersion: "k8s.cni.cncf.io/v1"
-kind: NetworkAttachmentDefinition
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodeState
 metadata:
-  name: ovs-net
-  annotations:
-    k8s.v1.cni.cncf.io/resourceName: openshift.io/cx5_sriov_switchdev
+  name: node-a
+  namespace: sriov-network-operator
 spec:
-  config: '{
-      "cniVersion": "0.3.1",
-      "type": "ovs",
-      "bridge": "br-sriov0",
-      "vlan": 10
-    }'
+  bridges:
+    ovs:
+    - bridge: {}
+      name: br-0000_d8_00.0
+      uplinks:
+      - interface: {}
+        name: enp216s0f0np0
+        pciAddress: 0000:d8:00.0
+    - bridge: {}
+      name: br-0000_d8_00.1
+      uplinks:
+      - interface: {}
+        name: enp216s0f1np1
+        pciAddress: 0000:d8:00.1
+  interfaces:
+  - eSwitchMode: switchdev
+    mtu: 1500
+    name: enp216s0f0np0
+    numVfs: 5
+    pciAddress: 0000:d8:00.0
+    vfGroups:
+    - deviceType: netdevice
+      mtu: 1500
+      policyName: ovs-hw-offload
+      resourceName: switchdev
+      vfRange: 0-4
+  - eSwitchMode: switchdev
+    mtu: 1500
+    name: enp216s0f1np1
+    numVfs: 5
+    pciAddress: 0000:d8:00.1
+    vfGroups:
+    - deviceType: netdevice
+      mtu: 1500
+      policyName: ovs-hw-offload
+      resourceName: switchdev
+      vfRange: 0-4
 ```
+
+In this example node-a has single ConnectX-6 Dx card with two ports (two Physical Functions).
+For each Physical Function a separate OVS bridge will be created.
+
+PF `0000:d8:00.0` -> OVS-bridge `br-0000_d8_00.0`
+PF `0000:d8:00.1` -> OVS-bridge `br-0000_d8_00.1`
+
+The PCI address of the PF is used to generate a predictable name for the bridge.
+
+The PFs will be automatically attached to the bridges.
+
+
+### Create kind: OVSNetwork CR
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: OVSNetwork
+metadata:
+  name: ovs
+  namespace: sriov-network-operator
+spec:
+  networkNamespace: default
+  ipam: |
+    {
+      "type": "host-local",
+      "subnet": "10.56.217.0/24",
+      "rangeStart": "10.56.217.171",
+      "rangeEnd": "10.56.217.181",
+      "routes": [{
+        "dst": "0.0.0.0/0"
+      }],
+      "gateway": "10.56.217.1"
+    }
+  resourceName: switchdev
+  vlan: 200
+```
+
+_Note: There is no need to explicitly specify bridge name in the OVSNetwork. The `ovs-cni` will be able to automatically select the right OVS bridge based on the allocated VF for the Pod._
 
 ### Deploy POD with OVS hardware-offload
 
@@ -76,16 +161,16 @@ kind: Pod
 metadata:
   name: ovs-offload-pod1
   annotations:
-    k8s.v1.cni.cncf.io/networks: ovs-net
+    k8s.v1.cni.cncf.io/networks: ovs
 spec:
   containers:
   - name: ovs-offload
     image: networkstatic/iperf3
     resources:
       requests:
-        openshift.io/cx5_sriov_switchdev: '1'
+        openshift.io/switchdev: '1'
       limits:
-        openshift.io/cx5_sriov_switchdev: '1'
+        openshift.io/switchdev: '1'
     command:
     - sh
     - -c

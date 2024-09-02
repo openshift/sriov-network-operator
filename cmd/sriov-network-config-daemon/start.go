@@ -87,6 +87,7 @@ var (
 		disabledPlugins       stringList
 		parallelNicConfig     bool
 		manageSoftwareBridges bool
+		ovsSocketPath         string
 	}
 )
 
@@ -98,6 +99,7 @@ func init() {
 	startCmd.PersistentFlags().VarP(&startOpts.disabledPlugins, "disable-plugins", "", "comma-separated list of plugins to disable")
 	startCmd.PersistentFlags().BoolVar(&startOpts.parallelNicConfig, "parallel-nic-config", false, "perform NIC configuration in parallel")
 	startCmd.PersistentFlags().BoolVar(&startOpts.manageSoftwareBridges, "manage-software-bridges", false, "enable management of software bridges")
+	startCmd.PersistentFlags().StringVar(&startOpts.ovsSocketPath, "ovs-socket-path", vars.OVSDBSocketPath, "path for OVSDB socket")
 }
 
 func runStartCmd(cmd *cobra.Command, args []string) error {
@@ -113,6 +115,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 
 	vars.ParallelNicConfig = startOpts.parallelNicConfig
 	vars.ManageSoftwareBridges = startOpts.manageSoftwareBridges
+	vars.OVSDBSocketPath = startOpts.ovsSocketPath
 
 	if startOpts.nodeName == "" {
 		name, ok := os.LookupEnv("NODE_NAME")

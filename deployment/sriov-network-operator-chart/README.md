@@ -128,10 +128,11 @@ This section contains general parameters that apply to both the operator and dae
 | Name | Type | Default | description |
 | ---- | ---- | ------- | ----------- |
 | `sriovOperatorConfig.deploy` | bool | `false` | deploy SriovOperatorConfig custom resource |
-| `sriovOperatorConfig.configDaemonNodeSelector` | map[string]string | `{}` | node slectors for sriov-network-config-daemon |
+| `sriovOperatorConfig.configDaemonNodeSelector` | map[string]string | `{}` | node selectors for sriov-network-config-daemon |
 | `sriovOperatorConfig.logLevel` | int | `2` | log level for both operator and sriov-network-config-daemon |
 | `sriovOperatorConfig.disableDrain` | bool | `false` | disable node draining when configuring SR-IOV, set to true in case of a single node cluster or any other justifiable reason |
 | `sriovOperatorConfig.configurationMode` | string | `daemon` | sriov-network-config-daemon configuration mode. either `daemon` or `systemd` |
+| `sriovOperatorConfig.featureGates` | map[string]bool | `{}` | feature gates to enable/disable |
 
 ### Images parameters
 
