@@ -1060,9 +1060,11 @@ var _ = Describe("[sriov] operator", func() {
 
 			findSriovDevice := func(vendorID, deviceID string) (string, sriovv1.InterfaceExt) {
 				for _, node := range sriovInfos.Nodes {
-					for _, nic := range sriovInfos.States[node].Status.Interfaces {
+					devices, err := sriovInfos.FindSriovDevices(node)
+					Expect(err).ToNot(HaveOccurred())
+					for _, nic := range devices {
 						if vendorID != "" && deviceID != "" && nic.Vendor == vendorID && nic.DeviceID == deviceID {
-							return node, nic
+							return node, *nic
 						}
 					}
 				}
