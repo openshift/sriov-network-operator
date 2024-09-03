@@ -10,48 +10,23 @@ kind: ClusterRole
 metadata:
   name: operator-webhook
 rules:
-- apiGroups: [""]
-  resources: ["nodes"]
-  verbs: ["get", "list", "watch"]
-- apiGroups:
-  - certificates.k8s.io
-  resources:
-  - certificatesigningrequests
-  - certificatesigningrequests/approval
-  verbs:
-  - '*'
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - '*'
 - apiGroups:
     - ""
   resources:
+    - nodes
     - configmaps
   verbs:
     - get
-    - update
+    - list
+    - watch
 - apiGroups:
-  - admissionregistration.k8s.io
+    - "sriovnetwork.openshift.io"
   resources:
-  - mutatingwebhookconfigurations
-  - validatingwebhookconfigurations
+    - "*"
   verbs:
-  - '*'
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - '*'
-- apiGroups:
-  - "sriovnetwork.openshift.io"
-  resources:
-  - "*"
-  verbs:
-  - "*"
+    - get
+    - list
+    - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
