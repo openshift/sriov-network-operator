@@ -146,6 +146,9 @@ spec:
         {{- if .ParallelNicConfig }}
           - --parallel-nic-config
         {{- end }}
+        {{- if .ManageSoftwareBridges }}
+          - --manage-software-bridges
+        {{ end }}
         env:
           - name: NODE_NAME
             valueFrom:

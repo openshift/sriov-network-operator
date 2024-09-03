@@ -31,6 +31,10 @@ operator:
     port: "9110"
     certificates:
       secretName: "metrics-exporter-cert"
+    prometheusOperator:
+      enabled: false
+      serviceAccount: "prometheus-k8s"
+      namespace: "monitoring"
   admissionControllers:
     enabled: false
     certificates:

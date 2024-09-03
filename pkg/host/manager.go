@@ -1,6 +1,7 @@
 package host
 
 import (
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/infiniband"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/kernel"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/ethtool"
@@ -26,6 +27,7 @@ type HostManagerInterface interface {
 	types.UdevInterface
 	types.SriovInterface
 	types.VdpaInterface
+	types.InfinibandInterface
 }
 
 type hostManager struct {
@@ -36,9 +38,10 @@ type hostManager struct {
 	types.UdevInterface
 	types.SriovInterface
 	types.VdpaInterface
+	types.InfinibandInterface
 }
 
-func NewHostManager(utilsInterface utils.CmdInterface) HostManagerInterface {
+func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, error) {
 	dpUtils := dputils.New()
 	netlinkLib := netlink.New()
 	ethtoolLib := ethtool.New()
@@ -49,7 +52,11 @@ func NewHostManager(utilsInterface utils.CmdInterface) HostManagerInterface {
 	sv := service.New(utilsInterface)
 	u := udev.New(utilsInterface)
 	v := vdpa.New(k, netlinkLib)
-	sr := sriov.New(utilsInterface, k, n, u, v, netlinkLib, dpUtils, sriovnetLib, ghwLib)
+	ib, err := infiniband.New(netlinkLib, k, n)
+	if err != nil {
+		return nil, err
+	}
+	sr := sriov.New(utilsInterface, k, n, u, v, ib, netlinkLib, dpUtils, sriovnetLib, ghwLib)
 
 	return &hostManager{
 		utilsInterface,
@@ -59,5 +66,6 @@ func NewHostManager(utilsInterface utils.CmdInterface) HostManagerInterface {
 		u,
 		sr,
 		v,
-	}
+		ib,
+	}, nil
 }

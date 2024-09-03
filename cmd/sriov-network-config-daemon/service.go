@@ -92,6 +92,7 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 	}
 	setupLog.V(2).Info("sriov-config-service", "config", sriovConf)
 	vars.DevMode = sriovConf.UnsupportedNics
+	vars.ManageSoftwareBridges = sriovConf.ManageSoftwareBridges
 
 	if err := initSupportedNics(); err != nil {
 		return updateSriovResultErr(setupLog, phaseArg, fmt.Errorf("failed to initialize list of supported NIC ids: %v", err))
