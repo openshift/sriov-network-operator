@@ -15,6 +15,8 @@ spec:
       maxUnavailable: 33%
   template:
     metadata:
+      annotations:
+        openshift.io/required-scc: restricted-v2
       labels:
         name: sriov-network-operator
     spec:
