@@ -11,46 +11,21 @@ metadata:
   name: network-resources-injector
 rules:
 - apiGroups:
-  - ""
-  - k8s.cni.cncf.io
-  - extensions
-  - apps
+    - k8s.cni.cncf.io
   resources:
-  - pods
-  - network-attachment-definitions
-  - replicationcontrollers
-  - replicasets
-  - daemonsets
-  - statefulsets
-  - configmaps
+    - network-attachment-definitions
   verbs:
-  - '*'
+    - 'watch'
+    - 'list'
+    - 'get'
 - apiGroups:
-  - certificates.k8s.io
+    - ""
   resources:
-  - certificatesigningrequests
-  - certificatesigningrequests/approval
+    - configmap
   verbs:
-  - '*'
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - '*'
-- apiGroups:
-  - admissionregistration.k8s.io
-  resources:
-  - mutatingwebhookconfigurations
-  - validatingwebhookconfigurations
-  verbs:
-  - '*'
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - '*'
+    - 'watch'
+    - 'list'
+    - 'get'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
