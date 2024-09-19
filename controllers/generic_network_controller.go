@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -168,9 +169,9 @@ func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err
 			}
-			anno := map[string]string{sriovnetworkv1.LASTNETWORKNAMESPACE: netAttDef.Namespace}
-			instance.SetAnnotations(anno)
-			if err := r.Update(ctx, instance); err != nil {
+
+			err = utils.AnnotateObject(ctx, instance, sriovnetworkv1.LASTNETWORKNAMESPACE, netAttDef.Namespace, r.Client)
+			if err != nil {
 				return reconcile.Result{}, err
 			}
 		} else {
