@@ -230,9 +230,14 @@ func (n *EnabledNodes) FindOneSriovNodeAndDevice() (string, *sriovv1.InterfaceEx
 // FindOneVfioSriovDevice retrieves a node with a valid sriov device for vfio
 func (n *EnabledNodes) FindOneVfioSriovDevice() (string, sriovv1.InterfaceExt) {
 	for _, node := range n.Nodes {
-		for _, nic := range n.States[node].Status.Interfaces {
+		devices, err := n.FindSriovDevices(node)
+		if err != nil {
+			return "", sriovv1.InterfaceExt{}
+		}
+
+		for _, nic := range devices {
 			if nic.Vendor == intelVendorID && sriovv1.IsSupportedModel(nic.Vendor, nic.DeviceID) && nic.TotalVfs != 0 {
-				return node, nic
+				return node, *nic
 			}
 		}
 	}
