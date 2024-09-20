@@ -396,6 +396,8 @@ spec:
                   value: metrics-exporter-cert
                 - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED
                   value: "true"
+                - name: METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES
+                  value: "true"
                 - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_NAMESPACE
                   value: openshift-monitoring
                 - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_SERVICE_ACCOUNT
@@ -553,6 +555,8 @@ spec:
           verbs:
           - get
           - create
+          - update
+          - delete
         - apiGroups:
           - apps
           resourceNames:
