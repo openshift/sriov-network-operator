@@ -46,7 +46,7 @@ setUp() {
 # Mock chroot calls to the temporary test folder
 export real_chroot=$(which chroot)
 chroot() {
-    $real_chroot $FAKE_HOST ${@:2}
+    $real_chroot $FAKE_HOST "${@:2}"
 }
 export -f chroot
 

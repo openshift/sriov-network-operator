@@ -95,7 +95,7 @@ It must be of the form <netns>:<pf1>,<pf2>. This flag can be repeated to specify
 done
 
 return_interfaces_to_default_namespace(){
-    for netns in ${netnses[@]};do
+    for netns in "${netnses[@]}";do
         for pf in ${pfs[$netns]};do
             return_interface_to_default_namespace "${netns}" "${pf}"
         done
@@ -360,7 +360,7 @@ main(){
     trap return_interfaces_to_default_namespace INT EXIT TERM
 
     while true;do
-        for netns in ${netnses[@]};do
+        for netns in "${netnses[@]}";do
             switch_pfs "$netns" "${pfs[$netns]}"
             sleep 2
             switch_netns_vfs "$netns"
@@ -388,7 +388,7 @@ if [[ "$status" != "0" ]];then
     exit $status
 fi
 
-for netns in ${netnses[@]};do
+for netns in "${netnses[@]}";do
     netns_create "$netns"
     let status=$status+$?
     if [[ "$status" != "0" ]];then
@@ -397,7 +397,7 @@ for netns in ${netnses[@]};do
     fi
 done
 
-for netns in ${netnses[@]};do
+for netns in "${netnses[@]}";do
     get_pcis_from_pfs "$netns" "${pfs[$netns]}"
     get_pf_switch_dev_info "$netns" "${pfs[$netns]}"
 done
