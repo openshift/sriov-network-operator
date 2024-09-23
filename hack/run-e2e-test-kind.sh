@@ -6,7 +6,7 @@ export SRIOV_NETWORK_OPERATOR_IMAGE="${SRIOV_NETWORK_OPERATOR_IMAGE:-sriov-netwo
 export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE="${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-origin-sriov-network-config-daemon:e2e-test}"
 export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 INTERFACES_SWITCHER="${INTERFACES_SWITCHER:-"test-suite"}"
-SUPPORTED_INTERFACE_SWTICHER_MODES=("test-suite", "system-service")
+SUPPORTED_INTERFACE_SWITCHER_MODES=("test-suite", "system-service")
 RETRY_MAX=10
 INTERVAL=10
 TIMEOUT=300
@@ -16,9 +16,9 @@ while test $# -gt 0; do
     case "$1" in
     --device-netns-switcher)
         INTERFACES_SWITCHER="$2"
-        if [[ ! "${SUPPORTED_INTERFACE_SWTICHER_MODES[@]}" =~ "${INTERFACES_SWITCHER}" ]]; then
+        if [[ ! "${SUPPORTED_INTERFACE_SWITCHER_MODES[*]}" =~ "${INTERFACES_SWITCHER}" ]]; then
             echo "Error: unsupported interface switching mode: ${INTERFACES_SWITCHER}!"
-            echo "Supported modes are: ${SUPPORTED_INTERFACE_SWTICHER_MODES[@]}"
+            echo "Supported modes are: ${SUPPORTED_INTERFACE_SWITCHER_MODES[*]}"
             exit 1
         fi
         shift

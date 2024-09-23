@@ -348,7 +348,7 @@ variables_check(){
 check_empty_var(){
     local var_name="$1"
 
-    if [[ -z "${!var_name[@]}" ]];then
+    if [[ -z "${!var_name[*]}" ]];then
         echo "Error: $var_name is empty..."
         return 1
     fi
@@ -403,7 +403,7 @@ for netns in "${netnses[@]}";do
 done
 
 if [[ "${#pcis[@]}" == "0" ]];then
-    echo "Error: could not get pci addresses of interfaces ${pfs[@]}!!"
+    echo "Error: could not get pci addresses of interfaces ${pfs[*]}!!"
     exit 1
 fi
 
