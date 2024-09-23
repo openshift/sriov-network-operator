@@ -277,19 +277,20 @@ switch_interface_vf_representors(){
         return 0
     fi
 
-    for interface in $(ls /sys/class/net);do
-        phys_switch_id=$(cat /sys/class/net/$interface/phys_switch_id)
+    for interface in /sys/class/net/*;do
+        phys_switch_id=$(cat $interface/phys_switch_id)
         if [[ "$phys_switch_id" != "${pf_switch_ids[$pf_name]}" ]]; then
             continue
         fi
-        phys_port_name=$(cat /sys/class/net/$interface/phys_port_name)
+        phys_port_name=$(cat $interface/phys_port_name)
         phys_port_name_pf_index=${phys_port_name%vf*}
         phys_port_name_pf_index=${phys_port_name_pf_index#pf}
         if [[ "$phys_port_name_pf_index" != "${pf_port_names[$pf_name]:1}"  ]]; then
             continue
         fi
-        echo "Switching VF representor $interface of PF $pf_name to netns $worker_netns"
-        switch_vf $interface $worker_netns
+        interface_name=${interface##*/}
+        echo "Switching VF representor $interface_name of PF $pf_name to netns $worker_netns"
+        switch_vf $interface_name $worker_netns
     done
 }
 
