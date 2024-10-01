@@ -100,7 +100,7 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:4.18
-    createdAt: "2024-09-18T23:50:48Z"
+    createdAt: "2024-09-20T13:02:55Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     features.operators.openshift.io/cnf: "false"
@@ -404,6 +404,8 @@ spec:
                   value: metrics-exporter-cert
                 - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED
                   value: "true"
+                - name: METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES
+                  value: "true"
                 - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_NAMESPACE
                   value: openshift-monitoring
                 - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_SERVICE_ACCOUNT
@@ -561,6 +563,8 @@ spec:
           verbs:
           - get
           - create
+          - update
+          - delete
         - apiGroups:
           - apps
           resourceNames:
