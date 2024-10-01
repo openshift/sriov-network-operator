@@ -32,7 +32,7 @@ else
         # ensure that OVS_CNI_IMAGE is set, empty string is a valid value
         OVS_CNI_IMAGE=${OVS_CNI_IMAGE:-}
         # ensure that RDMA_CNI_IMAGE is set, empty string is a valid value
-        RDMA_CNI_IMAGE=${$RDMA_CNI_IMAGE:-}
+        RDMA_CNI_IMAGE=${RDMA_CNI_IMAGE:-}
         METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE=${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE:-}
         [ -z $SRIOV_CNI_IMAGE ] && echo "SRIOV_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
         [ -z $SRIOV_INFINIBAND_CNI_IMAGE ] && echo "SRIOV_INFINIBAND_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1

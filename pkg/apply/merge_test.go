@@ -107,6 +107,38 @@ metadata:
 	}))
 }
 
+func TestMergeOne(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	cur := UnstructuredFromYaml(t, `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: d1
+  labels:
+    label-c: cur
+  annotations:
+    annotation-c: cur`)
+
+	upd := UnstructuredFromYaml(t, `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: d1`)
+
+	// this mutates updated
+	err := MergeObjectForUpdate(cur, upd)
+	g.Expect(err).NotTo(HaveOccurred())
+
+	g.Expect(upd.GetLabels()).To(Equal(map[string]string{
+		"label-c": "cur",
+	}))
+
+	g.Expect(upd.GetAnnotations()).To(Equal(map[string]string{
+		"annotation-c": "cur",
+	}))
+}
+
 func TestMergeNilCur(t *testing.T) {
 	g := NewGomegaWithT(t)
 

@@ -220,7 +220,7 @@ func mergeAnnotations(current, updated *uns.Unstructured) {
 	for k, v := range updatedAnnotations {
 		curAnnotations[k] = v
 	}
-	if len(curAnnotations) > 1 {
+	if len(curAnnotations) > 0 {
 		updated.SetAnnotations(curAnnotations)
 	}
 }
@@ -238,7 +238,7 @@ func mergeLabels(current, updated *uns.Unstructured) {
 	for k, v := range updatedLabels {
 		curLabels[k] = v
 	}
-	if len(curLabels) > 1 {
+	if len(curLabels) > 0 {
 		updated.SetLabels(curLabels)
 	}
 }

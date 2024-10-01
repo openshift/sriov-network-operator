@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -38,15 +39,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 	BeforeAll(func() {
 		By("Create SriovOperatorConfig controller k8s objs")
-		config := &sriovnetworkv1.SriovOperatorConfig{}
-		config.SetNamespace(testNamespace)
-		config.SetName(consts.DefaultConfigName)
-		config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
-			EnableInjector:           true,
-			EnableOperatorWebhook:    true,
-			ConfigDaemonNodeSelector: map[string]string{},
-			LogLevel:                 2,
-		}
+		config := makeDefaultSriovOpConfig()
 		Expect(k8sClient.Create(context.Background(), config)).Should(Succeed())
 		DeferCleanup(func() {
 			err := k8sClient.Delete(context.Background(), config)
@@ -224,6 +217,29 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		// Namespaced resources are deleted via the `.ObjectMeta.OwnerReference` field. That logic can't be tested here because testenv doesn't have built-in controllers
+		// (See https://book.kubebuilder.io/reference/envtest#testing-considerations). Since Service and DaemonSet are deleted when default/SriovOperatorConfig is no longer
+		// present, it's important that webhook configurations are deleted as well.
+		It("should delete the webhooks when SriovOperatorConfig/default is deleted", func() {
+			DeferCleanup(k8sClient.Create, context.Background(), makeDefaultSriovOpConfig())
+
+			err := k8sClient.Delete(context.Background(), &sriovnetworkv1.SriovOperatorConfig{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "default"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			assertResourceDoesNotExist(
+				schema.GroupVersionKind{Group: "admissionregistration.k8s.io", Kind: "MutatingWebhookConfiguration", Version: "v1"},
+				client.ObjectKey{Name: "sriov-operator-webhook-config"})
+			assertResourceDoesNotExist(
+				schema.GroupVersionKind{Group: "admissionregistration.k8s.io", Kind: "ValidatingWebhookConfiguration", Version: "v1"},
+				client.ObjectKey{Name: "sriov-operator-webhook-config"})
+
+			assertResourceDoesNotExist(
+				schema.GroupVersionKind{Group: "admissionregistration.k8s.io", Kind: "MutatingWebhookConfiguration", Version: "v1"},
+				client.ObjectKey{Name: "network-resources-injector-config"})
+		})
+
 		It("should be able to update the node selector of sriov-network-config-daemon", func() {
 			By("specify the configDaemonNodeSelector")
 			nodeSelector := map[string]string{"node-role.kubernetes.io/worker": ""}
@@ -380,6 +396,8 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				It("should deploy extra configuration when the Prometheus operator is installed", func() {
 					DeferCleanup(os.Setenv, "METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED", os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED"))
 					os.Setenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED", "true")
+					DeferCleanup(os.Setenv, "METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES", os.Getenv("METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES"))
+					os.Setenv("METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES", "true")
 
 					err := util.WaitForNamespacedObject(&rbacv1.Role{}, k8sClient, testNamespace, "prometheus-k8s", util.RetryInterval, util.APITimeout)
 					Expect(err).ToNot(HaveOccurred())
@@ -394,6 +412,14 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 							Version: "v1",
 						},
 						client.ObjectKey{Namespace: testNamespace, Name: "sriov-network-metrics-exporter"})
+
+					assertResourceExists(
+						schema.GroupVersionKind{
+							Group:   "monitoring.coreos.com",
+							Kind:    "PrometheusRule",
+							Version: "v1",
+						},
+						client.ObjectKey{Namespace: testNamespace, Name: "sriov-vf-rules"})
 				})
 			})
 		})
@@ -507,11 +533,38 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 	})
 })
 
+func makeDefaultSriovOpConfig() *sriovnetworkv1.SriovOperatorConfig {
+	config := &sriovnetworkv1.SriovOperatorConfig{}
+	config.SetNamespace(testNamespace)
+	config.SetName(consts.DefaultConfigName)
+	config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
+		EnableInjector:           true,
+		EnableOperatorWebhook:    true,
+		ConfigDaemonNodeSelector: map[string]string{},
+		LogLevel:                 2,
+	}
+	return config
+}
+
 func assertResourceExists(gvk schema.GroupVersionKind, key client.ObjectKey) {
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(gvk)
 	err := k8sClient.Get(context.Background(), key, u)
 	Expect(err).NotTo(HaveOccurred())
+}
+
+func assertResourceDoesNotExist(gvk schema.GroupVersionKind, key client.ObjectKey) {
+	Eventually(func(g Gomega) {
+		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(gvk)
+		err := k8sClient.Get(context.Background(), key, u)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(errors.IsNotFound(err)).To(BeTrue())
+	}).
+		WithOffset(1).
+		WithPolling(100*time.Millisecond).
+		WithTimeout(2*time.Second).
+		Should(Succeed(), "Resource type[%s] name[%s] still present in the cluster", gvk.String(), key.String())
 }
 
 func updateConfigDaemonNodeSelector(newValue map[string]string) func() {
