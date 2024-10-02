@@ -311,6 +311,14 @@ var _ = Describe("[sriov] operator", func() {
 					g.Expect(err).ToNot(HaveOccurred())
 				}).Should(Succeed())
 			})
+
+			It("should remove ServiceMonitor when the feature is turned off", func() {
+				setFeatureFlag("metricsExporter", false)
+				Eventually(func(g Gomega) {
+					_, err := clients.ServiceMonitors(operatorNamespace).Get(context.Background(), "sriov-network-metrics-exporter", metav1.GetOptions{})
+					g.Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+				}).Should(Succeed())
+			})
 		})
 	})
 
@@ -1060,9 +1068,11 @@ var _ = Describe("[sriov] operator", func() {
 
 			findSriovDevice := func(vendorID, deviceID string) (string, sriovv1.InterfaceExt) {
 				for _, node := range sriovInfos.Nodes {
-					for _, nic := range sriovInfos.States[node].Status.Interfaces {
+					devices, err := sriovInfos.FindSriovDevices(node)
+					Expect(err).ToNot(HaveOccurred())
+					for _, nic := range devices {
 						if vendorID != "" && deviceID != "" && nic.Vendor == vendorID && nic.DeviceID == deviceID {
-							return node, nic
+							return node, *nic
 						}
 					}
 				}
