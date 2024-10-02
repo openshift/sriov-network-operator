@@ -376,6 +376,11 @@ func (s *sriov) configureHWOptionsForSwitchdev(iface *sriovnetworkv1.Interface) 
 		log.Log.Error(err, "configureHWOptionsForSwitchdev(): fail to read current flow steering mode for the device", "device", iface.PciAddress)
 		return err
 	}
+	if currentFlowSteeringMode == "" {
+		log.Log.V(2).Info("configureHWOptionsForSwitchdev(): can't detect current flow_steering_mode mode for the device, skip",
+			"device", iface.PciAddress)
+		return nil
+	}
 	if currentFlowSteeringMode == desiredFlowSteeringMode {
 		return nil
 	}
