@@ -264,12 +264,12 @@ func (n *network) GetDevlinkDeviceParam(pciAddr, paramName string) (string, erro
 		funcLog.Error(err, "GetDevlinkDeviceParam(): fail to get devlink device param")
 		return "", err
 	}
-	if len(param.Values) == 0 {
-		err = fmt.Errorf("param %s has no value", paramName)
-		funcLog.Error(err, "GetDevlinkDeviceParam(): error")
-		return "", err
+	if len(param.Values) == 0 || param.Values[0].Data == nil {
+		funcLog.Info("GetDevlinkDeviceParam(): WARNING: can't read devlink parameter from the device, an empty value received")
+		return "", nil
 	}
 	var value string
+	var ok bool
 	switch param.Type {
 	case nl.DEVLINK_PARAM_TYPE_U8, nl.DEVLINK_PARAM_TYPE_U16, nl.DEVLINK_PARAM_TYPE_U32:
 		var valData uint64
@@ -281,14 +281,22 @@ func (n *network) GetDevlinkDeviceParam(pciAddr, paramName string) (string, erro
 		case uint32:
 			valData = uint64(v)
 		default:
-			return "", fmt.Errorf("unexpected uint type type")
+			return "", fmt.Errorf("value is not uint")
 		}
 		value = strconv.FormatUint(valData, 10)
 
 	case nl.DEVLINK_PARAM_TYPE_STRING:
-		value = param.Values[0].Data.(string)
+		value, ok = param.Values[0].Data.(string)
+		if !ok {
+			return "", fmt.Errorf("value is not a string")
+		}
 	case nl.DEVLINK_PARAM_TYPE_BOOL:
-		value = strconv.FormatBool(param.Values[0].Data.(bool))
+		var boolValue bool
+		boolValue, ok = param.Values[0].Data.(bool)
+		if !ok {
+			return "", fmt.Errorf("value is not a bool")
+		}
+		value = strconv.FormatBool(boolValue)
 	default:
 		return "", fmt.Errorf("unknown value type: %d", param.Type)
 	}
