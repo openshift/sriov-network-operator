@@ -314,6 +314,34 @@ var _ = Describe("SriovNetwork Controller", Ordered, func() {
 			})
 		})
 
+		It("should preserve user defined annotations", func() {
+			cr := sriovnetworkv1.SriovNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test-annotations",
+					Namespace:   testNamespace,
+					Annotations: map[string]string{"foo": "bar"},
+				},
+				Spec: sriovnetworkv1.SriovNetworkSpec{
+					NetworkNamespace: "default",
+				},
+			}
+
+			err := k8sClient.Create(ctx, &cr)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(k8sClient.Delete, ctx, &cr)
+
+			Eventually(func(g Gomega) {
+				network := &sriovnetworkv1.SriovNetwork{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: cr.GetName(), Namespace: testNamespace}, network)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(network.Annotations).To(HaveKeyWithValue("foo", "bar"))
+				g.Expect(network.Annotations).To(HaveKeyWithValue("operator.sriovnetwork.openshift.io/last-network-namespace", "default"))
+			}).
+				WithPolling(100 * time.Millisecond).
+				WithTimeout(5 * time.Second).
+				MustPassRepeatedly(10).
+				Should(Succeed())
+		})
 	})
 })
 
