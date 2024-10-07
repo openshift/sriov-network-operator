@@ -66,6 +66,8 @@ var _ = Describe("[sriov] Metrics Exporter", Ordered, ContinueOnFailure, func() 
 		Expect(err).ToNot(HaveOccurred())
 		waitForNetAttachDef("test-me-network", namespaces.Test)
 
+		WaitForSRIOVStable()
+
 		DeferCleanup(namespaces.Clean, operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 	})
 
@@ -158,15 +160,17 @@ var _ = Describe("[sriov] Metrics Exporter", Ordered, ContinueOnFailure, func() 
 			}, "90s", "1s").Should(Succeed())
 
 			// sriov_kubepoddevice has a different sets of label than statistics metrics
-			samples := runPromQLQuery(fmt.Sprintf(`sriov_kubepoddevice{namespace="%s",pod="%s"}`, pod.Namespace, pod.Name))
-			Expect(samples).ToNot(BeEmpty(), "no value for metric sriov_kubepoddevice")
-			Expect(samples[0].Metric).To(And(
-				HaveKey(model.LabelName("pciAddr")),
-				HaveKeyWithValue(model.LabelName("node"), model.LabelValue(pod.Spec.NodeName)),
-				HaveKeyWithValue(model.LabelName("dev_type"), model.LabelValue("openshift.io/metricsResource")),
-				HaveKeyWithValue(model.LabelName("namespace"), model.LabelValue(pod.Namespace)),
-				HaveKeyWithValue(model.LabelName("pod"), model.LabelValue(pod.Name)),
-			))
+			Eventually(func(g Gomega) {
+				samples := runPromQLQuery(fmt.Sprintf(`sriov_kubepoddevice{namespace="%s",pod="%s"}`, pod.Namespace, pod.Name))
+				g.Expect(samples).ToNot(BeEmpty(), "no value for metric sriov_kubepoddevice")
+				g.Expect(samples[0].Metric).To(And(
+					HaveKey(model.LabelName("pciAddr")),
+					HaveKeyWithValue(model.LabelName("node"), model.LabelValue(pod.Spec.NodeName)),
+					HaveKeyWithValue(model.LabelName("dev_type"), model.LabelValue("openshift.io/metricsResource")),
+					HaveKeyWithValue(model.LabelName("namespace"), model.LabelValue(pod.Namespace)),
+					HaveKeyWithValue(model.LabelName("pod"), model.LabelValue(pod.Name)),
+				))
+			}, "60s", "1s").Should(Succeed())
 		})
 	})
 })
