@@ -19,21 +19,18 @@ import (
 	"github.com/prometheus/common/model"
 
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("[sriov] Metrics Exporter", Ordered, func() {
+var _ = Describe("[sriov] Metrics Exporter", Ordered, ContinueOnFailure, func() {
 	var node string
 	var nic *sriovv1.InterfaceExt
 
 	BeforeAll(func() {
-		if cluster.VirtualCluster() {
-			Skip("IGB driver does not support VF statistics")
-		}
-
 		err := namespaces.Create(namespaces.Test, clients)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -73,6 +70,9 @@ var _ = Describe("[sriov] Metrics Exporter", Ordered, func() {
 	})
 
 	It("collects metrics regarding receiving traffic via VF", func() {
+		if cluster.VirtualCluster() {
+			Skip("IGB driver does not support VF statistics")
+		}
 
 		pod := createTestPod(node, []string{"test-me-network"})
 		DeferCleanup(namespaces.CleanPods, namespaces.Test, clients)
@@ -98,27 +98,76 @@ var _ = Describe("[sriov] Metrics Exporter", Ordered, func() {
 		Expect(finalRxPackets).Should(BeNumerically(">", initialRxPackets))
 	})
 
-	It("PrometheusRule should provide namespaced metrics", func() {
-		pod := createTestPod(node, []string{"test-me-network"})
-		DeferCleanup(namespaces.CleanPods, namespaces.Test, clients)
-
-		namespacedMetricNames := []string{
-			"network:sriov_vf_rx_bytes",
-			"network:sriov_vf_tx_bytes",
-			"network:sriov_vf_rx_packets",
-			"network:sriov_vf_tx_packets",
-			"network:sriov_vf_rx_dropped",
-			"network:sriov_vf_tx_dropped",
-			"network:sriov_vf_rx_broadcast",
-			"network:sriov_vf_rx_multicast",
-		}
-
-		Eventually(func(g Gomega) {
-			for _, metricName := range namespacedMetricNames {
-				values := runPromQLQuery(fmt.Sprintf(`%s{namespace="%s",pod="%s"}`, metricName, pod.Namespace, pod.Name))
-				g.Expect(values).ToNot(BeEmpty(), "no value for metric %s", metricName)
+	Context("When Prometheus operator is available", func() {
+		BeforeEach(func() {
+			_, err := clients.ServiceMonitors(operatorNamespace).List(context.Background(), metav1.ListOptions{})
+			if k8serrors.IsNotFound(err) {
+				Skip("Prometheus operator not available in the cluster")
 			}
-		}, "40s", "1s").Should(Succeed())
+		})
+
+		It("PrometheusRule should provide namespaced metrics", func() {
+			pod := createTestPod(node, []string{"test-me-network"})
+			DeferCleanup(namespaces.CleanPods, namespaces.Test, clients)
+
+			namespacedMetricNames := []string{
+				"network:sriov_vf_rx_bytes",
+				"network:sriov_vf_tx_bytes",
+				"network:sriov_vf_rx_packets",
+				"network:sriov_vf_tx_packets",
+				"network:sriov_vf_rx_dropped",
+				"network:sriov_vf_tx_dropped",
+				"network:sriov_vf_rx_broadcast",
+				"network:sriov_vf_rx_multicast",
+			}
+
+			Eventually(func(g Gomega) {
+				for _, metricName := range namespacedMetricNames {
+					values := runPromQLQuery(fmt.Sprintf(`%s{namespace="%s",pod="%s"}`, metricName, pod.Namespace, pod.Name))
+					g.Expect(values).ToNot(BeEmpty(), "no value for metric %s", metricName)
+				}
+			}, "90s", "1s").Should(Succeed())
+		})
+
+		It("Metrics should have the correct labels", func() {
+			pod := createTestPod(node, []string{"test-me-network"})
+			DeferCleanup(namespaces.CleanPods, namespaces.Test, clients)
+
+			metricsName := []string{
+				"sriov_vf_rx_bytes",
+				"sriov_vf_tx_bytes",
+				"sriov_vf_rx_packets",
+				"sriov_vf_tx_packets",
+				"sriov_vf_rx_dropped",
+				"sriov_vf_tx_dropped",
+				"sriov_vf_rx_broadcast",
+				"sriov_vf_rx_multicast",
+			}
+
+			Eventually(func(g Gomega) {
+				for _, metricName := range metricsName {
+					samples := runPromQLQuery(metricName)
+					g.Expect(samples).ToNot(BeEmpty(), "no value for metric %s", metricName)
+					g.Expect(samples[0].Metric).To(And(
+						HaveKey(model.LabelName("pciAddr")),
+						HaveKey(model.LabelName("node")),
+						HaveKey(model.LabelName("pf")),
+						HaveKey(model.LabelName("vf")),
+					))
+				}
+			}, "90s", "1s").Should(Succeed())
+
+			// sriov_kubepoddevice has a different sets of label than statistics metrics
+			samples := runPromQLQuery(fmt.Sprintf(`sriov_kubepoddevice{namespace="%s",pod="%s"}`, pod.Namespace, pod.Name))
+			Expect(samples).ToNot(BeEmpty(), "no value for metric sriov_kubepoddevice")
+			Expect(samples[0].Metric).To(And(
+				HaveKey(model.LabelName("pciAddr")),
+				HaveKeyWithValue(model.LabelName("node"), model.LabelValue(pod.Spec.NodeName)),
+				HaveKeyWithValue(model.LabelName("dev_type"), model.LabelValue("openshift.io/metricsResource")),
+				HaveKeyWithValue(model.LabelName("namespace"), model.LabelValue(pod.Namespace)),
+				HaveKeyWithValue(model.LabelName("pod"), model.LabelValue(pod.Name)),
+			))
+		})
 	})
 })
 
