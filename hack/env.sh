@@ -1,3 +1,5 @@
+#!/bin/bash
+
 if [ -z $SKIP_VAR_SET ]; then
         export SRIOV_CNI_IMAGE=${SRIOV_CNI_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-cni}
         export SRIOV_INFINIBAND_CNI_IMAGE=${SRIOV_INFINIBAND_CNI_IMAGE:-ghcr.io/k8snetworkplumbingwg/ib-sriov-cni}
