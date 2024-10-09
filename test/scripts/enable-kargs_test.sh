@@ -40,13 +40,14 @@ setUp() {
     cp $(which cat)                     ${FAKE_HOST}/usr/bin/
     cp $(which test)                    ${FAKE_HOST}/usr/bin/
     cp $(which sh)                      ${FAKE_HOST}/usr/bin/
+    cp $(which grep)                    ${FAKE_HOST}/usr/bin/
     cp "$SCRIPTPATH/rpm-ostree_mock"    ${FAKE_HOST}/usr/bin/rpm-ostree
 }
 
 # Mock chroot calls to the temporary test folder
 export real_chroot=$(which chroot)
 chroot() {
-    $real_chroot $FAKE_HOST ${@:2}
+    $real_chroot $FAKE_HOST "${@:2}"
 }
 export -f chroot
 

@@ -100,6 +100,16 @@ jobs:
         # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
         version: v1.55.2
 
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: error
+
   test-coverage:
     name: test-coverage
     runs-on: ubuntu-latest
