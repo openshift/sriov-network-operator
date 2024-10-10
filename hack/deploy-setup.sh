@@ -22,7 +22,7 @@ load_manifest() {
     fi
     files="service_account.yaml role.yaml role_binding.yaml clusterrole.yaml clusterrolebinding.yaml configmap.yaml sriovoperatorconfig.yaml operator.yaml"
     for m in ${files}; do
-      if [ "$(echo ${EXCLUSIONS[@]} | grep -o ${m} | wc -w | xargs)" == "0" ] ; then
+      if [ "$(echo "${EXCLUSIONS[@]}" | grep -o ${m} | wc -w | xargs)" == "0" ] ; then
         envsubst< ${m} | ${OPERATOR_EXEC} apply ${namespace:-} --validate=false -f -
       fi
     done

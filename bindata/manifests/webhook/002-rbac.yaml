@@ -21,7 +21,7 @@ rules:
 - apiGroups:
     - ""
   resources:
-    - configmap
+    - configmaps
   verbs:
     - 'watch'
     - 'list'

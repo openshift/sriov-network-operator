@@ -1,3 +1,5 @@
+#!/bin/bash
+
 if [ -z $SKIP_VAR_SET ]; then
         if ! skopeo -v &> /dev/null
         then

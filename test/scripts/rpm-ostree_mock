@@ -5,7 +5,7 @@
 # Write invocation with arguments to a file to allow making assertion.
 echo "$*" >> /rpm-ostree_calls
 
-if [ "$*" != *"--append"* ]
+if ! echo "$*" | grep -q "\--append"
 then
     # Caller is trying to read kernel arguments.
     cat /proc/cmdline
