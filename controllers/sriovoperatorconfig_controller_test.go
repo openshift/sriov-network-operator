@@ -102,9 +102,15 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 	Context("When is up", func() {
 		BeforeEach(func() {
+			var err error
 			config := &sriovnetworkv1.SriovOperatorConfig{}
-			err := util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
+			err = util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
+			// in case controller yet to add object's finalizer (e.g whenever test deferCleanup is creating new 'default' config object)
+			if len(config.Finalizers) == 0 {
+				err = util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
+				Expect(err).NotTo(HaveOccurred())
+			}
 			config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
 				EnableInjector:        true,
 				EnableOperatorWebhook: true,
@@ -238,6 +244,38 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			assertResourceDoesNotExist(
 				schema.GroupVersionKind{Group: "admissionregistration.k8s.io", Kind: "MutatingWebhookConfiguration", Version: "v1"},
 				client.ObjectKey{Name: "network-resources-injector-config"})
+		})
+
+		It("should add/delete finalizer 'operatorconfig' when SriovOperatorConfig/default is added/deleted", func() {
+			DeferCleanup(k8sClient.Create, context.Background(), makeDefaultSriovOpConfig())
+
+			// verify that finalizer has been added upon object creation
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			Eventually(func() []string {
+				// wait for SriovOperatorConfig flags to get updated
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: "default", Namespace: testNamespace}, config)
+				if err != nil {
+					return nil
+				}
+				return config.Finalizers
+			}, util.APITimeout, util.RetryInterval).Should(Equal([]string{sriovnetworkv1.OPERATORCONFIGFINALIZERNAME}))
+
+			err := k8sClient.Delete(context.Background(), &sriovnetworkv1.SriovOperatorConfig{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: "default"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// verify that finalizer has been removed
+			var empty []string
+			config = &sriovnetworkv1.SriovOperatorConfig{}
+			Eventually(func() []string {
+				// wait for SriovOperatorConfig flags to get updated
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: "default", Namespace: testNamespace}, config)
+				if err != nil {
+					return nil
+				}
+				return config.Finalizers
+			}, util.APITimeout, util.RetryInterval).Should(Equal(empty))
 		})
 
 		It("should be able to update the node selector of sriov-network-config-daemon", func() {
