@@ -10,6 +10,9 @@ import (
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
+
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 )
 
 func New(reportPath string) (*kniK8sReporter.KubernetesReporter, error) {
@@ -18,6 +21,17 @@ func New(reportPath string) (*kniK8sReporter.KubernetesReporter, error) {
 		if err != nil {
 			return err
 		}
+
+		err = monitoringv1.AddToScheme(s)
+		if err != nil {
+			return err
+		}
+
+		err = rbacv1.AddToScheme(s)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	}
 
@@ -38,6 +52,8 @@ func New(reportPath string) (*kniK8sReporter.KubernetesReporter, error) {
 			return true
 		case multusNamespace != "" && ns == multusNamespace:
 			return true
+		case ns == "openshift-monitoring":
+			return true
 		}
 		return false
 	}
@@ -47,6 +63,10 @@ func New(reportPath string) (*kniK8sReporter.KubernetesReporter, error) {
 		{Cr: &sriovv1.SriovNetworkNodePolicyList{}},
 		{Cr: &sriovv1.SriovNetworkList{}},
 		{Cr: &sriovv1.SriovOperatorConfigList{}},
+		{Cr: &monitoringv1.ServiceMonitorList{}, Namespace: &operatorNamespace},
+		{Cr: &monitoringv1.PrometheusRuleList{}, Namespace: &operatorNamespace},
+		{Cr: &rbacv1.RoleList{}, Namespace: &operatorNamespace},
+		{Cr: &rbacv1.RoleBindingList{}, Namespace: &operatorNamespace},
 	}
 
 	err := os.Mkdir(reportPath, 0755)
