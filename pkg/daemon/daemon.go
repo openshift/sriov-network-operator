@@ -114,6 +114,7 @@ func New(
 			workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, maxUpdateBackoff)), "SriovNetworkNodeState"),
 		eventRecorder:   er,
 		disabledPlugins: disabledPlugins,
+		mu:              &sync.Mutex{},
 	}
 }
 
@@ -153,7 +154,6 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 
 	var timeout int64 = 5
 	var metadataKey = "metadata.name"
-	dn.mu = &sync.Mutex{}
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.sriovClient,
 		time.Second*15,
 		vars.Namespace,
@@ -655,7 +655,6 @@ func (dn *Daemon) restartDevicePluginPod() error {
 	defer dn.mu.Unlock()
 	log.Log.V(2).Info("restartDevicePluginPod(): try to restart device plugin pod")
 
-	var podToDelete string
 	pods, err := dn.kubeClient.CoreV1().Pods(vars.Namespace).List(context.Background(), metav1.ListOptions{
 		LabelSelector:   "app=sriov-device-plugin",
 		FieldSelector:   "spec.nodeName=" + vars.NodeName,
@@ -674,35 +673,37 @@ func (dn *Daemon) restartDevicePluginPod() error {
 		log.Log.Info("restartDevicePluginPod(): device plugin pod exited")
 		return nil
 	}
-	podToDelete = pods.Items[0].Name
 
-	log.Log.V(2).Info("restartDevicePluginPod(): Found device plugin pod, deleting it", "pod-name", podToDelete)
-	err = dn.kubeClient.CoreV1().Pods(vars.Namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
-	if errors.IsNotFound(err) {
-		log.Log.Info("restartDevicePluginPod(): pod to delete not found")
-		return nil
-	}
-	if err != nil {
-		log.Log.Error(err, "restartDevicePluginPod(): Failed to delete device plugin pod, retrying")
-		return err
-	}
-
-	if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
-		_, err := dn.kubeClient.CoreV1().Pods(vars.Namespace).Get(context.Background(), podToDelete, metav1.GetOptions{})
+	for _, pod := range pods.Items {
+		podToDelete := pod.Name
+		log.Log.V(2).Info("restartDevicePluginPod(): Found device plugin pod, deleting it", "pod-name", podToDelete)
+		err = dn.kubeClient.CoreV1().Pods(vars.Namespace).Delete(context.Background(), podToDelete, metav1.DeleteOptions{})
 		if errors.IsNotFound(err) {
-			log.Log.Info("restartDevicePluginPod(): device plugin pod exited")
-			return true, nil
+			log.Log.Info("restartDevicePluginPod(): pod to delete not found")
+			continue
+		}
+		if err != nil {
+			log.Log.Error(err, "restartDevicePluginPod(): Failed to delete device plugin pod, retrying")
+			return err
 		}
 
-		if err != nil {
-			log.Log.Error(err, "restartDevicePluginPod(): Failed to check for device plugin exit, retrying")
-		} else {
-			log.Log.Info("restartDevicePluginPod(): waiting for device plugin pod to exit", "pod-name", podToDelete)
+		if err := wait.PollImmediateUntil(3*time.Second, func() (bool, error) {
+			_, err := dn.kubeClient.CoreV1().Pods(vars.Namespace).Get(context.Background(), podToDelete, metav1.GetOptions{})
+			if errors.IsNotFound(err) {
+				log.Log.Info("restartDevicePluginPod(): device plugin pod exited")
+				return true, nil
+			}
+
+			if err != nil {
+				log.Log.Error(err, "restartDevicePluginPod(): Failed to check for device plugin exit, retrying")
+			} else {
+				log.Log.Info("restartDevicePluginPod(): waiting for device plugin pod to exit", "pod-name", podToDelete)
+			}
+			return false, nil
+		}, dn.stopCh); err != nil {
+			log.Log.Error(err, "restartDevicePluginPod(): failed to wait for checking pod deletion")
+			return err
 		}
-		return false, nil
-	}, dn.stopCh); err != nil {
-		log.Log.Error(err, "restartDevicePluginPod(): failed to wait for checking pod deletion")
-		return err
 	}
 
 	return nil
