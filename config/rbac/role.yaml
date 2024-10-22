@@ -33,6 +33,8 @@ rules:
   verbs:
   - get
   - create
+  - update
+  - delete
 - apiGroups:
   - apps
   resourceNames:

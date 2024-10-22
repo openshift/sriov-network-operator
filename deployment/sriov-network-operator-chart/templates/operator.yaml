@@ -83,6 +83,8 @@ spec:
             {{- if .Values.operator.metricsExporter.prometheusOperator.enabled }}
             - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED
               value: {{ .Values.operator.metricsExporter.prometheusOperator.enabled | quote}}
+            - name: METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES
+              value: {{ .Values.operator.metricsExporter.prometheusOperator.deployRules | quote}}
             - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_SERVICE_ACCOUNT
               value: {{ .Values.operator.metricsExporter.prometheusOperator.serviceAccount }}
             - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_NAMESPACE

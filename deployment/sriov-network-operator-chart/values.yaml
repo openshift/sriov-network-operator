@@ -35,6 +35,7 @@ operator:
       enabled: false
       serviceAccount: "prometheus-k8s"
       namespace: "monitoring"
+      deployRules: false
   admissionControllers:
     enabled: false
     certificates:
