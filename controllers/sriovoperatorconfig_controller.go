@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -28,6 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -81,7 +83,9 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("default SriovOperatorConfig object not found. waiting for creation.")
-			return reconcile.Result{}, nil
+
+			err := r.deleteAllWebhooks(ctx)
+			return reconcile.Result{}, err
 		}
 		// Error reading the object - requeue the request.
 		logger.Error(err, "Failed to get default SriovOperatorConfig object")
@@ -455,4 +459,30 @@ func (r SriovOperatorConfigReconciler) setLabelInsideObject(ctx context.Context,
 	}
 
 	return nil
+}
+
+func (r SriovOperatorConfigReconciler) deleteAllWebhooks(ctx context.Context) error {
+	var err error
+	obj := &uns.Unstructured{}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{Group: "admissionregistration.k8s.io", Kind: "MutatingWebhookConfiguration", Version: "v1"})
+	obj.SetName(consts.OperatorWebHookName)
+	err = errors.Join(
+		err, r.deleteWebhookObject(ctx, obj),
+	)
+
+	obj = &uns.Unstructured{}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{Group: "admissionregistration.k8s.io", Kind: "ValidatingWebhookConfiguration", Version: "v1"})
+	obj.SetName(consts.OperatorWebHookName)
+	err = errors.Join(
+		err, r.deleteWebhookObject(ctx, obj),
+	)
+
+	obj = &uns.Unstructured{}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{Group: "admissionregistration.k8s.io", Kind: "MutatingWebhookConfiguration", Version: "v1"})
+	obj.SetName(consts.InjectorWebHookName)
+	err = errors.Join(
+		err, r.deleteWebhookObject(ctx, obj),
+	)
+
+	return err
 }
