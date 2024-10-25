@@ -217,7 +217,7 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 		return nil, fmt.Errorf("DiscoverSriovDevices(): error getting PCI info: %v", err)
 	}
 
-	devices := pci.ListDevices()
+	devices := pci.Devices
 	if len(devices) == 0 {
 		return nil, fmt.Errorf("DiscoverSriovDevices(): could not retrieve PCI devices")
 	}

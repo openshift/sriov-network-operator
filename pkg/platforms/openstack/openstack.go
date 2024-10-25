@@ -362,7 +362,7 @@ func (o *openstackContext) CreateOpenstackDevicesInfo() error {
 		return fmt.Errorf("CreateOpenstackDevicesInfo(): error getting PCI info: %v", err)
 	}
 
-	devices := pci.ListDevices()
+	devices := pci.Devices
 	if len(devices) == 0 {
 		return fmt.Errorf("CreateOpenstackDevicesInfo(): could not retrieve PCI devices")
 	}
@@ -421,7 +421,7 @@ func (o *openstackContext) DiscoverSriovDevicesVirtual() ([]sriovnetworkv1.Inter
 		return nil, fmt.Errorf("DiscoverSriovDevicesVirtual(): error getting PCI info: %v", err)
 	}
 
-	devices := pci.ListDevices()
+	devices := pci.Devices
 	if len(devices) == 0 {
 		return nil, fmt.Errorf("DiscoverSriovDevicesVirtual(): could not retrieve PCI devices")
 	}
