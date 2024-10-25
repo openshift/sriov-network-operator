@@ -187,3 +187,16 @@ type InfinibandInterface interface {
 	// ConfigureVfGUID configures and sets a GUID for an IB VF device
 	ConfigureVfGUID(vfAddr string, pfAddr string, vfID int, pfLink netlink.Link) error
 }
+
+type CPUVendor int
+
+const (
+	CPUVendorIntel CPUVendor = iota
+	CPUVendorAMD
+	CPUVendorARM
+)
+
+type CPUInfoProviderInterface interface {
+	// Retrieve the CPU vendor of the current system
+	GetCPUVendor() (CPUVendor, error)
+}

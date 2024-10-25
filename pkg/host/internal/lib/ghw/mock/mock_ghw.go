@@ -9,6 +9,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	ghw "github.com/jaypipes/ghw"
+	cpu "github.com/jaypipes/ghw/pkg/cpu"
 	ghw0 "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/ghw"
 )
 
@@ -33,6 +34,21 @@ func NewMockGHWLib(ctrl *gomock.Controller) *MockGHWLib {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockGHWLib) EXPECT() *MockGHWLibMockRecorder {
 	return m.recorder
+}
+
+// CPU mocks base method.
+func (m *MockGHWLib) CPU() (*cpu.Info, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CPU")
+	ret0, _ := ret[0].(*cpu.Info)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CPU indicates an expected call of CPU.
+func (mr *MockGHWLibMockRecorder) CPU() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CPU", reflect.TypeOf((*MockGHWLib)(nil).CPU))
 }
 
 // PCI mocks base method.

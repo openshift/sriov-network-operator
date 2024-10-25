@@ -2,6 +2,7 @@ package host
 
 import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/bridge"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/cpu"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/infiniband"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/kernel"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils"
@@ -30,6 +31,7 @@ type HostManagerInterface interface {
 	types.VdpaInterface
 	types.InfinibandInterface
 	types.BridgeInterface
+	types.CPUInfoProviderInterface
 }
 
 type hostManager struct {
@@ -42,6 +44,7 @@ type hostManager struct {
 	types.VdpaInterface
 	types.InfinibandInterface
 	types.BridgeInterface
+	types.CPUInfoProviderInterface
 }
 
 func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, error) {
@@ -61,6 +64,7 @@ func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, er
 	}
 	br := bridge.New()
 	sr := sriov.New(utilsInterface, k, n, u, v, ib, netlinkLib, dpUtils, sriovnetLib, ghwLib, br)
+	cpuInfoProvider := cpu.New(ghwLib)
 	return &hostManager{
 		utilsInterface,
 		k,
@@ -71,5 +75,6 @@ func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, er
 		v,
 		ib,
 		br,
+		cpuInfoProvider,
 	}, nil
 }
