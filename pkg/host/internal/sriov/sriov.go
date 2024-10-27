@@ -476,7 +476,7 @@ func (s *sriov) configSriovVFDevices(iface *sriovnetworkv1.Interface) error {
 					if err := s.infinibandHelper.ConfigureVfGUID(addr, iface.PciAddress, vfID, pfLink); err != nil {
 						return err
 					}
-					if err := s.kernelHelper.Unbind(iface.PciAddress); err != nil {
+					if err := s.kernelHelper.Unbind(addr); err != nil {
 						return err
 					}
 				} else {
