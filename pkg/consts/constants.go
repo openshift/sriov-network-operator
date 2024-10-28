@@ -128,6 +128,8 @@ const (
 	KernelArgIntelIommu       = "intel_iommu=on"
 	KernelArgIommuPt          = "iommu=pt"
 	KernelArgIommuPassthrough = "iommu.passthrough=1"
+	KernelArgRdmaShared       = "ib_core.netns_mode=1"
+	KernelArgRdmaExclusive    = "ib_core.netns_mode=0"
 
 	// Feature gates
 	// ParallelNicConfigFeatureGate: allow to configure nics in parallel

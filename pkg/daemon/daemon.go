@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os/exec"
 	"reflect"
 	"sync"
 	"time"
@@ -429,16 +428,6 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		reqReboot = reqReboot || r
 	}
 
-	if dn.currentNodeState.Status.System.RdmaMode != dn.desiredNodeState.Spec.System.RdmaMode {
-		err = dn.HostHelpers.SetRDMASubsystem(dn.desiredNodeState.Spec.System.RdmaMode)
-		if err != nil {
-			log.Log.Error(err, "nodeStateSyncHandler(): failed to set RDMA subsystem")
-			return err
-		}
-		reqReboot = true
-		reqDrain = true
-	}
-
 	// When running using systemd check if the applied configuration is the latest one
 	// or there is a new config we need to apply
 	// When using systemd configuration we write the file
@@ -761,11 +750,11 @@ func (dn *Daemon) rebootNode() {
 	// However note we use `;` instead of `&&` so we keep rebooting even
 	// if kubelet failed to shutdown - that way the machine will still eventually reboot
 	// as systemd will time out the stop invocation.
-	cmd := exec.Command("systemd-run", "--unit", "sriov-network-config-daemon-reboot",
+	stdOut, StdErr, err := dn.HostHelpers.RunCommand("systemd-run", "--unit", "sriov-network-config-daemon-reboot",
 		"--description", "sriov-network-config-daemon reboot node", "/bin/sh", "-c", "systemctl stop kubelet.service; reboot")
 
-	if err := cmd.Run(); err != nil {
-		log.Log.Error(err, "failed to reboot node")
+	if err != nil {
+		log.Log.Error(err, "failed to reboot node", "stdOut", stdOut, "StdErr", StdErr)
 	}
 }
 

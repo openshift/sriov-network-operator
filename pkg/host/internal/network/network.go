@@ -431,8 +431,7 @@ func (n *network) GetPciAddressFromInterfaceName(interfaceName string) (string, 
 }
 
 func (n *network) DiscoverRDMASubsystem() (string, error) {
-	log.Log.Info("DiscoverRDMASubsystem(): retrieving RDMA subsystem mode")
-	subsystem, err := n.netlinkLib.DiscoverRDMASubsystem()
+	subsystem, err := n.netlinkLib.RdmaSystemGetNetnsMode()
 
 	if err != nil {
 		log.Log.Error(err, "DiscoverRDMASubsystem(): failed to get RDMA subsystem mode")
@@ -443,19 +442,28 @@ func (n *network) DiscoverRDMASubsystem() (string, error) {
 }
 
 func (n *network) SetRDMASubsystem(mode string) error {
-	log.Log.Info("SetRDMASubsystem(): Updating RDMA subsystem mode")
+	log.Log.Info("SetRDMASubsystem(): Updating RDMA subsystem mode", "mode", mode)
+	path := filepath.Join(vars.FilesystemRoot, consts.Host, "etc", "modprobe.d", "sriov_network_operator_modules_config.conf")
+
+	if mode == "" {
+		err := os.Remove(path)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Log.Error(err, "failed to remove ib_core config file")
+			return err
+		}
+		return nil
+	}
 
 	modeValue := 1
 	if mode == "exclusive" {
 		modeValue = 0
 	}
-	config := fmt.Sprintf("options ib_core netns_mode=%d\n", modeValue)
-	path := filepath.Join(vars.FilesystemRoot, consts.Host, "etc", "modprobe.d", "ib_core.conf")
-	err := os.WriteFile(path, []byte(config), 0644)
+	config := fmt.Sprintf("# This file is managed by sriov-network-operator do not edit.\noptions ib_core netns_mode=%d\n", modeValue)
 
+	err := os.WriteFile(path, []byte(config), 0644)
 	if err != nil {
-		log.Log.Error(err, "SetRDMASubsystem(): failed to write ib_core config")
-		return fmt.Errorf("failed to write ib_core config: %v", err)
+		log.Log.Error(err, "SetRDMASubsystem(): failed to write sriov_network_operator_modules_config.conf")
+		return fmt.Errorf("failed to write sriov_network_operator_modules_config.conf: %v", err)
 	}
 
 	return nil

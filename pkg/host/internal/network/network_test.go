@@ -285,7 +285,7 @@ var _ = Describe("Network", func() {
 	})
 	Context("DiscoverRDMASubsystem", func() {
 		It("Should get RDMA Subsystem using netlink", func() {
-			netlinkLibMock.EXPECT().DiscoverRDMASubsystem().Return("shared", nil)
+			netlinkLibMock.EXPECT().RdmaSystemGetNetnsMode().Return("shared", nil)
 
 			pci, err := n.DiscoverRDMASubsystem()
 			Expect(err).NotTo(HaveOccurred())
@@ -297,21 +297,21 @@ var _ = Describe("Network", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
 				Dirs: []string{"/host/etc/modprobe.d"},
 				Files: map[string][]byte{
-					"/host/etc/modprobe.d/ib_core.conf": {},
+					"/host/etc/modprobe.d/sriov_network_operator_modules_config.conf": {},
 				},
 			})
 			Expect(n.SetRDMASubsystem("shared")).NotTo(HaveOccurred())
-			helpers.GinkgoAssertFileContentsEquals("/host/etc/modprobe.d/ib_core.conf", "options ib_core netns_mode=1\n")
+			helpers.GinkgoAssertFileContentsEquals("/host/etc/modprobe.d/sriov_network_operator_modules_config.conf", "# This file is managed by sriov-network-operator do not edit.\noptions ib_core netns_mode=1\n")
 		})
 		It("Should set RDMA Subsystem exclusive mode", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
 				Dirs: []string{"/host/etc/modprobe.d"},
 				Files: map[string][]byte{
-					"/host/etc/modprobe.d/ib_core.conf": {},
+					"/host/etc/modprobe.d/sriov_network_operator_modules_config.conf": {},
 				},
 			})
 			Expect(n.SetRDMASubsystem("exclusive")).NotTo(HaveOccurred())
-			helpers.GinkgoAssertFileContentsEquals("/host/etc/modprobe.d/ib_core.conf", "options ib_core netns_mode=0\n")
+			helpers.GinkgoAssertFileContentsEquals("/host/etc/modprobe.d/sriov_network_operator_modules_config.conf", "# This file is managed by sriov-network-operator do not edit.\noptions ib_core netns_mode=0\n")
 		})
 	})
 })
