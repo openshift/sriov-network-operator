@@ -20,8 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -338,14 +340,61 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 					logger.Error(err, "Fail to remove device plugin label from node", "node", ns.Name)
 					return err
 				}
-				logger.Info("Deleting SriovNetworkNodeState as node with that name doesn't exist", "nodeStateName", ns.Name)
-				err = r.Delete(ctx, &ns, &client.DeleteOptions{})
-				if err != nil {
-					logger.Error(err, "Fail to Delete", "SriovNetworkNodeState CR:", ns.GetName())
+				if err := r.handleStaleNodeState(ctx, &ns); err != nil {
 					return err
 				}
 			}
 		}
+	}
+	return nil
+}
+
+// handleStaleNodeState handles stale SriovNetworkNodeState CR (the CR which no longer have a corresponding node with the daemon).
+// If the CR has the "keep until time" annotation, indicating the earliest time the state object can be removed,
+// this function will compare it to the current time to determine if deletion is permissible and do deletion if allowed.
+// If the annotation is absent, the function will create one with a timestamp in future, using either the default or a configured offset.
+// If STALE_NODE_STATE_CLEANUP_DELAY_MINUTES env variable is set to 0, removes the CR immediately
+func (r *SriovNetworkNodePolicyReconciler) handleStaleNodeState(ctx context.Context, ns *sriovnetworkv1.SriovNetworkNodeState) error {
+	logger := log.Log.WithName("handleStaleNodeState")
+
+	var delayMinutes int
+	var err error
+
+	envValue, found := os.LookupEnv("STALE_NODE_STATE_CLEANUP_DELAY_MINUTES")
+	if found {
+		delayMinutes, err = strconv.Atoi(envValue)
+		if err != nil || delayMinutes < 0 {
+			delayMinutes = constants.DefaultNodeStateCleanupDelayMinutes
+			logger.Error(err, "invalid value in STALE_NODE_STATE_CLEANUP_DELAY_MINUTES env variable, use default delay",
+				"delay", delayMinutes)
+		}
+	} else {
+		delayMinutes = constants.DefaultNodeStateCleanupDelayMinutes
+	}
+
+	if delayMinutes != 0 {
+		now := time.Now().UTC()
+		keepUntilTime := ns.GetKeepUntilTime()
+		if keepUntilTime.IsZero() {
+			keepUntilTime = now.Add(time.Minute * time.Duration(delayMinutes))
+			logger.V(2).Info("SriovNetworkNodeState has no matching node, configure cleanup delay for the state object",
+				"nodeStateName", ns.Name, "delay", delayMinutes, "keepUntilTime", keepUntilTime.String())
+			ns.SetKeepUntilTime(keepUntilTime)
+			if err := r.Update(ctx, ns); err != nil {
+				logger.Error(err, "Fail to update SriovNetworkNodeState CR", "name", ns.GetName())
+				return err
+			}
+			return nil
+		}
+		if now.Before(keepUntilTime) {
+			return nil
+		}
+	}
+	// remove the object if delayMinutes is 0 or if keepUntilTime is already passed
+	logger.Info("Deleting SriovNetworkNodeState as node with that name doesn't exist", "nodeStateName", ns.Name)
+	if err := r.Delete(ctx, ns, &client.DeleteOptions{}); err != nil {
+		logger.Error(err, "Fail to delete SriovNetworkNodeState CR", "name", ns.GetName())
+		return err
 	}
 	return nil
 }
@@ -375,9 +424,16 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 			return fmt.Errorf("failed to get SriovNetworkNodeState: %v", err)
 		}
 	} else {
+		keepUntilAnnotationUpdated := found.ResetKeepUntilTime()
+
 		if len(found.Status.Interfaces) == 0 {
 			logger.Info("SriovNetworkNodeState Status Interfaces are empty. Skip update of policies in spec",
 				"namespace", ns.Namespace, "name", ns.Name)
+			if keepUntilAnnotationUpdated {
+				if err := r.Update(ctx, found); err != nil {
+					return fmt.Errorf("couldn't update SriovNetworkNodeState: %v", err)
+				}
+			}
 			return nil
 		}
 
@@ -420,7 +476,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 		// Note(adrianc): we check same ownerReferences since SriovNetworkNodeState
 		// was owned by a default SriovNetworkNodePolicy. if we encounter a descripancy
 		// we need to update.
-		if reflect.DeepEqual(newVersion.OwnerReferences, found.OwnerReferences) &&
+		if !keepUntilAnnotationUpdated && reflect.DeepEqual(newVersion.OwnerReferences, found.OwnerReferences) &&
 			equality.Semantic.DeepEqual(newVersion.Spec, found.Spec) {
 			logger.V(1).Info("SriovNetworkNodeState did not change, not updating")
 			return nil
