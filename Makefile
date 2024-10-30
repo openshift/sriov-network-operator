@@ -60,7 +60,7 @@ GOLANGCI_LINT_VER = v1.55.2
 
 all: generate lint build
 
-build: manager _build-sriov-network-config-daemon _build-webhook
+build: manager _build-sriov-network-config-daemon _build-webhook _build-sriov-network-operator-config-cleanup
 
 _build-%:
 	WHAT=$* hack/build-go.sh
