@@ -196,6 +196,22 @@ WantedBy=default.target' > /etc/systemd/system/disable-offload.service
 systemctl daemon-reload
 systemctl enable --now disable-offload
 
+echo '[Unit]
+Description=load br_netfilter
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash -c "modprobe br_netfilter"
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=default.target' > /etc/systemd/system/load-br-netfilter.service
+
+systemctl daemon-reload
+systemctl enable --now load-br-netfilter
+
 systemctl restart NetworkManager
 
 EOF
