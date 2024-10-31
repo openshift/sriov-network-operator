@@ -26,11 +26,12 @@ import (
 )
 
 const (
-	LASTNETWORKNAMESPACE    = "operator.sriovnetwork.openshift.io/last-network-namespace"
-	NETATTDEFFINALIZERNAME  = "netattdef.finalizers.sriovnetwork.openshift.io"
-	POOLCONFIGFINALIZERNAME = "poolconfig.finalizers.sriovnetwork.openshift.io"
-	ESwithModeLegacy        = "legacy"
-	ESwithModeSwitchDev     = "switchdev"
+	LASTNETWORKNAMESPACE        = "operator.sriovnetwork.openshift.io/last-network-namespace"
+	NETATTDEFFINALIZERNAME      = "netattdef.finalizers.sriovnetwork.openshift.io"
+	POOLCONFIGFINALIZERNAME     = "poolconfig.finalizers.sriovnetwork.openshift.io"
+	OPERATORCONFIGFINALIZERNAME = "operatorconfig.finalizers.sriovnetwork.openshift.io"
+	ESwithModeLegacy            = "legacy"
+	ESwithModeSwitchDev         = "switchdev"
 
 	SriovCniStateEnable  = "enable"
 	SriovCniStateDisable = "disable"
