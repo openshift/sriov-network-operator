@@ -13,6 +13,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
+	hostTypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
@@ -419,9 +420,31 @@ func (p *GenericPlugin) shouldConfigureBridges() bool {
 
 func (p *GenericPlugin) addVfioDesiredKernelArg(state *sriovnetworkv1.SriovNetworkNodeState) {
 	driverState := p.DriverStateMap[Vfio]
+
+	kernelArgFnByCPUVendor := map[hostTypes.CPUVendor]func(){
+		hostTypes.CPUVendorIntel: func() {
+			p.addToDesiredKernelArgs(consts.KernelArgIntelIommu)
+			p.addToDesiredKernelArgs(consts.KernelArgIommuPt)
+		},
+		hostTypes.CPUVendorAMD: func() {
+			p.addToDesiredKernelArgs(consts.KernelArgIommuPt)
+		},
+		hostTypes.CPUVendorARM: func() {
+			p.addToDesiredKernelArgs(consts.KernelArgIommuPassthrough)
+		},
+	}
+
 	if !driverState.DriverLoaded && driverState.NeedDriverFunc(state, driverState) {
-		p.addToDesiredKernelArgs(consts.KernelArgIntelIommu)
-		p.addToDesiredKernelArgs(consts.KernelArgIommuPt)
+		cpuVendor, err := p.helpers.GetCPUVendor()
+		if err != nil {
+			log.Log.Error(err, "can't get CPU vendor, falling back to Intel")
+			cpuVendor = hostTypes.CPUVendorIntel
+		}
+
+		addKernelArgFn := kernelArgFnByCPUVendor[cpuVendor]
+		if addKernelArgFn != nil {
+			addKernelArgFn()
+		}
 	}
 }
 

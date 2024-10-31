@@ -7,7 +7,7 @@ import (
 	"syscall"
 
 	"github.com/golang/mock/gomock"
-	"github.com/jaypipes/ghw"
+	"github.com/jaypipes/ghw/pkg/pci"
 	"github.com/jaypipes/pcidb"
 	"github.com/vishvananda/netlink"
 
@@ -57,12 +57,7 @@ var _ = Describe("SRIOV", func() {
 	})
 
 	Context("DiscoverSriovDevices", func() {
-		var (
-			ghwInfoMock *ghwMockPkg.MockInfo
-		)
 		BeforeEach(func() {
-			ghwInfoMock = ghwMockPkg.NewMockInfo(testCtrl)
-			ghwLibMock.EXPECT().PCI().Return(ghwInfoMock, nil)
 			origNicMap := sriovnetworkv1.NicIDMap
 			sriovnetworkv1.InitNicIDMapFromList([]string{
 				"15b3 101d 101e",
@@ -73,7 +68,7 @@ var _ = Describe("SRIOV", func() {
 		})
 
 		It("discovered", func() {
-			ghwInfoMock.EXPECT().ListDevices().Return(getTestPCIDevices())
+			ghwLibMock.EXPECT().PCI().Return(getTestPCIDevices(), nil)
 			dputilsLibMock.EXPECT().IsSriovVF("0000:d8:00.0").Return(false)
 			dputilsLibMock.EXPECT().IsSriovVF("0000:d8:00.2").Return(true)
 			dputilsLibMock.EXPECT().IsSriovVF("0000:3b:00.0").Return(false)
@@ -628,91 +623,94 @@ var _ = Describe("SRIOV", func() {
 	})
 })
 
-func getTestPCIDevices() []*ghw.PCIDevice {
-	return []*ghw.PCIDevice{{
-		Driver:  "mlx5_core",
-		Address: "0000:d8:00.0",
-		Vendor: &pcidb.Vendor{
-			ID:   "15b3",
-			Name: "Mellanox Technologies",
-		},
-		Product: &pcidb.Product{
-			ID:   "101d",
-			Name: "MT2892 Family [ConnectX-6 Dx]",
-		},
-		Revision: "0x00",
-		Subsystem: &pcidb.Product{
-			ID:   "0083",
-			Name: "unknown",
-		},
-		Class: &pcidb.Class{
-			ID:   "02",
-			Name: "Network controller",
-		},
-		Subclass: &pcidb.Subclass{
-			ID:   "00",
-			Name: "Ethernet controller",
-		},
-		ProgrammingInterface: &pcidb.ProgrammingInterface{
-			ID:   "00",
-			Name: "unknonw",
-		},
-	},
-		{
-			Driver:  "mlx5_core",
-			Address: "0000:d8:00.2",
-			Vendor: &pcidb.Vendor{
-				ID:   "15b3",
-				Name: "Mellanox Technologies",
+func getTestPCIDevices() *pci.Info {
+	return &pci.Info{
+		Devices: []*pci.Device{
+			{
+				Driver:  "mlx5_core",
+				Address: "0000:d8:00.0",
+				Vendor: &pcidb.Vendor{
+					ID:   "15b3",
+					Name: "Mellanox Technologies",
+				},
+				Product: &pcidb.Product{
+					ID:   "101d",
+					Name: "MT2892 Family [ConnectX-6 Dx]",
+				},
+				Revision: "0x00",
+				Subsystem: &pcidb.Product{
+					ID:   "0083",
+					Name: "unknown",
+				},
+				Class: &pcidb.Class{
+					ID:   "02",
+					Name: "Network controller",
+				},
+				Subclass: &pcidb.Subclass{
+					ID:   "00",
+					Name: "Ethernet controller",
+				},
+				ProgrammingInterface: &pcidb.ProgrammingInterface{
+					ID:   "00",
+					Name: "unknonw",
+				},
 			},
-			Product: &pcidb.Product{
-				ID:   "101e",
-				Name: "ConnectX Family mlx5Gen Virtual Function",
+			{
+				Driver:  "mlx5_core",
+				Address: "0000:d8:00.2",
+				Vendor: &pcidb.Vendor{
+					ID:   "15b3",
+					Name: "Mellanox Technologies",
+				},
+				Product: &pcidb.Product{
+					ID:   "101e",
+					Name: "ConnectX Family mlx5Gen Virtual Function",
+				},
+				Revision: "0x00",
+				Subsystem: &pcidb.Product{
+					ID:   "0083",
+					Name: "unknown",
+				},
+				Class: &pcidb.Class{
+					ID:   "02",
+					Name: "Network controller",
+				},
+				Subclass: &pcidb.Subclass{
+					ID:   "00",
+					Name: "Ethernet controller",
+				},
+				ProgrammingInterface: &pcidb.ProgrammingInterface{
+					ID:   "00",
+					Name: "unknonw",
+				},
 			},
-			Revision: "0x00",
-			Subsystem: &pcidb.Product{
-				ID:   "0083",
-				Name: "unknown",
+			{
+				Driver:  "mlx5_core",
+				Address: "0000:3b:00.0",
+				Vendor: &pcidb.Vendor{
+					ID:   "15b3",
+					Name: "Mellanox Technologies",
+				},
+				Product: &pcidb.Product{
+					ID:   "aaaa", // not supported
+					Name: "not supported",
+				},
+				Class: &pcidb.Class{
+					ID:   "02",
+					Name: "Network controller",
+				},
 			},
-			Class: &pcidb.Class{
-				ID:   "02",
-				Name: "Network controller",
-			},
-			Subclass: &pcidb.Subclass{
-				ID:   "00",
-				Name: "Ethernet controller",
-			},
-			ProgrammingInterface: &pcidb.ProgrammingInterface{
-				ID:   "00",
-				Name: "unknonw",
-			},
-		},
-		{
-			Driver:  "mlx5_core",
-			Address: "0000:3b:00.0",
-			Vendor: &pcidb.Vendor{
-				ID:   "15b3",
-				Name: "Mellanox Technologies",
-			},
-			Product: &pcidb.Product{
-				ID:   "aaaa", // not supported
-				Name: "not supported",
-			},
-			Class: &pcidb.Class{
-				ID:   "02",
-				Name: "Network controller",
-			},
-		},
-		{
-			Driver:  "test",
-			Address: "0000:d7:16.5",
-			Vendor: &pcidb.Vendor{
-				ID:   "8086",
-				Name: "Intel Corporation",
-			},
-			Class: &pcidb.Class{
-				ID:   "11", // not network device
-				Name: "Signal processing controller",
+			{
+				Driver:  "test",
+				Address: "0000:d7:16.5",
+				Vendor: &pcidb.Vendor{
+					ID:   "8086",
+					Name: "Intel Corporation",
+				},
+				Class: &pcidb.Class{
+					ID:   "11", // not network device
+					Name: "Signal processing controller",
+				},
 			},
 		},
 	}

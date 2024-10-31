@@ -321,6 +321,21 @@ func (mr *MockHostManagerInterfaceMockRecorder) EnableService(service interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableService", reflect.TypeOf((*MockHostManagerInterface)(nil).EnableService), service)
 }
 
+// GetCPUVendor mocks base method.
+func (m *MockHostManagerInterface) GetCPUVendor() (types.CPUVendor, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCPUVendor")
+	ret0, _ := ret[0].(types.CPUVendor)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCPUVendor indicates an expected call of GetCPUVendor.
+func (mr *MockHostManagerInterfaceMockRecorder) GetCPUVendor() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCPUVendor", reflect.TypeOf((*MockHostManagerInterface)(nil).GetCPUVendor))
+}
+
 // GetCurrentKernelArgs mocks base method.
 func (m *MockHostManagerInterface) GetCurrentKernelArgs() (string, error) {
 	m.ctrl.T.Helper()

@@ -10,6 +10,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	mock_helper "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
+	hostTypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
@@ -850,8 +851,9 @@ var _ = Describe("Generic plugin", func() {
 			Expect(changed).To(BeTrue())
 		})
 
-		It("should detect changes on status due to missing kernel args", func() {
-			networkNodeState := &sriovnetworkv1.SriovNetworkNodeState{
+		Context("Kernel Args", func() {
+
+			vfioNetworkNodeState := &sriovnetworkv1.SriovNetworkNodeState{
 				Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{
 					Interfaces: sriovnetworkv1.Interfaces{{
 						PciAddress: "0000:00:00.0",
@@ -896,16 +898,41 @@ var _ = Describe("Generic plugin", func() {
 				},
 			}
 
-			// Load required kernel args.
-			genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(networkNodeState)
+			It("should detect changes on status due to missing kernel args", func() {
+				hostHelper.EXPECT().GetCPUVendor().Return(hostTypes.CPUVendorIntel, nil)
 
-			hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil)
-			hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIntelIommu).Return(false)
-			hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPt).Return(false)
+				// Load required kernel args.
+				genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(vfioNetworkNodeState)
 
-			changed, err := genericPlugin.CheckStatusChanges(networkNodeState)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(changed).To(BeTrue())
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs).To(Equal(map[string]bool{
+					consts.KernelArgIntelIommu: false,
+					consts.KernelArgIommuPt:    false,
+				}))
+
+				hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil)
+				hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIntelIommu).Return(false)
+				hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPt).Return(false)
+
+				changed, err := genericPlugin.CheckStatusChanges(vfioNetworkNodeState)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(changed).To(BeTrue())
+			})
+
+			It("should set the correct kernel args on AMD CPUs", func() {
+				hostHelper.EXPECT().GetCPUVendor().Return(hostTypes.CPUVendorAMD, nil)
+				genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(vfioNetworkNodeState)
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs).To(Equal(map[string]bool{
+					consts.KernelArgIommuPt: false,
+				}))
+			})
+
+			It("should set the correct kernel args on ARM CPUs", func() {
+				hostHelper.EXPECT().GetCPUVendor().Return(hostTypes.CPUVendorARM, nil)
+				genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(vfioNetworkNodeState)
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs).To(Equal(map[string]bool{
+					consts.KernelArgIommuPassthrough: false,
+				}))
+			})
 		})
 
 		It("should load vfio_pci driver", func() {

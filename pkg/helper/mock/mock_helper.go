@@ -351,6 +351,21 @@ func (mr *MockHostHelpersInterfaceMockRecorder) EnableService(service interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableService", reflect.TypeOf((*MockHostHelpersInterface)(nil).EnableService), service)
 }
 
+// GetCPUVendor mocks base method.
+func (m *MockHostHelpersInterface) GetCPUVendor() (types.CPUVendor, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCPUVendor")
+	ret0, _ := ret[0].(types.CPUVendor)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCPUVendor indicates an expected call of GetCPUVendor.
+func (mr *MockHostHelpersInterfaceMockRecorder) GetCPUVendor() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCPUVendor", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetCPUVendor))
+}
+
 // GetCheckPointNodeState mocks base method.
 func (m *MockHostHelpersInterface) GetCheckPointNodeState() (*v1.SriovNetworkNodeState, error) {
 	m.ctrl.T.Helper()

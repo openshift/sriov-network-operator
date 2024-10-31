@@ -121,9 +121,10 @@ const (
 		`IMPORT{program}="/etc/udev/switchdev-vf-link-name.sh $attr{phys_port_name}", ` +
 		`NAME="%s_$env{NUMBER}"`
 
-	KernelArgPciRealloc = "pci=realloc"
-	KernelArgIntelIommu = "intel_iommu=on"
-	KernelArgIommuPt    = "iommu=pt"
+	KernelArgPciRealloc       = "pci=realloc"
+	KernelArgIntelIommu       = "intel_iommu=on"
+	KernelArgIommuPt          = "iommu=pt"
+	KernelArgIommuPassthrough = "iommu.passthrough=1"
 
 	// Feature gates
 	// ParallelNicConfigFeatureGate: allow to configure nics in parallel
