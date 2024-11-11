@@ -2,14 +2,14 @@
 
 
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
-SUT_SCRIPT="${SCRIPTPATH}/../../bindata/scripts/enable-kargs.sh"
+SUT_SCRIPT="${SCRIPTPATH}/../../bindata/scripts/kargs.sh"
 
 
 test_RpmOstree_Add_All_Arguments() {
     echo "a b c=d eee=fff" > ${FAKE_HOST}/proc/cmdline
     touch ${FAKE_HOST}/run/ostree-booted
 
-    output=`$SUT_SCRIPT X=Y W=Z`
+    output=`$SUT_SCRIPT add X=Y W=Z`
     assertEquals 0 $?
     assertEquals "2" $output
 
@@ -22,7 +22,7 @@ test_RpmOstree_Add_Only_Missing_Arguments() {
     echo "a b c=d eee=fff K=L" > ${FAKE_HOST}/proc/cmdline
     touch ${FAKE_HOST}/run/ostree-booted
 
-    output=`$SUT_SCRIPT K=L X=Y`
+    output=`$SUT_SCRIPT add K=L X=Y`
     assertEquals 0 $?
     assertEquals "1" $output
 
@@ -30,6 +30,29 @@ test_RpmOstree_Add_Only_Missing_Arguments() {
     assertNotContains "`cat ${FAKE_HOST}/rpm-ostree_calls`" "--append K=L"
 }
 
+test_RpmOstree_Delete_All_Arguments() {
+    echo "a b c=d eee=fff X=Y W=Z" > ${FAKE_HOST}/proc/cmdline
+    touch ${FAKE_HOST}/run/ostree-booted
+
+    output=`$SUT_SCRIPT remove X=Y W=Z`
+    assertEquals 0 $?
+    assertEquals "2" $output
+
+    assertContains "`cat ${FAKE_HOST}/rpm-ostree_calls`" "--delete X=Y"
+    assertContains "`cat ${FAKE_HOST}/rpm-ostree_calls`" "--delete W=Z"
+}
+
+test_RpmOstree_Delete_Only_Exist_Arguments() {
+    echo "a b c=d eee=fff X=Y" > ${FAKE_HOST}/proc/cmdline
+    touch ${FAKE_HOST}/run/ostree-booted
+
+    output=`$SUT_SCRIPT remove X=Y W=Z`
+    assertEquals 0 $?
+    assertEquals "1" $output
+
+    assertContains "`cat ${FAKE_HOST}/rpm-ostree_calls`" "--delete X=Y"
+    assertContains "`cat ${FAKE_HOST}/rpm-ostree_calls`" "--delete W=Z"
+}
 
 ###### Mock /host directory ######
 export FAKE_HOST="$(mktemp -d)"

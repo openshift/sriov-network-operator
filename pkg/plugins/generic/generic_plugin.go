@@ -1,11 +1,8 @@
 package generic
 
 import (
-	"bytes"
 	"errors"
-	"os/exec"
-	"strconv"
-	"strings"
+	"fmt"
 	"syscall"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -13,6 +10,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
+	hostTypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
@@ -47,12 +45,14 @@ type DriverState struct {
 
 type DriverStateMapType map[uint]*DriverState
 
+type KargStateMapType map[string]bool
+
 type GenericPlugin struct {
 	PluginName              string
 	SpecVersion             string
 	DesireState             *sriovnetworkv1.SriovNetworkNodeState
 	DriverStateMap          DriverStateMapType
-	DesiredKernelArgs       map[string]bool
+	DesiredKernelArgs       KargStateMapType
 	helpers                 helper.HostHelpersInterface
 	skipVFConfiguration     bool
 	skipBridgeConfiguration bool
@@ -81,7 +81,7 @@ type genericPluginOptions struct {
 	skipBridgeConfiguration bool
 }
 
-const scriptsPath = "bindata/scripts/enable-kargs.sh"
+const scriptsPath = "bindata/scripts/kargs.sh"
 
 // Initialize our plugin and set up initial values
 func NewGenericPlugin(helpers helper.HostHelpersInterface, options ...Option) (plugin.VendorPlugin, error) {
@@ -111,11 +111,27 @@ func NewGenericPlugin(helpers helper.HostHelpersInterface, options ...Option) (p
 		NeedDriverFunc: needDriverCheckVdpaType,
 		DriverLoaded:   false,
 	}
+
+	// To maintain backward compatibility we don't remove the intel_iommu, iommu and pcirealloc
+	// kernel args if they are configured
+	kargs, err := helpers.GetCurrentKernelArgs()
+	if err != nil {
+		return nil, err
+	}
+	desiredKernelArgs := KargStateMapType{
+		consts.KernelArgPciRealloc:       helpers.IsKernelArgsSet(kargs, consts.KernelArgPciRealloc),
+		consts.KernelArgIntelIommu:       helpers.IsKernelArgsSet(kargs, consts.KernelArgIntelIommu),
+		consts.KernelArgIommuPt:          helpers.IsKernelArgsSet(kargs, consts.KernelArgIommuPt),
+		consts.KernelArgIommuPassthrough: helpers.IsKernelArgsSet(kargs, consts.KernelArgIommuPassthrough),
+		consts.KernelArgRdmaShared:       false,
+		consts.KernelArgRdmaExclusive:    false,
+	}
+
 	return &GenericPlugin{
 		PluginName:              PluginName,
 		SpecVersion:             "1.0",
 		DriverStateMap:          driverStateMap,
-		DesiredKernelArgs:       make(map[string]bool),
+		DesiredKernelArgs:       desiredKernelArgs,
 		helpers:                 helpers,
 		skipVFConfiguration:     cfg.skipVFConfiguration,
 		skipBridgeConfiguration: cfg.skipBridgeConfiguration,
@@ -178,18 +194,13 @@ func (p *GenericPlugin) CheckStatusChanges(current *sriovnetworkv1.SriovNetworkN
 		}
 	}
 
-	missingKernelArgs, err := p.getMissingKernelArgs()
+	shouldUpdate, err := p.shouldUpdateKernelArgs()
 	if err != nil {
 		log.Log.Error(err, "generic-plugin CheckStatusChanges(): failed to verify missing kernel arguments")
 		return false, err
 	}
 
-	if len(missingKernelArgs) != 0 {
-		log.Log.V(0).Info("generic-plugin CheckStatusChanges(): kernel args missing",
-			"kernelArgs", missingKernelArgs)
-	}
-
-	return len(missingKernelArgs) != 0, nil
+	return shouldUpdate, nil
 }
 
 func (p *GenericPlugin) syncDriverState() error {
@@ -227,7 +238,7 @@ func (p *GenericPlugin) Apply() error {
 		p.DesireState.Status.Interfaces, p.skipVFConfiguration); err != nil {
 		// Catch the "cannot allocate memory" error and try to use PCI realloc
 		if errors.Is(err, syscall.ENOMEM) {
-			p.addToDesiredKernelArgs(consts.KernelArgPciRealloc)
+			p.enableDesiredKernelArgs(consts.KernelArgPciRealloc)
 		}
 		return err
 	}
@@ -263,85 +274,84 @@ func needDriverCheckVdpaType(state *sriovnetworkv1.SriovNetworkNodeState, driver
 	return false
 }
 
-// setKernelArg Tries to add the kernel args via ostree or grubby.
-func setKernelArg(karg string) (bool, error) {
-	log.Log.Info("generic plugin setKernelArg()")
-	var stdout, stderr bytes.Buffer
-	cmd := exec.Command("/bin/sh", scriptsPath, karg)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
+// editKernelArg Tries to add the kernel args via ostree or grubby.
+func editKernelArg(helper helper.HostHelpersInterface, mode, karg string) error {
+	log.Log.Info("generic plugin editKernelArg()", "mode", mode, "karg", karg)
+	_, _, err := helper.RunCommand("/bin/sh", scriptsPath, mode, karg)
+	if err != nil {
 		// if grubby is not there log and assume kernel args are set correctly.
 		if utils.IsCommandNotFound(err) {
-			log.Log.Error(err, "generic plugin setKernelArg(): grubby or ostree command not found. Please ensure that kernel arg are set",
+			log.Log.Error(err, "generic plugin editKernelArg(): grubby or ostree command not found. Please ensure that kernel arg are correct",
 				"kargs", karg)
-			return false, nil
+			return nil
 		}
-		log.Log.Error(err, "generic plugin setKernelArg(): fail to enable kernel arg", "karg", karg)
+		log.Log.Error(err, "generic plugin editKernelArg(): fail to edit kernel arg", "karg", karg)
+		return err
+	}
+	return nil
+}
+
+// enableDesiredKernelArgs Should be called to mark a kernel arg as enabled.
+func (p *GenericPlugin) enableDesiredKernelArgs(karg string) {
+	log.Log.Info("generic plugin enableDesiredKernelArgs(): enable kernel arg", "karg", karg)
+	p.DesiredKernelArgs[karg] = true
+}
+
+// disableDesiredKernelArgs Should be called to mark a kernel arg as disabled.
+func (p *GenericPlugin) disableDesiredKernelArgs(karg string) {
+	log.Log.Info("generic plugin disableDesiredKernelArgs(): disable kernel arg", "karg", karg)
+	p.DesiredKernelArgs[karg] = false
+}
+
+// shouldUpdateKernelArgs returns true if the DesiredKernelArgs state is not equal to the running kernel args in the system
+func (p *GenericPlugin) shouldUpdateKernelArgs() (bool, error) {
+	kargs, err := p.helpers.GetCurrentKernelArgs()
+	if err != nil {
 		return false, err
 	}
 
-	i, err := strconv.Atoi(strings.TrimSpace(stdout.String()))
-	if err == nil {
-		if i > 0 {
-			log.Log.Info("generic plugin setKernelArg(): need to reboot node for kernel arg", "karg", karg)
+	for karg, kargState := range p.DesiredKernelArgs {
+		if kargState && !p.helpers.IsKernelArgsSet(kargs, karg) {
+			return true, nil
+		}
+
+		if !kargState && p.helpers.IsKernelArgsSet(kargs, karg) {
 			return true, nil
 		}
 	}
-	return false, err
-}
-
-// addToDesiredKernelArgs Should be called to queue a kernel arg to be added to the node.
-func (p *GenericPlugin) addToDesiredKernelArgs(karg string) {
-	if _, ok := p.DesiredKernelArgs[karg]; !ok {
-		log.Log.Info("generic plugin addToDesiredKernelArgs(): Adding to desired kernel arg", "karg", karg)
-		p.DesiredKernelArgs[karg] = false
-	}
-}
-
-// getMissingKernelArgs gets Kernel arguments that have not been set.
-func (p *GenericPlugin) getMissingKernelArgs() ([]string, error) {
-	missingArgs := make([]string, 0, len(p.DesiredKernelArgs))
-	if len(p.DesiredKernelArgs) == 0 {
-		return nil, nil
-	}
-
-	kargs, err := p.helpers.GetCurrentKernelArgs()
-	if err != nil {
-		return nil, err
-	}
-
-	for desiredKarg := range p.DesiredKernelArgs {
-		if !p.helpers.IsKernelArgsSet(kargs, desiredKarg) {
-			missingArgs = append(missingArgs, desiredKarg)
-		}
-	}
-	return missingArgs, nil
+	return false, nil
 }
 
 // syncDesiredKernelArgs should be called to set all the kernel arguments. Returns bool if node update is needed.
-func (p *GenericPlugin) syncDesiredKernelArgs(kargs []string) (bool, error) {
-	needReboot := false
+func (p *GenericPlugin) syncDesiredKernelArgs() (bool, error) {
+	kargs, err := p.helpers.GetCurrentKernelArgs()
+	if err != nil {
+		return false, err
+	}
 
-	for _, karg := range kargs {
-		if p.DesiredKernelArgs[karg] {
-			log.Log.V(2).Info("generic-plugin syncDesiredKernelArgs(): previously attempted to set kernel arg",
-				"karg", karg)
+	needReboot := false
+	for karg, kargState := range p.DesiredKernelArgs {
+		if kargState {
+			err = editKernelArg(p.helpers, "add", karg)
+			if err != nil {
+				log.Log.Error(err, "generic-plugin syncDesiredKernelArgs(): fail to set kernel arg", "karg", karg)
+				return false, err
+			}
+
+			if !p.helpers.IsKernelArgsSet(kargs, karg) {
+				needReboot = true
+			}
+		} else {
+			err = editKernelArg(p.helpers, "remove", karg)
+			if err != nil {
+				log.Log.Error(err, "generic-plugin syncDesiredKernelArgs(): fail to remove kernel arg", "karg", karg)
+				return false, err
+			}
+
+			if p.helpers.IsKernelArgsSet(kargs, karg) {
+				needReboot = true
+			}
 		}
-		// There is a case when we try to set the kernel argument here, the daemon could decide to not reboot because
-		// the daemon encountered a potentially one-time error. However we always want to make sure that the kernel
-		// argument is set once the daemon goes through node state sync again.
-		update, err := setKernelArg(karg)
-		if err != nil {
-			log.Log.Error(err, "generic-plugin syncDesiredKernelArgs(): fail to set kernel arg", "karg", karg)
-			return false, err
-		}
-		if update {
-			needReboot = true
-			log.Log.V(2).Info("generic-plugin syncDesiredKernelArgs(): need reboot for setting kernel arg", "karg", karg)
-		}
-		p.DesiredKernelArgs[karg] = true
 	}
 	return needReboot, nil
 }
@@ -419,32 +429,69 @@ func (p *GenericPlugin) shouldConfigureBridges() bool {
 
 func (p *GenericPlugin) addVfioDesiredKernelArg(state *sriovnetworkv1.SriovNetworkNodeState) {
 	driverState := p.DriverStateMap[Vfio]
-	if !driverState.DriverLoaded && driverState.NeedDriverFunc(state, driverState) {
-		p.addToDesiredKernelArgs(consts.KernelArgIntelIommu)
-		p.addToDesiredKernelArgs(consts.KernelArgIommuPt)
+
+	kernelArgFnByCPUVendor := map[hostTypes.CPUVendor]func(){
+		hostTypes.CPUVendorIntel: func() {
+			p.enableDesiredKernelArgs(consts.KernelArgIntelIommu)
+			p.enableDesiredKernelArgs(consts.KernelArgIommuPt)
+		},
+		hostTypes.CPUVendorAMD: func() {
+			p.enableDesiredKernelArgs(consts.KernelArgIommuPt)
+		},
+		hostTypes.CPUVendorARM: func() {
+			p.enableDesiredKernelArgs(consts.KernelArgIommuPassthrough)
+		},
 	}
+
+	if !driverState.DriverLoaded && driverState.NeedDriverFunc(state, driverState) {
+		cpuVendor, err := p.helpers.GetCPUVendor()
+		if err != nil {
+			log.Log.Error(err, "can't get CPU vendor, falling back to Intel")
+			cpuVendor = hostTypes.CPUVendorIntel
+		}
+
+		addKernelArgFn := kernelArgFnByCPUVendor[cpuVendor]
+		if addKernelArgFn != nil {
+			addKernelArgFn()
+		}
+	}
+}
+
+func (p *GenericPlugin) configRdmaKernelArg(state *sriovnetworkv1.SriovNetworkNodeState) error {
+	if state.Spec.System.RdmaMode == "" {
+		p.disableDesiredKernelArgs(consts.KernelArgRdmaExclusive)
+		p.disableDesiredKernelArgs(consts.KernelArgRdmaShared)
+	} else if state.Spec.System.RdmaMode == "shared" {
+		p.enableDesiredKernelArgs(consts.KernelArgRdmaShared)
+		p.disableDesiredKernelArgs(consts.KernelArgRdmaExclusive)
+	} else if state.Spec.System.RdmaMode == "exclusive" {
+		p.enableDesiredKernelArgs(consts.KernelArgRdmaExclusive)
+		p.disableDesiredKernelArgs(consts.KernelArgRdmaShared)
+	} else {
+		err := fmt.Errorf("unexpected rdma mode: %s", state.Spec.System.RdmaMode)
+		log.Log.Error(err, "generic-plugin configRdmaKernelArg(): failed to configure kernel arguments for rdma")
+		return err
+	}
+
+	return p.helpers.SetRDMASubsystem(state.Spec.System.RdmaMode)
 }
 
 func (p *GenericPlugin) needRebootNode(state *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	needReboot := false
 
 	p.addVfioDesiredKernelArg(state)
-
-	missingKernelArgs, err := p.getMissingKernelArgs()
+	err := p.configRdmaKernelArg(state)
 	if err != nil {
-		log.Log.Error(err, "generic-plugin needRebootNode(): failed to verify missing kernel arguments")
 		return false, err
 	}
 
-	if len(missingKernelArgs) != 0 {
-		needReboot, err = p.syncDesiredKernelArgs(missingKernelArgs)
-		if err != nil {
-			log.Log.Error(err, "generic-plugin needRebootNode(): failed to set the desired kernel arguments")
-			return false, err
-		}
-		if needReboot {
-			log.Log.V(2).Info("generic-plugin needRebootNode(): need reboot for updating kernel arguments")
-		}
+	needReboot, err = p.syncDesiredKernelArgs()
+	if err != nil {
+		log.Log.Error(err, "generic-plugin needRebootNode(): failed to set the desired kernel arguments")
+		return false, err
+	}
+	if needReboot {
+		log.Log.V(2).Info("generic-plugin needRebootNode(): need reboot for updating kernel arguments")
 	}
 
 	return needReboot, nil

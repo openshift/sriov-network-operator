@@ -155,22 +155,22 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 	delayedEventHandler := handler.Funcs{
 		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 			log.Log.WithName("SriovNetworkNodePolicy").
-				Info("Enqueuing sync for create event", "resource", e.Object.GetName())
+				Info("Enqueuing sync for create event", "resource", e.Object.GetName(), "type", e.Object.GetObjectKind().GroupVersionKind().String())
 			qHandler(q)
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
 			log.Log.WithName("SriovNetworkNodePolicy").
-				Info("Enqueuing sync for update event", "resource", e.ObjectNew.GetName())
+				Info("Enqueuing sync for update event", "resource", e.ObjectNew.GetName(), "type", e.ObjectNew.GetObjectKind().GroupVersionKind().String())
 			qHandler(q)
 		},
 		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 			log.Log.WithName("SriovNetworkNodePolicy").
-				Info("Enqueuing sync for delete event", "resource", e.Object.GetName())
+				Info("Enqueuing sync for delete event", "resource", e.Object.GetName(), "type", e.Object.GetObjectKind().GroupVersionKind().String())
 			qHandler(q)
 		},
 		GenericFunc: func(ctx context.Context, e event.GenericEvent, q workqueue.RateLimitingInterface) {
 			log.Log.WithName("SriovNetworkNodePolicy").
-				Info("Enqueuing sync for generic event", "resource", e.Object.GetName())
+				Info("Enqueuing sync for generic event", "resource", e.Object.GetName(), "type", e.Object.GetObjectKind().GroupVersionKind().String())
 			qHandler(q)
 		},
 	}
@@ -199,6 +199,7 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 		For(&sriovnetworkv1.SriovNetworkNodePolicy{}).
 		Watches(&corev1.Node{}, nodeEvenHandler).
 		Watches(&sriovnetworkv1.SriovNetworkNodePolicy{}, delayedEventHandler).
+		Watches(&sriovnetworkv1.SriovNetworkPoolConfig{}, delayedEventHandler).
 		WatchesRawSource(&source.Channel{Source: eventChan}, delayedEventHandler).
 		Complete(r)
 }
@@ -271,6 +272,13 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 		ns := &sriovnetworkv1.SriovNetworkNodeState{}
 		ns.Name = node.Name
 		ns.Namespace = vars.Namespace
+		netPoolConfig, _, err := findNodePoolConfig(ctx, &node, r.Client)
+		if err != nil {
+			logger.Error(err, "failed to get SriovNetworkPoolConfig for the current node")
+		}
+		if netPoolConfig != nil {
+			ns.Spec.System.RdmaMode = netPoolConfig.Spec.RdmaMode
+		}
 		j, _ := json.Marshal(ns)
 		logger.V(2).Info("SriovNetworkNodeState CR", "content", j)
 		if err := r.syncSriovNetworkNodeState(ctx, dc, npl, ns, &node); err != nil {
