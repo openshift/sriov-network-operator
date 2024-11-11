@@ -98,7 +98,7 @@ func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrai
 		reqLogger.Info("drainNode(): failed to drain node", "error", err)
 		return false, err
 	}
-	reqLogger.Info("drainNode(): drain complete")
+	reqLogger.Info("drainNode(): Drain completed")
 	return true, nil
 }
 
