@@ -41,6 +41,14 @@ var _ = Describe("config daemon plugin loading tests", func() {
 			vars.ClusterType = consts.ClusterTypeKubernetes
 			gmockController = gomock.NewController(GinkgoT())
 			helperMock = helperMocks.NewMockHostHelpersInterface(gmockController)
+			helperMock.EXPECT().GetCurrentKernelArgs().Return("", nil).AnyTimes()
+			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgIntelIommu).Return(false)
+			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPt).Return(false)
+			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgPciRealloc).Return(false)
+			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaExclusive).Return(false)
+			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaShared).Return(false)
+			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPassthrough).Return(false)
+
 			// k8s plugin is ATM the only plugin which require mocking/faking, as its New method performs additional logic
 			// other than simple plugin struct initialization
 			K8sPlugin = func(_ helper.HostHelpersInterface) (plugin.VendorPlugin, error) {

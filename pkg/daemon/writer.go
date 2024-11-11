@@ -118,6 +118,7 @@ func (w *NodeStateStatusWriter) pollNicStatus() error {
 	log.Log.V(2).Info("pollNicStatus()")
 	var iface []sriovnetworkv1.InterfaceExt
 	var bridges sriovnetworkv1.Bridges
+	var rdmaMode string
 	var err error
 
 	if vars.PlatformType == consts.VirtualOpenStack {
@@ -138,8 +139,14 @@ func (w *NodeStateStatusWriter) pollNicStatus() error {
 		}
 	}
 
+	rdmaMode, err = w.hostHelper.DiscoverRDMASubsystem()
+	if err != nil {
+		return err
+	}
+
 	w.status.Interfaces = iface
 	w.status.Bridges = bridges
+	w.status.System.RdmaMode = rdmaMode
 
 	return nil
 }
@@ -182,6 +189,7 @@ func (w *NodeStateStatusWriter) setNodeStateStatus(msg Message) (*sriovnetworkv1
 	nodeState, err := w.updateNodeStateStatusRetry(func(nodeState *sriovnetworkv1.SriovNetworkNodeState) {
 		nodeState.Status.Interfaces = w.status.Interfaces
 		nodeState.Status.Bridges = w.status.Bridges
+		nodeState.Status.System = w.status.System
 		if msg.lastSyncError != "" || msg.syncStatus == consts.SyncStatusSucceeded {
 			// clear lastSyncError when sync Succeeded
 			nodeState.Status.LastSyncError = msg.lastSyncError

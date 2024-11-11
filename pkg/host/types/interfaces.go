@@ -90,6 +90,10 @@ type NetworkInterface interface {
 	GetNetDevLinkAdminState(ifaceName string) string
 	// GetPciAddressFromInterfaceName parses sysfs to get pci address of an interface by name
 	GetPciAddressFromInterfaceName(interfaceName string) (string, error)
+	// DiscoverRDMASubsystem returns RDMA subsystem mode
+	DiscoverRDMASubsystem() (string, error)
+	// SetRDMASubsystem changes RDMA subsystem mode
+	SetRDMASubsystem(mode string) error
 }
 
 type ServiceInterface interface {
@@ -186,4 +190,17 @@ type BridgeInterface interface {
 type InfinibandInterface interface {
 	// ConfigureVfGUID configures and sets a GUID for an IB VF device
 	ConfigureVfGUID(vfAddr string, pfAddr string, vfID int, pfLink netlink.Link) error
+}
+
+type CPUVendor int
+
+const (
+	CPUVendorIntel CPUVendor = iota
+	CPUVendorAMD
+	CPUVendorARM
+)
+
+type CPUInfoProviderInterface interface {
+	// Retrieve the CPU vendor of the current system
+	GetCPUVendor() (CPUVendor, error)
 }

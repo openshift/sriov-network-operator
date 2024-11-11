@@ -8,8 +8,8 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	ghw "github.com/jaypipes/ghw"
-	ghw0 "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/ghw"
+	cpu "github.com/jaypipes/ghw/pkg/cpu"
+	pci "github.com/jaypipes/ghw/pkg/pci"
 )
 
 // MockGHWLib is a mock of GHWLib interface.
@@ -35,11 +35,26 @@ func (m *MockGHWLib) EXPECT() *MockGHWLibMockRecorder {
 	return m.recorder
 }
 
+// CPU mocks base method.
+func (m *MockGHWLib) CPU() (*cpu.Info, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CPU")
+	ret0, _ := ret[0].(*cpu.Info)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CPU indicates an expected call of CPU.
+func (mr *MockGHWLibMockRecorder) CPU() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CPU", reflect.TypeOf((*MockGHWLib)(nil).CPU))
+}
+
 // PCI mocks base method.
-func (m *MockGHWLib) PCI() (ghw0.Info, error) {
+func (m *MockGHWLib) PCI() (*pci.Info, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "PCI")
-	ret0, _ := ret[0].(ghw0.Info)
+	ret0, _ := ret[0].(*pci.Info)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -48,41 +63,4 @@ func (m *MockGHWLib) PCI() (ghw0.Info, error) {
 func (mr *MockGHWLibMockRecorder) PCI() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PCI", reflect.TypeOf((*MockGHWLib)(nil).PCI))
-}
-
-// MockInfo is a mock of Info interface.
-type MockInfo struct {
-	ctrl     *gomock.Controller
-	recorder *MockInfoMockRecorder
-}
-
-// MockInfoMockRecorder is the mock recorder for MockInfo.
-type MockInfoMockRecorder struct {
-	mock *MockInfo
-}
-
-// NewMockInfo creates a new mock instance.
-func NewMockInfo(ctrl *gomock.Controller) *MockInfo {
-	mock := &MockInfo{ctrl: ctrl}
-	mock.recorder = &MockInfoMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockInfo) EXPECT() *MockInfoMockRecorder {
-	return m.recorder
-}
-
-// ListDevices mocks base method.
-func (m *MockInfo) ListDevices() []*ghw.PCIDevice {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListDevices")
-	ret0, _ := ret[0].([]*ghw.PCIDevice)
-	return ret0
-}
-
-// ListDevices indicates an expected call of ListDevices.
-func (mr *MockInfoMockRecorder) ListDevices() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListDevices", reflect.TypeOf((*MockInfo)(nil).ListDevices))
 }

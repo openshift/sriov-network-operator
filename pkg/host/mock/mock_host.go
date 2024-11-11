@@ -264,6 +264,21 @@ func (mr *MockHostManagerInterfaceMockRecorder) DiscoverBridges() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverBridges", reflect.TypeOf((*MockHostManagerInterface)(nil).DiscoverBridges))
 }
 
+// DiscoverRDMASubsystem mocks base method.
+func (m *MockHostManagerInterface) DiscoverRDMASubsystem() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DiscoverRDMASubsystem")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DiscoverRDMASubsystem indicates an expected call of DiscoverRDMASubsystem.
+func (mr *MockHostManagerInterfaceMockRecorder) DiscoverRDMASubsystem() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverRDMASubsystem", reflect.TypeOf((*MockHostManagerInterface)(nil).DiscoverRDMASubsystem))
+}
+
 // DiscoverSriovDevices mocks base method.
 func (m *MockHostManagerInterface) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]v1.InterfaceExt, error) {
 	m.ctrl.T.Helper()
@@ -319,6 +334,21 @@ func (m *MockHostManagerInterface) EnableService(service *types.Service) error {
 func (mr *MockHostManagerInterfaceMockRecorder) EnableService(service interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnableService", reflect.TypeOf((*MockHostManagerInterface)(nil).EnableService), service)
+}
+
+// GetCPUVendor mocks base method.
+func (m *MockHostManagerInterface) GetCPUVendor() (types.CPUVendor, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCPUVendor")
+	ret0, _ := ret[0].(types.CPUVendor)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCPUVendor indicates an expected call of GetCPUVendor.
+func (mr *MockHostManagerInterfaceMockRecorder) GetCPUVendor() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCPUVendor", reflect.TypeOf((*MockHostManagerInterface)(nil).GetCPUVendor))
 }
 
 // GetCurrentKernelArgs mocks base method.
@@ -842,6 +872,20 @@ func (m *MockHostManagerInterface) SetNicSriovMode(pciAddr, mode string) error {
 func (mr *MockHostManagerInterfaceMockRecorder) SetNicSriovMode(pciAddr, mode interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNicSriovMode", reflect.TypeOf((*MockHostManagerInterface)(nil).SetNicSriovMode), pciAddr, mode)
+}
+
+// SetRDMASubsystem mocks base method.
+func (m *MockHostManagerInterface) SetRDMASubsystem(mode string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetRDMASubsystem", mode)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetRDMASubsystem indicates an expected call of SetRDMASubsystem.
+func (mr *MockHostManagerInterfaceMockRecorder) SetRDMASubsystem(mode interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetRDMASubsystem", reflect.TypeOf((*MockHostManagerInterface)(nil).SetRDMASubsystem), mode)
 }
 
 // SetSriovNumVfs mocks base method.

@@ -68,6 +68,8 @@ type NetlinkLib interface {
 	RdmaLinkByName(name string) (*netlink.RdmaLink, error)
 	// IsLinkAdminStateUp checks if the admin state of a link is up
 	IsLinkAdminStateUp(link Link) bool
+	// RdmaSystemGetNetnsMode returns RDMA subsystem mode
+	RdmaSystemGetNetnsMode() (string, error)
 }
 
 type libWrapper struct{}
@@ -184,4 +186,9 @@ func (w *libWrapper) RdmaLinkByName(name string) (*netlink.RdmaLink, error) {
 // IsLinkAdminStateUp checks if the admin state of a link is up
 func (w *libWrapper) IsLinkAdminStateUp(link Link) bool {
 	return link.Attrs().Flags&net.FlagUp == 1
+}
+
+// RdmaSystemGetNetnsMode returns RDMA subsystem mode
+func (w *libWrapper) RdmaSystemGetNetnsMode() (string, error) {
+	return netlink.RdmaSystemGetNetnsMode()
 }
