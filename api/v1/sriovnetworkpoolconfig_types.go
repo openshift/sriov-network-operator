@@ -21,6 +21,10 @@ type SriovNetworkPoolConfigSpec struct {
 	// Drain will respect Pod Disruption Budgets (PDBs) such as etcd quorum guards,
 	// even if maxUnavailable is greater than one.
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
+
+	// +kubebuilder:validation:Enum=shared;exclusive
+	// RDMA subsystem. Allowed value "shared", "exclusive".
+	RdmaMode string `json:"rdmaMode,omitempty"`
 }
 
 type OvsHardwareOffloadConfig struct {

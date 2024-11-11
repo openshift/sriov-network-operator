@@ -289,6 +289,21 @@ func (mr *MockNetlinkLibMockRecorder) RdmaLinkByName(name interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RdmaLinkByName", reflect.TypeOf((*MockNetlinkLib)(nil).RdmaLinkByName), name)
 }
 
+// RdmaSystemGetNetnsMode mocks base method.
+func (m *MockNetlinkLib) RdmaSystemGetNetnsMode() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RdmaSystemGetNetnsMode")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RdmaSystemGetNetnsMode indicates an expected call of RdmaSystemGetNetnsMode.
+func (mr *MockNetlinkLibMockRecorder) RdmaSystemGetNetnsMode() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RdmaSystemGetNetnsMode", reflect.TypeOf((*MockNetlinkLib)(nil).RdmaSystemGetNetnsMode))
+}
+
 // VDPADelDev mocks base method.
 func (m *MockNetlinkLib) VDPADelDev(name string) error {
 	m.ctrl.T.Helper()

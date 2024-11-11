@@ -27,6 +27,7 @@ import (
 type SriovNetworkNodeStateSpec struct {
 	Interfaces Interfaces `json:"interfaces,omitempty"`
 	Bridges    Bridges    `json:"bridges,omitempty"`
+	System     System     `json:"system,omitempty"`
 }
 
 type Interfaces []Interface
@@ -114,10 +115,17 @@ type OVSUplinkConfigExt struct {
 	Interface OVSInterfaceConfig `json:"interface,omitempty"`
 }
 
+type System struct {
+	// +kubebuilder:validation:Enum=shared;exclusive
+	//RDMA subsystem. Allowed value "shared", "exclusive".
+	RdmaMode string `json:"rdmaMode,omitempty"`
+}
+
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState
 type SriovNetworkNodeStateStatus struct {
 	Interfaces    InterfaceExts `json:"interfaces,omitempty"`
 	Bridges       Bridges       `json:"bridges,omitempty"`
+	System        System        `json:"system,omitempty"`
 	SyncStatus    string        `json:"syncStatus,omitempty"`
 	LastSyncError string        `json:"lastSyncError,omitempty"`
 }

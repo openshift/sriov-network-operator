@@ -34,6 +34,16 @@ var _ = Describe("Generic plugin", func() {
 		ctrl = gomock.NewController(t)
 
 		hostHelper = mock_helper.NewMockHostHelpersInterface(ctrl)
+		hostHelper.EXPECT().SetRDMASubsystem("").Return(nil).AnyTimes()
+		hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIntelIommu).Return(false).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPt).Return(false).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgPciRealloc).Return(false).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaExclusive).Return(false).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaShared).Return(false).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPassthrough).Return(false).AnyTimes()
+
+		hostHelper.EXPECT().RunCommand(gomock.Any(), gomock.Any()).Return("", "", nil).AnyTimes()
 
 		genericPlugin, err = NewGenericPlugin(hostHelper)
 		Expect(err).ToNot(HaveOccurred())
@@ -898,20 +908,21 @@ var _ = Describe("Generic plugin", func() {
 				},
 			}
 
+			rdmaState := &sriovnetworkv1.SriovNetworkNodeState{
+				Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{System: sriovnetworkv1.System{
+					RdmaMode: consts.RdmaSubsystemModeShared,
+				}},
+				Status: sriovnetworkv1.SriovNetworkNodeStateStatus{},
+			}
+
 			It("should detect changes on status due to missing kernel args", func() {
 				hostHelper.EXPECT().GetCPUVendor().Return(hostTypes.CPUVendorIntel, nil)
 
 				// Load required kernel args.
 				genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(vfioNetworkNodeState)
 
-				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs).To(Equal(map[string]bool{
-					consts.KernelArgIntelIommu: false,
-					consts.KernelArgIommuPt:    false,
-				}))
-
-				hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil)
-				hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIntelIommu).Return(false)
-				hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPt).Return(false)
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgIntelIommu]).To(BeTrue())
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgIommuPt]).To(BeTrue())
 
 				changed, err := genericPlugin.CheckStatusChanges(vfioNetworkNodeState)
 				Expect(err).ToNot(HaveOccurred())
@@ -921,17 +932,52 @@ var _ = Describe("Generic plugin", func() {
 			It("should set the correct kernel args on AMD CPUs", func() {
 				hostHelper.EXPECT().GetCPUVendor().Return(hostTypes.CPUVendorAMD, nil)
 				genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(vfioNetworkNodeState)
-				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs).To(Equal(map[string]bool{
-					consts.KernelArgIommuPt: false,
-				}))
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgIommuPt]).To(BeTrue())
 			})
 
 			It("should set the correct kernel args on ARM CPUs", func() {
 				hostHelper.EXPECT().GetCPUVendor().Return(hostTypes.CPUVendorARM, nil)
 				genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(vfioNetworkNodeState)
-				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs).To(Equal(map[string]bool{
-					consts.KernelArgIommuPassthrough: false,
-				}))
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgIommuPassthrough]).To(BeTrue())
+			})
+
+			It("should enable rdma shared mode", func() {
+				hostHelper.EXPECT().SetRDMASubsystem(consts.RdmaSubsystemModeShared).Return(nil)
+				err := genericPlugin.(*GenericPlugin).configRdmaKernelArg(rdmaState)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgRdmaShared]).To(BeTrue())
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgRdmaExclusive]).To(BeFalse())
+
+				changed, err := genericPlugin.CheckStatusChanges(rdmaState)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(changed).To(BeTrue())
+			})
+			It("should enable rdma exclusive mode", func() {
+				hostHelper.EXPECT().SetRDMASubsystem(consts.RdmaSubsystemModeExclusive).Return(nil)
+				rdmaState.Spec.System.RdmaMode = consts.RdmaSubsystemModeExclusive
+				err := genericPlugin.(*GenericPlugin).configRdmaKernelArg(rdmaState)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgRdmaShared]).To(BeFalse())
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgRdmaExclusive]).To(BeTrue())
+
+				changed, err := genericPlugin.CheckStatusChanges(rdmaState)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(changed).To(BeTrue())
+			})
+			It("should not configure RDMA kernel args", func() {
+				hostHelper.EXPECT().SetRDMASubsystem("").Return(nil)
+				rdmaState.Spec.System = sriovnetworkv1.System{}
+				err := genericPlugin.(*GenericPlugin).configRdmaKernelArg(rdmaState)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgRdmaShared]).To(BeFalse())
+				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgRdmaExclusive]).To(BeFalse())
+
+				changed, err := genericPlugin.CheckStatusChanges(rdmaState)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(changed).To(BeFalse())
 			})
 		})
 

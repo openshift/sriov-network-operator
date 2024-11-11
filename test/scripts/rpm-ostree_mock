@@ -10,3 +10,9 @@ then
     # Caller is trying to read kernel arguments.
     cat /proc/cmdline
 fi
+
+if ! echo "$*" | grep -q "\--delete"
+then
+    # Caller is trying to read kernel arguments.
+    cat /proc/cmdline
+fi

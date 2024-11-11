@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
 	configv1 "github.com/openshift/api/config/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )

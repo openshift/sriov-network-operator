@@ -90,6 +90,10 @@ type NetworkInterface interface {
 	GetNetDevLinkAdminState(ifaceName string) string
 	// GetPciAddressFromInterfaceName parses sysfs to get pci address of an interface by name
 	GetPciAddressFromInterfaceName(interfaceName string) (string, error)
+	// DiscoverRDMASubsystem returns RDMA subsystem mode
+	DiscoverRDMASubsystem() (string, error)
+	// SetRDMASubsystem changes RDMA subsystem mode
+	SetRDMASubsystem(mode string) error
 }
 
 type ServiceInterface interface {
