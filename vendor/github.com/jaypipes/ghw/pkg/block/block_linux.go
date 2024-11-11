@@ -8,9 +8,7 @@ package block
 import (
 	"bufio"
 	"io"
-	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -27,11 +25,12 @@ const (
 func (i *Info) load() error {
 	paths := linuxpath.New(i.ctx)
 	i.Disks = disks(i.ctx, paths)
-	var tpb uint64
+	var tsb uint64
 	for _, d := range i.Disks {
-		tpb += d.SizeBytes
+		tsb += d.SizeBytes
 	}
-	i.TotalPhysicalBytes = tpb
+	i.TotalSizeBytes = tsb
+	i.TotalPhysicalBytes = tsb
 	return nil
 }
 
@@ -39,7 +38,7 @@ func diskPhysicalBlockSizeBytes(paths *linuxpath.Paths, disk string) uint64 {
 	// We can find the sector size in Linux by looking at the
 	// /sys/block/$DEVICE/queue/physical_block_size file in sysfs
 	path := filepath.Join(paths.SysBlock, disk, "queue", "physical_block_size")
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
@@ -54,7 +53,7 @@ func diskSizeBytes(paths *linuxpath.Paths, disk string) uint64 {
 	// We can find the number of 512-byte sectors by examining the contents of
 	// /sys/block/$DEVICE/size and calculate the physical bytes accordingly.
 	path := filepath.Join(paths.SysBlock, disk, "size")
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
@@ -71,7 +70,7 @@ func diskNUMANodeID(paths *linuxpath.Paths, disk string) int {
 		return -1
 	}
 	for partial := link; strings.HasPrefix(partial, "../devices/"); partial = filepath.Base(partial) {
-		if nodeContents, err := ioutil.ReadFile(filepath.Join(paths.SysBlock, partial, "numa_node")); err != nil {
+		if nodeContents, err := os.ReadFile(filepath.Join(paths.SysBlock, partial, "numa_node")); err != nil {
 			if nodeInt, err := strconv.Atoi(string(nodeContents)); err != nil {
 				return nodeInt
 			}
@@ -84,7 +83,7 @@ func diskVendor(paths *linuxpath.Paths, disk string) string {
 	// In Linux, the vendor for a disk device is found in the
 	// /sys/block/$DEVICE/device/vendor file in sysfs
 	path := filepath.Join(paths.SysBlock, disk, "device", "vendor")
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return util.UNKNOWN
 	}
@@ -94,7 +93,7 @@ func diskVendor(paths *linuxpath.Paths, disk string) string {
 // udevInfoDisk gets the udev info for a disk
 func udevInfoDisk(paths *linuxpath.Paths, disk string) (map[string]string, error) {
 	// Get device major:minor numbers
-	devNo, err := ioutil.ReadFile(filepath.Join(paths.SysBlock, disk, "dev"))
+	devNo, err := os.ReadFile(filepath.Join(paths.SysBlock, disk, "dev"))
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +103,7 @@ func udevInfoDisk(paths *linuxpath.Paths, disk string) (map[string]string, error
 // udevInfoPartition gets the udev info for a partition
 func udevInfoPartition(paths *linuxpath.Paths, disk string, partition string) (map[string]string, error) {
 	// Get device major:minor numbers
-	devNo, err := ioutil.ReadFile(filepath.Join(paths.SysBlock, disk, partition, "dev"))
+	devNo, err := os.ReadFile(filepath.Join(paths.SysBlock, disk, partition, "dev"))
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +113,7 @@ func udevInfoPartition(paths *linuxpath.Paths, disk string, partition string) (m
 func udevInfo(paths *linuxpath.Paths, devNo string) (map[string]string, error) {
 	// Look up block device in udev runtime database
 	udevID := "b" + strings.TrimSpace(devNo)
-	udevBytes, err := ioutil.ReadFile(filepath.Join(paths.RunUdevData, udevID))
+	udevBytes, err := os.ReadFile(filepath.Join(paths.RunUdevData, udevID))
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +147,16 @@ func diskSerialNumber(paths *linuxpath.Paths, disk string) string {
 		return util.UNKNOWN
 	}
 
+	// First try to use the serial from sg3_utils
+	if serial, ok := info["SCSI_IDENT_SERIAL"]; ok {
+		return serial
+	}
+
+	// Fall back to ID_SCSI_SERIAL
+	if serial, ok := info["ID_SCSI_SERIAL"]; ok {
+		return serial
+	}
+
 	// There are two serial number keys, ID_SERIAL and ID_SERIAL_SHORT The
 	// non-_SHORT version often duplicates vendor information collected
 	// elsewhere, so use _SHORT and fall back to ID_SERIAL if missing...
@@ -170,6 +179,18 @@ func diskBusPath(paths *linuxpath.Paths, disk string) string {
 	// The difference seems to be _TAG has funky characters converted to underscores.
 	if path, ok := info["ID_PATH"]; ok {
 		return path
+	}
+	return util.UNKNOWN
+}
+
+func diskWWNNoExtension(paths *linuxpath.Paths, disk string) string {
+	info, err := udevInfoDisk(paths, disk)
+	if err != nil {
+		return util.UNKNOWN
+	}
+
+	if wwn, ok := info["ID_WWN"]; ok {
+		return wwn
 	}
 	return util.UNKNOWN
 }
@@ -197,7 +218,7 @@ func diskWWN(paths *linuxpath.Paths, disk string) string {
 func diskPartitions(ctx *context.Context, paths *linuxpath.Paths, disk string) []*Partition {
 	out := make([]*Partition, 0)
 	path := filepath.Join(paths.SysBlock, disk)
-	files, err := ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
 	if err != nil {
 		ctx.Warn("failed to read disk partitions: %s\n", err)
 		return out
@@ -209,23 +230,37 @@ func diskPartitions(ctx *context.Context, paths *linuxpath.Paths, disk string) [
 		}
 		size := partitionSizeBytes(paths, disk, fname)
 		mp, pt, ro := partitionInfo(paths, fname)
-		du := diskPartUUID(ctx, fname)
+		du := diskPartUUID(paths, disk, fname)
 		label := diskPartLabel(paths, disk, fname)
 		if pt == "" {
 			pt = diskPartTypeUdev(paths, disk, fname)
 		}
+		fsLabel := diskFSLabel(paths, disk, fname)
 		p := &Partition{
-			Name:       fname,
-			SizeBytes:  size,
-			MountPoint: mp,
-			Type:       pt,
-			IsReadOnly: ro,
-			UUID:       du,
-			Label:      label,
+			Name:            fname,
+			SizeBytes:       size,
+			MountPoint:      mp,
+			Type:            pt,
+			IsReadOnly:      ro,
+			UUID:            du,
+			Label:           label,
+			FilesystemLabel: fsLabel,
 		}
 		out = append(out, p)
 	}
 	return out
+}
+
+func diskFSLabel(paths *linuxpath.Paths, disk string, partition string) string {
+	info, err := udevInfoPartition(paths, disk, partition)
+	if err != nil {
+		return util.UNKNOWN
+	}
+
+	if label, ok := info["ID_FS_LABEL"]; ok {
+		return label
+	}
+	return util.UNKNOWN
 }
 
 func diskPartLabel(paths *linuxpath.Paths, disk string, partition string) string {
@@ -234,7 +269,7 @@ func diskPartLabel(paths *linuxpath.Paths, disk string, partition string) string
 		return util.UNKNOWN
 	}
 
-	if label, ok := info["ID_FS_LABEL"]; ok {
+	if label, ok := info["ID_PART_ENTRY_NAME"]; ok {
 		return label
 	}
 	return util.UNKNOWN
@@ -254,42 +289,21 @@ func diskPartTypeUdev(paths *linuxpath.Paths, disk string, partition string) str
 	return util.UNKNOWN
 }
 
-func diskPartUUID(ctx *context.Context, part string) string {
-	if !ctx.EnableTools {
-		ctx.Warn("EnableTools=false disables partition UUID detection.")
-		return ""
-	}
-	if !strings.HasPrefix(part, "/dev") {
-		part = "/dev/" + part
-	}
-	args := []string{
-		"blkid",
-		"-s",
-		"PARTUUID",
-		part,
-	}
-	out, err := exec.Command(args[0], args[1:]...).Output()
+func diskPartUUID(paths *linuxpath.Paths, disk string, partition string) string {
+	info, err := udevInfoPartition(paths, disk, partition)
 	if err != nil {
-		ctx.Warn("failed to read disk partuuid of %s : %s\n", part, err.Error())
-		return ""
+		return util.UNKNOWN
 	}
 
-	if len(out) == 0 {
-		return ""
+	if pType, ok := info["ID_PART_ENTRY_UUID"]; ok {
+		return pType
 	}
-
-	parts := strings.Split(string(out), "PARTUUID=")
-	if len(parts) != 2 {
-		ctx.Warn("failed to parse the partuuid of %s\n", part)
-		return ""
-	}
-
-	return strings.ReplaceAll(strings.TrimSpace(parts[1]), `"`, "")
+	return util.UNKNOWN
 }
 
 func diskIsRemovable(paths *linuxpath.Paths, disk string) bool {
 	path := filepath.Join(paths.SysBlock, disk, "removable")
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return false
 	}
@@ -303,15 +317,12 @@ func disks(ctx *context.Context, paths *linuxpath.Paths) []*Disk {
 	// run. We can get all of this information by examining the /sys/block
 	// and /sys/class/block files
 	disks := make([]*Disk, 0)
-	files, err := ioutil.ReadDir(paths.SysBlock)
+	files, err := os.ReadDir(paths.SysBlock)
 	if err != nil {
 		return nil
 	}
 	for _, file := range files {
 		dname := file.Name()
-		if strings.HasPrefix(dname, "loop") {
-			continue
-		}
 
 		driveType, storageController := diskTypes(dname)
 		// TODO(jaypipes): Move this into diskTypes() once abstracting
@@ -327,8 +338,13 @@ func disks(ctx *context.Context, paths *linuxpath.Paths) []*Disk {
 		model := diskModel(paths, dname)
 		serialNo := diskSerialNumber(paths, dname)
 		wwn := diskWWN(paths, dname)
+		wwnNoExtension := diskWWNNoExtension(paths, dname)
 		removable := diskIsRemovable(paths, dname)
 
+		if storageController == STORAGE_CONTROLLER_LOOP && size == 0 {
+			// We don't care about unused loop devices...
+			continue
+		}
 		d := &Disk{
 			Name:                   dname,
 			SizeBytes:              size,
@@ -342,6 +358,7 @@ func disks(ctx *context.Context, paths *linuxpath.Paths) []*Disk {
 			Model:                  model,
 			SerialNumber:           serialNo,
 			WWN:                    wwn,
+			WWNNoExtension:         wwnNoExtension,
 		}
 
 		parts := diskPartitions(ctx, paths, dname)
@@ -365,31 +382,34 @@ func diskTypes(dname string) (
 	// The conditionals below which set the controller and drive type are
 	// based on information listed here:
 	// https://en.wikipedia.org/wiki/Device_file
-	driveType := DRIVE_TYPE_UNKNOWN
-	storageController := STORAGE_CONTROLLER_UNKNOWN
+	driveType := DriveTypeUnknown
+	storageController := StorageControllerUnknown
 	if strings.HasPrefix(dname, "fd") {
-		driveType = DRIVE_TYPE_FDD
+		driveType = DriveTypeFDD
 	} else if strings.HasPrefix(dname, "sd") {
-		driveType = DRIVE_TYPE_HDD
-		storageController = STORAGE_CONTROLLER_SCSI
+		driveType = DriveTypeHDD
+		storageController = StorageControllerSCSI
 	} else if strings.HasPrefix(dname, "hd") {
-		driveType = DRIVE_TYPE_HDD
-		storageController = STORAGE_CONTROLLER_IDE
+		driveType = DriveTypeHDD
+		storageController = StorageControllerIDE
 	} else if strings.HasPrefix(dname, "vd") {
-		driveType = DRIVE_TYPE_HDD
-		storageController = STORAGE_CONTROLLER_VIRTIO
+		driveType = DriveTypeHDD
+		storageController = StorageControllerVirtIO
 	} else if strings.HasPrefix(dname, "nvme") {
-		driveType = DRIVE_TYPE_SSD
-		storageController = STORAGE_CONTROLLER_NVME
+		driveType = DriveTypeSSD
+		storageController = StorageControllerNVMe
 	} else if strings.HasPrefix(dname, "sr") {
-		driveType = DRIVE_TYPE_ODD
-		storageController = STORAGE_CONTROLLER_SCSI
+		driveType = DriveTypeODD
+		storageController = StorageControllerSCSI
 	} else if strings.HasPrefix(dname, "xvd") {
-		driveType = DRIVE_TYPE_HDD
-		storageController = STORAGE_CONTROLLER_SCSI
+		driveType = DriveTypeHDD
+		storageController = StorageControllerSCSI
 	} else if strings.HasPrefix(dname, "mmc") {
-		driveType = DRIVE_TYPE_SSD
-		storageController = STORAGE_CONTROLLER_MMC
+		driveType = DriveTypeSSD
+		storageController = StorageControllerMMC
+	} else if strings.HasPrefix(dname, "loop") {
+		driveType = DriveTypeVirtual
+		storageController = StorageControllerLoop
 	}
 
 	return driveType, storageController
@@ -407,7 +427,7 @@ func diskIsRotational(ctx *context.Context, paths *linuxpath.Paths, devName stri
 // paths.
 func partitionSizeBytes(paths *linuxpath.Paths, disk string, part string) uint64 {
 	path := filepath.Join(paths.SysBlock, disk, part, "size")
-	contents, err := ioutil.ReadFile(path)
+	contents, err := os.ReadFile(path)
 	if err != nil {
 		return 0
 	}
