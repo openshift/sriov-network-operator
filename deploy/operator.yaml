@@ -20,7 +20,12 @@ spec:
     spec:
       affinity:
         nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
+          # In the context of Hypershift, the SR-IOV network
+          # Operator is deployed on Nodepools which are labeled
+          # as workers. So we relax the node affinity to prefer
+          # masters/control-plane when possible otherwise we
+          # schedule where it's possible.
+          preferredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
               - key: node-role.kubernetes.io/master
