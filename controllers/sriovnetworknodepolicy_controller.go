@@ -46,6 +46,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -133,10 +134,6 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	if err = r.syncDevicePluginConfigMap(ctx, defaultOpConf, policyList, nodeList); err != nil {
 		return reconcile.Result{}, err
 	}
-	// Render and sync Daemon objects
-	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultOpConf, policyList); err != nil {
-		return reconcile.Result{}, err
-	}
 
 	// All was successful. Request that this be re-triggered after ResyncPeriod,
 	// so we can reconcile state again.
@@ -182,6 +179,12 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 				Info("Enqueuing sync for create event", "resource", e.Object.GetName())
 			qHandler(q)
 		},
+		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+			reflect.DeepEqual(e.ObjectOld.GetLabels(), e.ObjectNew.GetLabels())
+			log.Log.WithName("SriovNetworkNodePolicy").
+				Info("Enqueuing sync for create event", "resource", e.ObjectNew.GetName())
+			qHandler(q)
+		},
 		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 			log.Log.WithName("SriovNetworkNodePolicy").
 				Info("Enqueuing sync for delete event", "resource", e.Object.GetName())
@@ -220,6 +223,30 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(ctx context
 			return err
 		}
 		configData[node.Name] = string(config)
+
+		if data.ResourceList == nil || len(data.ResourceList) == 0 {
+			// if we don't have policies we should add the disabled label for the device plugin
+			err = utils.LabelNode(ctx, node.Name, constants.SriovDevicePluginLabel, constants.SriovDevicePluginLabelDisabled, r.Client)
+			if err != nil {
+				logger.Error(err, "failed to label node for device plugin label",
+					"labelKey",
+					constants.SriovDevicePluginLabel,
+					"labelValue",
+					constants.SriovDevicePluginLabelDisabled)
+				return err
+			}
+		} else {
+			// if we have policies we should add the enabled label for the device plugin
+			err = utils.LabelNode(ctx, node.Name, constants.SriovDevicePluginLabel, constants.SriovDevicePluginLabelEnabled, r.Client)
+			if err != nil {
+				logger.Error(err, "failed to label node for device plugin label",
+					"labelKey",
+					constants.SriovDevicePluginLabel,
+					"labelValue",
+					constants.SriovDevicePluginLabelEnabled)
+				return err
+			}
+		}
 	}
 
 	cm := &corev1.ConfigMap{
@@ -304,8 +331,15 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 				}
 			}
 			if !found {
+				// remove device plugin labels
+				logger.Info("removing device plugin label from node as SriovNetworkNodeState doesn't exist", "nodeStateName", ns.Name)
+				err = utils.RemoveLabelFromNode(ctx, ns.Name, constants.SriovDevicePluginLabel, r.Client)
+				if err != nil {
+					logger.Error(err, "Fail to remove device plugin label from node", "node", ns.Name)
+					return err
+				}
 				logger.Info("Deleting SriovNetworkNodeState as node with that name doesn't exist", "nodeStateName", ns.Name)
-				err := r.Delete(ctx, &ns, &client.DeleteOptions{})
+				err = r.Delete(ctx, &ns, &client.DeleteOptions{})
 				if err != nil {
 					logger.Error(err, "Fail to Delete", "SriovNetworkNodeState CR:", ns.GetName())
 					return err
@@ -423,13 +457,13 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 		found, i := resourceNameInList(p.Spec.ResourceName, &rcl)
 
 		if found {
-			err := updateDevicePluginResource(ctx, &rcl.ResourceList[i], &p, nodeState)
+			err := updateDevicePluginResource(&rcl.ResourceList[i], &p, nodeState)
 			if err != nil {
 				return rcl, err
 			}
 			logger.V(1).Info("Update resource", "Resource", rcl.ResourceList[i])
 		} else {
-			rc, err := createDevicePluginResource(ctx, &p, nodeState)
+			rc, err := createDevicePluginResource(&p, nodeState)
 			if err != nil {
 				return rcl, err
 			}
@@ -450,7 +484,6 @@ func resourceNameInList(name string, rcl *dptypes.ResourceConfList) (bool, int) 
 }
 
 func createDevicePluginResource(
-	ctx context.Context,
 	p *sriovnetworkv1.SriovNetworkNodePolicy,
 	nodeState *sriovnetworkv1.SriovNetworkNodeState) (*dptypes.ResourceConfig, error) {
 	netDeviceSelectors := dptypes.NetDeviceSelectors{}
@@ -524,7 +557,6 @@ func createDevicePluginResource(
 }
 
 func updateDevicePluginResource(
-	ctx context.Context,
 	rc *dptypes.ResourceConfig,
 	p *sriovnetworkv1.SriovNetworkNodePolicy,
 	nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
