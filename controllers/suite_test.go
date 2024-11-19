@@ -188,6 +188,13 @@ var _ = BeforeSuite(func() {
 	}
 	Expect(k8sClient.Create(context.Background(), ns)).Should(Succeed())
 
+	sa := &corev1.ServiceAccount{TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default",
+			Namespace: testNamespace,
+		}}
+	Expect(k8sClient.Create(context.Background(), sa)).Should(Succeed())
+
 	// Create openshift Infrastructure
 	infra := &openshiftconfigv1.Infrastructure{
 		ObjectMeta: metav1.ObjectMeta{

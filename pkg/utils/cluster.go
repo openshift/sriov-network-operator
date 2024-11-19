@@ -127,16 +127,17 @@ func ObjectHasAnnotation(obj metav1.Object, annoKey string, value string) bool {
 
 // AnnotateObject adds annotation to a kubernetes object
 func AnnotateObject(ctx context.Context, obj client.Object, key, value string, c client.Client) error {
-	log.Log.V(2).Info("AnnotateObject(): Annotate object",
-		"objectName", obj.GetName(),
-		"objectKind", obj.GetObjectKind(),
-		"annotation", value)
 	newObj := obj.DeepCopyObject().(client.Object)
 	if newObj.GetAnnotations() == nil {
 		newObj.SetAnnotations(map[string]string{})
 	}
 
 	if newObj.GetAnnotations()[key] != value {
+		log.Log.V(2).Info("AnnotateObject(): Annotate object",
+			"objectName", obj.GetName(),
+			"objectKind", obj.GetObjectKind(),
+			"annotationKey", key,
+			"annotationValue", value)
 		newObj.GetAnnotations()[key] = value
 		patch := client.MergeFrom(obj)
 		err := c.Patch(ctx,
@@ -159,4 +160,77 @@ func AnnotateNode(ctx context.Context, nodeName string, key, value string, c cli
 	}
 
 	return AnnotateObject(ctx, node, key, value, c)
+}
+
+// labelObject adds label to a kubernetes object
+func labelObject(ctx context.Context, obj client.Object, key, value string, c client.Client) error {
+	newObj := obj.DeepCopyObject().(client.Object)
+	if newObj.GetLabels() == nil {
+		newObj.SetLabels(map[string]string{})
+	}
+
+	if newObj.GetLabels()[key] != value {
+		log.Log.V(2).Info("labelObject(): label object",
+			"objectName", obj.GetName(),
+			"objectKind", obj.GetObjectKind(),
+			"labelKey", key,
+			"labelValue", value)
+		newObj.GetLabels()[key] = value
+		patch := client.MergeFrom(obj)
+		err := c.Patch(ctx,
+			newObj, patch)
+		if err != nil {
+			log.Log.Error(err, "labelObject(): Failed to patch object")
+			return err
+		}
+	}
+
+	return nil
+}
+
+// removeLabelObject remove a label from a kubernetes object
+func removeLabelObject(ctx context.Context, obj client.Object, key string, c client.Client) error {
+	newObj := obj.DeepCopyObject().(client.Object)
+	if newObj.GetLabels() == nil {
+		newObj.SetLabels(map[string]string{})
+	}
+
+	_, exist := newObj.GetLabels()[key]
+	if exist {
+		log.Log.V(2).Info("removeLabelObject(): remove label from object",
+			"objectName", obj.GetName(),
+			"objectKind", obj.GetObjectKind(),
+			"labelKey", key)
+		delete(newObj.GetLabels(), key)
+		patch := client.MergeFrom(obj)
+		err := c.Patch(ctx,
+			newObj, patch)
+		if err != nil {
+			log.Log.Error(err, "removeLabelObject(): Failed to patch object")
+			return err
+		}
+	}
+
+	return nil
+}
+
+// LabelNode add label to a node
+func LabelNode(ctx context.Context, nodeName string, key, value string, c client.Client) error {
+	node := &corev1.Node{}
+	err := c.Get(context.TODO(), client.ObjectKey{Name: nodeName}, node)
+	if err != nil {
+		return err
+	}
+
+	return labelObject(ctx, node, key, value, c)
+}
+
+func RemoveLabelFromNode(ctx context.Context, nodeName string, key string, c client.Client) error {
+	node := &corev1.Node{}
+	err := c.Get(context.TODO(), client.ObjectKey{Name: nodeName}, node)
+	if err != nil {
+		return err
+	}
+
+	return removeLabelObject(ctx, node, key, c)
 }

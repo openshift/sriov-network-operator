@@ -70,6 +70,10 @@ const (
 	MachineConfigPoolPausedAnnotationIdle   = "Idle"
 	MachineConfigPoolPausedAnnotationPaused = "Paused"
 
+	SriovDevicePluginLabel         = "sriovnetwork.openshift.io/device-plugin"
+	SriovDevicePluginLabelEnabled  = "Enabled"
+	SriovDevicePluginLabelDisabled = "Disabled"
+
 	NodeDrainAnnotation             = "sriovnetwork.openshift.io/state"
 	NodeStateDrainAnnotation        = "sriovnetwork.openshift.io/desired-state"
 	NodeStateDrainAnnotationCurrent = "sriovnetwork.openshift.io/current-state"
