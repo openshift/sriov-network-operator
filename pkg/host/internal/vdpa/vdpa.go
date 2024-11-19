@@ -94,11 +94,9 @@ func (v *vdpa) DeleteVDPADevice(pciAddr string) error {
 func (v *vdpa) DiscoverVDPAType(pciAddr string) string {
 	expectedVDPAName := generateVDPADevName(pciAddr)
 	funcLog := log.Log.WithValues("device", pciAddr, "name", expectedVDPAName)
-	funcLog.V(2).Info("DiscoverVDPAType() discover device type")
 	_, err := v.netlinkLib.VDPAGetDevByName(expectedVDPAName)
 	if err != nil {
 		if errors.Is(err, syscall.ENODEV) {
-			funcLog.V(2).Info("DiscoverVDPAType(): VDPA device for VF not found")
 			return ""
 		}
 		if errors.Is(err, syscall.ENOENT) {
