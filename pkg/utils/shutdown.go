@@ -71,6 +71,7 @@ func updateValidatingWebhook(c *kubernetes.Clientset) {
 	webhook, err := validatingWebhookClient.Get(context.TODO(), consts.OperatorWebHookName, metav1.GetOptions{})
 	if err != nil {
 		shutdownLog.Error(err, "Error getting webhook")
+		return
 	}
 	webhook.Webhooks[0].FailurePolicy = &failurePolicyIgnore
 	_, err = validatingWebhookClient.Update(context.TODO(), webhook, metav1.UpdateOptions{})
