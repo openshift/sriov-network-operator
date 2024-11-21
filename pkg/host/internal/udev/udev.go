@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -121,6 +122,18 @@ func (u *udev) LoadUdevRules() error {
 	_, stderr, err = u.utilsHelper.RunCommand(udevAdmTool, "trigger", "--action", "add", "--attr-match", "subsystem=net")
 	if err != nil {
 		log.Log.Error(err, "LoadUdevRules(): failed to trigger rules", "error", stderr)
+		return err
+	}
+	return nil
+}
+
+// WaitUdevEventsProcessed calls `udevadm settle“ with provided timeout
+// The command watches the udev event queue, and exits if all current events are handled.
+func (u *udev) WaitUdevEventsProcessed(timeout int) error {
+	log.Log.V(2).Info("WaitUdevEventsProcessed()")
+	_, stderr, err := u.utilsHelper.RunCommand("udevadm", "settle", "-t", strconv.Itoa(timeout))
+	if err != nil {
+		log.Log.Error(err, "WaitUdevEventsProcessed(): failed to wait for udev rules to process", "error", stderr, "timeout", timeout)
 		return err
 	}
 	return nil
