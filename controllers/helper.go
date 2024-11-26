@@ -100,11 +100,7 @@ func (DrainAnnotationPredicate) Update(e event.UpdateEvent) bool {
 		return true
 	}
 
-	if oldAnno != newAnno {
-		return true
-	}
-
-	return false
+	return oldAnno != newAnno
 }
 
 type DrainStateAnnotationPredicate struct {
@@ -134,10 +130,6 @@ func (DrainStateAnnotationPredicate) Update(e event.UpdateEvent) bool {
 	newAnno, hasNewAnno := e.ObjectNew.GetLabels()[constants.NodeStateDrainAnnotationCurrent]
 
 	if !hasOldAnno || !hasNewAnno {
-		return true
-	}
-
-	if oldAnno != newAnno {
 		return true
 	}
 
