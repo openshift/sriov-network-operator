@@ -210,4 +210,14 @@ var _ = Describe("UDEV", func() {
 			Expect(s.LoadUdevRules()).To(MatchError(testError))
 		})
 	})
+	Context("WaitUdevEventsProcessed", func() {
+		It("Succeed", func() {
+			utilsMock.EXPECT().RunCommand("udevadm", "settle", "-t", "10").Return("", "", nil)
+			Expect(s.WaitUdevEventsProcessed(10)).NotTo(HaveOccurred())
+		})
+		It("Command Failed", func() {
+			utilsMock.EXPECT().RunCommand("udevadm", "settle", "-t", "20").Return("", "", testError)
+			Expect(s.WaitUdevEventsProcessed(20)).To(MatchError(testError))
+		})
+	})
 })

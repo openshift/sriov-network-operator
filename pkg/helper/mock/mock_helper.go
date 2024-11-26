@@ -1224,6 +1224,20 @@ func (mr *MockHostHelpersInterfaceMockRecorder) VFIsReady(pciAddr interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VFIsReady", reflect.TypeOf((*MockHostHelpersInterface)(nil).VFIsReady), pciAddr)
 }
 
+// WaitUdevEventsProcessed mocks base method.
+func (m *MockHostHelpersInterface) WaitUdevEventsProcessed(timeout int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitUdevEventsProcessed", timeout)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WaitUdevEventsProcessed indicates an expected call of WaitUdevEventsProcessed.
+func (mr *MockHostHelpersInterfaceMockRecorder) WaitUdevEventsProcessed(timeout interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitUdevEventsProcessed", reflect.TypeOf((*MockHostHelpersInterface)(nil).WaitUdevEventsProcessed), timeout)
+}
+
 // WriteCheckpointFile mocks base method.
 func (m *MockHostHelpersInterface) WriteCheckpointFile(arg0 *v1.SriovNetworkNodeState) error {
 	m.ctrl.T.Helper()
