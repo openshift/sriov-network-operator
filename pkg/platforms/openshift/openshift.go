@@ -228,6 +228,18 @@ func (c *openshiftContext) OpenshiftAfterCompleteDrainNode(ctx context.Context, 
 		return false, err
 	}
 
+	value, exist := mcp.Annotations[consts.MachineConfigPoolPausedAnnotation]
+	// if the label doesn't exist we just return true here
+	// this can be a case where the node was moved to another MCP in the time we start the drain
+	if !exist {
+		return true, nil
+	}
+	// check if the sriov annotation on mcp is idle
+	// if the value is idle we just return here
+	if value == consts.MachineConfigPoolPausedAnnotationIdle {
+		return true, nil
+	}
+
 	// get all the nodes that belong to this machine config pool to validate this is the last node
 	// request to complete the drain
 	nodesInPool := &corev1.NodeList{}
