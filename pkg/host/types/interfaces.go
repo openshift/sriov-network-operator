@@ -164,6 +164,9 @@ type UdevInterface interface {
 	RemoveVfRepresentorUdevRule(pfPciAddress string) error
 	// LoadUdevRules triggers udev rules for network subsystem
 	LoadUdevRules() error
+	// WaitUdevEventsProcessed calls `udevadm settle“ with provided timeout
+	// The command watches the udev event queue, and exits if all current events are handled.
+	WaitUdevEventsProcessed(timeout int) error
 }
 
 type VdpaInterface interface {
