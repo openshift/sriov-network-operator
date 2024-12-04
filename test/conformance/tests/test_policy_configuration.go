@@ -90,7 +90,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						},
 						Spec: sriovv1.SriovNetworkSpec{
 							ResourceName:     resourceName,
-							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181"}`,
 							NetworkNamespace: namespaces.Test,
 						}}
 
@@ -486,9 +486,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						"type":"host-local",
 						"subnet":"10.10.10.0/24",
 						"rangeStart":"10.10.10.171",
-						"rangeEnd":"10.10.10.181",
-						"routes":[{"dst":"0.0.0.0/0"}],
-						"gateway":"10.10.10.1"
+						"rangeEnd":"10.10.10.181"
 						}`
 
 					err = network.CreateSriovNetwork(clients, unusedSriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
@@ -603,7 +601,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						},
 						Spec: sriovv1.SriovNetworkSpec{
 							ResourceName:     resourceName,
-							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+							IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181"}`,
 							NetworkNamespace: namespaces.Test,
 						}}
 
