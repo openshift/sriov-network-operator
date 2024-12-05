@@ -260,4 +260,64 @@ var _ = Describe("SriovnetworkNodePolicy controller", Ordered, func() {
 			}, time.Minute, time.Second).Should(Succeed())
 		})
 	})
+
+	Context("RdmaMode", func() {
+		BeforeEach(func() {
+			Expect(
+				k8sClient.DeleteAllOf(context.Background(), &sriovnetworkv1.SriovNetworkPoolConfig{}, k8sclient.InNamespace(vars.Namespace)),
+			).ToNot(HaveOccurred())
+		})
+
+		It("field is correctly written to the SriovNetworkNodeState", func() {
+			node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{
+				Name: "node0",
+				Labels: map[string]string{
+					"node-role.kubernetes.io/worker": "",
+					"kubernetes.io/os":               "linux",
+					"test":                           "",
+				},
+			}}
+			Expect(k8sClient.Create(ctx, node)).To(Succeed())
+
+			nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(context.TODO(), k8sclient.ObjectKey{Name: "node0", Namespace: testNamespace}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, time.Minute, time.Second).Should(Succeed())
+
+			nodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				sriovnetworkv1.InterfaceExt{
+					Vendor:     "8086",
+					Driver:     "i40e",
+					Mtu:        1500,
+					Name:       "ens803f0",
+					PciAddress: "0000:86:00.0",
+					NumVfs:     0,
+					TotalVfs:   64,
+				},
+			}
+			err := k8sClient.Status().Update(context.Background(), nodeState)
+			Expect(err).ToNot(HaveOccurred())
+
+			poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
+			poolConfig.SetNamespace(testNamespace)
+			poolConfig.SetName("test-workers")
+			poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{
+				NodeSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"test": "",
+					},
+				},
+				RdmaMode: "exclusive",
+			}
+			Expect(k8sClient.Create(ctx, poolConfig)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(context.Background(), k8sclient.ObjectKey{Name: node.Name, Namespace: testNamespace}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(nodeState.Spec.System.RdmaMode).To(Equal("exclusive"))
+			}).WithPolling(time.Second).WithTimeout(time.Minute).Should(Succeed())
+
+		})
+	})
 })
