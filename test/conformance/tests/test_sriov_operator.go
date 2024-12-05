@@ -1777,9 +1777,17 @@ func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceEx
 		if isDefaultRouteInterface(device.Name, routes) {
 			continue
 		}
-		stdout, _, err = pod.ExecCommand(clients, createdPod, "ip", "link", "show", device.Name)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(len(stdout)).Should(Not(Equal(0)), "Unable to query link state")
+		stdout, stderr, err := pod.ExecCommand(clients, createdPod, "ip", "link", "show", device.Name)
+		if err != nil {
+			fmt.Printf("Can't query link state for device [%s]: %s", device.Name, err.Error())
+			continue
+		}
+
+		if len(stdout) == 0 {
+			fmt.Printf("Can't query link state for device [%s]: stderr:[%s]", device.Name, stderr)
+			continue
+		}
+
 		if strings.Contains(stdout, "master ovs-system") {
 			continue // The interface is not active
 		}
