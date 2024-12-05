@@ -457,17 +457,6 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	log.Log.V(0).Info("nodeStateSyncHandler(): aggregated daemon",
 		"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", dn.disableDrain)
 
-	for k, p := range dn.loadedPlugins {
-		// Skip both the general and virtual plugin apply them last
-		if k != GenericPluginName && k != VirtualPluginName {
-			err := p.Apply()
-			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): plugin Apply failed", "plugin-name", k)
-				return err
-			}
-		}
-	}
-
 	// handle drain only if the plugin request drain, or we are already in a draining request state
 	if reqDrain || !utils.ObjectHasAnnotation(dn.desiredNodeState,
 		consts.NodeStateDrainAnnotationCurrent,
@@ -479,6 +468,17 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		}
 		if drainInProcess {
 			return nil
+		}
+	}
+
+	for k, p := range dn.loadedPlugins {
+		// Skip both the general and virtual plugin apply them last
+		if k != GenericPluginName && k != VirtualPluginName {
+			err := p.Apply()
+			if err != nil {
+				log.Log.Error(err, "nodeStateSyncHandler(): plugin Apply failed", "plugin-name", k)
+				return err
+			}
 		}
 	}
 
