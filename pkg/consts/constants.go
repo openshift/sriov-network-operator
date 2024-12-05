@@ -118,6 +118,22 @@ const (
 	KernelArgIommuPt    = "iommu=pt"
 
 	ParallelNicConfigFeatureGate = "parallelNicConfig"
+
+	// ResourceInjectorMatchConditionFeatureGate: switch injector to fail policy and add mactch condition
+	// this will make the mutating webhook to be called only when a pod has 'k8s.v1.cni.cncf.io/networks' annotation
+	ResourceInjectorMatchConditionFeatureGate = "resourceInjectorMatchCondition"
+
+	// MetricsExporterFeatureGate: enable SriovNetworkMetricsExporter on the same node as where the config-daemon run
+	MetricsExporterFeatureGate = "metricsExporter"
+
+	// ManageSoftwareBridgesFeatureGate: enables management of software bridges by the operator
+	ManageSoftwareBridgesFeatureGate = "manageSoftwareBridges"
+
+	// MellanoxFirmwareResetFeatureGate: enables the firmware reset via mstfwreset before a reboot
+	MellanoxFirmwareResetFeatureGate = "mellanoxFirmwareReset"
+
+	// The path to the file on the host filesystem that contains the IB GUID distribution for IB VFs
+	InfinibandGUIDConfigFilePath = SriovConfBasePath + "/infiniband/guids"
 )
 
 const (
