@@ -117,7 +117,6 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 			Command:   command,
 			Stdout:    true,
 			Stderr:    true,
-			TTY:       true,
 		}, scheme.ParameterCodec)
 
 	exec, err := remotecommand.NewSPDYExecutor(cs.Config, "POST", req.URL())
@@ -125,10 +124,9 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 		return buf.String(), errbuf.String(), err
 	}
 
-	err = exec.Stream(remotecommand.StreamOptions{
+	err = exec.StreamWithContext(context.Background(), remotecommand.StreamOptions{
 		Stdout: &buf,
 		Stderr: &errbuf,
-		Tty:    true,
 	})
 	if err != nil {
 		return buf.String(), errbuf.String(), err
