@@ -12,6 +12,17 @@ spec:
       bearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
       scheme: "https"
       honorLabels: true
+      relabelings:
+      - action: replace
+        sourceLabels:
+        - __meta_kubernetes_endpoint_node_name
+        targetLabel: node
+      - action: labeldrop
+        regex: pod
+      - action: labeldrop
+        regex: container
+      - action: labeldrop
+        regex: namespace
       tlsConfig:
         serverName: sriov-network-metrics-exporter-service.{{.Namespace}}.svc
         caFile: /etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt
