@@ -937,7 +937,7 @@ var _ = Describe("[sriov] operator", func() {
 				waitForNetAttachDef(sriovNetworkName, namespaces.Test)
 
 				testPod := createTestPod(node, []string{sriovNetworkName})
-				stdout, _, err := pod.ExecCommand(clients, testPod, "more", "/proc/sys/net/ipv4/conf/net1/accept_redirects")
+				stdout, _, err := pod.ExecCommand(clients, testPod, "cat", "/proc/sys/net/ipv4/conf/net1/accept_redirects")
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(strings.TrimSpace(stdout)).To(Equal("1"))
