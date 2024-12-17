@@ -28,6 +28,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/clean"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
@@ -276,6 +277,41 @@ var _ = Describe("[sriov] operator", func() {
 				}, 3*time.Minute, 5*time.Second).Should(Succeed())
 			})
 		})
+
+		DescribeTable("should gracefully restart quickly", func(webookEnabled bool) {
+			DeferCleanup(setSriovOperatorSpecFlag(operatorNetworkInjectorFlag, webookEnabled))
+			DeferCleanup(setSriovOperatorSpecFlag(operatorWebhookFlag, webookEnabled))
+
+			// This test case ensure leader election process runs smoothly when the operator's pod is restarted.
+			oldLease, err := clients.CoordinationV1Interface.Leases(operatorNamespace).Get(context.Background(), consts.LeaderElectionID, metav1.GetOptions{})
+			if k8serrors.IsNotFound(err) {
+				Skip("Leader Election is not enabled on the cluster. Skipping")
+			}
+			Expect(err).ToNot(HaveOccurred())
+
+			oldOperatorPod := getOperatorPod()
+
+			By("Delete the operator's pod")
+			deleteOperatorPod()
+
+			By("Wait the new operator's pod to start")
+			Eventually(func(g Gomega) {
+				newOperatorPod := getOperatorPod()
+				Expect(newOperatorPod.Name).ToNot(Equal(oldOperatorPod.Name))
+				Expect(newOperatorPod.Status.Phase).To(Equal(corev1.PodRunning))
+			}, 45*time.Second, 5*time.Second)
+
+			By("Assert the new operator's pod acquire the lease before 30 seconds")
+			Eventually(func(g Gomega) {
+				newLease, err := clients.CoordinationV1Interface.Leases(operatorNamespace).Get(context.Background(), consts.LeaderElectionID, metav1.GetOptions{})
+				g.Expect(err).ToNot(HaveOccurred())
+
+				g.Expect(newLease.Spec.HolderIdentity).ToNot(Equal(oldLease.Spec.HolderIdentity))
+			}, 30*time.Second, 5*time.Second).Should(Succeed())
+		},
+			Entry("webhooks enabled", true),
+			Entry("webhooks disabled", true),
+		)
 	})
 
 	Describe("Generic SriovNetworkNodePolicy", func() {
@@ -2729,12 +2765,14 @@ func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {
 	return policy.Spec.DeviceType == "netdevice"
 }
 
-func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
+func setSriovOperatorSpecFlag(flagName string, flagValue bool) func() {
 	cfg := sriovv1.SriovOperatorConfig{}
 	err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
 		Name:      "default",
 		Namespace: operatorNamespace,
 	}, &cfg)
+
+	ret := func() {}
 
 	Expect(err).ToNot(HaveOccurred())
 	if flagName == operatorNetworkInjectorFlag && cfg.Spec.EnableInjector != flagValue {
@@ -2742,6 +2780,9 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 		err = clients.Update(context.TODO(), &cfg)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.Spec.EnableInjector).To(Equal(flagValue))
+		ret = func() {
+			setSriovOperatorSpecFlag(flagName, !flagValue)
+		}
 	}
 
 	if flagName == operatorWebhookFlag && cfg.Spec.EnableOperatorWebhook != flagValue {
@@ -2749,6 +2790,9 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 		clients.Update(context.TODO(), &cfg)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(cfg.Spec.EnableOperatorWebhook).To(Equal(flagValue))
+		ret = func() {
+			setSriovOperatorSpecFlag(flagName, !flagValue)
+		}
 	}
 
 	if flagValue {
@@ -2764,6 +2808,8 @@ func setSriovOperatorSpecFlag(flagName string, flagValue bool) {
 			}
 		}, 1*time.Minute, 10*time.Second).WithOffset(1).Should(Succeed())
 	}
+
+	return ret
 }
 
 func setOperatorConfigLogLevel(level int) {
@@ -2806,14 +2852,17 @@ func getOperatorConfigLogLevel() int {
 	return cfg.Spec.LogLevel
 }
 
-func getOperatorLogs(since time.Time) []string {
+func getOperatorPod() corev1.Pod {
 	podList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
 		LabelSelector: "name=sriov-network-operator",
 	})
 	ExpectWithOffset(1, err).ToNot(HaveOccurred())
-	ExpectWithOffset(1, podList.Items).To(HaveLen(1), "One operator pod expected")
+	ExpectWithOffset(1, podList.Items).ToNot(HaveLen(0), "At least one operator pod expected")
+	return podList.Items[0]
+}
 
-	pod := podList.Items[0]
+func getOperatorLogs(since time.Time) []string {
+	pod := getOperatorPod()
 	logStart := metav1.NewTime(since)
 	rawLogs, err := clients.Pods(pod.Namespace).
 		GetLogs(pod.Name, &corev1.PodLogOptions{
@@ -2824,6 +2873,13 @@ func getOperatorLogs(since time.Time) []string {
 	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 
 	return strings.Split(string(rawLogs), "\n")
+}
+
+func deleteOperatorPod() {
+	pod := getOperatorPod()
+
+	err := clients.Pods(operatorNamespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 }
 
 func assertObjectIsNotFound(name string, obj runtimeclient.Object) {

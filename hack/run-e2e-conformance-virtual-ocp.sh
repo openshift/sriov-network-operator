@@ -189,6 +189,7 @@ export OPERATOR_EXEC=kubectl
 export CLUSTER_TYPE=openshift
 export DEV_MODE=TRUE
 export CLUSTER_HAS_EMULATED_PF=TRUE
+export OPERATOR_LEADER_ELECTION_ENABLE=true
 
 export SRIOV_NETWORK_OPERATOR_IMAGE="$registry/$NAMESPACE/sriov-network-operator:latest"
 export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE="$registry/$NAMESPACE/sriov-network-config-daemon:latest"
