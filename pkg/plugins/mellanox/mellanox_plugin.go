@@ -9,6 +9,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	mlx "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 )
 
@@ -20,6 +21,7 @@ type MellanoxPlugin struct {
 	helpers     helper.HostHelpersInterface
 }
 
+var pciAddressesToReset []string
 var attributesToChange map[string]mlx.MlxNic
 var mellanoxNicsStatus map[string]map[string]sriovnetworkv1.InterfaceExt
 var mellanoxNicsSpec map[string]sriovnetworkv1.Interface
@@ -52,6 +54,7 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 	needDrain = false
 	needReboot = false
 	err = nil
+	pciAddressesToReset = []string{}
 	attributesToChange = map[string]mlx.MlxNic{}
 	mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}
 	mellanoxNicsSpec = map[string]sriovnetworkv1.Interface{}
@@ -132,6 +135,10 @@ func (p *MellanoxPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeS
 		if needReboot || changeWithoutReboot {
 			attributesToChange[ifaceSpec.PciAddress] = *attrs
 		}
+
+		if needReboot {
+			pciAddressesToReset = append(pciAddressesToReset, ifaceSpec.PciAddress)
+		}
 	}
 
 	// Set total VFs to 0 for mellanox interfaces with no spec
@@ -202,7 +209,13 @@ func (p *MellanoxPlugin) Apply() error {
 		return nil
 	}
 	log.Log.Info("mellanox plugin Apply()")
-	return p.helpers.MlxConfigFW(attributesToChange)
+	if err := p.helpers.MlxConfigFW(attributesToChange); err != nil {
+		return err
+	}
+	if vars.MlxPluginFwReset {
+		return p.helpers.MlxResetFW(pciAddressesToReset)
+	}
+	return nil
 }
 
 // nicHasExternallyManagedPFs returns true if one of the ports(interface) of the NIC is marked as externally managed

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os/exec"
+	"reflect"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	sninformer "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/informers/externalversions"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
@@ -82,6 +84,8 @@ type Daemon struct {
 	workqueue workqueue.RateLimitingInterface
 
 	eventRecorder *EventRecorder
+
+	featureGate featuregate.FeatureGate
 }
 
 func New(
@@ -95,6 +99,7 @@ func New(
 	syncCh <-chan struct{},
 	refreshCh chan<- Message,
 	er *EventRecorder,
+	featureGates featuregate.FeatureGate,
 	disabledPlugins []string,
 ) *Daemon {
 	return &Daemon{
@@ -113,6 +118,7 @@ func New(
 			&workqueue.BucketRateLimiter{Limiter: rate.NewLimiter(rate.Limit(updateDelay), 1)},
 			workqueue.NewItemExponentialFailureRateLimiter(1*time.Second, maxUpdateBackoff)), "SriovNetworkNodeState"),
 		eventRecorder:   er,
+		featureGate:     featureGates,
 		disabledPlugins: disabledPlugins,
 		mu:              &sync.Mutex{},
 	}
@@ -286,6 +292,7 @@ func (dn *Daemon) operatorConfigAddHandler(obj interface{}) {
 }
 
 func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
+	oldCfg := old.(*sriovnetworkv1.SriovOperatorConfig)
 	newCfg := new.(*sriovnetworkv1.SriovOperatorConfig)
 	if newCfg.Namespace != vars.Namespace || newCfg.Name != consts.DefaultConfigName {
 		log.Log.V(2).Info("unsupported SriovOperatorConfig", "namespace", newCfg.Namespace, "name", newCfg.Name)
@@ -299,6 +306,13 @@ func (dn *Daemon) operatorConfigChangeHandler(old, new interface{}) {
 		dn.disableDrain = newDisableDrain
 		log.Log.Info("Set Disable Drain", "value", dn.disableDrain)
 	}
+
+	if !reflect.DeepEqual(oldCfg.Spec.FeatureGates, newCfg.Spec.FeatureGates) {
+		dn.featureGate.Init(newCfg.Spec.FeatureGates)
+		log.Log.Info("Updated featureGates", "featureGates", dn.featureGate.String())
+	}
+
+	vars.MlxPluginFwReset = dn.featureGate.IsEnabled(consts.MellanoxFirmwareResetFeatureGate)
 }
 
 func (dn *Daemon) nodeStateSyncHandler() error {
@@ -443,17 +457,6 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 	log.Log.V(0).Info("nodeStateSyncHandler(): aggregated daemon",
 		"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", dn.disableDrain)
 
-	for k, p := range dn.loadedPlugins {
-		// Skip both the general and virtual plugin apply them last
-		if k != GenericPluginName && k != VirtualPluginName {
-			err := p.Apply()
-			if err != nil {
-				log.Log.Error(err, "nodeStateSyncHandler(): plugin Apply failed", "plugin-name", k)
-				return err
-			}
-		}
-	}
-
 	// handle drain only if the plugin request drain, or we are already in a draining request state
 	if reqDrain || !utils.ObjectHasAnnotation(dn.desiredNodeState,
 		consts.NodeStateDrainAnnotationCurrent,
@@ -465,6 +468,17 @@ func (dn *Daemon) nodeStateSyncHandler() error {
 		}
 		if drainInProcess {
 			return nil
+		}
+	}
+
+	for k, p := range dn.loadedPlugins {
+		// Skip both the general and virtual plugin apply them last
+		if k != GenericPluginName && k != VirtualPluginName {
+			err := p.Apply()
+			if err != nil {
+				log.Log.Error(err, "nodeStateSyncHandler(): plugin Apply failed", "plugin-name", k)
+				return err
+			}
 		}
 	}
 
