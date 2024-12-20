@@ -74,15 +74,13 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
 
 			By("Checking rdma mode and kernel args")
-			output, _, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline | grep ib_core.netns_mode=0 | wc -l")
+			cmdlineOutput, _, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline")
+			errDescription := fmt.Sprintf("kernel args are not right, printing current kernel args %s", cmdlineOutput)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "1")).To(BeTrue())
+			Expect(cmdlineOutput).To(ContainSubstring("ib_core.netns_mode=0"), errDescription)
+			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=1"), errDescription)
 
-			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline | grep ib_core.netns_mode=1 | wc -l")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "0")).To(BeTrue())
-
-			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/etc/modprobe.d/sriov_network_operator_modules_config.conf  | grep mode=0 | wc -l")
+			output, _, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/etc/modprobe.d/sriov_network_operator_modules_config.conf  | grep mode=0 | wc -l")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(strings.HasPrefix(output, "1")).To(BeTrue())
 
@@ -97,21 +95,22 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
 
 			By("Checking rdma mode and kernel args")
-			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline | grep ib_core.netns_mode=0 | wc -l")
+			cmdlineOutput, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline")
+			errDescription = fmt.Sprintf("kernel args are not right, printing current kernel args %s", cmdlineOutput)
 			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "0")).To(BeTrue())
-
-			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline | grep ib_core.netns_mode=1 | wc -l")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "1")).To(BeTrue())
+			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=0"), errDescription)
+			Expect(cmdlineOutput).To(ContainSubstring("ib_core.netns_mode=1"), errDescription)
 
 			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/etc/modprobe.d/sriov_network_operator_modules_config.conf  | grep mode=1 | wc -l")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "1")).To(BeTrue())
+			Expect(strings.HasPrefix(output, "1")).To(BeTrue(), fmt.Sprintf("kernel args are not right, printing current kernel args %s", cmdlineOutput))
 
 			By("removing rdma mode configuration")
-			err = clients.Delete(context.Background(), networkPool)
-			Expect(err).ToNot(HaveOccurred())
+			Eventually(func(g Gomega) {
+				err = clients.Delete(context.Background(), networkPool)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, 5*time.Minute, 5*time.Second).Should(Succeed())
+
 			WaitForSRIOVStable()
 
 			err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, nodeState)
@@ -120,17 +119,14 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
 
 			By("Checking rdma mode and kernel args")
-			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline | grep ib_core.netns_mode=0 | wc -l")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "0")).To(BeTrue())
-
-			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline | grep ib_core.netns_mode=1 | wc -l")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "0")).To(BeTrue())
+			cmdlineOutput, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline")
+			errDescription = fmt.Sprintf("kernel args are not right, printing current kernel args %s", cmdlineOutput)
+			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=0"), errDescription)
+			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=1"), errDescription)
 
 			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/modprobe.d | grep sriov_network_operator_modules_config.conf | wc -l")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "0")).To(BeTrue())
+			Expect(strings.HasPrefix(output, "0")).To(BeTrue(), fmt.Sprintf("kernel args are not right, printing current kernel args %s", cmdlineOutput))
 		})
 	})
 
