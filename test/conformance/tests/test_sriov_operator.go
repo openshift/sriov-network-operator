@@ -507,9 +507,14 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(func() bool {
-					stdout, stderr, err := pod.ExecCommand(clients, hostNetPod, "ip", "link", "show")
-					Expect(err).ToNot(HaveOccurred())
-					Expect(stderr).To(Equal(""))
+					var stdout, stderr string
+					// Adding a retry because some of the time we get `Dump was interrupted and may be inconsistent.`
+					// output from the ip link command
+					Eventually(func(g Gomega) {
+						stdout, stderr, err = pod.ExecCommand(clients, hostNetPod, "ip", "link", "show")
+						g.Expect(err).ToNot(HaveOccurred())
+						g.Expect(stderr).To(Equal(""))
+					}, time.Minute, 2*time.Second).Should(Succeed())
 
 					found := false
 					for _, line := range strings.Split(stdout, "\n") {
