@@ -602,6 +602,10 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 							NetworkNamespace: namespaces.Test,
 						}}
 
+					if !cluster.VirtualCluster() {
+						sriovNetwork.Spec.LinkState = "enable"
+					}
+
 					// We need this to be able to run the connectivity checks on Mellanox cards
 					if intf.DeviceID == "1015" {
 						sriovNetwork.Spec.SpoofChk = off
