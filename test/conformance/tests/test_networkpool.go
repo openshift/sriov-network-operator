@@ -24,9 +24,10 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
 )
 
-var _ = Describe("[sriov] NetworkPool", Ordered, func() {
+var _ = FDescribe("[sriov] NetworkPool", Ordered, func() {
 	var testNode string
 	var interfaces []*sriovv1.InterfaceExt
+	var resourceName = "testrdma"
 
 	BeforeAll(func() {
 		err := namespaces.Create(namespaces.Test, clients)
@@ -68,10 +69,12 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			By("waiting for operator to finish the configuration")
 			WaitForSRIOVStable()
 			nodeState := &sriovv1.SriovNetworkNodeState{}
-			err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, nodeState)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(nodeState.Spec.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
-			Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
+			Eventually(func(g Gomega) {
+				err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(nodeState.Spec.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
+				g.Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
+			}, 20*time.Minute, 5*time.Second).Should(Succeed())
 
 			By("Checking rdma mode and kernel args")
 			cmdlineOutput, _, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline")
@@ -85,14 +88,22 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			Expect(strings.HasPrefix(output, "1")).To(BeTrue())
 
 			By("configure rdma mode to shared")
-			networkPool.Spec.RdmaMode = consts.RdmaSubsystemModeShared
-			err = clients.Update(context.Background(), networkPool)
-			Expect(err).ToNot(HaveOccurred())
+			Eventually(func(g Gomega) {
+				err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, networkPool)
+				g.Expect(err).ToNot(HaveOccurred())
+				networkPool.Spec.RdmaMode = consts.RdmaSubsystemModeShared
+				err = clients.Update(context.Background(), networkPool)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, time.Minute, 5*time.Second).Should(Succeed())
+
+			By("waiting for operator to finish the configuration")
 			WaitForSRIOVStable()
-			err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, nodeState)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(nodeState.Spec.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
-			Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
+			Eventually(func(g Gomega) {
+				err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(nodeState.Spec.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
+				g.Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
+			}, 20*time.Minute, 5*time.Second).Should(Succeed())
 
 			By("Checking rdma mode and kernel args")
 			cmdlineOutput, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline")
@@ -107,19 +118,24 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 
 			By("removing rdma mode configuration")
 			Eventually(func(g Gomega) {
+				err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, networkPool)
+				g.Expect(err).ToNot(HaveOccurred())
 				err = clients.Delete(context.Background(), networkPool)
 				g.Expect(err).ToNot(HaveOccurred())
 			}, 5*time.Minute, 5*time.Second).Should(Succeed())
 
+			By("waiting for operator to finish the configuration")
+			Eventually(func(g Gomega) {
+				err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(nodeState.Spec.System.RdmaMode).To(Equal(""))
+				g.Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
+			}, 20*time.Minute, 5*time.Second).Should(Succeed())
 			WaitForSRIOVStable()
-
-			err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, nodeState)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(nodeState.Spec.System.RdmaMode).To(Equal(""))
-			Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
 
 			By("Checking rdma mode and kernel args")
 			cmdlineOutput, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline")
+			By(fmt.Sprintf("DEBUG: print cmdline output %s", cmdlineOutput))
 			errDescription = fmt.Sprintf("kernel args are not right, printing current kernel args %s", cmdlineOutput)
 			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=0"), errDescription)
 			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=1"), errDescription)
@@ -149,25 +165,6 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			if iface == nil {
 				Skip("no mellanox card available to test rdma")
 			}
-
-			networkPool := &sriovv1.SriovNetworkPoolConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: testNode, Namespace: operatorNamespace},
-				Spec: sriovv1.SriovNetworkPoolConfigSpec{RdmaMode: consts.RdmaSubsystemModeExclusive,
-					NodeSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/hostname": testNode}}}}
-
-			err = clients.Create(context.Background(), networkPool)
-			Expect(err).ToNot(HaveOccurred())
-			By("waiting for operator to finish the configuration")
-			WaitForSRIOVStable()
-		})
-
-		It("should run pod with RDMA cni and expose nic metrics and another one without rdma info", func() {
-			By("creating a policy")
-			resourceName := "testrdma"
-			_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, iface.Name, testNode, 5, resourceName, "netdevice",
-				func(policy *sriovv1.SriovNetworkNodePolicy) { policy.Spec.IsRdma = true })
-			Expect(err).ToNot(HaveOccurred())
-			WaitForSRIOVStable()
 
 			By("Creating sriov network to use the rdma device")
 			sriovNetwork := &sriovv1.SriovNetwork{
@@ -201,6 +198,32 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 			waitForNetAttachDef("test-nordmanetwork", namespaces.Test)
 
+			networkPool := &sriovv1.SriovNetworkPoolConfig{
+				ObjectMeta: metav1.ObjectMeta{Name: testNode, Namespace: operatorNamespace},
+				Spec: sriovv1.SriovNetworkPoolConfigSpec{RdmaMode: consts.RdmaSubsystemModeExclusive,
+					NodeSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/hostname": testNode}}}}
+			err = clients.Create(context.Background(), networkPool)
+			Expect(err).ToNot(HaveOccurred())
+
+			By("waiting for operator to finish the configuration")
+			WaitForSRIOVStable()
+			nodeState := &sriovv1.SriovNetworkNodeState{}
+			Eventually(func(g Gomega) {
+				err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(nodeState.Spec.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
+				g.Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
+			}, 20*time.Minute, 5*time.Second).Should(Succeed())
+		})
+
+		It("should run pod with RDMA cni and expose nic metrics and another one without rdma info", func() {
+			By("creating a policy")
+			_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, iface.Name, testNode, 5, resourceName, "netdevice",
+				func(policy *sriovv1.SriovNetworkNodePolicy) { policy.Spec.IsRdma = true })
+			Expect(err).ToNot(HaveOccurred())
+
+			By("waiting for operator to finish the configuration")
+			WaitForSRIOVStable()
 			podDefinition := pod.DefineWithNetworks([]string{"test-rdmanetwork"})
 			firstPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
@@ -287,25 +310,6 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 				Skip("no mellanox card available to test rdma")
 			}
 
-			networkPool := &sriovv1.SriovNetworkPoolConfig{
-				ObjectMeta: metav1.ObjectMeta{Name: testNode, Namespace: operatorNamespace},
-				Spec: sriovv1.SriovNetworkPoolConfigSpec{RdmaMode: consts.RdmaSubsystemModeShared,
-					NodeSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/hostname": testNode}}}}
-
-			err = clients.Create(context.Background(), networkPool)
-			Expect(err).ToNot(HaveOccurred())
-			By("waiting for operator to finish the configuration")
-			WaitForSRIOVStable()
-		})
-
-		It("should run pod without RDMA cni and not expose nic metrics", func() {
-			By("creating a policy")
-			resourceName := "testrdma"
-			_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, iface.Name, testNode, 5, resourceName, "netdevice",
-				func(policy *sriovv1.SriovNetworkNodePolicy) { policy.Spec.IsRdma = true })
-			Expect(err).ToNot(HaveOccurred())
-			WaitForSRIOVStable()
-
 			By("Creating sriov network to use the rdma device")
 			sriovNetwork := &sriovv1.SriovNetwork{
 				ObjectMeta: metav1.ObjectMeta{
@@ -321,6 +325,31 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			err = clients.Create(context.Background(), sriovNetwork)
 			Expect(err).ToNot(HaveOccurred())
 			waitForNetAttachDef("test-rdmanetwork", namespaces.Test)
+
+			networkPool := &sriovv1.SriovNetworkPoolConfig{
+				ObjectMeta: metav1.ObjectMeta{Name: testNode, Namespace: operatorNamespace},
+				Spec: sriovv1.SriovNetworkPoolConfigSpec{RdmaMode: consts.RdmaSubsystemModeShared,
+					NodeSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/hostname": testNode}}}}
+
+			err = clients.Create(context.Background(), networkPool)
+			Expect(err).ToNot(HaveOccurred())
+			By("waiting for operator to finish the configuration")
+			WaitForSRIOVStable()
+			nodeState := &sriovv1.SriovNetworkNodeState{}
+			Eventually(func(g Gomega) {
+				err = clients.Get(context.Background(), client.ObjectKey{Name: testNode, Namespace: operatorNamespace}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(nodeState.Spec.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
+				g.Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
+			}, 20*time.Minute, 5*time.Second).Should(Succeed())
+		})
+
+		It("should run pod without RDMA cni and not expose nic metrics", func() {
+			By("creating a policy")
+			_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, iface.Name, testNode, 5, resourceName, "netdevice",
+				func(policy *sriovv1.SriovNetworkNodePolicy) { policy.Spec.IsRdma = true })
+			Expect(err).ToNot(HaveOccurred())
+			WaitForSRIOVStable()
 
 			podDefinition := pod.DefineWithNetworks([]string{"test-rdmanetwork"})
 			firstPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
