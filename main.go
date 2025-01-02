@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -32,7 +33,9 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -266,6 +269,34 @@ func main() {
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
+
+	// To speed up the leader election progress we check if the current running code is the only operator we remove the
+	// lock CR. this is to handle cases on single node when the node was rebooted and the operator didn't terminate as
+	// expected, in that case the restarted pod will need to wait 250 seconds before is able to take the lock again.
+	listContext, listContextCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	pods := &corev1.PodList{}
+	setupLog.V(2).Info("listing all operator pods")
+	err = kubeClient.List(listContext, pods, &client.ListOptions{
+		Namespace: vars.Namespace,
+		Raw: &metav1.ListOptions{
+			LabelSelector:   "name=sriov-network-operator",
+			ResourceVersion: "0"}})
+	if err != nil {
+		listContextCancel()
+		setupLog.Error(err, "failed to list operator pods")
+		os.Exit(1)
+	}
+
+	// if we find only one it's the current one we are running
+	// we remove the lease to speed up the restart process
+	if len(pods.Items) == 1 {
+		setupLog.Info("only one operator pod exist removing lease to speed up controller lock")
+		err = kubeClient.DeleteAllOf(listContext, &coordinationv1.Lease{}, client.InNamespace(vars.Namespace))
+		if err != nil {
+			listContextCancel()
+			setupLog.Error(err, "failed to remove lease for the operator... continue with regular flow to wait for lock")
+		}
+	}
 
 	leaderElectionErr := make(chan error)
 	leaderElectionContext, cancelLeaderElection := context.WithCancel(context.Background())
