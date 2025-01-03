@@ -6,6 +6,7 @@ SUT_SCRIPT="${SCRIPTPATH}/../../bindata/scripts/kargs.sh"
 
 
 test_RpmOstree_Add_All_Arguments() {
+    echo "ID=\"rhel\"" > ${FAKE_HOST}/etc/os-release
     echo "a b c=d eee=fff" > ${FAKE_HOST}/proc/cmdline
     touch ${FAKE_HOST}/run/ostree-booted
 
@@ -19,6 +20,7 @@ test_RpmOstree_Add_All_Arguments() {
 
 
 test_RpmOstree_Add_Only_Missing_Arguments() {
+    echo "ID=\"rhel\"" > ${FAKE_HOST}/etc/os-release
     echo "a b c=d eee=fff K=L" > ${FAKE_HOST}/proc/cmdline
     touch ${FAKE_HOST}/run/ostree-booted
 
@@ -31,6 +33,7 @@ test_RpmOstree_Add_Only_Missing_Arguments() {
 }
 
 test_RpmOstree_Delete_All_Arguments() {
+    echo "ID=\"rhel\"" > ${FAKE_HOST}/etc/os-release
     echo "a b c=d eee=fff X=Y W=Z" > ${FAKE_HOST}/proc/cmdline
     touch ${FAKE_HOST}/run/ostree-booted
 
@@ -43,6 +46,7 @@ test_RpmOstree_Delete_All_Arguments() {
 }
 
 test_RpmOstree_Delete_Only_Exist_Arguments() {
+    echo "ID=\"rhel\"" > ${FAKE_HOST}/etc/os-release
     echo "a b c=d eee=fff X=Y" > ${FAKE_HOST}/proc/cmdline
     touch ${FAKE_HOST}/run/ostree-booted
 

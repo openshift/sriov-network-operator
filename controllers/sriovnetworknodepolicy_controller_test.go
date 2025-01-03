@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -11,18 +12,17 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/google/go-cmp/cmp"
+	dptypes "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/types"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	dptypes "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/types"
-
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
@@ -48,7 +48,7 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 		{
 			tname: "testVirtioVdpaVirtio",
 			policy: sriovnetworkv1.SriovNetworkNodePolicy{
-				Spec: v1.SriovNetworkNodePolicySpec{
+				Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
 					ResourceName: "resourceName",
 					DeviceType:   consts.DeviceTypeNetDevice,
 					VdpaType:     consts.VdpaTypeVirtio,
@@ -67,7 +67,7 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 		}, {
 			tname: "testVhostVdpaVirtio",
 			policy: sriovnetworkv1.SriovNetworkNodePolicy{
-				Spec: v1.SriovNetworkNodePolicySpec{
+				Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
 					ResourceName: "resourceName",
 					DeviceType:   consts.DeviceTypeNetDevice,
 					VdpaType:     consts.VdpaTypeVhost,
@@ -87,7 +87,7 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 		{
 			tname: "testExcludeTopology",
 			policy: sriovnetworkv1.SriovNetworkNodePolicy{
-				Spec: v1.SriovNetworkNodePolicySpec{
+				Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
 					ResourceName:    "resourceName",
 					ExcludeTopology: true,
 				},
@@ -138,6 +138,10 @@ var _ = Describe("SriovnetworkNodePolicy controller", Ordered, func() {
 	var ctx context.Context
 
 	BeforeAll(func() {
+		// disable stale state cleanup delay to check that the controller can cleanup state objects
+		DeferCleanup(os.Setenv, "STALE_NODE_STATE_CLEANUP_DELAY_MINUTES", os.Getenv("STALE_NODE_STATE_CLEANUP_DELAY_MINUTES"))
+		os.Setenv("STALE_NODE_STATE_CLEANUP_DELAY_MINUTES", "0")
+
 		By("Create SriovOperatorConfig controller k8s objs")
 		config := makeDefaultSriovOpConfig()
 		Expect(k8sClient.Create(context.Background(), config)).Should(Succeed())
@@ -318,6 +322,68 @@ var _ = Describe("SriovnetworkNodePolicy controller", Ordered, func() {
 				g.Expect(nodeState.Spec.System.RdmaMode).To(Equal("exclusive"))
 			}).WithPolling(time.Second).WithTimeout(time.Minute).Should(Succeed())
 
+		})
+	})
+})
+
+var _ = Describe("SriovNetworkNodePolicyReconciler", Ordered, func() {
+	Context("handleStaleNodeState", func() {
+		var (
+			ctx       context.Context
+			r         *SriovNetworkNodePolicyReconciler
+			nodeState *sriovnetworkv1.SriovNetworkNodeState
+		)
+
+		BeforeEach(func() {
+			ctx = context.Background()
+			scheme := runtime.NewScheme()
+			utilruntime.Must(sriovnetworkv1.AddToScheme(scheme))
+			nodeState = &sriovnetworkv1.SriovNetworkNodeState{ObjectMeta: metav1.ObjectMeta{Name: "node1"}}
+			r = &SriovNetworkNodePolicyReconciler{Client: fake.NewClientBuilder().WithObjects(nodeState).Build()}
+		})
+		It("should set default delay", func() {
+			nodeState := nodeState.DeepCopy()
+			Expect(r.handleStaleNodeState(ctx, nodeState)).NotTo(HaveOccurred())
+			Expect(r.Get(ctx, types.NamespacedName{Name: nodeState.Name}, nodeState)).NotTo(HaveOccurred())
+			Expect(time.Now().UTC().Before(nodeState.GetKeepUntilTime())).To(BeTrue())
+		})
+		It("should remove CR if wait time expired", func() {
+			nodeState := nodeState.DeepCopy()
+			nodeState.SetKeepUntilTime(time.Now().UTC().Add(-time.Minute))
+			Expect(r.handleStaleNodeState(ctx, nodeState)).NotTo(HaveOccurred())
+			Expect(errors.IsNotFound(r.Get(ctx, types.NamespacedName{Name: nodeState.Name}, nodeState))).To(BeTrue())
+		})
+		It("should keep existing wait time if already set", func() {
+			nodeState := nodeState.DeepCopy()
+			nodeState.SetKeepUntilTime(time.Now().UTC().Add(time.Minute))
+			testTime := nodeState.GetKeepUntilTime()
+			r.Update(ctx, nodeState)
+			Expect(r.handleStaleNodeState(ctx, nodeState)).NotTo(HaveOccurred())
+			Expect(r.Get(ctx, types.NamespacedName{Name: nodeState.Name}, nodeState)).NotTo(HaveOccurred())
+			Expect(nodeState.GetKeepUntilTime()).To(Equal(testTime))
+		})
+		It("non default dealy", func() {
+			DeferCleanup(os.Setenv, "STALE_NODE_STATE_CLEANUP_DELAY_MINUTES", os.Getenv("STALE_NODE_STATE_CLEANUP_DELAY_MINUTES"))
+			os.Setenv("STALE_NODE_STATE_CLEANUP_DELAY_MINUTES", "60")
+			nodeState := nodeState.DeepCopy()
+			Expect(r.handleStaleNodeState(ctx, nodeState)).NotTo(HaveOccurred())
+			Expect(r.Get(ctx, types.NamespacedName{Name: nodeState.Name}, nodeState)).NotTo(HaveOccurred())
+			Expect(time.Until(nodeState.GetKeepUntilTime()) > 30*time.Minute).To(BeTrue())
+		})
+		It("invalid non default delay - should use default", func() {
+			DeferCleanup(os.Setenv, "STALE_NODE_STATE_CLEANUP_DELAY_MINUTES", os.Getenv("STALE_NODE_STATE_CLEANUP_DELAY_MINUTES"))
+			os.Setenv("STALE_NODE_STATE_CLEANUP_DELAY_MINUTES", "-20")
+			nodeState := nodeState.DeepCopy()
+			Expect(r.handleStaleNodeState(ctx, nodeState)).NotTo(HaveOccurred())
+			Expect(r.Get(ctx, types.NamespacedName{Name: nodeState.Name}, nodeState)).NotTo(HaveOccurred())
+			Expect(time.Until(nodeState.GetKeepUntilTime()) > 20*time.Minute).To(BeTrue())
+		})
+		It("should remove CR if delay is zero", func() {
+			DeferCleanup(os.Setenv, "STALE_NODE_STATE_CLEANUP_DELAY_MINUTES", os.Getenv("STALE_NODE_STATE_CLEANUP_DELAY_MINUTES"))
+			os.Setenv("STALE_NODE_STATE_CLEANUP_DELAY_MINUTES", "0")
+			nodeState := nodeState.DeepCopy()
+			Expect(r.handleStaleNodeState(ctx, nodeState)).NotTo(HaveOccurred())
+			Expect(errors.IsNotFound(r.Get(ctx, types.NamespacedName{Name: nodeState.Name}, nodeState))).To(BeTrue())
 		})
 	})
 })
