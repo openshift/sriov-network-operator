@@ -27,6 +27,7 @@ import (
 )
 
 func getManagedBridges() map[string]*sriovnetworkv1.OVSConfigExt {
+	mtu := 5000
 	return map[string]*sriovnetworkv1.OVSConfigExt{
 		"br-0000_d8_00.0": {
 			Name: "br-0000_d8_00.0",
@@ -43,6 +44,7 @@ func getManagedBridges() map[string]*sriovnetworkv1.OVSConfigExt {
 					ExternalIDs: map[string]string{"iface_externalID_key": "iface_externalID_value"},
 					OtherConfig: map[string]string{"iface_otherConfig_key": "iface_otherConfig_value"},
 					Options:     map[string]string{"iface_options_key": "iface_options_value"},
+					MTURequest:  &mtu,
 				},
 			}},
 		},
@@ -83,6 +85,7 @@ func (t *testDBEntries) GetCreateOperations(c client.Client) []ovsdb.Operation {
 }
 
 func getDefaultInitialDBContent() *testDBEntries {
+	mtu := 5000
 	iface := &InterfaceEntry{
 		Name:        "enp216s0f0np0",
 		UUID:        uuid.NewString(),
@@ -90,6 +93,7 @@ func getDefaultInitialDBContent() *testDBEntries {
 		ExternalIDs: map[string]string{"iface_externalID_key": "iface_externalID_value"},
 		OtherConfig: map[string]string{"iface_otherConfig_key": "iface_otherConfig_value"},
 		Options:     map[string]string{"iface_options_key": "iface_options_value"},
+		MTURequest:  &mtu,
 	}
 	port := &PortEntry{
 		Name:       "enp216s0f0np0",
@@ -156,6 +160,7 @@ func validateDBConfig(dbContent *testDBEntries, conf *sriovnetworkv1.OVSConfigEx
 	Expect(iface.Type).To(Equal(conf.Uplinks[0].Interface.Type))
 	Expect(iface.OtherConfig).To(Equal(conf.Uplinks[0].Interface.OtherConfig))
 	Expect(iface.ExternalIDs).To(Equal(conf.Uplinks[0].Interface.ExternalIDs))
+	Expect(iface.MTURequest).To(Equal(conf.Uplinks[0].Interface.MTURequest))
 }
 
 var _ = Describe("OVS", func() {
@@ -457,6 +462,7 @@ var _ = Describe("OVS", func() {
 				initialDBContent := getDefaultInitialDBContent()
 				initialDBContent.Bridge[0].ExternalIDs = nil
 				initialDBContent.Bridge[0].OtherConfig = nil
+				initialDBContent.Interface[0].MTURequest = nil
 				createInitialDBContent(ctx, ovsClient, initialDBContent)
 				conf := getManagedBridges()
 				store.EXPECT().GetManagedOVSBridges().Return(conf, nil)
@@ -465,6 +471,7 @@ var _ = Describe("OVS", func() {
 				Expect(ret).To(HaveLen(1))
 				Expect(ret[0].Bridge.ExternalIDs).To(BeEmpty())
 				Expect(ret[0].Bridge.OtherConfig).To(BeEmpty())
+				Expect(ret[0].Uplinks[0].Interface.MTURequest).To(BeNil())
 			})
 		})
 		Context("RemoveOVSBridge", func() {

@@ -36,6 +36,7 @@ type InterfaceEntry struct {
 	Options     map[string]string `ovsdb:"options"`
 	ExternalIDs map[string]string `ovsdb:"external_ids"`
 	OtherConfig map[string]string `ovsdb:"other_config"`
+	MTURequest  *int              `ovsdb:"mtu_request"`
 }
 
 // PortEntry represents some fields of the object in the Port table
