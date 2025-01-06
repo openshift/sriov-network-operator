@@ -99,27 +99,27 @@ func (m *mellanoxHelper) GetMellanoxBlueFieldMode(PciAddress string) (BlueFieldM
 
 	internalCPUPageSupplierstatus, exist := mstCurrentData[internalCPUPageSupplier]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUPageSupplier)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUPageSupplier)
 	}
 
 	internalCPUEswitchManagerStatus, exist := mstCurrentData[internalCPUEswitchManager]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUEswitchManager)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUEswitchManager)
 	}
 
 	internalCPUIbVportoStatus, exist := mstCurrentData[internalCPUIbVporto]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUIbVporto)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUIbVporto)
 	}
 
 	internalCPUOffloadEngineStatus, exist := mstCurrentData[internalCPUOffloadEngine]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUOffloadEngine)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUOffloadEngine)
 	}
 
 	internalCPUModelStatus, exist := mstCurrentData[internalCPUModel]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUModel)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUModel)
 	}
 
 	// check for DPU
