@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1004,4 +1005,44 @@ func GenerateBridgeName(iface *InterfaceExt) string {
 // NeedToUpdateBridges returns true if bridge for the host requires update
 func NeedToUpdateBridges(bridgeSpec, bridgeStatus *Bridges) bool {
 	return !reflect.DeepEqual(bridgeSpec, bridgeStatus)
+}
+
+// SetKeepUntilTime sets an annotation to hold the "keep until time" for the node’s state.
+// The "keep until time" specifies the earliest time at which the state object can be removed
+// if the daemon's pod is not found on the node.
+func (s *SriovNetworkNodeState) SetKeepUntilTime(t time.Time) {
+	ts := t.Format(time.RFC3339)
+	annotations := s.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[consts.NodeStateKeepUntilAnnotation] = ts
+	s.SetAnnotations(annotations)
+}
+
+// GetKeepUntilTime returns the value that is stored in the "keep until time" annotation.
+// The "keep until time" specifies the earliest time at which the state object can be removed
+// if the daemon's pod is not found on the node.
+// Return zero time instant if annotaion is not found on the object or if it has a wrong format.
+func (s *SriovNetworkNodeState) GetKeepUntilTime() time.Time {
+	t, err := time.Parse(time.RFC3339, s.GetAnnotations()[consts.NodeStateKeepUntilAnnotation])
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// ResetKeepUntilTime removes "keep until time" annotation from the state object.
+// The "keep until time" specifies the earliest time at which the state object can be removed
+// if the daemon's pod is not found on the node.
+// Returns true if the value was removed, false otherwise.
+func (s *SriovNetworkNodeState) ResetKeepUntilTime() bool {
+	annotations := s.GetAnnotations()
+	_, exist := annotations[consts.NodeStateKeepUntilAnnotation]
+	if !exist {
+		return false
+	}
+	delete(annotations, consts.NodeStateKeepUntilAnnotation)
+	s.SetAnnotations(annotations)
+	return true
 }
