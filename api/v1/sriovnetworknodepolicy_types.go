@@ -125,6 +125,8 @@ type OVSInterfaceConfig struct {
 	ExternalIDs map[string]string `json:"externalIDs,omitempty"`
 	// other_config field in the Interface table in OVSDB
 	OtherConfig map[string]string `json:"otherConfig,omitempty"`
+	// mtu_request field in the Interface table in OVSDB
+	MTURequest *int `json:"mtuRequest,omitempty"`
 }
 
 // SriovNetworkNodePolicyStatus defines the observed state of SriovNetworkNodePolicy

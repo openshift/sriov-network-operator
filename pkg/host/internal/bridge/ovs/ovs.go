@@ -156,6 +156,7 @@ func (o *ovs) CreateOVSBridge(ctx context.Context, conf *sriovnetworkv1.OVSConfi
 		Options:     conf.Uplinks[0].Interface.Options,
 		ExternalIDs: conf.Uplinks[0].Interface.ExternalIDs,
 		OtherConfig: conf.Uplinks[0].Interface.OtherConfig,
+		MTURequest:  conf.Uplinks[0].Interface.MTURequest,
 	}); err != nil {
 		funcLog.Error(err, "CreateOVSBridge(): failed to add uplink interface to the bridge")
 		return err
@@ -592,6 +593,10 @@ func (o *ovs) getCurrentBridgeState(ctx context.Context, dbClient client.Client,
 			OtherConfig: updateMap(knownConfigUplink.Interface.OtherConfig, iface.OtherConfig),
 		},
 	}}
+	if iface.MTURequest != nil {
+		mtu := *iface.MTURequest
+		currentConfig.Uplinks[0].Interface.MTURequest = &mtu
+	}
 	return currentConfig, nil
 }
 
@@ -707,6 +712,7 @@ func getClient(ctx context.Context) (client.Client, error) {
 			&interfaceEntry.Options,
 			&interfaceEntry.ExternalIDs,
 			&interfaceEntry.OtherConfig,
+			&interfaceEntry.MTURequest,
 		),
 		client.WithTable(portEntry,
 			&portEntry.UUID,
