@@ -148,6 +148,15 @@ func (o *ovs) CreateOVSBridge(ctx context.Context, conf *sriovnetworkv1.OVSConfi
 		funcLog.Error(err, "CreateOVSBridge(): failed to get bridge after creation")
 		return err
 	}
+	funcLog.V(2).Info("CreateOVSBridge(): add internal interface to the bridge")
+	if err := o.addInterface(ctx, dbClient, bridge, &InterfaceEntry{
+		Name: bridge.Name,
+		UUID: uuid.NewString(),
+		Type: "internal",
+	}); err != nil {
+		funcLog.Error(err, "CreateOVSBridge(): failed to add internal interface to the bridge")
+		return err
+	}
 	funcLog.V(2).Info("CreateOVSBridge(): add uplink interface to the bridge")
 	if err := o.addInterface(ctx, dbClient, bridge, &InterfaceEntry{
 		Name:        conf.Uplinks[0].Name,

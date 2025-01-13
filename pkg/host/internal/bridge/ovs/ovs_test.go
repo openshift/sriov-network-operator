@@ -141,26 +141,43 @@ func createInitialDBContent(ctx context.Context, c client.Client, expectedState 
 func validateDBConfig(dbContent *testDBEntries, conf *sriovnetworkv1.OVSConfigExt) {
 	Expect(dbContent.OpenVSwitch).To(HaveLen(1))
 	Expect(dbContent.Bridge).To(HaveLen(1))
-	Expect(dbContent.Interface).To(HaveLen(1))
-	Expect(dbContent.Port).To(HaveLen(1))
+	Expect(dbContent.Interface).To(HaveLen(2))
+	Expect(dbContent.Port).To(HaveLen(2))
 	ovs := dbContent.OpenVSwitch[0]
 	br := dbContent.Bridge[0]
-	port := dbContent.Port[0]
-	iface := dbContent.Interface[0]
+	ports := make(map[string]*PortEntry, 0)
+	interfaces := make(map[string]*InterfaceEntry, 0)
+	for _, p := range dbContent.Port {
+		ports[p.Name] = p
+	}
+	for _, ifc := range dbContent.Interface {
+		interfaces[ifc.Name] = ifc
+	}
 	Expect(ovs.Bridges).To(ContainElement(br.UUID))
 	Expect(br.Name).To(Equal(conf.Name))
 	Expect(br.DatapathType).To(Equal(conf.Bridge.DatapathType))
 	Expect(br.OtherConfig).To(Equal(conf.Bridge.OtherConfig))
 	Expect(br.ExternalIDs).To(Equal(conf.Bridge.ExternalIDs))
+	port, ok := ports[conf.Uplinks[0].Name]
+	Expect(ok).To(BeTrue())
 	Expect(br.Ports).To(ContainElement(port.UUID))
-	Expect(port.Name).To(Equal(conf.Uplinks[0].Name))
+	iface, ok := interfaces[conf.Uplinks[0].Name]
+	Expect(ok).To(BeTrue())
 	Expect(port.Interfaces).To(ContainElement(iface.UUID))
-	Expect(iface.Name).To(Equal(conf.Uplinks[0].Name))
 	Expect(iface.Options).To(Equal(conf.Uplinks[0].Interface.Options))
 	Expect(iface.Type).To(Equal(conf.Uplinks[0].Interface.Type))
 	Expect(iface.OtherConfig).To(Equal(conf.Uplinks[0].Interface.OtherConfig))
 	Expect(iface.ExternalIDs).To(Equal(conf.Uplinks[0].Interface.ExternalIDs))
 	Expect(iface.MTURequest).To(Equal(conf.Uplinks[0].Interface.MTURequest))
+	internalPort, ok := ports[conf.Name]
+	Expect(ok).To(BeTrue())
+	internalIface, ok := interfaces[conf.Name]
+	Expect(ok).To(BeTrue())
+	Expect(internalPort.Interfaces).To(ContainElement(internalIface.UUID))
+	Expect(internalIface.Options).To(BeNil())
+	Expect(internalIface.Type).To(Equal("internal"))
+	Expect(internalIface.OtherConfig).To(BeNil())
+	Expect(internalIface.ExternalIDs).To(BeNil())
 }
 
 var _ = Describe("OVS", func() {
