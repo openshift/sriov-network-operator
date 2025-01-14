@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -xeo pipefail
 
-cluster_version=${CLUSTER_VERSION:-1.29.3}
+cluster_version=${CLUSTER_VERSION:-1.32.0}
 cluster_name=${CLUSTER_NAME:-virtual}
 domain_name=$cluster_name.lab
 
