@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -98,27 +99,27 @@ func (m *mellanoxHelper) GetMellanoxBlueFieldMode(PciAddress string) (BlueFieldM
 
 	internalCPUPageSupplierstatus, exist := mstCurrentData[internalCPUPageSupplier]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUPageSupplier)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUPageSupplier)
 	}
 
 	internalCPUEswitchManagerStatus, exist := mstCurrentData[internalCPUEswitchManager]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUEswitchManager)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUEswitchManager)
 	}
 
 	internalCPUIbVportoStatus, exist := mstCurrentData[internalCPUIbVporto]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUIbVporto)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUIbVporto)
 	}
 
 	internalCPUOffloadEngineStatus, exist := mstCurrentData[internalCPUOffloadEngine]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUOffloadEngine)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUOffloadEngine)
 	}
 
 	internalCPUModelStatus, exist := mstCurrentData[internalCPUModel]
 	if !exist {
-		return 0, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUModel)
+		return -1, fmt.Errorf("failed to find %s in the mstconfig output command", internalCPUModel)
 	}
 
 	// check for DPU
@@ -162,6 +163,15 @@ func (m *mellanoxHelper) MlxResetFW(pciAddresses []string) error {
 func (m *mellanoxHelper) MlxConfigFW(attributesToChange map[string]MlxNic) error {
 	log.Log.Info("mellanox-plugin configFW()")
 	for pciAddr, fwArgs := range attributesToChange {
+		bfMode, err := m.GetMellanoxBlueFieldMode(pciAddr)
+		if err != nil {
+			// NIC is not a DPU or mstconfig failed. It's safe to continue FW configuration
+			log.Log.V(2).Info("mellanox-plugin: configFW(): can't get DPU mode for NIC", "pciAddress", pciAddr)
+		}
+		if bfMode == BluefieldDpu {
+			// Host reboot won't re-load NIC firmware in DPU mode. To apply FW changes power cycle is required or mstfwreset could be used.
+			return errors.Errorf("NIC %s is in DPU mode. Firmware configuration changes are not supported in this mode.", pciAddr)
+		}
 		cmdArgs := []string{"-d", pciAddr, "-y", "set"}
 		if fwArgs.EnableSriov {
 			cmdArgs = append(cmdArgs, fmt.Sprintf("%s=True", EnableSriov))
