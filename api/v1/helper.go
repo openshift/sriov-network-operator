@@ -484,6 +484,10 @@ func (p *SriovNetworkNodePolicy) ApplyBridgeConfig(state *SriovNetworkNodeState)
 					Interface:  p.Spec.Bridge.OVS.Uplink.Interface,
 				}},
 			}
+			if p.Spec.Mtu > 0 {
+				mtu := p.Spec.Mtu
+				ovsBridge.Uplinks[0].Interface.MTURequest = &mtu
+			}
 			log.Info("Update bridge for interface", "name", iface.Name, "bridge", ovsBridge.Name)
 
 			// We need to keep slices with bridges ordered to avoid unnecessary updates in the K8S API.

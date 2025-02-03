@@ -30,21 +30,26 @@ if [ -z $SKIP_VAR_SET ]; then
         export SRIOV_NETWORK_OPERATOR_IMAGE=${SRIOV_NETWORK_OPERATOR_IMAGE:-quay.io/openshift/origin-sriov-network-operator@${OPERATOR_IMAGE_DIGEST}}
         METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE_DIGEST=$(skopeo inspect docker://quay.io/openshift/origin-kube-rbac-proxy | jq --raw-output '.Digest')
         export METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE=${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE:-quay.io/openshift/origin-kube-rbac-proxy@${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE_DIGEST}}
+        fail_msg_detect="is empty and failed to detect"
 else
-        # ensure that OVS_CNI_IMAGE is set, empty string is a valid value
-        OVS_CNI_IMAGE=${OVS_CNI_IMAGE:-}
-        # ensure that RDMA_CNI_IMAGE is set, empty string is a valid value
-        RDMA_CNI_IMAGE=${RDMA_CNI_IMAGE:-}
-        METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE=${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE:-}
-        [ -z $SRIOV_CNI_IMAGE ] && echo "SRIOV_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $SRIOV_INFINIBAND_CNI_IMAGE ] && echo "SRIOV_INFINIBAND_CNI_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $SRIOV_DEVICE_PLUGIN_IMAGE ] && echo "SRIOV_DEVICE_PLUGIN_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $NETWORK_RESOURCES_INJECTOR_IMAGE ] && echo "NETWORK_RESOURCES_INJECTOR_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE ] && echo "SRIOV_NETWORK_CONFIG_DAEMON_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $SRIOV_NETWORK_WEBHOOK_IMAGE ] && echo "SRIOV_NETWORK_WEBHOOK_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $METRICS_EXPORTER_IMAGE ] && echo "METRICS_EXPORTER_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
-        [ -z $SRIOV_NETWORK_OPERATOR_IMAGE ] && echo "SRIOV_NETWORK_OPERATOR_IMAGE is empty but SKIP_VAR_SET is set" && exit 1
+        fail_msg_detect="is empty but SKIP_VAR_SET is set"
 fi
+
+# ensure that OVS_CNI_IMAGE is set, empty string is a valid value
+OVS_CNI_IMAGE=${OVS_CNI_IMAGE:-}
+# ensure that RDMA_CNI_IMAGE is set, empty string is a valid value
+RDMA_CNI_IMAGE=${RDMA_CNI_IMAGE:-}
+METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE=${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE:-}
+[ -z $SRIOV_CNI_IMAGE ] && echo "SRIOV_CNI_IMAGE $fail_msg_detect" && exit 1
+[ -z $SRIOV_INFINIBAND_CNI_IMAGE ] && echo "SRIOV_INFINIBAND_CNI_IMAGE $fail_msg_detect" && exit 1
+[ -z $SRIOV_DEVICE_PLUGIN_IMAGE ] && echo "SRIOV_DEVICE_PLUGIN_IMAGE $fail_msg_detect" && exit 1
+[ -z $NETWORK_RESOURCES_INJECTOR_IMAGE ] && echo "NETWORK_RESOURCES_INJECTOR_IMAGE $fail_msg_detect" && exit 1
+[ -z $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE ] && echo "SRIOV_NETWORK_CONFIG_DAEMON_IMAGE $fail_msg_detect" && exit 1
+[ -z $SRIOV_NETWORK_WEBHOOK_IMAGE ] && echo "SRIOV_NETWORK_WEBHOOK_IMAGE $fail_msg_detect" && exit 1
+[ -z $METRICS_EXPORTER_IMAGE ] && echo "METRICS_EXPORTER_IMAGE $fail_msg_detect" && exit 1
+[ -z $SRIOV_NETWORK_OPERATOR_IMAGE ] && echo "SRIOV_NETWORK_OPERATOR_IMAGE $fail_msg_detect" && exit 1
+
+unset fail_msg_detect
 
 set -x
 
