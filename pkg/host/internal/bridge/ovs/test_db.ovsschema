@@ -105,6 +105,15 @@
         },
         "type": {
           "type": "string"
+        },
+        "mtu_request":{
+          "type": {
+            "key": {
+              "minInteger":1,
+              "type": "integer"
+            },
+            "min": 0
+          }
         }
       },
       "indexes": [

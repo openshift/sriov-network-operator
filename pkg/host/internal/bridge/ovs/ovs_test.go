@@ -27,6 +27,7 @@ import (
 )
 
 func getManagedBridges() map[string]*sriovnetworkv1.OVSConfigExt {
+	mtu := 5000
 	return map[string]*sriovnetworkv1.OVSConfigExt{
 		"br-0000_d8_00.0": {
 			Name: "br-0000_d8_00.0",
@@ -43,6 +44,7 @@ func getManagedBridges() map[string]*sriovnetworkv1.OVSConfigExt {
 					ExternalIDs: map[string]string{"iface_externalID_key": "iface_externalID_value"},
 					OtherConfig: map[string]string{"iface_otherConfig_key": "iface_otherConfig_value"},
 					Options:     map[string]string{"iface_options_key": "iface_options_value"},
+					MTURequest:  &mtu,
 				},
 			}},
 		},
@@ -83,6 +85,7 @@ func (t *testDBEntries) GetCreateOperations(c client.Client) []ovsdb.Operation {
 }
 
 func getDefaultInitialDBContent() *testDBEntries {
+	mtu := 5000
 	iface := &InterfaceEntry{
 		Name:        "enp216s0f0np0",
 		UUID:        uuid.NewString(),
@@ -90,6 +93,7 @@ func getDefaultInitialDBContent() *testDBEntries {
 		ExternalIDs: map[string]string{"iface_externalID_key": "iface_externalID_value"},
 		OtherConfig: map[string]string{"iface_otherConfig_key": "iface_otherConfig_value"},
 		Options:     map[string]string{"iface_options_key": "iface_options_value"},
+		MTURequest:  &mtu,
 	}
 	port := &PortEntry{
 		Name:       "enp216s0f0np0",
@@ -137,25 +141,43 @@ func createInitialDBContent(ctx context.Context, c client.Client, expectedState 
 func validateDBConfig(dbContent *testDBEntries, conf *sriovnetworkv1.OVSConfigExt) {
 	Expect(dbContent.OpenVSwitch).To(HaveLen(1))
 	Expect(dbContent.Bridge).To(HaveLen(1))
-	Expect(dbContent.Interface).To(HaveLen(1))
-	Expect(dbContent.Port).To(HaveLen(1))
+	Expect(dbContent.Interface).To(HaveLen(2))
+	Expect(dbContent.Port).To(HaveLen(2))
 	ovs := dbContent.OpenVSwitch[0]
 	br := dbContent.Bridge[0]
-	port := dbContent.Port[0]
-	iface := dbContent.Interface[0]
+	ports := make(map[string]*PortEntry, 0)
+	interfaces := make(map[string]*InterfaceEntry, 0)
+	for _, p := range dbContent.Port {
+		ports[p.Name] = p
+	}
+	for _, ifc := range dbContent.Interface {
+		interfaces[ifc.Name] = ifc
+	}
 	Expect(ovs.Bridges).To(ContainElement(br.UUID))
 	Expect(br.Name).To(Equal(conf.Name))
 	Expect(br.DatapathType).To(Equal(conf.Bridge.DatapathType))
 	Expect(br.OtherConfig).To(Equal(conf.Bridge.OtherConfig))
 	Expect(br.ExternalIDs).To(Equal(conf.Bridge.ExternalIDs))
+	port, ok := ports[conf.Uplinks[0].Name]
+	Expect(ok).To(BeTrue())
 	Expect(br.Ports).To(ContainElement(port.UUID))
-	Expect(port.Name).To(Equal(conf.Uplinks[0].Name))
+	iface, ok := interfaces[conf.Uplinks[0].Name]
+	Expect(ok).To(BeTrue())
 	Expect(port.Interfaces).To(ContainElement(iface.UUID))
-	Expect(iface.Name).To(Equal(conf.Uplinks[0].Name))
 	Expect(iface.Options).To(Equal(conf.Uplinks[0].Interface.Options))
 	Expect(iface.Type).To(Equal(conf.Uplinks[0].Interface.Type))
 	Expect(iface.OtherConfig).To(Equal(conf.Uplinks[0].Interface.OtherConfig))
 	Expect(iface.ExternalIDs).To(Equal(conf.Uplinks[0].Interface.ExternalIDs))
+	Expect(iface.MTURequest).To(Equal(conf.Uplinks[0].Interface.MTURequest))
+	internalPort, ok := ports[conf.Name]
+	Expect(ok).To(BeTrue())
+	internalIface, ok := interfaces[conf.Name]
+	Expect(ok).To(BeTrue())
+	Expect(internalPort.Interfaces).To(ContainElement(internalIface.UUID))
+	Expect(internalIface.Options).To(BeNil())
+	Expect(internalIface.Type).To(Equal("internal"))
+	Expect(internalIface.OtherConfig).To(BeNil())
+	Expect(internalIface.ExternalIDs).To(BeNil())
 }
 
 var _ = Describe("OVS", func() {
@@ -457,6 +479,7 @@ var _ = Describe("OVS", func() {
 				initialDBContent := getDefaultInitialDBContent()
 				initialDBContent.Bridge[0].ExternalIDs = nil
 				initialDBContent.Bridge[0].OtherConfig = nil
+				initialDBContent.Interface[0].MTURequest = nil
 				createInitialDBContent(ctx, ovsClient, initialDBContent)
 				conf := getManagedBridges()
 				store.EXPECT().GetManagedOVSBridges().Return(conf, nil)
@@ -465,6 +488,7 @@ var _ = Describe("OVS", func() {
 				Expect(ret).To(HaveLen(1))
 				Expect(ret[0].Bridge.ExternalIDs).To(BeEmpty())
 				Expect(ret[0].Bridge.OtherConfig).To(BeEmpty())
+				Expect(ret[0].Uplinks[0].Interface.MTURequest).To(BeNil())
 			})
 		})
 		Context("RemoveOVSBridge", func() {
