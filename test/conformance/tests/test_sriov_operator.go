@@ -348,6 +348,14 @@ var _ = Describe("[sriov] operator", func() {
 					g.Expect(err).ToNot(HaveOccurred())
 				}).Should(Succeed())
 			})
+
+			It("should remove ServiceMonitor when the feature is turned off", func() {
+				setFeatureFlag("metricsExporter", false)
+				Eventually(func(g Gomega) {
+					_, err := clients.ServiceMonitors(operatorNamespace).Get(context.Background(), "sriov-network-metrics-exporter", metav1.GetOptions{})
+					g.Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+				}).Should(Succeed())
+			})
 		})
 	})
 

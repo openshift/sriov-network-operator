@@ -1,0 +1,38 @@
+---
+{{ if and .IsPrometheusOperatorInstalled .PrometheusOperatorDeployRules }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sriov-vf-rules
+  namespace: {{.Namespace}}
+spec:
+  groups:
+  - name: sriov-network-metrics-operator.rules
+    interval: 30s
+    rules:
+    - expr: |
+        sriov_vf_tx_packets * on (pciAddr,node) group_left(pod,namespace,dev_type) sriov_kubepoddevice
+      record: network:sriov_vf_tx_packets
+    - expr: |
+        sriov_vf_rx_packets * on (pciAddr,node) group_left(pod,namespace,dev_type) sriov_kubepoddevice
+      record: network:sriov_vf_rx_packets
+    - expr: |
+        sriov_vf_tx_bytes * on (pciAddr,node) group_left(pod,namespace,dev_type) sriov_kubepoddevice
+      record: network:sriov_vf_tx_bytes
+    - expr: |
+        sriov_vf_rx_bytes * on (pciAddr,node) group_left(pod,namespace,dev_type) sriov_kubepoddevice
+      record: network:sriov_vf_rx_bytes
+    - expr: |
+        sriov_vf_tx_dropped * on (pciAddr,node) group_left(pod,namespace,dev_type) sriov_kubepoddevice
+      record: network:sriov_vf_tx_dropped
+    - expr: |
+        sriov_vf_rx_dropped * on (pciAddr,node) group_left(pod,namespace,dev_type) sriov_kubepoddevice
+      record: network:sriov_vf_rx_dropped
+    - expr: |
+        sriov_vf_rx_broadcast * on (pciAddr,node) group_left(pod,namespace,dev_type) sriov_kubepoddevice
+      record: network:sriov_vf_rx_broadcast
+    - expr: |
+        sriov_vf_rx_multicast * on (pciAddr,node) group_left(pod,namespace,dev_type) sriov_kubepoddevice
+      record: network:sriov_vf_rx_multicast
+{{ end }}
+
