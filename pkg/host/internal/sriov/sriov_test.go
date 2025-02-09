@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/golang/mock/gomock"
 	"github.com/jaypipes/ghw/pkg/pci"
 	"github.com/jaypipes/pcidb"
 	"github.com/vishvananda/netlink"
+	"go.uber.org/mock/gomock"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

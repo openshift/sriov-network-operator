@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
+	"go.uber.org/mock/gomock"
 	"gopkg.in/yaml.v3"
 
 	. "github.com/onsi/ginkgo/v2"
