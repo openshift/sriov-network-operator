@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -60,6 +61,7 @@ type MellanoxInterface interface {
 	GetMlxNicFwData(pciAddress string) (current, next *MlxNic, err error)
 
 	MlxConfigFW(attributesToChange map[string]MlxNic) error
+	MlxResetFW(pciAddresses []string) error
 }
 
 type mellanoxHelper struct {
@@ -139,6 +141,22 @@ func (m *mellanoxHelper) GetMellanoxBlueFieldMode(PciAddress string) (BlueFieldM
 	log.Log.Error(err, "MellanoxBlueFieldMode(): unknown device status",
 		"device", PciAddress, "mstconfig-output", stdout)
 	return -1, fmt.Errorf("MellanoxBlueFieldMode(): unknown device status for %s", PciAddress)
+}
+
+func (m *mellanoxHelper) MlxResetFW(pciAddresses []string) error {
+	log.Log.Info("mellanox-plugin resetFW()")
+	var errs []error
+	for _, pciAddress := range pciAddresses {
+		cmdArgs := []string{"-d", pciAddress, "--skip_driver", "-l", "3", "-y", "reset"}
+		log.Log.Info("mellanox-plugin: resetFW()", "cmd-args", cmdArgs)
+		// We have to ensure that pciutils is installed into the container image Dockerfile.sriov-network-config-daemon
+		_, stderr, err := m.utils.RunCommand("mstfwreset", cmdArgs...)
+		if err != nil {
+			log.Log.Error(err, "mellanox-plugin resetFW(): failed", "stderr", stderr)
+			errs = append(errs, err)
+		}
+	}
+	return kerrors.NewAggregate(errs)
 }
 
 func (m *mellanoxHelper) MlxConfigFW(attributesToChange map[string]MlxNic) error {
