@@ -33,7 +33,7 @@ spec:
             # Removal of this file signals firstboot completion
             ConditionPathExists=!/etc/ignition-machine-config-encapsulated.json
             Description=Configures SRIOV NIC - post network configuration
-            After=systemd-networkd-wait-online.service NetworkManager-wait-online.service openvswitch-switch.service
+            After=systemd-networkd-wait-online.service NetworkManager-wait-online.service openvswitch-switch.service sriov-config.service
             Before=kubelet.service
 
             [Service]
