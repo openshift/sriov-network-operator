@@ -106,7 +106,12 @@ func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// create the drain state annotation if it doesn't exist in the sriovNetworkNodeState object
-	nodeStateDrainAnnotationCurrent, nodeStateExist, err := dr.ensureAnnotationExists(ctx, nodeNetworkState, constants.NodeStateDrainAnnotationCurrent)
+	nodeStateDrainAnnotationCurrent, currentNodeStateExist, err := dr.ensureAnnotationExists(ctx, nodeNetworkState, constants.NodeStateDrainAnnotationCurrent)
+	if err != nil {
+		reqLogger.Error(err, "failed to ensure nodeStateDrainAnnotationCurrent")
+		return ctrl.Result{}, err
+	}
+	_, desireNodeStateExist, err := dr.ensureAnnotationExists(ctx, nodeNetworkState, constants.NodeStateDrainAnnotation)
 	if err != nil {
 		reqLogger.Error(err, "failed to ensure nodeStateDrainAnnotation")
 		return ctrl.Result{}, err
@@ -120,7 +125,7 @@ func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// requeue the request if we needed to add any of the annotations
-	if !nodeExist || !nodeStateExist {
+	if !nodeExist || !currentNodeStateExist || !desireNodeStateExist {
 		return ctrl.Result{Requeue: true}, nil
 	}
 	reqLogger.V(2).Info("Drain annotations", "nodeAnnotation", nodeDrainAnnotation, "nodeStateAnnotation", nodeStateDrainAnnotationCurrent)
