@@ -3,9 +3,9 @@ package infiniband
 import (
 	"net"
 
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	netlinkLibPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink"

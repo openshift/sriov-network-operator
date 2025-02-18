@@ -8,7 +8,7 @@ import (
 	bytes "bytes"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockCommandInterface is a mock of CommandInterface interface.

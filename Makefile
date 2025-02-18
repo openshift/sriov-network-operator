@@ -167,7 +167,7 @@ envtest: ## Download envtest-setup locally if necessary.
 
 GOMOCK = $(shell pwd)/bin/mockgen
 gomock:
-	$(call go-install-tool,$(GOMOCK),github.com/golang/mock/mockgen@v1.6.0)
+	$(call go-install-tool,$(GOMOCK),go.uber.org/mock/mockgen@v0.5.0)
 
 GINKGO = $(BIN_DIR)/ginkgo
 ginkgo:
@@ -235,7 +235,7 @@ test-bindata-scripts: fakechroot
 	fakechroot ./test/scripts/kargs_test.sh
 
 test-%: generate manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./$*/... -coverprofile cover-$*-$(CLUSTER_TYPE).out -coverpkg ./... -v
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test `go list ./$*/... | grep -v "/mock"` -coverprofile cover-$*-$(CLUSTER_TYPE).out -coverpkg ./... -v
 
 GOCOVMERGE = $(BIN_DIR)/gocovmerge
 gocovmerge: ## Download gocovmerge locally if necessary.
