@@ -7,8 +7,8 @@ package mock_utils
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockStoreManagerInterface is a mock of StoreManagerInterface interface.
