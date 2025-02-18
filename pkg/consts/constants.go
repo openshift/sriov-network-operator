@@ -14,7 +14,10 @@ const (
 	Chroot = "/host"
 	Host   = "/host"
 
-	ResyncPeriod                       = 5 * time.Minute
+	ResyncPeriod               = 5 * time.Minute
+	DaemonRequeueTime          = 30 * time.Second
+	DrainControllerRequeueTime = 5 * time.Second
+
 	DefaultConfigName                  = "default"
 	ConfigDaemonPath                   = "./bindata/manifests/daemon"
 	InjectorWebHookPath                = "./bindata/manifests/webhook"
