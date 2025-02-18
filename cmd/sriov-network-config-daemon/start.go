@@ -18,25 +18,27 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
+	ocpconfigapi "github.com/openshift/api/config/v1"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/connrotation"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	configv1 "github.com/openshift/api/config/v1"
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
@@ -89,6 +91,8 @@ var (
 		manageSoftwareBridges bool
 		ovsSocketPath         string
 	}
+
+	scheme = runtime.NewScheme()
 )
 
 func init() {
@@ -100,13 +104,17 @@ func init() {
 	startCmd.PersistentFlags().BoolVar(&startOpts.parallelNicConfig, "parallel-nic-config", false, "perform NIC configuration in parallel")
 	startCmd.PersistentFlags().BoolVar(&startOpts.manageSoftwareBridges, "manage-software-bridges", false, "enable management of software bridges")
 	startCmd.PersistentFlags().StringVar(&startOpts.ovsSocketPath, "ovs-socket-path", vars.OVSDBSocketPath, "path for OVSDB socket")
+
+	// Init Scheme
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(sriovnetworkv1.AddToScheme(scheme))
+	utilruntime.Must(ocpconfigapi.AddToScheme(scheme))
+
+	// Init logger
+	snolog.InitLog()
 }
 
-func runStartCmd(cmd *cobra.Command, args []string) error {
-	// init logger
-	snolog.InitLog()
-	setupLog := log.Log.WithName("sriov-network-config-daemon")
-
+func configGlobalVariables() error {
 	// Mark that we are running inside a container
 	vars.UsingSystemdMode = false
 	if startOpts.systemd {
@@ -132,53 +140,94 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// This channel is used to ensure all spawned goroutines exit when we exit.
-	stopCh := make(chan struct{})
-	defer close(stopCh)
+	vars.Scheme = scheme
 
-	// This channel is used to signal Run() something failed and to jump ship.
-	// It's purely a chan<- in the Daemon struct for goroutines to write to, and
-	// a <-chan in Run() for the main thread to listen on.
-	exitCh := make(chan error)
-	defer close(exitCh)
+	return nil
+}
 
-	// This channel is to make sure main thread will wait until the writer finish
-	// to report lastSyncError in SriovNetworkNodeState object.
-	syncCh := make(chan struct{})
-	defer close(syncCh)
+func useKubeletKubeConfig() {
+	fnLogger := log.Log.WithName("sriov-network-config-daemon")
 
-	refreshCh := make(chan daemon.Message)
-	defer close(refreshCh)
+	kubeconfig, err := clientcmd.LoadFromFile("/host/etc/kubernetes/kubeconfig")
+	if err != nil {
+		fnLogger.Error(err, "failed to load kubelet kubeconfig")
+	}
+	clusterName := kubeconfig.Contexts[kubeconfig.CurrentContext].Cluster
+	apiURL := kubeconfig.Clusters[clusterName].Server
+
+	urlPath, err := url.Parse(apiURL)
+	if err != nil {
+		fnLogger.Error(err, "failed to parse api url from kubelet kubeconfig")
+	}
+
+	// The kubernetes in-cluster functions don't let you override the apiserver
+	// directly; gotta "pass" it via environment vars.
+	fnLogger.V(0).Info("overriding kubernetes api", "new-url", apiURL)
+	err = os.Setenv("KUBERNETES_SERVICE_HOST", urlPath.Hostname())
+	if err != nil {
+		fnLogger.Error(err, "failed to set KUBERNETES_SERVICE_HOST environment variable")
+	}
+	err = os.Setenv("KUBERNETES_SERVICE_PORT", urlPath.Port())
+	if err != nil {
+		fnLogger.Error(err, "failed to set KUBERNETES_SERVICE_PORT environment variable")
+	}
+}
+
+func getOperatorConfig(kClient runtimeclient.Client) (*sriovnetworkv1.SriovOperatorConfig, error) {
+	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
+	err := kClient.Get(context.Background(), types.NamespacedName{Namespace: vars.Namespace, Name: consts.DefaultConfigName}, defaultConfig)
+	if err != nil {
+		return nil, err
+	}
+	return defaultConfig, nil
+}
+
+func initFeatureGates(kClient runtimeclient.Client) (featuregate.FeatureGate, error) {
+	fnLogger := log.Log.WithName("initFeatureGates")
+	// Init feature gates once to prevent race conditions.
+	defaultConfig, err := getOperatorConfig(kClient)
+	if err != nil {
+		fnLogger.Error(err, "Failed to get default SriovOperatorConfig object")
+		return nil, err
+	}
+	featureGates := featuregate.New()
+	featureGates.Init(defaultConfig.Spec.FeatureGates)
+	fnLogger.Info("Enabled featureGates", "featureGates", featureGates.String())
+
+	return featureGates, nil
+}
+
+func initLogLevel(kClient runtimeclient.Client) error {
+	fnLogger := log.Log.WithName("initLogLevel")
+	// Init feature gates once to prevent race conditions.
+	defaultConfig, err := getOperatorConfig(kClient)
+	if err != nil {
+		fnLogger.Error(err, "Failed to get default SriovOperatorConfig object")
+		return err
+	}
+	fnLogger.V(2).Info("DEBUG", defaultConfig)
+	snolog.SetLogLevel(defaultConfig.Spec.LogLevel)
+	fnLogger.V(2).Info("logLevel sets", "logLevel", defaultConfig.Spec.LogLevel)
+	return nil
+}
+
+func runStartCmd(cmd *cobra.Command, args []string) error {
+	setupLog := log.Log.WithName("sriov-network-config-daemon")
+	stopSignalCh := ctrl.SetupSignalHandler()
+
+	// Load global variables
+	err := configGlobalVariables()
+	if err != nil {
+		setupLog.Error(err, "unable to config global variables")
+		return err
+	}
 
 	var config *rest.Config
-	var err error
 
 	// On openshift we use the kubeconfig from kubelet on the node where the daemon is running
 	// this allow us to improve security as every daemon has access only to its own node
 	if vars.ClusterType == consts.ClusterTypeOpenshift {
-		kubeconfig, err := clientcmd.LoadFromFile("/host/etc/kubernetes/kubeconfig")
-		if err != nil {
-			setupLog.Error(err, "failed to load kubelet kubeconfig")
-		}
-		clusterName := kubeconfig.Contexts[kubeconfig.CurrentContext].Cluster
-		apiURL := kubeconfig.Clusters[clusterName].Server
-
-		urlPath, err := url.Parse(apiURL)
-		if err != nil {
-			setupLog.Error(err, "failed to parse api url from kubelet kubeconfig")
-		}
-
-		// The kubernetes in-cluster functions don't let you override the apiserver
-		// directly; gotta "pass" it via environment vars.
-		setupLog.V(0).Info("overriding kubernetes api", "new-url", apiURL)
-		err = os.Setenv("KUBERNETES_SERVICE_HOST", urlPath.Hostname())
-		if err != nil {
-			setupLog.Error(err, "failed to set KUBERNETES_SERVICE_HOST environment variable")
-		}
-		err = os.Setenv("KUBERNETES_SERVICE_PORT", urlPath.Port())
-		if err != nil {
-			setupLog.Error(err, "failed to set KUBERNETES_SERVICE_PORT environment variable")
-		}
+		useKubeletKubeConfig()
 	}
 
 	kubeconfig := os.Getenv("KUBECONFIG")
@@ -192,42 +241,10 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
 	vars.Config = config
-	vars.Scheme = scheme.Scheme
+	config.Timeout = 5 * time.Second
 
-	closeAllConns, err := updateDialer(config)
-	if err != nil {
-		return err
-	}
-
-	err = sriovnetworkv1.AddToScheme(scheme.Scheme)
-	if err != nil {
-		setupLog.Error(err, "failed to load sriov network CRDs to scheme")
-		return err
-	}
-
-	err = mcfgv1.AddToScheme(scheme.Scheme)
-	if err != nil {
-		setupLog.Error(err, "failed to load machine config CRDs to scheme")
-		return err
-	}
-
-	err = configv1.Install(scheme.Scheme)
-	if err != nil {
-		setupLog.Error(err, "failed to load openshift config CRDs to scheme")
-		return err
-	}
-
-	kClient, err := client.New(config, client.Options{Scheme: scheme.Scheme})
-	if err != nil {
-		setupLog.Error(err, "couldn't create client")
-		os.Exit(1)
-	}
-
-	snclient := snclientset.NewForConfigOrDie(config)
-	kubeclient := kubernetes.NewForConfigOrDie(config)
-
+	// create helpers
 	hostHelpers, err := helper.NewDefaultHostHelpers()
 	if err != nil {
 		setupLog.Error(err, "failed to create hostHelpers")
@@ -240,88 +257,104 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	config.Timeout = 5 * time.Second
-	writerclient := snclientset.NewForConfigOrDie(config)
+	// create clients
+	snclient := snclientset.NewForConfigOrDie(config)
+	kubeclient := kubernetes.NewForConfigOrDie(config)
+	kClient, err := runtimeclient.New(
+		config,
+		runtimeclient.Options{
+			Scheme: vars.Scheme})
+	if err != nil {
+		setupLog.Error(err, "couldn't create generic client")
+		os.Exit(1)
+	}
 
-	eventRecorder := daemon.NewEventRecorder(writerclient, kubeclient)
+	eventRecorder := daemon.NewEventRecorder(snclient, kubeclient, scheme)
 	defer eventRecorder.Shutdown()
 
-	setupLog.V(0).Info("starting node writer")
-	nodeWriter := daemon.NewNodeStateStatusWriter(writerclient,
-		closeAllConns,
-		eventRecorder,
-		hostHelpers,
-		platformHelper)
-
-	nodeInfo, err := kubeclient.CoreV1().Nodes().Get(context.Background(), startOpts.nodeName, v1.GetOptions{})
-	if err == nil {
-		for key, pType := range vars.PlatformsMap {
-			if strings.Contains(strings.ToLower(nodeInfo.Spec.ProviderID), strings.ToLower(key)) {
-				vars.PlatformType = pType
-			}
-		}
-	} else {
+	nodeInfo, err := kubeclient.CoreV1().Nodes().Get(context.Background(), vars.NodeName, v1.GetOptions{})
+	if err != nil {
 		setupLog.Error(err, "failed to fetch node state, exiting", "node-name", startOpts.nodeName)
 		return err
 	}
+
+	// check for platform
+	for key, pType := range vars.PlatformsMap {
+		if strings.Contains(strings.ToLower(nodeInfo.Spec.ProviderID), strings.ToLower(key)) {
+			vars.PlatformType = pType
+		}
+	}
 	setupLog.Info("Running on", "platform", vars.PlatformType.String())
 
+	// Initial supported nic IDs
 	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, vars.Namespace); err != nil {
 		setupLog.Error(err, "failed to run init NicIdMap")
 		return err
 	}
 
-	eventRecorder.SendEvent("ConfigDaemonStart", "Config Daemon starting")
-
-	// block the deamon process until nodeWriter finish first its run
-	err = nodeWriter.RunOnce()
+	fg, err := initFeatureGates(kClient)
 	if err != nil {
-		setupLog.Error(err, "failed to run writer")
+		setupLog.Error(err, "failed to initialize feature gates")
 		return err
 	}
-	go nodeWriter.Run(stopCh, refreshCh, syncCh)
 
-	// Init feature gates once to prevent race conditions.
-	defaultConfig := &sriovnetworkv1.SriovOperatorConfig{}
-	err = kClient.Get(context.Background(), types.NamespacedName{Namespace: vars.Namespace, Name: consts.DefaultConfigName}, defaultConfig)
-	if err != nil {
-		log.Log.Error(err, "Failed to get default SriovOperatorConfig object")
+	if err := initLogLevel(kClient); err != nil {
+		setupLog.Error(err, "failed to initialize log level")
 		return err
 	}
-	featureGates := featuregate.New()
-	featureGates.Init(defaultConfig.Spec.FeatureGates)
-	vars.MlxPluginFwReset = featureGates.IsEnabled(consts.MellanoxFirmwareResetFeatureGate)
-	log.Log.Info("Enabled featureGates", "featureGates", featureGates.String())
 
-	setupLog.V(0).Info("Starting SriovNetworkConfigDaemon")
-	err = daemon.New(
+	// Init manager
+	setupLog.V(0).Info("Starting SR-IOV Network Config Daemon")
+	nodeStateSelector, err := fields.ParseSelector(fmt.Sprintf("metadata.name=%s,metadata.namespace=%s", vars.NodeName, vars.Namespace))
+	if err != nil {
+		setupLog.Error(err, "failed to parse sriovNetworkNodeState name selector")
+		return err
+	}
+	operatorConfigSelector, err := fields.ParseSelector(fmt.Sprintf("metadata.name=%s,metadata.namespace=%s", consts.DefaultConfigName, vars.Namespace))
+	if err != nil {
+		setupLog.Error(err, "failed to parse sriovOperatorConfig name selector")
+		return err
+	}
+
+	mgr, err := ctrl.NewManager(vars.Config, ctrl.Options{
+		Scheme:  vars.Scheme,
+		Metrics: server.Options{BindAddress: "0"}, // disable metrics server for now as the daemon runs with hostNetwork
+		Cache: cache.Options{ // cache only the SriovNetworkNodeState with the node name
+			ByObject: map[runtimeclient.Object]cache.ByObject{
+				&sriovnetworkv1.SriovNetworkNodeState{}: {Field: nodeStateSelector},
+				&sriovnetworkv1.SriovOperatorConfig{}:   {Field: operatorConfigSelector}}},
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create manager")
+		os.Exit(1)
+	}
+
+	dm := daemon.New(
 		kClient,
-		snclient,
-		kubeclient,
 		hostHelpers,
 		platformHelper,
-		exitCh,
-		stopCh,
-		syncCh,
-		refreshCh,
 		eventRecorder,
-		featureGates,
-		startOpts.disabledPlugins,
-	).Run(stopCh, exitCh)
-	if err != nil {
-		setupLog.Error(err, "failed to run daemon")
-	}
-	setupLog.V(0).Info("Shutting down SriovNetworkConfigDaemon")
-	return err
-}
+		fg,
+		startOpts.disabledPlugins)
 
-// updateDialer instruments a restconfig with a dial. the returned function allows forcefully closing all active connections.
-func updateDialer(clientConfig *rest.Config) (func(), error) {
-	if clientConfig.Transport != nil || clientConfig.Dial != nil {
-		return nil, fmt.Errorf("there is already a transport or dialer configured")
+	// Init Daemon configuration on the node
+	if err = dm.Init(); err != nil {
+		setupLog.Error(err, "unable to initialize daemon")
+		os.Exit(1)
 	}
-	f := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
-	d := connrotation.NewDialer(f.DialContext)
-	clientConfig.Dial = d.DialContext
-	return d.CloseAll, nil
+
+	// Setup reconcile loop with manager
+	if err = dm.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to setup daemon with manager for SriovNetworkNodeState")
+		os.Exit(1)
+	}
+
+	// Setup reconcile loop with manager
+	if err = daemon.NewOperatorConfigNodeReconcile(kClient).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create setup daemon manager for OperatorConfig")
+		os.Exit(1)
+	}
+
+	setupLog.Info("Starting Manager")
+	return mgr.Start(stopSignalCh)
 }

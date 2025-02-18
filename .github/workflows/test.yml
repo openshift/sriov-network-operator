@@ -40,8 +40,11 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
 
-    - name: test pkg
-      run: make test-pkg
+    - name: test pkg on kubernetes
+      run: CLUSTER_TYPE=kubernetes make test-pkg
+
+    - name: test pkg on openshift
+      run: CLUSTER_TYPE=openshift make test-pkg
 
     - name: test cmd
       run: make test-cmd
@@ -49,7 +52,7 @@ jobs:
     - name: test api
       run: make test-api
 
-    - name: test controllers on opensfhit
+    - name: test controllers on openshift
       run: CLUSTER_TYPE=openshift make test-controllers
 
     - name: test controllers on kubernetes

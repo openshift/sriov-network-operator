@@ -127,27 +127,26 @@ func ObjectHasAnnotation(obj metav1.Object, annoKey string, value string) bool {
 
 // AnnotateObject adds annotation to a kubernetes object
 func AnnotateObject(ctx context.Context, obj client.Object, key, value string, c client.Client) error {
-	newObj := obj.DeepCopyObject().(client.Object)
-	if newObj.GetAnnotations() == nil {
-		newObj.SetAnnotations(map[string]string{})
+	original := obj.DeepCopyObject().(client.Object)
+	if obj.GetAnnotations() == nil {
+		obj.SetAnnotations(map[string]string{})
 	}
 
-	if newObj.GetAnnotations()[key] != value {
+	if obj.GetAnnotations()[key] != value {
 		log.Log.V(2).Info("AnnotateObject(): Annotate object",
 			"objectName", obj.GetName(),
 			"objectKind", obj.GetObjectKind(),
 			"annotationKey", key,
 			"annotationValue", value)
-		newObj.GetAnnotations()[key] = value
-		patch := client.MergeFrom(obj)
+		obj.GetAnnotations()[key] = value
+		patch := client.MergeFrom(original)
 		err := c.Patch(ctx,
-			newObj, patch)
+			obj, patch)
 		if err != nil {
 			log.Log.Error(err, "annotateObject(): Failed to patch object")
 			return err
 		}
 	}
-
 	return nil
 }
 
