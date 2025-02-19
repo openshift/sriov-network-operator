@@ -69,6 +69,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			Scheme:         k8sManager.GetScheme(),
 			PlatformHelper: platformHelper,
 			FeatureGate:    featuregate.New(),
+			KubeClient:     k8sClient,
 		}).SetupWithManager(k8sManager)
 		Expect(err).ToNot(HaveOccurred())
 
