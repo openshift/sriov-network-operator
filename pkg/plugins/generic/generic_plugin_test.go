@@ -3,9 +3,9 @@ package generic
 import (
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -967,7 +967,7 @@ var _ = Describe("Generic plugin", func() {
 				Expect(changed).To(BeTrue())
 			})
 			It("should not configure RDMA kernel args", func() {
-				hostHelper.EXPECT().SetRDMASubsystem("").Return(nil)
+				//hostHelper.EXPECT().SetRDMASubsystem("").Return(nil)
 				rdmaState.Spec.System = sriovnetworkv1.System{}
 				err := genericPlugin.(*GenericPlugin).configRdmaKernelArg(rdmaState)
 				Expect(err).ToNot(HaveOccurred())
