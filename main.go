@@ -223,6 +223,7 @@ func main() {
 		Scheme:         mgr.GetScheme(),
 		PlatformHelper: platformsHelper,
 		FeatureGate:    featureGate,
+		KubeClient:     kubeClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovOperatorConfig")
 		os.Exit(1)
