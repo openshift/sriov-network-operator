@@ -113,7 +113,7 @@ var _ = Describe("Drain Controller", Ordered, func() {
 
 	Context("when there is only one node", func() {
 
-		It("should drain", func(ctx context.Context) {
+		It("should drain single node on drain require", func(ctx context.Context) {
 			node, nodeState := createNode(ctx, "node1")
 
 			simulateDaemonSetAnnotation(node, constants.DrainRequired)
@@ -123,6 +123,33 @@ var _ = Describe("Drain Controller", Ordered, func() {
 
 			simulateDaemonSetAnnotation(node, constants.DrainIdle)
 
+			expectNodeStateAnnotation(nodeState, constants.DrainIdle)
+			expectNodeIsSchedulable(node)
+		})
+
+		It("should not drain on reboot for single node", func(ctx context.Context) {
+			node, nodeState := createNode(ctx, "node1")
+
+			simulateDaemonSetAnnotation(node, constants.RebootRequired)
+
+			expectNodeStateAnnotation(nodeState, constants.DrainComplete)
+			expectNodeIsSchedulable(node)
+
+			simulateDaemonSetAnnotation(node, constants.DrainIdle)
+			expectNodeStateAnnotation(nodeState, constants.DrainIdle)
+			expectNodeIsSchedulable(node)
+		})
+
+		It("should drain on reboot for multiple node", func(ctx context.Context) {
+			node, nodeState := createNode(ctx, "node1")
+			createNode(ctx, "node2")
+
+			simulateDaemonSetAnnotation(node, constants.RebootRequired)
+
+			expectNodeStateAnnotation(nodeState, constants.DrainComplete)
+			expectNodeIsNotSchedulable(node)
+
+			simulateDaemonSetAnnotation(node, constants.DrainIdle)
 			expectNodeStateAnnotation(nodeState, constants.DrainIdle)
 			expectNodeIsSchedulable(node)
 		})
