@@ -141,11 +141,11 @@ func newConfigController() *configController {
 	platformHelper.EXPECT().IsHypershift().Return(false).AnyTimes()
 
 	err = (&controllers.SriovOperatorConfigReconciler{
-		Client:         k8sManager.GetClient(),
-		Scheme:         k8sManager.GetScheme(),
-		PlatformHelper: platformHelper,
-		FeatureGate:    featuregate.New(),
-		KubeClient:     k8sClient,
+		Client:            k8sManager.GetClient(),
+		Scheme:            k8sManager.GetScheme(),
+		PlatformHelper:    platformHelper,
+		FeatureGate:       featuregate.New(),
+		UncachedAPIReader: k8sManager.GetAPIReader(),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

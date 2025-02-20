@@ -56,10 +56,10 @@ import (
 // SriovOperatorConfigReconciler reconciles a SriovOperatorConfig object
 type SriovOperatorConfigReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	PlatformHelper platforms.Interface
-	FeatureGate    featuregate.FeatureGate
-	KubeClient     client.Client
+	Scheme            *runtime.Scheme
+	PlatformHelper    platforms.Interface
+	FeatureGate       featuregate.FeatureGate
+	UncachedAPIReader client.Reader
 }
 
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovoperatorconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -414,7 +414,8 @@ func (r *SriovOperatorConfigReconciler) syncOpenShiftSystemdService(ctx context.
 
 	if cr.Spec.ConfigurationMode != sriovnetworkv1.SystemdConfigurationMode {
 		obj := &machinev1.MachineConfig{}
-		err := r.KubeClient.Get(context.TODO(), types.NamespacedName{Name: consts.SystemdServiceOcpMachineConfigName}, obj)
+		// use uncached api reader to get machineconfig to reduce memory footprint
+		err := r.UncachedAPIReader.Get(context.TODO(), types.NamespacedName{Name: consts.SystemdServiceOcpMachineConfigName}, obj)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil
@@ -425,7 +426,7 @@ func (r *SriovOperatorConfigReconciler) syncOpenShiftSystemdService(ctx context.
 		}
 
 		logger.Info("Systemd service was deployed but the operator is now operating on daemonset mode, removing the machine config")
-		err = r.KubeClient.Delete(context.TODO(), obj)
+		err = r.Delete(context.TODO(), obj)
 		if err != nil {
 			logger.Error(err, "failed to remove the systemd service machine config")
 			return err
