@@ -111,6 +111,15 @@ func openshiftControlPlaneTopologyStatus(c client.Client) (configv1.TopologyMode
 	return infra.Status.ControlPlaneTopology, nil
 }
 
+func openshiftAPIServerInternalIPs(c client.Client) ([]string, error) {
+	infra := &configv1.Infrastructure{}
+	err := c.Get(context.TODO(), types.NamespacedName{Name: infraResourceName}, infra)
+	if err != nil {
+		return nil, fmt.Errorf("openshiftAPIServerInternalIPs(): Failed to get Infrastructure (name: %s): %v", infraResourceName, err)
+	}
+	return infra.Status.PlatformStatus.OpenStack.APIServerInternalIPs, nil
+}
+
 // ObjectHasAnnotationKey checks if a kubernetes object already contains annotation
 func ObjectHasAnnotationKey(obj metav1.Object, annoKey string) bool {
 	_, hasKey := obj.GetAnnotations()[annoKey]

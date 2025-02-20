@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	network "net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,24 +14,24 @@ import (
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/net"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
 	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
+	_ "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils" // why is this not being auto imported?
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 const (
 	varConfigPath      = "/var/config"
 	ospMetaDataBaseDir = "/openstack/2018-08-27"
 	ospMetaDataDir     = varConfigPath + ospMetaDataBaseDir
-	ospMetaDataBaseURL = "http://169.254.169.254" + ospMetaDataBaseDir
 	ospNetworkDataJSON = "network_data.json"
 	ospMetaDataJSON    = "meta_data.json"
-	ospNetworkDataURL  = ospMetaDataBaseURL + "/" + ospNetworkDataJSON
-	ospMetaDataURL     = ospMetaDataBaseURL + "/" + ospMetaDataJSON
+
 	// Config drive is defined as an iso9660 or vfat (deprecated) drive
 	// with the "config-2" label.
 	//https://docs.openstack.org/nova/latest/user/config-drive.html
@@ -40,6 +41,9 @@ const (
 var (
 	ospNetworkDataFile = ospMetaDataDir + "/" + ospNetworkDataJSON
 	ospMetaDataFile    = ospMetaDataDir + "/" + ospMetaDataJSON
+	ospMetaDataBaseURL = "http://169.254.169.254" + ospMetaDataBaseDir
+	ospNetworkDataURL  = ospMetaDataBaseURL + "/" + ospNetworkDataJSON
+	ospMetaDataURL     = ospMetaDataBaseURL + "/" + ospMetaDataJSON
 )
 
 //go:generate ../../../bin/mockgen -destination mock/mock_openstack.go -source openstack.go
@@ -112,12 +116,52 @@ func New(hostManager host.HostManagerInterface) OpenstackInterface {
 		hostManager: hostManager,
 	}
 }
+func getGuestNetworkInterface() (i string) {
+	return
+	//some way of getting the guest interface being used
+}
+func IsSingleStackIPv6() (isIPV6 bool, err error) {
+	// maybe add optional client as an input to function?
+	infraClient, err := client.New(vars.Config, client.Options{
+		Scheme: vars.Scheme,
+	})
+	if err != nil {
+		return false, err
+	}
 
-// GetOpenstackData gets the metadata and network_data
+	ips, err := utils.openshiftAPIServerInternalIPs(infraClient)
+	if err != nil {
+		return false, err
+	}
+
+	if len(ips) > 1 { //in the case that it is dualstack do nothing
+		return false, nil
+	}
+
+	for _, ip := range ips {
+		parsedIP := network.ParseIP(ip)
+		if parsedIP.To4() == nil { //check for ipv6
+			return true, nil //Maybe return the IP?
+		}
+	}
+	return false, nil
+}
 func getOpenstackData(mountConfigDrive bool) (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
 	metaData, networkData, err = getOpenstackDataFromConfigDrive(mountConfigDrive)
 	if err != nil {
 		log.Log.Error(err, "GetOpenStackData(): non-fatal error getting OpenStack data from config drive")
+
+		isIPV6, err := IsSingleStackIPv6()
+		if err != nil {
+			log.Log.Error(err, "Error Message Placeholder")
+		}
+		if isIPV6 {
+			// Leaving this for reference https://docs.openstack.org/nova/latest/user/metadata.html#the-metadata-service:~:text=http%3A//%5Bfe80%3A%3Aa9fe%3Aa9fe%2525ens2%5D
+			ipv6BaseURL := "http://[fe80::a9fe:a9fe" + "%25" + getGuestNetworkInterface() + "]:80" //Where would i get the interface from?
+			ospMetaDataBaseURL = ipv6BaseURL + ospMetaDataBaseDir
+			ospNetworkDataURL = ospMetaDataBaseURL + "/" + ospNetworkDataJSON
+			ospMetaDataURL = ospMetaDataBaseURL + "/" + ospMetaDataJSON
+		}
 		metaData, networkData, err = getOpenstackDataFromMetadataService()
 		if err != nil {
 			return metaData, networkData, fmt.Errorf("GetOpenStackData(): error getting OpenStack data: %w", err)
