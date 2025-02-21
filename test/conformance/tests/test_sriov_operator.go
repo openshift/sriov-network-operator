@@ -302,10 +302,10 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				By("Checking that a daemon is scheduled on selected node")
 				Eventually(func() bool {
 					return isDaemonsetScheduledOnNodes("node-role.kubernetes.io/worker", "app=sriov-network-metrics-exporter")
-				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
+				}).WithTimeout(time.Minute).WithPolling(time.Second).Should(Equal(true))
 			})
 
-			It("should deploy ServiceMonitor if the Promethueus operator is installed", func() {
+			It("should deploy ServiceMonitor if the Prometheus operator is installed", func() {
 				_, err := clients.ServiceMonitors(operatorNamespace).List(context.Background(), metav1.ListOptions{})
 				if k8serrors.IsNotFound(err) {
 					Skip("Prometheus operator not available in the cluster")
@@ -315,7 +315,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				Eventually(func(g Gomega) {
 					_, err := clients.ServiceMonitors(operatorNamespace).Get(context.Background(), "sriov-network-metrics-exporter", metav1.GetOptions{})
 					g.Expect(err).ToNot(HaveOccurred())
-				}).Should(Succeed())
+				}).WithTimeout(time.Minute).WithPolling(time.Second).Should(Succeed())
 			})
 
 			It("should remove ServiceMonitor when the feature is turned off", func() {
@@ -323,7 +323,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				Eventually(func(g Gomega) {
 					_, err := clients.ServiceMonitors(operatorNamespace).Get(context.Background(), "sriov-network-metrics-exporter", metav1.GetOptions{})
 					g.Expect(k8serrors.IsNotFound(err)).To(BeTrue())
-				}).Should(Succeed())
+				}).WithTimeout(time.Minute).WithPolling(time.Second).Should(Succeed())
 			})
 		})
 	})
