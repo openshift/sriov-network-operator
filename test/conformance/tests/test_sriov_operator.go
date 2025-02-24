@@ -68,7 +68,13 @@ func init() {
 	}
 }
 
-var _ = Describe("[sriov] operator", func() {
+var _ = Describe("[sriov] operator", Ordered, func() {
+	AfterAll(func() {
+		err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
+		Expect(err).ToNot(HaveOccurred())
+		WaitForSRIOVStable()
+	})
+
 	Describe("No SriovNetworkNodePolicy", func() {
 		Context("SR-IOV network config daemon can be set by nodeselector", func() {
 			// 26186
