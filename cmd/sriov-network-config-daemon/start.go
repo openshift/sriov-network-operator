@@ -182,14 +182,8 @@ func getOperatorConfig(kClient runtimeclient.Client) (*sriovnetworkv1.SriovOpera
 	return defaultConfig, nil
 }
 
-func initFeatureGates(kClient runtimeclient.Client) (featuregate.FeatureGate, error) {
+func initFeatureGates(defaultConfig *sriovnetworkv1.SriovOperatorConfig) (featuregate.FeatureGate, error) {
 	fnLogger := log.Log.WithName("initFeatureGates")
-	// Init feature gates once to prevent race conditions.
-	defaultConfig, err := getOperatorConfig(kClient)
-	if err != nil {
-		fnLogger.Error(err, "Failed to get default SriovOperatorConfig object")
-		return nil, err
-	}
 	featureGates := featuregate.New()
 	featureGates.Init(defaultConfig.Spec.FeatureGates)
 	fnLogger.Info("Enabled featureGates", "featureGates", featureGates.String())
@@ -197,15 +191,8 @@ func initFeatureGates(kClient runtimeclient.Client) (featuregate.FeatureGate, er
 	return featureGates, nil
 }
 
-func initLogLevel(kClient runtimeclient.Client) error {
+func initLogLevel(defaultConfig *sriovnetworkv1.SriovOperatorConfig) error {
 	fnLogger := log.Log.WithName("initLogLevel")
-	// Init feature gates once to prevent race conditions.
-	defaultConfig, err := getOperatorConfig(kClient)
-	if err != nil {
-		fnLogger.Error(err, "Failed to get default SriovOperatorConfig object")
-		return err
-	}
-	fnLogger.V(2).Info("DEBUG", defaultConfig)
 	snolog.SetLogLevel(defaultConfig.Spec.LogLevel)
 	fnLogger.V(2).Info("logLevel sets", "logLevel", defaultConfig.Spec.LogLevel)
 	return nil
@@ -292,16 +279,27 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fg, err := initFeatureGates(kClient)
+	operatorConfig, err := getOperatorConfig(kClient)
+	if err != nil {
+		setupLog.Error(err, "Failed to get operator config object")
+		return err
+	}
+
+	// init feature gates
+	fg, err := initFeatureGates(operatorConfig)
 	if err != nil {
 		setupLog.Error(err, "failed to initialize feature gates")
 		return err
 	}
 
-	if err := initLogLevel(kClient); err != nil {
+	// init log level
+	if err := initLogLevel(operatorConfig); err != nil {
 		setupLog.Error(err, "failed to initialize log level")
 		return err
 	}
+
+	// init disable drain
+	vars.DisableDrain = operatorConfig.Spec.DisableDrain
 
 	// Init manager
 	setupLog.V(0).Info("Starting SR-IOV Network Config Daemon")

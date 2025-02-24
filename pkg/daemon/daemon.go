@@ -45,7 +45,6 @@ type NodeReconciler struct {
 
 	loadedPlugins         map[string]plugin.VendorPlugin
 	lastAppliedGeneration int64
-	disableDrain          bool
 }
 
 // New creates a new instance of NodeReconciler.
@@ -251,7 +250,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	reqLogger.V(0).Info("aggregated daemon node state requirement",
-		"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", dn.disableDrain)
+		"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", vars.DisableDrain)
 
 	// handle drain only if the plugins request drain, or we are already in a draining request state
 	if reqDrain ||
@@ -523,7 +522,7 @@ func (dn *NodeReconciler) handleDrain(ctx context.Context, desiredNodeState *sri
 	}
 
 	// drain is disabled we continue with the configuration
-	if dn.disableDrain {
+	if vars.DisableDrain {
 		funcLog.Info("drain is disabled in sriovOperatorConfig")
 		return false, nil
 	}
