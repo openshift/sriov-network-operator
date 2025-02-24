@@ -241,8 +241,13 @@ var _ = Describe("SRIOV", func() {
 			hostMock.EXPECT().HasDriver("0000:d8:00.3").Return(true, "vfio-pci").Times(2)
 			hostMock.EXPECT().UnbindDriverIfNeeded("0000:d8:00.3", false).Return(nil)
 			hostMock.EXPECT().BindDpdkDriver("0000:d8:00.3", "vfio-pci").Return(nil)
+			hostMock.EXPECT().RemoveDisableNMUdevRule("0000:d8:00.1").Return(nil)
+			hostMock.EXPECT().RemoveVfRepresentorUdevRule("0000:d8:00.1").Return(nil)
+			hostMock.EXPECT().RemovePersistPFNameUdevRule("0000:d8:00.1").Return(nil)
 
 			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil)
+			storeManagerMode.EXPECT().RemovePfAppliedStatus(gomock.Any()).Return(nil)
+			storeManagerMode.EXPECT().LoadPfsStatus("0000:d8:00.1").Return(&sriovnetworkv1.Interface{ExternallyManaged: false}, true, nil)
 
 			Expect(s.ConfigSriovInterfaces(storeManagerMode,
 				[]sriovnetworkv1.Interface{{
