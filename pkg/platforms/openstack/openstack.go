@@ -21,7 +21,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
-	_ "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils" // why is this not being auto imported?
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -116,9 +116,19 @@ func New(hostManager host.HostManagerInterface) OpenstackInterface {
 		hostManager: hostManager,
 	}
 }
-func getGuestNetworkInterface() (i string) {
-	return
-	//some way of getting the guest interface being used
+func getActiveInterfaceName() (string, error) {
+	interfaces, err := network.Interfaces()
+	if err != nil {
+		return "", err
+	}
+
+	for _, intf := range interfaces {
+		if intf.Flags&network.FlagUp != 0 && intf.Flags&network.FlagLoopback == 0 {
+			return intf.Name, nil // Return the interface name
+		}
+	}
+
+	return "", fmt.Errorf("no active non-loopback interface found")
 }
 func IsSingleStackIPv6() (isIPV6 bool, err error) {
 	// maybe add optional client as an input to function?
@@ -129,7 +139,7 @@ func IsSingleStackIPv6() (isIPV6 bool, err error) {
 		return false, err
 	}
 
-	ips, err := utils.openshiftAPIServerInternalIPs(infraClient)
+	ips, err := utils.OpenshiftAPIServerInternalIPs(infraClient)
 	if err != nil {
 		return false, err
 	}
@@ -150,14 +160,18 @@ func getOpenstackData(mountConfigDrive bool) (metaData *OSPMetaData, networkData
 	metaData, networkData, err = getOpenstackDataFromConfigDrive(mountConfigDrive)
 	if err != nil {
 		log.Log.Error(err, "GetOpenStackData(): non-fatal error getting OpenStack data from config drive")
-
-		isIPV6, err := IsSingleStackIPv6()
+		// if the network is Single Stack IPv6 it checks for an active non-loopback interface.
+		// This is needed to reach the metadata over IPv6.
+		SingeStackIPV6, err := IsSingleStackIPv6()
 		if err != nil {
 			log.Log.Error(err, "Error Message Placeholder")
 		}
-		if isIPV6 {
-			// Leaving this for reference https://docs.openstack.org/nova/latest/user/metadata.html#the-metadata-service:~:text=http%3A//%5Bfe80%3A%3Aa9fe%3Aa9fe%2525ens2%5D
-			ipv6BaseURL := "http://[fe80::a9fe:a9fe" + "%25" + getGuestNetworkInterface() + "]:80" //Where would i get the interface from?
+		if SingeStackIPV6 {
+			activeInterface, err := getActiveInterfaceName()
+			if err != nil {
+				log.Log.Error(err, "Error Message Placeholder")
+			}
+			ipv6BaseURL := "http://[fe80::a9fe:a9fe" + "%25" + activeInterface + "]:80"
 			ospMetaDataBaseURL = ipv6BaseURL + ospMetaDataBaseDir
 			ospNetworkDataURL = ospMetaDataBaseURL + "/" + ospNetworkDataJSON
 			ospMetaDataURL = ospMetaDataBaseURL + "/" + ospMetaDataJSON

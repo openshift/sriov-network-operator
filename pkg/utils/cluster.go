@@ -111,7 +111,7 @@ func openshiftControlPlaneTopologyStatus(c client.Client) (configv1.TopologyMode
 	return infra.Status.ControlPlaneTopology, nil
 }
 
-func openshiftAPIServerInternalIPs(c client.Client) ([]string, error) {
+func OpenshiftAPIServerInternalIPs(c client.Client) ([]string, error) {
 	infra := &configv1.Infrastructure{}
 	err := c.Get(context.TODO(), types.NamespacedName{Name: infraResourceName}, infra)
 	if err != nil {
