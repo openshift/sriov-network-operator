@@ -4,24 +4,21 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"github.com/spf13/cobra"
-	"go.uber.org/mock/gomock"
-	"gopkg.in/yaml.v3"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
+	"go.uber.org/mock/gomock"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	helperMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
+	hosttypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	platformsMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/generic"
 	pluginsMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/mock"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/systemd"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
-	testHelpers "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/helpers"
 )
 
 func restoreOrigFuncs() {
@@ -37,39 +34,42 @@ func restoreOrigFuncs() {
 	})
 }
 
-func getTestSriovInterfaceConfig(platform int) []byte {
-	return []byte(fmt.Sprintf(`spec:
-    interfaces:
-        - pciaddress: 0000:d8:00.0
-          numvfs: 4
-          mtu: 1500
-          name: enp216s0f0np0
-          linktype: ""
-          eswitchmode: legacy
-          vfgroups:
-            - resourcename: legacy
-              devicetype: ""
-              vfrange: 0-3
-              policyname: test-legacy
-              mtu: 1500
-              isrdma: false
-              vdpatype: ""
-          externallymanaged: false
-unsupportedNics: false
-platformType: %d
-manageSoftwareBridges: true
-`, platform))
+func getTestSriovInterfaceConfig(platform consts.PlatformTypes) *hosttypes.SriovConfig {
+	return &hosttypes.SriovConfig{
+		Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{
+			Interfaces: sriovnetworkv1.Interfaces{
+				{
+					PciAddress:  "0000:d8:00.0",
+					NumVfs:      4,
+					Mtu:         1500,
+					Name:        "enp216s0f0np0",
+					LinkType:    "",
+					EswitchMode: "legacy",
+					VfGroups: []sriovnetworkv1.VfGroup{
+						{
+							ResourceName: "legacy",
+							DeviceType:   "",
+							VfRange:      "0-3",
+							PolicyName:   "test-legacy",
+							Mtu:          1500,
+							IsRdma:       false,
+							VdpaType:     "",
+						},
+					},
+					ExternallyManaged: false,
+				},
+			},
+		},
+		PlatformType:          platform,
+		UnsupportedNics:       false,
+		ManageSoftwareBridges: true,
+	}
 }
 
-var testSriovSupportedNicIDs = `8086 1583 154c
-8086 0d58 154c
-8086 10c9 10ca
-`
+var testSriovSupportedNicIDs = []string{"8086 1583 154c", "8086 0d58 154c", "8086 10c9 10ca"}
 
-func getTestResultFileContent(syncStatus, errMsg string) []byte {
-	data, err := yaml.Marshal(systemd.SriovResult{SyncStatus: syncStatus, LastSyncError: errMsg})
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	return data
+func getTestResultFileContent(syncStatus, errMsg string) *hosttypes.SriovResult {
+	return &hosttypes.SriovResult{SyncStatus: syncStatus, LastSyncError: errMsg}
 }
 
 // checks if NodeState contains deviceName in spec and status fields
@@ -151,44 +151,35 @@ var _ = Describe("Service", func() {
 
 	It("Pre phase - baremetal cluster", func() {
 		phaseArg = PhasePre
-		testHelpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-			Dirs: []string{"/etc/sriov-operator"},
-			Files: map[string][]byte{
-				"/etc/sriov-operator/sriov-supported-nics-ids.yaml": []byte(testSriovSupportedNicIDs),
-				"/etc/sriov-operator/sriov-interface-config.yaml":   getTestSriovInterfaceConfig(0),
-				"/etc/sriov-operator/sriov-interface-result.yaml":   []byte("something"),
-			},
-		})
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.0").Return("enp216s0f0np0")
 		hostHelpers.EXPECT().WaitUdevEventsProcessed(60).Return(nil)
 		hostHelpers.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelpers.EXPECT().TryEnableTun().Return()
 		hostHelpers.EXPECT().TryEnableVhostNet().Return()
-		hostHelpers.EXPECT().DiscoverSriovDevices(hostHelpers).Return([]sriovnetworkv1.InterfaceExt{{
+		hostHelpers.EXPECT().DiscoverSriovDevices(gomock.Any()).Return([]sriovnetworkv1.InterfaceExt{{
 			Name: "enp216s0f0np0",
 		}}, nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(0), nil)
+		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
+		hostHelpers.EXPECT().RemoveSriovResult().Return(nil)
+		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusInProgress})
+
 		genericPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil)
 		genericPlugin.EXPECT().Apply().Return(nil)
 
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).NotTo(HaveOccurred())
-
-		testHelpers.GinkgoAssertFileContentsEquals("/etc/sriov-operator/sriov-interface-result.yaml",
-			string(getTestResultFileContent("InProgress", "")))
+		Expect(testCtrl.Satisfied()).To(BeTrue())
 	})
 
 	It("Pre phase - virtual cluster", func() {
 		phaseArg = PhasePre
-		testHelpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-			Dirs: []string{"/etc/sriov-operator"},
-			Files: map[string][]byte{
-				"/etc/sriov-operator/sriov-supported-nics-ids.yaml": []byte(testSriovSupportedNicIDs),
-				"/etc/sriov-operator/sriov-interface-config.yaml":   getTestSriovInterfaceConfig(1),
-				"/etc/sriov-operator/sriov-interface-result.yaml":   []byte("something"),
-			},
-		})
 		hostHelpers.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelpers.EXPECT().TryEnableTun().Return()
 		hostHelpers.EXPECT().TryEnableVhostNet().Return()
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(1), nil)
+		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
+		hostHelpers.EXPECT().RemoveSriovResult().Return(nil)
+		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusInProgress})
 
 		platformHelper.EXPECT().CreateOpenstackDevicesInfo().Return(nil)
 		platformHelper.EXPECT().DiscoverSriovDevicesVirtual().Return([]sriovnetworkv1.InterfaceExt{{
@@ -199,92 +190,72 @@ var _ = Describe("Service", func() {
 		virtualPlugin.EXPECT().Apply().Return(nil)
 
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).NotTo(HaveOccurred())
-
-		testHelpers.GinkgoAssertFileContentsEquals("/etc/sriov-operator/sriov-interface-result.yaml",
-			string(getTestResultFileContent("InProgress", "")))
+		Expect(testCtrl.Satisfied()).To(BeTrue())
 	})
 
 	It("Pre phase - apply failed", func() {
 		phaseArg = PhasePre
-		testHelpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-			Dirs: []string{"/etc/sriov-operator"},
-			Files: map[string][]byte{
-				"/etc/sriov-operator/sriov-supported-nics-ids.yaml": []byte(testSriovSupportedNicIDs),
-				"/etc/sriov-operator/sriov-interface-config.yaml":   getTestSriovInterfaceConfig(0),
-				"/etc/sriov-operator/sriov-interface-result.yaml":   []byte("something"),
-			},
-		})
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.0").Return("enp216s0f0np0")
 		hostHelpers.EXPECT().WaitUdevEventsProcessed(60).Return(nil)
 		hostHelpers.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelpers.EXPECT().TryEnableTun().Return()
 		hostHelpers.EXPECT().TryEnableVhostNet().Return()
-		hostHelpers.EXPECT().DiscoverSriovDevices(hostHelpers).Return([]sriovnetworkv1.InterfaceExt{{
+		hostHelpers.EXPECT().DiscoverSriovDevices(gomock.Any()).Return([]sriovnetworkv1.InterfaceExt{{
 			Name: "enp216s0f0np0",
 		}}, nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(0), nil)
+		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
+		hostHelpers.EXPECT().RemoveSriovResult().Return(nil)
+		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusFailed, LastSyncError: "pre: failed to apply configuration: test"})
+
 		genericPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil)
 		genericPlugin.EXPECT().Apply().Return(testError)
 
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).To(MatchError(ContainSubstring("test")))
-
-		testHelpers.GinkgoAssertFileContentsEquals("/etc/sriov-operator/sriov-interface-result.yaml",
-			string(getTestResultFileContent("Failed", "pre: failed to apply configuration: test")))
+		Expect(testCtrl.Satisfied()).To(BeTrue())
 	})
 
 	It("Post phase - baremetal cluster", func() {
 		phaseArg = PhasePost
-		testHelpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-			Dirs: []string{"/etc/sriov-operator"},
-			Files: map[string][]byte{
-				"/etc/sriov-operator/sriov-supported-nics-ids.yaml": []byte(testSriovSupportedNicIDs),
-				"/etc/sriov-operator/sriov-interface-config.yaml":   getTestSriovInterfaceConfig(0),
-				"/etc/sriov-operator/sriov-interface-result.yaml":   getTestResultFileContent("InProgress", ""),
-			},
-		})
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.0").Return("enp216s0f0np0")
 		hostHelpers.EXPECT().WaitUdevEventsProcessed(60).Return(nil)
-		hostHelpers.EXPECT().DiscoverSriovDevices(hostHelpers).Return([]sriovnetworkv1.InterfaceExt{{
+		hostHelpers.EXPECT().DiscoverSriovDevices(gomock.Any()).Return([]sriovnetworkv1.InterfaceExt{{
 			Name: "enp216s0f0np0",
 		}}, nil)
 		hostHelpers.EXPECT().DiscoverBridges().Return(sriovnetworkv1.Bridges{}, nil)
+		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("InProgress", ""), false, nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(0), nil)
+		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
+		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusSucceeded})
+
 		genericPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil)
 		genericPlugin.EXPECT().Apply().Return(nil)
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).NotTo(HaveOccurred())
-		testHelpers.GinkgoAssertFileContentsEquals("/etc/sriov-operator/sriov-interface-result.yaml",
-			string(getTestResultFileContent("Succeeded", "")))
+		Expect(testCtrl.Satisfied()).To(BeTrue())
 	})
 
 	It("Post phase - virtual cluster", func() {
 		phaseArg = PhasePost
-		testHelpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-			Dirs: []string{"/etc/sriov-operator"},
-			Files: map[string][]byte{
-				"/etc/sriov-operator/sriov-supported-nics-ids.yaml": []byte(testSriovSupportedNicIDs),
-				"/etc/sriov-operator/sriov-interface-config.yaml":   getTestSriovInterfaceConfig(1),
-				"/etc/sriov-operator/sriov-interface-result.yaml":   getTestResultFileContent("InProgress", ""),
-			},
-		})
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(1), nil)
+		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
+		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("InProgress", ""), false, nil)
+		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusSucceeded})
+
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).NotTo(HaveOccurred())
-		testHelpers.GinkgoAssertFileContentsEquals("/etc/sriov-operator/sriov-interface-result.yaml",
-			string(getTestResultFileContent("Succeeded", "")))
+		Expect(testCtrl.Satisfied()).To(BeTrue())
 	})
 
 	It("Post phase - wrong result of the pre phase", func() {
 		phaseArg = PhasePost
-		testHelpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-			Dirs: []string{"/etc/sriov-operator"},
-			Files: map[string][]byte{
-				"/etc/sriov-operator/sriov-supported-nics-ids.yaml": []byte(testSriovSupportedNicIDs),
-				"/etc/sriov-operator/sriov-interface-config.yaml":   getTestSriovInterfaceConfig(1),
-				"/etc/sriov-operator/sriov-interface-result.yaml":   getTestResultFileContent("Failed", "pretest"),
-			},
-		})
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(1), nil)
+		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
+		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("Failed", "pretest"), false, nil)
+		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusFailed, LastSyncError: "post: unexpected result of the pre phase: Failed, syncError: pretest"})
+
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).To(HaveOccurred())
-		testHelpers.GinkgoAssertFileContentsEquals("/etc/sriov-operator/sriov-interface-result.yaml",
-			string(getTestResultFileContent("Failed", "post: unexpected result of the pre phase: Failed, syncError: pretest")))
 	})
 	It("waitForDevicesInitialization", func() {
-		cfg := &systemd.SriovConfig{Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{
+		cfg := &hosttypes.SriovConfig{Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{
 			Interfaces: []sriovnetworkv1.Interface{
 				{Name: "name1", PciAddress: "0000:d8:00.0"},
 				{Name: "name2", PciAddress: "0000:d8:00.1"}}}}
@@ -294,6 +265,9 @@ var _ = Describe("Service", func() {
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.1").Return("")
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.1").Return("name2")
 		hostHelpers.EXPECT().WaitUdevEventsProcessed(60).Return(nil)
-		waitForDevicesInitialization(logr.Discard(), cfg, hostHelpers)
+		sc, err := newServiceConfig(logr.Discard())
+		Expect(err).ToNot(HaveOccurred())
+		sc.sriovConfig = cfg
+		sc.waitForDevicesInitialization()
 	})
 })
