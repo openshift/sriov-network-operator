@@ -7,10 +7,8 @@ spec:
   selector:
     matchLabels:
       name: sriov-network-operator
-  updateStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 33%
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
@@ -51,8 +49,6 @@ spec:
           image: $SRIOV_NETWORK_OPERATOR_IMAGE
           command:
           - sriov-network-operator
-          args:
-          - --leader-elect=$OPERATOR_LEADER_ELECTION_ENABLE
           resources:
             requests:
               cpu: 100m
