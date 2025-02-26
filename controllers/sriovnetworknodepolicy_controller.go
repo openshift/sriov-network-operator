@@ -88,7 +88,7 @@ func (r *SriovNetworkNodePolicyReconciler) Reconcile(ctx context.Context, req ct
 	if err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: constants.DefaultConfigName}, defaultOpConf); err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("default SriovOperatorConfig object not found, cannot reconcile SriovNetworkNodePolicies. Requeue.")
-			return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+			return reconcile.Result{RequeueAfter: constants.DrainControllerRequeueTime}, nil
 		}
 		return reconcile.Result{}, err
 	}
@@ -226,7 +226,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(ctx context
 		}
 		configData[node.Name] = string(config)
 
-		if data.ResourceList == nil || len(data.ResourceList) == 0 {
+		if len(data.ResourceList) == 0 {
 			// if we don't have policies we should add the disabled label for the device plugin
 			err = utils.LabelNode(ctx, node.Name, constants.SriovDevicePluginLabel, constants.SriovDevicePluginLabelDisabled, r.Client)
 			if err != nil {

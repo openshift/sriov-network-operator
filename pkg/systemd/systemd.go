@@ -42,6 +42,7 @@ const (
 
 // TODO: move this to the host interface also
 
+// SriovConfig: Contains the information we saved on the host for the sriov-config service running on the host
 type SriovConfig struct {
 	Spec                  sriovnetworkv1.SriovNetworkNodeStateSpec `yaml:"spec"`
 	UnsupportedNics       bool                                     `yaml:"unsupportedNics"`
@@ -50,11 +51,14 @@ type SriovConfig struct {
 	OVSDBSocketPath       string                                   `yaml:"ovsdbSocketPath"`
 }
 
+// SriovResult: Contains the result from the sriov-config service trying to apply the requested policies
 type SriovResult struct {
 	SyncStatus    string `yaml:"syncStatus"`
 	LastSyncError string `yaml:"lastSyncError"`
 }
 
+// ReadConfFile reads the SR-IOV config file from the host
+// Unmarshal YAML content into SriovConfig object
 func ReadConfFile() (spec *SriovConfig, err error) {
 	rawConfig, err := os.ReadFile(utils.GetHostExtensionPath(SriovSystemdConfigPath))
 	if err != nil {
@@ -66,6 +70,9 @@ func ReadConfFile() (spec *SriovConfig, err error) {
 	return spec, err
 }
 
+// WriteConfFile generates or updates a SriovNetwork configuration file based on the provided state.
+// It creates the necessary directory structure if the file doesn't exist,
+// reads the existing content to check for changes, and writes new content only when needed.
 func WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	newFile := false
 	sriovConfig := &SriovConfig{
@@ -147,6 +154,8 @@ func WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (bool, error)
 	return true, nil
 }
 
+// WriteSriovResult writes SR-IOV results to the host.
+// It creates the file if it doesn't exist
 func WriteSriovResult(result *SriovResult) error {
 	_, err := os.Stat(utils.GetHostExtensionPath(SriovSystemdResultPath))
 	if err != nil {
@@ -180,33 +189,37 @@ func WriteSriovResult(result *SriovResult) error {
 	return nil
 }
 
-func ReadSriovResult() (*SriovResult, error) {
+// ReadSriovResult reads and parses the sriov result file from the host.
+// The function first checks if the result file exists. If it doesn't, it returns nil with a success flag of false and no error.
+// If the file exists, it reads its contents and attempts to unmarshal the YAML data into the SriovResult struct.
+func ReadSriovResult() (*SriovResult, bool, error) {
 	_, err := os.Stat(utils.GetHostExtensionPath(SriovSystemdResultPath))
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Log.V(2).Info("ReadSriovResult(): file does not exist, return empty result")
-			return &SriovResult{}, nil
+			log.Log.V(2).Info("ReadSriovResult(): file does not exist")
+			return nil, false, nil
 		} else {
 			log.Log.Error(err, "ReadSriovResult(): failed to check sriov result file", "path", utils.GetHostExtensionPath(SriovSystemdResultPath))
-			return nil, err
+			return nil, false, err
 		}
 	}
 
 	rawConfig, err := os.ReadFile(utils.GetHostExtensionPath(SriovSystemdResultPath))
 	if err != nil {
 		log.Log.Error(err, "ReadSriovResult(): failed to read sriov result file", "path", utils.GetHostExtensionPath(SriovSystemdResultPath))
-		return nil, err
+		return nil, false, err
 	}
 
 	result := &SriovResult{}
 	err = yaml.Unmarshal(rawConfig, &result)
 	if err != nil {
 		log.Log.Error(err, "ReadSriovResult(): failed to unmarshal sriov result file", "path", utils.GetHostExtensionPath(SriovSystemdResultPath))
-		return nil, err
+		return nil, false, err
 	}
-	return result, err
+	return result, true, err
 }
 
+// RemoveSriovResult: Removes the Sriov result file from the host.
 func RemoveSriovResult() error {
 	err := os.Remove(utils.GetHostExtensionPath(SriovSystemdResultPath))
 	if err != nil {
@@ -221,6 +234,9 @@ func RemoveSriovResult() error {
 	return nil
 }
 
+// WriteSriovSupportedNics() creates or updates a file containing the list of supported SR-IOV NIC IDs
+// If the file does not exist, it will create it
+// It reads from sriovnetworkv1.NicIDMap to gather the list of NIC identifiers
 func WriteSriovSupportedNics() error {
 	_, err := os.Stat(utils.GetHostExtensionPath(sriovSystemdSupportedNicPath))
 	if err != nil {
@@ -253,6 +269,10 @@ func WriteSriovSupportedNics() error {
 	return nil
 }
 
+// ReadSriovSupportedNics reads the list of SR-IOV supported network interface cards (NICs) from the host.
+// It returns a slice of strings where each string represents a line from the file,
+// with each line corresponding to an SR-IOV supported NIC. If the file does not exist, it returns nil and an error.
+// If there is an error reading the file, it returns the error along with the file path for debugging purposes.
 func ReadSriovSupportedNics() ([]string, error) {
 	_, err := os.Stat(utils.GetHostExtensionPath(sriovSystemdSupportedNicPath))
 	if err != nil {
@@ -275,6 +295,10 @@ func ReadSriovSupportedNics() ([]string, error) {
 	return lines, nil
 }
 
+// CleanSriovFilesFromHost removes SR-IOV related configuration and service files from the host system.
+// It deletes several systemd-related files including configuration paths, result paths, supported NICs path,
+// and service binary path. If not in an OpenShift environment, it also removes the main SR-IOV
+// service and post-networking service files.
 func CleanSriovFilesFromHost(isOpenShift bool) error {
 	err := os.Remove(utils.GetHostExtensionPath(SriovSystemdConfigPath))
 	if err != nil && !os.IsNotExist(err) {

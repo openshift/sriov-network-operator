@@ -21,7 +21,7 @@ spec:
 
             [Service]
             Type=oneshot
-            ExecStart=/var/lib/sriov/sriov-network-config-daemon service -v {{ .LogLevel }} --zap-log-level {{ .LogLevel }} --phase pre
+            ExecStart=/var/lib/sriov/sriov-network-config-daemon service --phase pre
             StandardOutput=journal+console
 
             [Install]
@@ -38,7 +38,7 @@ spec:
 
             [Service]
             Type=oneshot
-            ExecStart=/var/lib/sriov/sriov-network-config-daemon service -v {{ .LogLevel }} --zap-log-level {{ .LogLevel }} --phase post
+            ExecStart=/var/lib/sriov/sriov-network-config-daemon service --phase post
             StandardOutput=journal+console
 
             [Install]

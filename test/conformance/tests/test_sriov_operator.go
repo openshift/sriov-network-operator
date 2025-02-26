@@ -68,7 +68,13 @@ func init() {
 	}
 }
 
-var _ = Describe("[sriov] operator", func() {
+var _ = Describe("[sriov] operator", Ordered, func() {
+	AfterAll(func() {
+		err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
+		Expect(err).ToNot(HaveOccurred())
+		WaitForSRIOVStable()
+	})
+
 	Describe("No SriovNetworkNodePolicy", func() {
 		Context("SR-IOV network config daemon can be set by nodeselector", func() {
 			// 26186
@@ -76,8 +82,6 @@ var _ = Describe("[sriov] operator", func() {
 				if discovery.Enabled() {
 					Skip("Test unsuitable to be run in discovery mode")
 				}
-
-				testStartingTime := time.Now()
 
 				By("Checking that a daemon is scheduled on each worker node")
 				Eventually(func() bool {
@@ -134,21 +138,6 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func() bool {
 					return daemonsScheduledOnNodes("node-role.kubernetes.io/worker")
 				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
-
-				By("Checking that a daemon is able to publish events")
-				Eventually(func() bool {
-					events, err := clients.Events(operatorNamespace).List(
-						context.Background(), metav1.ListOptions{TypeMeta: sriovv1.SriovNetworkNodeState{}.TypeMeta})
-					Expect(err).ToNot(HaveOccurred())
-
-					for _, e := range events.Items {
-						if e.Reason == "ConfigDaemonStart" &&
-							e.CreationTimestamp.Time.After(testStartingTime) {
-							return true
-						}
-					}
-					return false
-				}, 30*time.Second, 5*time.Second).Should(BeTrue(), "Config Daemon should record an event when starting")
 			})
 		})
 

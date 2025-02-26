@@ -96,7 +96,7 @@ func main() {
 		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{vars.Namespace: {}}},
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+		setupLog.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
@@ -137,7 +137,6 @@ func main() {
 	err = mgrGlobal.GetCache().IndexField(context.Background(), &sriovnetworkv1.OVSNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
 		return []string{o.(*sriovnetworkv1.OVSNetwork).Spec.NetworkNamespace}
 	})
-
 	if err != nil {
 		setupLog.Error(err, "unable to create index field for cache")
 		os.Exit(1)

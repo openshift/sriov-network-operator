@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 )
 
 var (
@@ -54,9 +55,6 @@ var (
 	// ManageSoftwareBridges global variable which reflects state of manageSoftwareBridges feature
 	ManageSoftwareBridges = false
 
-	// MlxPluginFwReset global variable enables mstfwreset before rebooting a node on VF changes
-	MlxPluginFwReset = false
-
 	// FilesystemRoot used by test to mock interactions with filesystem
 	FilesystemRoot = ""
 
@@ -75,6 +73,12 @@ var (
 
 	// DisableablePlugins contains which plugins can be disabled in sriov config daemon
 	DisableablePlugins = map[string]struct{}{"mellanox": {}}
+
+	// DisableDrain controls if the daemon will drain the node before configuration
+	DisableDrain = false
+
+	// FeatureGates interface to interact with feature gates
+	FeatureGate featuregate.FeatureGate
 )
 
 func init() {
@@ -95,4 +99,6 @@ func init() {
 	}
 
 	ResourcePrefix = os.Getenv("RESOURCE_PREFIX")
+
+	FeatureGate = featuregate.New()
 }
