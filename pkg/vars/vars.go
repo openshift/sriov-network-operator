@@ -54,6 +54,12 @@ var (
 	// ParallelNicConfig global variable to perform NIC configuration in parallel
 	ParallelNicConfig = false
 
+	// ManageSoftwareBridges global variable which reflects state of manageSoftwareBridges feature
+	ManageSoftwareBridges = false
+
+	// MlxPluginFwReset global variable enables mstfwreset before rebooting a node on VF changes
+	MlxPluginFwReset = false
+
 	// FilesystemRoot used by test to mock interactions with filesystem
 	FilesystemRoot = ""
 

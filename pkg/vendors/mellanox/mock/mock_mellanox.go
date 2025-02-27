@@ -79,6 +79,20 @@ func (mr *MockMellanoxInterfaceMockRecorder) MlxConfigFW(attributesToChange inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MlxConfigFW", reflect.TypeOf((*MockMellanoxInterface)(nil).MlxConfigFW), attributesToChange)
 }
 
+// MlxResetFW mocks base method.
+func (m *MockMellanoxInterface) MlxResetFW(pciAddresses []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MlxResetFW", pciAddresses)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MlxResetFW indicates an expected call of MlxResetFW.
+func (mr *MockMellanoxInterfaceMockRecorder) MlxResetFW(pciAddresses interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MlxResetFW", reflect.TypeOf((*MockMellanoxInterface)(nil).MlxResetFW), pciAddresses)
+}
+
 // MstConfigReadData mocks base method.
 func (m *MockMellanoxInterface) MstConfigReadData(arg0 string) (string, string, error) {
 	m.ctrl.T.Helper()
