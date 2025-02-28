@@ -23,7 +23,6 @@ require (
 	github.com/onsi/gomega v1.27.10
 	github.com/openshift-kni/k8sreporter v1.0.4
 	github.com/openshift/api v0.0.0-20230807132801-600991d550ac
-	github.com/openshift/client-go v0.0.0-20230607134213-3cd0021bbee3
 	github.com/openshift/machine-config-operator v0.0.1-0.20231024085435-7e1fb719c1ba
 	github.com/ovn-org/libovsdb v0.6.1-0.20240125124854-03f787b1a892
 	github.com/pkg/errors v0.9.1
@@ -123,6 +122,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/openshift/client-go v0.0.0-20230607134213-3cd0021bbee3 // indirect
 	github.com/openshift/library-go v0.0.0-20231020125025-211b32f1a1f2 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
