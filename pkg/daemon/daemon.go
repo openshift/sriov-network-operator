@@ -134,7 +134,7 @@ func (dn *NodeReconciler) Init() error {
 	if err != nil {
 		funcLog.Error(err, "failed to write checkpoint file on host")
 	}
-	return nil
+	return err
 }
 
 // Reconcile Reconciles the nodeState object by performing the following steps:
