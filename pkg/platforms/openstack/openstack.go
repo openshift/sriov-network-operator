@@ -15,14 +15,11 @@ import (
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/net"
 	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 const (
@@ -31,7 +28,8 @@ const (
 	ospMetaDataDir     = varConfigPath + ospMetaDataBaseDir
 	ospNetworkDataJSON = "network_data.json"
 	ospMetaDataJSON    = "meta_data.json"
-
+	ospHTTP            = "http://"
+	ospHTTPS           = "https://"
 	// Config drive is defined as an iso9660 or vfat (deprecated) drive
 	// with the "config-2" label.
 	//https://docs.openstack.org/nova/latest/user/config-drive.html
@@ -41,9 +39,10 @@ const (
 var (
 	ospNetworkDataFile = ospMetaDataDir + "/" + ospNetworkDataJSON
 	ospMetaDataFile    = ospMetaDataDir + "/" + ospMetaDataJSON
-	ospMetaDataBaseURL = "http://169.254.169.254" + ospMetaDataBaseDir
-	ospNetworkDataURL  = ospMetaDataBaseURL + "/" + ospNetworkDataJSON
-	ospMetaDataURL     = ospMetaDataBaseURL + "/" + ospMetaDataJSON
+	ospBaseURLS        = [2]string{"fe80::a9fe:a9fe", "169.254.169.254"}
+	ospNetworkDataURL  string
+	ospMetaDataURL     string
+	ospMetaDataBaseURL []string
 )
 
 //go:generate ../../../bin/mockgen -destination mock/mock_openstack.go -source openstack.go
@@ -124,62 +123,65 @@ func getActiveInterfaceName() (string, error) {
 
 	for _, intf := range interfaces {
 		if intf.Flags&network.FlagUp != 0 && intf.Flags&network.FlagLoopback == 0 {
-			return intf.Name, nil // Return the interface name
+			return intf.Name, nil
 		}
 	}
 
 	return "", fmt.Errorf("no active non-loopback interface found")
 }
-func IsSingleStackIPv6() (isIPV6 bool, err error) {
-	// maybe add optional client as an input to function?
-	infraClient, err := client.New(vars.Config, client.Options{
-		Scheme: vars.Scheme,
-	})
-	if err != nil {
-		return false, err
-	}
 
-	ips, err := utils.OpenshiftAPIServerInternalIPs(infraClient)
-	if err != nil {
-		return false, err
+func constructMetaDataURLs(baseURL, activeInterface string, isIPv6 bool) []string {
+	var urls []string
+	if isIPv6 {
+		urls = append(urls, ospHTTPS+"["+baseURL+"%"+activeInterface+"]:80")
+		urls = append(urls, ospHTTP+"["+baseURL+"%"+activeInterface+"]:80")
+	} else {
+		urls = append(urls, ospHTTPS+baseURL)
+		urls = append(urls, ospHTTP+baseURL)
 	}
-
-	if len(ips) > 1 { //in the case that it is dualstack do nothing
-		return false, nil
-	}
-
-	for _, ip := range ips {
-		parsedIP := network.ParseIP(ip)
-		if parsedIP.To4() == nil { //check for ipv6
-			return true, nil //Maybe return the IP?
-		}
-	}
-	return false, nil
+	return urls
 }
+
 func getOpenstackData(mountConfigDrive bool) (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
 	metaData, networkData, err = getOpenstackDataFromConfigDrive(mountConfigDrive)
 	if err != nil {
 		log.Log.Error(err, "GetOpenStackData(): non-fatal error getting OpenStack data from config drive")
-		// if the network is Single Stack IPv6 it checks for an active non-loopback interface.
-		// This is needed to reach the metadata over IPv6.
-		SingeStackIPV6, err := IsSingleStackIPv6()
-		if err != nil {
-			log.Log.Error(err, "Error Message Placeholder")
-		}
-		if SingeStackIPV6 {
-			activeInterface, err := getActiveInterfaceName()
-			if err != nil {
-				log.Log.Error(err, "Error Message Placeholder")
+
+		// Attempt to reach MetaData over IPv6 then over IPv4
+		reachedMetaData := false
+		for i, baseURL := range ospBaseURLS {
+			isIPv6 := i == 0
+			if isIPv6 {
+				activeInterface, err := getActiveInterfaceName()
+				if err != nil {
+					log.Log.Error(err, "GetOpenStackData(): non-fatal error retrieving active network interface")
+					continue
+				}
+				ospMetaDataBaseURL = constructMetaDataURLs(baseURL, activeInterface, true)
+			} else {
+				ospMetaDataBaseURL = constructMetaDataURLs(baseURL, "", false)
 			}
-			ipv6BaseURL := "http://[fe80::a9fe:a9fe" + "%25" + activeInterface + "]:80"
-			ospMetaDataBaseURL = ipv6BaseURL + ospMetaDataBaseDir
-			ospNetworkDataURL = ospMetaDataBaseURL + "/" + ospNetworkDataJSON
-			ospMetaDataURL = ospMetaDataBaseURL + "/" + ospMetaDataJSON
+			// Attempt to reach MetaData over HTTPS then over HTTP
+			for _, baseMetaUrl := range ospMetaDataBaseURL {
+				ospNetworkDataURL = baseMetaUrl + "/" + ospNetworkDataJSON
+				ospMetaDataURL = baseMetaUrl + "/" + ospMetaDataJSON
+				metaData, networkData, err = getOpenstackDataFromMetadataService()
+				if err == nil {
+					reachedMetaData = true
+					break
+				}
+			}
+
+			if reachedMetaData {
+				break
+			}
+
 		}
-		metaData, networkData, err = getOpenstackDataFromMetadataService()
-		if err != nil {
-			return metaData, networkData, fmt.Errorf("GetOpenStackData(): error getting OpenStack data: %w", err)
+
+		if !reachedMetaData {
+			return metaData, networkData, fmt.Errorf("GetOpenStackData(): error reaching metadata service both over IPv6 and IPv4: %v", err)
 		}
+
 	}
 
 	// We can't rely on the PCI address from the metadata so we will lookup the real PCI address
