@@ -212,7 +212,7 @@ func (p *MellanoxPlugin) Apply() error {
 	if err := p.helpers.MlxConfigFW(attributesToChange); err != nil {
 		return err
 	}
-	if vars.MlxPluginFwReset {
+	if vars.FeatureGate.IsEnabled(consts.MellanoxFirmwareResetFeatureGate) {
 		return p.helpers.MlxResetFW(pciAddressesToReset)
 	}
 	return nil

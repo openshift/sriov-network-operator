@@ -13,10 +13,12 @@ metadata:
   labels:
     control-plane: controller-manager
 spec:
-  replicas: 1
   selector:
     matchLabels:
       name: sriov-network-operator
+  replicas: 1
+  strategy:
+    type: Recreate
   template:
     metadata:
       annotations:
@@ -37,8 +39,6 @@ spec:
         image: quay.io/openshift/origin-sriov-network-operator:4.19
         command:
         - sriov-network-operator
-        args:
-        - --leader-elect
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false

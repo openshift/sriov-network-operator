@@ -7,7 +7,7 @@ contents: |
 
   [Service]
   Type=oneshot
-  ExecStart=/var/lib/sriov/sriov-network-config-daemon -v 2 --zap-log-level 2 service --phase pre
+  ExecStart=/var/lib/sriov/sriov-network-config-daemon service --phase pre
   StandardOutput=journal+console
 
   [Install]

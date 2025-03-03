@@ -174,7 +174,7 @@ func (s *manager) WriteCheckpointFile(ns *sriovnetworkv1.SriovNetworkNodeState) 
 	defer file.Close()
 	log.Log.Info("WriteCheckpointFile(): try to decode the checkpoint file")
 	if err = json.NewDecoder(file).Decode(&sriovnetworkv1.InitialState); err != nil {
-		log.Log.V(2).Error(err, "WriteCheckpointFile(): fail to decode, writing new file instead")
+		log.Log.Error(err, "WriteCheckpointFile(): fail to decode, writing new file instead")
 		log.Log.Info("WriteCheckpointFile(): write checkpoint file")
 		if err = file.Truncate(0); err != nil {
 			return err

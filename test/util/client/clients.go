@@ -4,7 +4,6 @@ import (
 	"os"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-	clientconfigv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
 	clientmachineconfigv1 "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/typed/machineconfiguration.openshift.io/v1"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,7 +31,6 @@ func init() {
 // ClientSet provides the struct to talk with relevant API
 type ClientSet struct {
 	corev1client.CoreV1Interface
-	clientconfigv1.ConfigV1Interface
 	clientmachineconfigv1.MachineconfigurationV1Interface
 
 	appsv1client.AppsV1Interface
@@ -67,7 +65,6 @@ func New(kubeconfig string) *ClientSet {
 
 	clientSet := &ClientSet{}
 	clientSet.CoreV1Interface = corev1client.NewForConfigOrDie(config)
-	clientSet.ConfigV1Interface = clientconfigv1.NewForConfigOrDie(config)
 	clientSet.MachineconfigurationV1Interface = clientmachineconfigv1.NewForConfigOrDie(config)
 	clientSet.AppsV1Interface = appsv1client.NewForConfigOrDie(config)
 	clientSet.DiscoveryInterface = discovery.NewDiscoveryClientForConfigOrDie(config)

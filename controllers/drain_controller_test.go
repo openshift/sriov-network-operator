@@ -428,7 +428,7 @@ func createNodeWithLabel(ctx context.Context, nodeName string, label string) (*c
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodeName,
 			Namespace: vars.Namespace,
-			Labels: map[string]string{
+			Annotations: map[string]string{
 				constants.NodeStateDrainAnnotationCurrent: constants.DrainIdle,
 			},
 		},
