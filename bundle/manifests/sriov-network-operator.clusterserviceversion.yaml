@@ -353,7 +353,8 @@ spec:
           selector:
             matchLabels:
               name: sriov-network-operator
-          strategy: {}
+          strategy:
+            type: Recreate
           template:
             metadata:
               annotations:
@@ -363,9 +364,7 @@ spec:
                 name: sriov-network-operator
             spec:
               containers:
-              - args:
-                - --leader-elect
-                command:
+              - command:
                 - sriov-network-operator
                 env:
                 - name: WATCH_NAMESPACE
