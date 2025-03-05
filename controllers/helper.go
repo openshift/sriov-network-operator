@@ -108,14 +108,7 @@ type DrainStateAnnotationPredicate struct {
 }
 
 func (DrainStateAnnotationPredicate) Create(e event.CreateEvent) bool {
-	if e.Object == nil {
-		return false
-	}
-
-	if _, hasAnno := e.Object.GetLabels()[constants.NodeStateDrainAnnotationCurrent]; hasAnno {
-		return true
-	}
-	return false
+	return e.Object != nil
 }
 
 func (DrainStateAnnotationPredicate) Update(e event.UpdateEvent) bool {

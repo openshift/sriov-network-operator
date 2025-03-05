@@ -60,6 +60,10 @@ func SetLogLevel(operatorLevel int) {
 	}
 }
 
+func GetLogLevel() int {
+	return zapToOperatorLevel(Options.Level.(zzap.AtomicLevel).Level())
+}
+
 func zapToOperatorLevel(zapLevel zapcore.Level) int {
 	return int(zapLevel) * -1
 }

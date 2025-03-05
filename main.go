@@ -48,9 +48,6 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/leaderelection"
-
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
@@ -75,66 +72,40 @@ func init() {
 
 func main() {
 	var metricsAddr string
-	var enableLeaderElection bool
 	var probeAddr string
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
+
 	snolog.BindFlags(flag.CommandLine)
 	flag.Parse()
 	snolog.InitLog()
 
 	restConfig := ctrl.GetConfigOrDie()
 
-	kubeClient, err := client.New(restConfig, client.Options{Scheme: scheme})
-	if err != nil {
-		setupLog.Error(err, "couldn't create client")
-		os.Exit(1)
-	}
-
 	if vars.ResourcePrefix == "" {
 		setupLog.Error(nil, "RESOURCE_PREFIX environment variable can't be empty")
 		os.Exit(1)
 	}
 
-	le := leaderelection.GetLeaderElectionConfig(kubeClient, enableLeaderElection)
-
-	leaderElectionMgr, err := ctrl.NewManager(restConfig, ctrl.Options{
-		Scheme:                        scheme,
-		HealthProbeBindAddress:        probeAddr,
-		Metrics:                       server.Options{BindAddress: "0"},
-		LeaderElection:                enableLeaderElection,
-		LeaseDuration:                 &le.LeaseDuration,
-		LeaderElectionReleaseOnCancel: true,
-		RenewDeadline:                 &le.RenewDeadline,
-		RetryPeriod:                   &le.RetryPeriod,
-		LeaderElectionID:              consts.LeaderElectionID,
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
+		Scheme:                 scheme,
+		HealthProbeBindAddress: probeAddr,
+		Metrics:                server.Options{BindAddress: metricsAddr},
+		WebhookServer:          webhook.NewServer(webhook.Options{Port: 9443}),
+		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{vars.Namespace: {}}},
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start leader election manager")
+		setupLog.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
-	if err := leaderElectionMgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
-	if err := leaderElectionMgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
-
-	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
-		Scheme:        scheme,
-		Metrics:       server.Options{BindAddress: metricsAddr},
-		WebhookServer: webhook.NewServer(webhook.Options{Port: 9443}),
-		Cache:         cache.Options{DefaultNamespaces: map[string]cache.Config{vars.Namespace: {}}},
-	})
-	if err != nil {
-		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
@@ -166,7 +137,6 @@ func main() {
 	err = mgrGlobal.GetCache().IndexField(context.Background(), &sriovnetworkv1.OVSNetwork{}, "spec.networkNamespace", func(o client.Object) []string {
 		return []string{o.(*sriovnetworkv1.OVSNetwork).Spec.NetworkNamespace}
 	})
-
 	if err != nil {
 		setupLog.Error(err, "unable to create index field for cache")
 		os.Exit(1)
@@ -267,22 +237,6 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
-	leaderElectionErr := make(chan error)
-	leaderElectionContext, cancelLeaderElection := context.WithCancel(context.Background())
-	go func() {
-		setupLog.Info("starting leader election manager")
-		leaderElectionErr <- leaderElectionMgr.Start(leaderElectionContext)
-	}()
-
-	select {
-	case <-leaderElectionMgr.Elected():
-	case err := <-leaderElectionErr:
-		setupLog.Error(err, "Leader Election Manager error")
-		os.Exit(1)
-	}
-
-	setupLog.Info("acquired lease")
-
 	stopSignalCh := ctrl.SetupSignalHandler()
 
 	globalManagerErr := make(chan error)
@@ -303,49 +257,25 @@ func main() {
 	// Wait for a stop signal
 	case <-stopSignalCh.Done():
 		setupLog.Info("Stop signal received")
-
 		globalManagerCancel()
 		namespacedManagerCancel()
 		<-globalManagerErr
 		<-namespacedManagerErr
-
 		utils.Shutdown()
-
-		cancelLeaderElection()
-		<-leaderElectionErr
-
-	case err := <-leaderElectionErr:
-		setupLog.Error(err, "Leader Election Manager error")
-		globalManagerCancel()
-		namespacedManagerCancel()
-		<-globalManagerErr
-		<-namespacedManagerErr
-
-		os.Exit(1)
 
 	case err := <-globalManagerErr:
 		setupLog.Error(err, "Global Manager error")
-
 		namespacedManagerCancel()
 		<-namespacedManagerErr
-
 		utils.Shutdown()
-
-		cancelLeaderElection()
-		<-leaderElectionErr
 
 		os.Exit(1)
 
 	case err := <-namespacedManagerErr:
 		setupLog.Error(err, "Namsepaced Manager error")
-
 		globalManagerCancel()
 		<-globalManagerErr
-
 		utils.Shutdown()
-
-		cancelLeaderElection()
-		<-leaderElectionErr
 
 		os.Exit(1)
 	}

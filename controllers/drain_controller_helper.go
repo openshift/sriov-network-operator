@@ -3,10 +3,8 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/go-logr/logr"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,7 +42,7 @@ func (dr *DrainReconcile) handleNodeIdleNodeStateDrainingOrCompleted(ctx context
 			"DrainController",
 			"node complete drain was not completed")
 		// TODO: make this time configurable
-		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+		return reconcile.Result{RequeueAfter: constants.DrainControllerRequeueTime}, nil
 	}
 
 	// move the node state back to idle
@@ -106,7 +104,7 @@ func (dr *DrainReconcile) handleNodeDrainOrReboot(ctx context.Context,
 			corev1.EventTypeWarning,
 			"DrainController",
 			"node drain operation was not completed")
-		return reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+		return reconcile.Result{RequeueAfter: constants.DrainControllerRequeueTime}, nil
 	}
 
 	// if we manage to drain we label the node state with drain completed and finish
@@ -180,7 +178,7 @@ func (dr *DrainReconcile) tryDrainNode(ctx context.Context, node *corev1.Node) (
 		// the node requested to be drained, but we are at the limit so we re-enqueue the request
 		reqLogger.Info("MaxParallelNodeConfiguration limit reached for draining nodes re-enqueue the request")
 		// TODO: make this time configurable
-		return &reconcile.Result{RequeueAfter: 5 * time.Second}, nil
+		return &reconcile.Result{RequeueAfter: constants.DrainControllerRequeueTime}, nil
 	}
 
 	if currentSnns == nil {

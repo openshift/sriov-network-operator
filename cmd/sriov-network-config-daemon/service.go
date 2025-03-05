@@ -85,6 +85,7 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 	}
 	// init logger
 	snolog.InitLog()
+	snolog.SetLogLevel(2)
 	setupLog := log.Log.WithName("sriov-config-service").WithValues("phase", phaseArg)
 
 	setupLog.V(0).Info("Starting sriov-config-service", "version", version.Version)
@@ -168,7 +169,7 @@ func phasePre(setupLog logr.Logger, conf *systemd.SriovConfig, hostHelpers helpe
 
 func phasePost(setupLog logr.Logger, conf *systemd.SriovConfig, hostHelpers helper.HostHelpersInterface) error {
 	setupLog.V(0).Info("check result of the Pre phase")
-	prePhaseResult, err := systemd.ReadSriovResult()
+	prePhaseResult, _, err := systemd.ReadSriovResult()
 	if err != nil {
 		return fmt.Errorf("failed to read result of the pre phase: %v", err)
 	}
