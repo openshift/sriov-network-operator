@@ -86,8 +86,24 @@ func (dr *DrainReconcile) handleNodeDrainOrReboot(ctx context.Context,
 		}
 	}
 
+	// Check if we are on a single node, and we require a reboot/full-drain we just return
+	fullNodeDrain := nodeDrainAnnotation == constants.RebootRequired
+	singleNode := false
+	if fullNodeDrain {
+		nodeList := &corev1.NodeList{}
+		err := dr.Client.List(ctx, nodeList)
+		if err != nil {
+			reqLogger.Error(err, "failed to list nodes")
+			return ctrl.Result{}, err
+		}
+		if len(nodeList.Items) == 1 {
+			reqLogger.Info("drainNode(): FullNodeDrain requested and we are on Single node")
+			singleNode = true
+		}
+	}
+
 	// call the drain function that will also call drain to other platform providers like openshift
-	drained, err := dr.drainer.DrainNode(ctx, node, nodeDrainAnnotation == constants.RebootRequired)
+	drained, err := dr.drainer.DrainNode(ctx, node, fullNodeDrain, singleNode)
 	if err != nil {
 		reqLogger.Error(err, "error trying to drain the node")
 		dr.recorder.Event(nodeNetworkState,

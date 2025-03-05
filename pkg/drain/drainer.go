@@ -29,7 +29,7 @@ func (w writer) Write(p []byte) (n int, err error) {
 }
 
 type DrainInterface interface {
-	DrainNode(context.Context, *corev1.Node, bool) (bool, error)
+	DrainNode(context.Context, *corev1.Node, bool, bool) (bool, error)
 	CompleteDrainNode(context.Context, *corev1.Node) (bool, error)
 }
 
@@ -53,7 +53,7 @@ func NewDrainer(platformHelpers platforms.Interface) (DrainInterface, error) {
 // DrainNode the function cordon a node and drain pods from it
 // if fullNodeDrain true all the pods on the system will get drained
 // for openshift system we also pause the machine config pool this machine is part of it
-func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrain bool) (bool, error) {
+func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrain, singleNode bool) (bool, error) {
 	reqLogger := log.FromContext(ctx).WithValues("drain node", node.Name)
 	reqLogger.Info("drainNode(): Node drain requested", "node", node.Name)
 
@@ -66,6 +66,11 @@ func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrai
 	if !completed {
 		reqLogger.Info("OpenshiftDrainNode did not finish re queue the node request")
 		return false, nil
+	}
+
+	// Check if we are on a single node, and we require a reboot/full-drain we just return
+	if fullNodeDrain && singleNode {
+		return true, nil
 	}
 
 	drainHelper := createDrainHelper(d.kubeClient, ctx, fullNodeDrain)
