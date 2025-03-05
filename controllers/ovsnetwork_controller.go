@@ -48,7 +48,7 @@ func (r *OVSNetworkReconciler) Name() string {
 }
 
 // return empty instance of the OVSNetwork CR
-func (r *OVSNetworkReconciler) GetObject() networkCRInstance {
+func (r *OVSNetworkReconciler) GetObject() NetworkCRInstance {
 	return &sriovnetworkv1.OVSNetwork{}
 }
 

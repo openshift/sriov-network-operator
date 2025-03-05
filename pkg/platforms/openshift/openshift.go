@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	mcv1 "github.com/openshift/api/machineconfiguration/v1"
 	mcoconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
