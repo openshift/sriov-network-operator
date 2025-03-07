@@ -207,3 +207,14 @@ type CPUInfoProviderInterface interface {
 	// Retrieve the CPU vendor of the current system
 	GetCPUVendor() (CPUVendor, error)
 }
+
+type SystemdInterface interface {
+	ReadConfFile() (spec *SriovConfig, err error)
+	WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (bool, error)
+	WriteSriovResult(result *SriovResult) error
+	ReadSriovResult() (*SriovResult, bool, error)
+	RemoveSriovResult() error
+	WriteSriovSupportedNics() error
+	ReadSriovSupportedNics() ([]string, error)
+	CleanSriovFilesFromHost(isOpenShift bool) error
+}
