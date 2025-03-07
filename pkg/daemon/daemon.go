@@ -19,9 +19,9 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
+	hosttypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/systemd"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
@@ -82,7 +82,7 @@ func (dn *NodeReconciler) Init() error {
 		}
 		dn.HostHelpers.TryEnableTun()
 		dn.HostHelpers.TryEnableVhostNet()
-		err = systemd.CleanSriovFilesFromHost(vars.ClusterType == consts.ClusterTypeOpenshift)
+		err = dn.HostHelpers.CleanSriovFilesFromHost(vars.ClusterType == consts.ClusterTypeOpenshift)
 		if err != nil {
 			funcLog.Error(err, "failed to remove all the systemd sriov files")
 		}
@@ -302,18 +302,18 @@ func (dn *NodeReconciler) checkOnNodeStateChange(desiredNodeState *sriovnetworkv
 
 // checkSystemdStatus Checks the status of systemd services on the host node.
 // return the sriovResult struct a boolean if the result file exist on the node
-func (dn *NodeReconciler) checkSystemdStatus() (*systemd.SriovResult, bool, error) {
+func (dn *NodeReconciler) checkSystemdStatus() (*hosttypes.SriovResult, bool, error) {
 	if !vars.UsingSystemdMode {
 		return nil, false, nil
 	}
 
 	funcLog := log.Log.WithName("checkSystemdStatus")
-	serviceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovServicePath)
+	serviceEnabled, err := dn.HostHelpers.IsServiceEnabled(consts.SriovServicePath)
 	if err != nil {
 		funcLog.Error(err, "failed to check if sriov-config service exist on host")
 		return nil, false, err
 	}
-	postNetworkServiceEnabled, err := dn.HostHelpers.IsServiceEnabled(systemd.SriovPostNetworkServicePath)
+	postNetworkServiceEnabled, err := dn.HostHelpers.IsServiceEnabled(consts.SriovPostNetworkServicePath)
 	if err != nil {
 		funcLog.Error(err, "failed to check if sriov-config-post-network service exist on host")
 		return nil, false, err
@@ -322,14 +322,14 @@ func (dn *NodeReconciler) checkSystemdStatus() (*systemd.SriovResult, bool, erro
 	// if the service doesn't exist we should continue to let the k8s plugin to create the service files
 	// this is only for k8s base environments, for openshift the sriov-operator creates a machine config to will apply
 	// the system service and reboot the node the config-daemon doesn't need to do anything.
-	sriovResult := &systemd.SriovResult{SyncStatus: consts.SyncStatusFailed,
+	sriovResult := &hosttypes.SriovResult{SyncStatus: consts.SyncStatusFailed,
 		LastSyncError: fmt.Sprintf("some sriov systemd services are not available on node: "+
 			"sriov-config available:%t, sriov-config-post-network available:%t", serviceEnabled, postNetworkServiceEnabled)}
 	exist := false
 
 	// check if the service exist
 	if serviceEnabled && postNetworkServiceEnabled {
-		sriovResult, exist, err = systemd.ReadSriovResult()
+		sriovResult, exist, err = dn.HostHelpers.ReadSriovResult()
 		if err != nil {
 			funcLog.Error(err, "failed to load sriov result file from host")
 			return nil, false, err
@@ -346,7 +346,7 @@ func (dn *NodeReconciler) checkSystemdStatus() (*systemd.SriovResult, bool, erro
 // 5. Requesting annotation updates for draining the idle state of the node.
 // 6. Synchronizing with the host network status and updating the sync status of the node in the nodeState object.
 // 7. Updating the lastAppliedGeneration to the current generation.
-func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *systemd.SriovResult) (ctrl.Result, error) {
+func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *hosttypes.SriovResult) (ctrl.Result, error) {
 	reqLogger := log.FromContext(ctx).WithName("Apply")
 	// apply the vendor plugins after we are done with drain if needed
 	for k, p := range dn.loadedPlugins {
@@ -479,7 +479,7 @@ func (dn *NodeReconciler) checkHostStateDrift(ctx context.Context, desiredNodeSt
 func (dn *NodeReconciler) writeSystemdConfigFile(desiredNodeState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	funcLog := log.Log.WithName("writeSystemdConfigFile()")
 	funcLog.V(0).Info("writing systemd config file to host")
-	systemdConfModified, err := systemd.WriteConfFile(desiredNodeState)
+	systemdConfModified, err := dn.HostHelpers.WriteConfFile(desiredNodeState)
 	if err != nil {
 		funcLog.Error(err, "failed to write configuration file for systemd mode")
 		return false, err
@@ -487,14 +487,14 @@ func (dn *NodeReconciler) writeSystemdConfigFile(desiredNodeState *sriovnetworkv
 	if systemdConfModified {
 		// remove existing result file to make sure that we will not use outdated result, e.g. in case if
 		// systemd service was not triggered for some reason
-		err = systemd.RemoveSriovResult()
+		err = dn.HostHelpers.RemoveSriovResult()
 		if err != nil {
 			funcLog.Error(err, "failed to remove result file for systemd mode")
 			return false, err
 		}
 	}
 
-	err = systemd.WriteSriovSupportedNics()
+	err = dn.HostHelpers.WriteSriovSupportedNics()
 	if err != nil {
 		funcLog.Error(err, "failed to write supported nic ids file for systemd mode")
 		return false, err

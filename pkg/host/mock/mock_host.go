@@ -142,6 +142,20 @@ func (mr *MockHostManagerInterfaceMockRecorder) CheckRDMAEnabled() *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckRDMAEnabled", reflect.TypeOf((*MockHostManagerInterface)(nil).CheckRDMAEnabled))
 }
 
+// CleanSriovFilesFromHost mocks base method.
+func (m *MockHostManagerInterface) CleanSriovFilesFromHost(isOpenShift bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CleanSriovFilesFromHost", isOpenShift)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CleanSriovFilesFromHost indicates an expected call of CleanSriovFilesFromHost.
+func (mr *MockHostManagerInterfaceMockRecorder) CleanSriovFilesFromHost(isOpenShift any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CleanSriovFilesFromHost", reflect.TypeOf((*MockHostManagerInterface)(nil).CleanSriovFilesFromHost), isOpenShift)
+}
+
 // CompareServices mocks base method.
 func (m *MockHostManagerInterface) CompareServices(serviceA, serviceB *types.Service) (bool, error) {
 	m.ctrl.T.Helper()
@@ -723,6 +737,21 @@ func (mr *MockHostManagerInterfaceMockRecorder) PrepareVFRepUdevRule() *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareVFRepUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).PrepareVFRepUdevRule))
 }
 
+// ReadConfFile mocks base method.
+func (m *MockHostManagerInterface) ReadConfFile() (*types.SriovConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadConfFile")
+	ret0, _ := ret[0].(*types.SriovConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadConfFile indicates an expected call of ReadConfFile.
+func (mr *MockHostManagerInterfaceMockRecorder) ReadConfFile() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadConfFile", reflect.TypeOf((*MockHostManagerInterface)(nil).ReadConfFile))
+}
+
 // ReadService mocks base method.
 func (m *MockHostManagerInterface) ReadService(servicePath string) (*types.Service, error) {
 	m.ctrl.T.Helper()
@@ -768,6 +797,37 @@ func (mr *MockHostManagerInterfaceMockRecorder) ReadServiceManifestFile(path any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadServiceManifestFile", reflect.TypeOf((*MockHostManagerInterface)(nil).ReadServiceManifestFile), path)
 }
 
+// ReadSriovResult mocks base method.
+func (m *MockHostManagerInterface) ReadSriovResult() (*types.SriovResult, bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadSriovResult")
+	ret0, _ := ret[0].(*types.SriovResult)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ReadSriovResult indicates an expected call of ReadSriovResult.
+func (mr *MockHostManagerInterfaceMockRecorder) ReadSriovResult() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadSriovResult", reflect.TypeOf((*MockHostManagerInterface)(nil).ReadSriovResult))
+}
+
+// ReadSriovSupportedNics mocks base method.
+func (m *MockHostManagerInterface) ReadSriovSupportedNics() ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadSriovSupportedNics")
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadSriovSupportedNics indicates an expected call of ReadSriovSupportedNics.
+func (mr *MockHostManagerInterfaceMockRecorder) ReadSriovSupportedNics() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadSriovSupportedNics", reflect.TypeOf((*MockHostManagerInterface)(nil).ReadSriovSupportedNics))
+}
+
 // RebindVfToDefaultDriver mocks base method.
 func (m *MockHostManagerInterface) RebindVfToDefaultDriver(pciAddr string) error {
 	m.ctrl.T.Helper()
@@ -808,6 +868,20 @@ func (m *MockHostManagerInterface) RemovePersistPFNameUdevRule(pfPciAddress stri
 func (mr *MockHostManagerInterfaceMockRecorder) RemovePersistPFNameUdevRule(pfPciAddress any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePersistPFNameUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).RemovePersistPFNameUdevRule), pfPciAddress)
+}
+
+// RemoveSriovResult mocks base method.
+func (m *MockHostManagerInterface) RemoveSriovResult() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveSriovResult")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveSriovResult indicates an expected call of RemoveSriovResult.
+func (mr *MockHostManagerInterfaceMockRecorder) RemoveSriovResult() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveSriovResult", reflect.TypeOf((*MockHostManagerInterface)(nil).RemoveSriovResult))
 }
 
 // RemoveVfRepresentorUdevRule mocks base method.
@@ -1057,4 +1131,47 @@ func (m *MockHostManagerInterface) WaitUdevEventsProcessed(timeout int) error {
 func (mr *MockHostManagerInterfaceMockRecorder) WaitUdevEventsProcessed(timeout any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitUdevEventsProcessed", reflect.TypeOf((*MockHostManagerInterface)(nil).WaitUdevEventsProcessed), timeout)
+}
+
+// WriteConfFile mocks base method.
+func (m *MockHostManagerInterface) WriteConfFile(newState *v1.SriovNetworkNodeState) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WriteConfFile", newState)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// WriteConfFile indicates an expected call of WriteConfFile.
+func (mr *MockHostManagerInterfaceMockRecorder) WriteConfFile(newState any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteConfFile", reflect.TypeOf((*MockHostManagerInterface)(nil).WriteConfFile), newState)
+}
+
+// WriteSriovResult mocks base method.
+func (m *MockHostManagerInterface) WriteSriovResult(result *types.SriovResult) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WriteSriovResult", result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WriteSriovResult indicates an expected call of WriteSriovResult.
+func (mr *MockHostManagerInterfaceMockRecorder) WriteSriovResult(result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteSriovResult", reflect.TypeOf((*MockHostManagerInterface)(nil).WriteSriovResult), result)
+}
+
+// WriteSriovSupportedNics mocks base method.
+func (m *MockHostManagerInterface) WriteSriovSupportedNics() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WriteSriovSupportedNics")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WriteSriovSupportedNics indicates an expected call of WriteSriovSupportedNics.
+func (mr *MockHostManagerInterfaceMockRecorder) WriteSriovSupportedNics() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteSriovSupportedNics", reflect.TypeOf((*MockHostManagerInterface)(nil).WriteSriovSupportedNics))
 }
