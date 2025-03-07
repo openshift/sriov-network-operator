@@ -21,7 +21,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"time"
 
 	ocpconfigapi "github.com/openshift/api/config/v1"
 	"github.com/spf13/cobra"
@@ -229,7 +228,6 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	vars.Config = config
-	config.Timeout = 5 * time.Second
 
 	// create helpers
 	hostHelpers, err := helper.NewDefaultHostHelpers()

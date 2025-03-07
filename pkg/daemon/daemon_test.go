@@ -104,6 +104,7 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 
 		// daemon initialization default mocks
 		hostHelper.EXPECT().CheckRDMAEnabled().Return(true, nil)
+		hostHelper.EXPECT().CleanSriovFilesFromHost(vars.ClusterType == constants.ClusterTypeOpenshift).Return(nil)
 		hostHelper.EXPECT().TryEnableTun()
 		hostHelper.EXPECT().TryEnableVhostNet()
 		hostHelper.EXPECT().PrepareNMUdevRule([]string{}).Return(nil)
