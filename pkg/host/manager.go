@@ -13,6 +13,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/network"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/service"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/sriov"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/systemd"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/udev"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/vdpa"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
@@ -32,6 +33,7 @@ type HostManagerInterface interface {
 	types.InfinibandInterface
 	types.BridgeInterface
 	types.CPUInfoProviderInterface
+	types.SystemdInterface
 }
 
 type hostManager struct {
@@ -45,6 +47,7 @@ type hostManager struct {
 	types.InfinibandInterface
 	types.BridgeInterface
 	types.CPUInfoProviderInterface
+	types.SystemdInterface
 }
 
 func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, error) {
@@ -65,6 +68,7 @@ func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, er
 	br := bridge.New()
 	sr := sriov.New(utilsInterface, k, n, u, v, ib, netlinkLib, dpUtils, sriovnetLib, ghwLib, br)
 	cpuInfoProvider := cpu.New(ghwLib)
+	s := systemd.New()
 	return &hostManager{
 		utilsInterface,
 		k,
@@ -76,5 +80,6 @@ func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, er
 		ib,
 		br,
 		cpuInfoProvider,
+		s,
 	}, nil
 }
