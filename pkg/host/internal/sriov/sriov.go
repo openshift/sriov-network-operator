@@ -176,7 +176,7 @@ func (s *sriov) VFIsReady(pciAddr string) (netlink.Link, error) {
 	err = wait.PollImmediate(time.Second, 10*time.Second, func() (bool, error) {
 		vfIndex, err := s.networkHelper.GetInterfaceIndex(pciAddr)
 		if err != nil {
-			log.Log.Error(err, "VFIsReady(): invalid index number")
+			log.Log.Error(err, "VFIsReady(): invalid index number", "device", pciAddr)
 			return false, nil
 		}
 		vfLink, err = s.netlinkLib.LinkByIndex(vfIndex)
