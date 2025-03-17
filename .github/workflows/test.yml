@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.22
+    - name: Set up Go 1.23
       uses: actions/setup-go@v3
       with:
-        go-version: 1.22.x
+        go-version: 1.23.x
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -32,10 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.22
+    - name: Set up Go 1.23
       uses: actions/setup-go@v2
       with:
-        go-version: 1.22.x
+        go-version: 1.23.x
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -63,10 +63,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.22
+    - name: Set up Go 1.23
       uses: actions/setup-go@v2
       with:
-        go-version: 1.22.x
+        go-version: 1.23.x
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -88,18 +88,15 @@ jobs:
     name: Golangci-lint
     runs-on: ubuntu-latest
     steps:
-    - name: Set up Go 1.22
+    - name: Set up Go 1.23
       uses: actions/setup-go@v2
       with:
-        go-version: 1.22.x
+        go-version: 1.23.x
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
-    - name: golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
-        version: v1.55.2
-
+    - name: run lint checks
+      run: make lint
+  
   shellcheck:
     name: Shellcheck
     runs-on: ubuntu-latest
@@ -115,10 +112,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.22
+    - name: Set up Go 1.23
       uses: actions/setup-go@v2
       with:
-        go-version: 1.22.x
+        go-version: 1.23.x
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
@@ -158,10 +155,10 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
-      - name: Set up Go 1.22
+      - name: Set up Go 1.23
         uses: actions/setup-go@v3
         with:
-          go-version: 1.22.x
+          go-version: 1.23.x
 
       - name: run test
         run: make test-e2e-conformance-virtual-k8s-cluster-ci
@@ -195,7 +192,7 @@ jobs:
       - name: Set up Go 1.22
         uses: actions/setup-go@v3
         with:
-          go-version: 1.22.x
+          go-version: 1.23.x
 
       - name: run test
         run: make test-e2e-conformance-virtual-ocp-cluster-ci
