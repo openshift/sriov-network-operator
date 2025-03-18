@@ -1,13 +1,6 @@
 # Tested with golangci-lint ver. 1.37
 run:
   timeout: 10m
-  skip-dirs:
-    - vendor/
-    - .github/
-    - deployment/
-    - doc/
-    - bindata/
-    - pkg/client
 linters-settings:
   depguard:
     rules:
@@ -74,11 +67,11 @@ linters:
   disable-all: true
   enable:
     - bodyclose
+    - copyloopvar
     - depguard
     - dogsled
     # TODO fix issues- dupl
     # TODO fix issues- errcheck
-    - exportloopref
     - exhaustive
     # TODO fix issues- funlen
       #- gochecknoinits
@@ -107,6 +100,13 @@ linters:
     - whitespace
 
 issues:
+  exclude-dirs:
+    - vendor/
+    - .github/
+    - deployment/
+    - doc/
+    - bindata/
+    - pkg/client
   # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:
     - path: _test\.go
