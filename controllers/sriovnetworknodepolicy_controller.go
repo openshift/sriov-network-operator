@@ -224,7 +224,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(ctx context
 		}
 		configData[node.Name] = string(config)
 
-		if data.ResourceList == nil || len(data.ResourceList) == 0 {
+		if len(data.ResourceList) == 0 {
 			// if we don't have policies we should add the disabled label for the device plugin
 			err = utils.LabelNode(ctx, node.Name, constants.SriovDevicePluginLabel, constants.SriovDevicePluginLabelDisabled, r.Client)
 			if err != nil {

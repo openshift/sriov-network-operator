@@ -35,7 +35,7 @@ func updateFinalizers() {
 		shutdownLog.Error(err, "Failed to list SriovNetworks")
 	} else {
 		for _, instance := range networkList.Items {
-			if instance.ObjectMeta.Finalizers == nil || len(instance.ObjectMeta.Finalizers) == 0 {
+			if len(instance.ObjectMeta.Finalizers) == 0 {
 				continue
 			}
 			if err != nil {
