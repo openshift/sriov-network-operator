@@ -1711,6 +1711,54 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 			})
 		})
 
+		Context("Daemon reset with shutdown", Ordered, func() {
+			var testNode string
+			var policy *sriovv1.SriovNetworkNodePolicy
+			resourceName := "resetresource"
+
+			BeforeAll(func() {
+				isSingleNode, err := cluster.IsSingleNode(clients)
+				Expect(err).ToNot(HaveOccurred())
+				if isSingleNode {
+					Skip("test not supported for single node")
+				}
+
+				sriovInfos, err := cluster.DiscoverSriov(clients, operatorNamespace)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(len(sriovInfos.Nodes)).ToNot(BeZero())
+				testNode = sriovInfos.Nodes[0]
+				iface, err := sriovInfos.FindOneSriovDevice(testNode)
+				Expect(err).ToNot(HaveOccurred())
+
+				policy, err = network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, iface.Name, testNode, 5, resourceName, "netdevice")
+				Expect(err).ToNot(HaveOccurred())
+				WaitForSRIOVStable()
+			})
+
+			It("should remove interface configuration from host even after reboot", func() {
+				By("force rebooting the node")
+				_, errOutput, err := runCommandOnConfigDaemon(testNode, "chroot", "/host", "reboot")
+				Expect(err).ToNot(HaveOccurred(), errOutput)
+				By("removing the policy")
+				err = clients.Delete(context.Background(), policy)
+				Expect(err).ToNot(HaveOccurred())
+
+				By("waiting for node to be not ready")
+				waitForNodeCondition(testNode, corev1.NodeReady, corev1.ConditionUnknown)
+
+				By("waiting for node to be ready")
+				waitForNodeCondition(testNode, corev1.NodeReady, corev1.ConditionTrue)
+
+				WaitForSRIOVStable()
+				By("Checking files on the host")
+				output, errOutput, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
+				Expect(err).ToNot(HaveOccurred(), errOutput)
+				Expect(strings.HasPrefix(output, "0")).Should(BeTrue())
+				output, errOutput, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/udev/rules.d/ | grep 10-nm-disable | wc -l")
+				Expect(err).ToNot(HaveOccurred(), errOutput)
+				Expect(strings.HasPrefix(output, "0")).Should(BeTrue())
+			})
+		})
 	})
 })
 
@@ -2402,4 +2450,17 @@ func getInterfaceFromNodeStateByPciAddress(node, pciAddress string) *sriovv1.Int
 	}
 	Expect(found).To(BeTrue())
 	return intf
+}
+
+func waitForNodeCondition(nodeName string, conditionType corev1.NodeConditionType, conditionStatus corev1.ConditionStatus) {
+	EventuallyWithOffset(1, func(g Gomega) bool {
+		node, err := clients.CoreV1Interface.Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+		g.Expect(err).ToNot(HaveOccurred())
+		for _, con := range node.Status.Conditions {
+			if con.Type == conditionType && con.Status == conditionStatus {
+				return true
+			}
+		}
+		return false
+	}, waitingTime, 1*time.Second).Should(BeTrue())
 }
