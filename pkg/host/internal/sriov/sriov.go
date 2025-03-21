@@ -176,7 +176,7 @@ func (s *sriov) VFIsReady(pciAddr string) (netlink.Link, error) {
 	err = wait.PollImmediate(time.Second, 10*time.Second, func() (bool, error) {
 		vfIndex, err := s.networkHelper.GetInterfaceIndex(pciAddr)
 		if err != nil {
-			log.Log.Error(err, "VFIsReady(): invalid index number")
+			log.Log.Error(err, "VFIsReady(): invalid index number", "device", pciAddr)
 			return false, nil
 		}
 		vfLink, err = s.netlinkLib.LinkByIndex(vfIndex)
@@ -658,7 +658,7 @@ func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interf
 			}
 		}
 
-		if !configured && ifaceStatus.NumVfs > 0 {
+		if !configured {
 			toBeResetted = append(toBeResetted, ifaceStatus)
 		}
 	}
@@ -824,8 +824,10 @@ func (s *sriov) checkForConfigAndReset(ifaceStatus sriovnetworkv1.InterfaceExt, 
 		return err
 	}
 
-	if err = s.ResetSriovDevice(ifaceStatus); err != nil {
-		return err
+	if ifaceStatus.NumVfs > 0 {
+		if err = s.ResetSriovDevice(ifaceStatus); err != nil {
+			return err
+		}
 	}
 
 	// remove pf status from host
