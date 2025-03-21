@@ -368,6 +368,7 @@ func (s *ServiceConfig) waitForDevicesInitialization() {
 	for time.Now().Before(deadline) {
 		for pciAddr, name := range devicesToWait {
 			if s.hostHelper.TryGetInterfaceName(pciAddr) == name {
+				s.log.Info("Device ready", "pci", pciAddr, "name", name)
 				delete(devicesToWait, pciAddr)
 			}
 		}
