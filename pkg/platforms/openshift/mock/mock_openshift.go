@@ -14,7 +14,7 @@ import (
 	reflect "reflect"
 
 	openshift "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
-	v1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	v1 "github.com/openshift/api/machineconfiguration/v1"
 	gomock "go.uber.org/mock/gomock"
 	v10 "k8s.io/api/core/v1"
 )

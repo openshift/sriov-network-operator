@@ -190,14 +190,14 @@ func (dr *DrainReconcile) ensureAnnotationExists(ctx context.Context, object cli
 // SetupWithManager sets up the controller with the Manager.
 func (dr *DrainReconcile) SetupWithManager(mgr ctrl.Manager) error {
 	createUpdateEnqueue := handler.Funcs{
-		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
-			q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+		CreateFunc: func(c context.Context, e event.TypedCreateEvent[client.Object], w workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			w.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 				Namespace: vars.Namespace,
 				Name:      e.Object.GetName(),
 			}})
 		},
-		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-			q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+		UpdateFunc: func(ctx context.Context, e event.TypedUpdateEvent[client.Object], w workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			w.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 				Namespace: vars.Namespace,
 				Name:      e.ObjectNew.GetName(),
 			}})

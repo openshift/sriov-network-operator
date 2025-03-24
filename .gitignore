@@ -84,3 +84,5 @@ tags
 .idea/
 # test-environment files
 registry-login.conf
+# go telemetry
+.config/

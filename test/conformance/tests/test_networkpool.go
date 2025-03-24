@@ -30,6 +30,8 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 	var resourceName = "testrdma"
 
 	BeforeAll(func() {
+		WaitForSRIOVStable()
+
 		err := namespaces.Create(namespaces.Test, clients)
 		Expect(err).ToNot(HaveOccurred())
 		err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
