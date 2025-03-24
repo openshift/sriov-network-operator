@@ -223,7 +223,7 @@ var _ = Describe("Service", func() {
 			Name: "enp216s0f0np0",
 		}}, nil)
 		hostHelpers.EXPECT().DiscoverBridges().Return(sriovnetworkv1.Bridges{}, nil)
-		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("InProgress", ""), false, nil)
+		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("InProgress", ""), nil)
 		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(0), nil)
 		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
 		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusSucceeded})
@@ -238,7 +238,7 @@ var _ = Describe("Service", func() {
 		phaseArg = PhasePost
 		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(1), nil)
 		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
-		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("InProgress", ""), false, nil)
+		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("InProgress", ""), nil)
 		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusSucceeded})
 
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).NotTo(HaveOccurred())
@@ -249,7 +249,7 @@ var _ = Describe("Service", func() {
 		phaseArg = PhasePost
 		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(1), nil)
 		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
-		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("Failed", "pretest"), false, nil)
+		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("Failed", "pretest"), nil)
 		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusFailed, LastSyncError: "post: unexpected result of the pre phase: Failed, syncError: pretest"})
 
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).To(HaveOccurred())

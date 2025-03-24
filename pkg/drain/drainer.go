@@ -17,6 +17,10 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
+var (
+	DrainTimeOut = 90 * time.Second
+)
+
 // writer implements io.Writer interface as a pass-through for log.Log.
 type writer struct {
 	logFunc func(msg string, keysAndValues ...interface{})
@@ -75,17 +79,19 @@ func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrai
 
 	drainHelper := createDrainHelper(d.kubeClient, ctx, fullNodeDrain)
 	backoff := wait.Backoff{
-		Steps:    5,
-		Duration: 10 * time.Second,
+		Steps:    3,
+		Duration: 2 * time.Second,
 		Factor:   2,
 	}
 	var lastErr error
 
 	reqLogger.Info("drainNode(): Start draining")
 	if err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
+		nodeCopy := node.DeepCopy()
 		err := drain.RunCordonOrUncordon(drainHelper, node, true)
 		if err != nil {
 			lastErr = err
+			node = nodeCopy
 			reqLogger.Info("drainNode(): Cordon failed, retrying", "error", err)
 			return false, nil
 		}
@@ -111,7 +117,7 @@ func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrai
 // for openshift system we also remove the pause from the machine config pool this node is part of
 // only if we are the last draining node on that pool
 func (d *Drainer) CompleteDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
-	logger := log.FromContext(ctx)
+	logger := log.FromContext(ctx).WithValues("complete node drain", node.Name)
 	logger.Info("CompleteDrainNode:()")
 
 	// Create drain helper object
@@ -147,7 +153,7 @@ func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, ful
 		IgnoreAllDaemonSets: true,
 		DeleteEmptyDirData:  true,
 		GracePeriodSeconds:  -1,
-		Timeout:             90 * time.Second,
+		Timeout:             DrainTimeOut,
 		OnPodDeletedOrEvicted: func(pod *corev1.Pod, usingEviction bool) {
 			verbStr := constants.DrainDeleted
 			if usingEviction {

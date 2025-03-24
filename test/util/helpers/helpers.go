@@ -32,3 +32,12 @@ func GinkgoAssertFileContentsEquals(path, expectedContent string) {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	ExpectWithOffset(1, string(d)).To(Equal(expectedContent))
 }
+
+// GinkgoAssertFileDoesNotExist check that the file exist
+// prepends vars.FilesystemRoot to the file path to be compatible with
+// GinkgoConfigureFakeFS function
+func GinkgoAssertFileDoesNotExist(path string) {
+	_, err := os.Stat(filepath.Join(vars.FilesystemRoot, path))
+	ExpectWithOffset(1, err).To(HaveOccurred())
+	ExpectWithOffset(1, os.IsNotExist(err)).To(BeTrue())
+}

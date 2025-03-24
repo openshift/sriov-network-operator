@@ -68,7 +68,7 @@ func (s *systemd) WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) 
 		if os.IsNotExist(err) {
 			// Create the sriov-operator folder on the host if it doesn't exist
 			if _, err := os.Stat(utils.GetHostExtensionPath(consts.SriovConfBasePath)); os.IsNotExist(err) {
-				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), os.ModeDir)
+				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), 0777)
 				if err != nil {
 					log.Log.Error(err, "WriteConfFile(): fail to create sriov-operator folder",
 						"path", utils.GetHostExtensionPath(consts.SriovConfBasePath))
@@ -140,6 +140,16 @@ func (s *systemd) WriteSriovResult(result *types.SriovResult) error {
 	_, err := os.Stat(utils.GetHostExtensionPath(consts.SriovSystemdResultPath))
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Create the sriov-operator folder on the host if it doesn't exist
+			if _, err := os.Stat(utils.GetHostExtensionPath(consts.SriovConfBasePath)); os.IsNotExist(err) {
+				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), 0777)
+				if err != nil {
+					log.Log.Error(err, "WriteConfFile(): fail to create sriov-operator folder",
+						"path", utils.GetHostExtensionPath(consts.SriovConfBasePath))
+					return err
+				}
+			}
+
 			log.Log.V(2).Info("WriteSriovResult(): file not existed, create it")
 			_, err = os.Create(utils.GetHostExtensionPath(consts.SriovSystemdResultPath))
 			if err != nil {
@@ -172,31 +182,31 @@ func (s *systemd) WriteSriovResult(result *types.SriovResult) error {
 // ReadSriovResult reads and parses the sriov result file from the host.
 // The function first checks if the result file exists. If it doesn't, it returns nil with a success flag of false and no error.
 // If the file exists, it reads its contents and attempts to unmarshal the YAML data into the SriovResult struct.
-func (s *systemd) ReadSriovResult() (*types.SriovResult, bool, error) {
+func (s *systemd) ReadSriovResult() (*types.SriovResult, error) {
 	_, err := os.Stat(utils.GetHostExtensionPath(consts.SriovSystemdResultPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Log.V(2).Info("ReadSriovResult(): file does not exist")
-			return nil, false, nil
+			return nil, nil
 		} else {
 			log.Log.Error(err, "ReadSriovResult(): failed to check sriov result file", "path", utils.GetHostExtensionPath(consts.SriovSystemdResultPath))
-			return nil, false, err
+			return nil, err
 		}
 	}
 
 	rawConfig, err := os.ReadFile(utils.GetHostExtensionPath(consts.SriovSystemdResultPath))
 	if err != nil {
 		log.Log.Error(err, "ReadSriovResult(): failed to read sriov result file", "path", utils.GetHostExtensionPath(consts.SriovSystemdResultPath))
-		return nil, false, err
+		return nil, err
 	}
 
 	result := &types.SriovResult{}
 	err = yaml.Unmarshal(rawConfig, &result)
 	if err != nil {
 		log.Log.Error(err, "ReadSriovResult(): failed to unmarshal sriov result file", "path", utils.GetHostExtensionPath(consts.SriovSystemdResultPath))
-		return nil, false, err
+		return nil, err
 	}
-	return result, true, err
+	return result, err
 }
 
 // RemoveSriovResult: Removes the Sriov result file from the host.
@@ -221,6 +231,16 @@ func (s *systemd) WriteSriovSupportedNics() error {
 	_, err := os.Stat(utils.GetHostExtensionPath(consts.SriovSystemdSupportedNicPath))
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Create the sriov-operator folder on the host if it doesn't exist
+			if _, err := os.Stat(utils.GetHostExtensionPath(consts.SriovConfBasePath)); os.IsNotExist(err) {
+				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), 0777)
+				if err != nil {
+					log.Log.Error(err, "WriteConfFile(): fail to create sriov-operator folder",
+						"path", utils.GetHostExtensionPath(consts.SriovConfBasePath))
+					return err
+				}
+			}
+
 			log.Log.V(2).Info("WriteSriovSupportedNics(): file does not exist, create it")
 			_, err = os.Create(utils.GetHostExtensionPath(consts.SriovSystemdSupportedNicPath))
 			if err != nil {
