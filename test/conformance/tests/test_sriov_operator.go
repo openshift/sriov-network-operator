@@ -266,16 +266,17 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 			By("Wait the new operator's pod to start")
 			Eventually(func(g Gomega) {
 				newOperatorPod := getOperatorPod()
-				Expect(newOperatorPod.Name).ToNot(Equal(oldOperatorPod.Name))
-				Expect(newOperatorPod.Status.Phase).To(Equal(corev1.PodRunning))
-			}, 45*time.Second, 5*time.Second)
+				g.Expect(newOperatorPod.Name).ToNot(Equal(oldOperatorPod.Name))
+				g.Expect(newOperatorPod.Status.Phase).To(Equal(corev1.PodRunning))
+			}, 45*time.Second, 5*time.Second).Should(Succeed())
 
 			By("Assert the new operator's pod acquire the lease before 30 seconds")
 			Eventually(func(g Gomega) {
 				newLease, err := clients.CoordinationV1Interface.Leases(operatorNamespace).Get(context.Background(), consts.LeaderElectionID, metav1.GetOptions{})
 				g.Expect(err).ToNot(HaveOccurred())
 
-				g.Expect(newLease.Spec.HolderIdentity).ToNot(Equal(oldLease.Spec.HolderIdentity))
+				g.Expect(*newLease.Spec.HolderIdentity).ToNot(Equal(*oldLease.Spec.HolderIdentity))
+				g.Expect(*newLease.Spec.HolderIdentity).ToNot(BeEmpty())
 			}, 30*time.Second, 5*time.Second).Should(Succeed())
 		},
 			Entry("webhooks enabled", true),
