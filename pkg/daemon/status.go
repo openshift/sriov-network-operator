@@ -31,12 +31,14 @@ func (dn *NodeReconciler) updateSyncState(ctx context.Context, desiredNodeState 
 				"LastSyncError", failedMessage)
 			return err
 		}
+		// update the object meta if not the patch can fail if the object did change
+		desiredNodeState.ObjectMeta = currentNodeState.ObjectMeta
 
 		funcLog.V(2).Info("update nodeState status",
 			"CurrentSyncStatus", currentNodeState.Status.SyncStatus,
 			"CurrentLastSyncError", currentNodeState.Status.LastSyncError,
-			"NewSyncStatus", status,
-			"NewFailedMessage", failedMessage)
+			"NewSyncStatus", desiredNodeState.Status.SyncStatus,
+			"NewFailedMessage", desiredNodeState.Status.LastSyncError)
 
 		err := dn.client.Status().Patch(ctx, desiredNodeState, client.MergeFrom(currentNodeState))
 		if err != nil {
