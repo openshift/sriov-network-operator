@@ -4,7 +4,7 @@ on: pull_request
 jobs:
   execute:
     name: "remove the lgtm label"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: jpmcb/prow-github-actions@v1.1.2
         with:
