@@ -11,7 +11,7 @@ on:
 
 jobs:
   build-and-push-image-operator:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -50,7 +50,7 @@ jobs:
           file: ./Dockerfile
 
   build-and-push-image-config-daemon:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
@@ -89,7 +89,7 @@ jobs:
           file: ./Dockerfile.sriov-network-config-daemon
 
   build-and-push-image-webhook:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3
