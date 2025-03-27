@@ -3,10 +3,10 @@
 package v1
 
 import (
-	v1 "github.com/openshift/api/operator/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	operatorv1 "github.com/openshift/api/operator/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ServiceCatalogAPIServerLister helps list ServiceCatalogAPIServers.
@@ -14,39 +14,19 @@ import (
 type ServiceCatalogAPIServerLister interface {
 	// List lists all ServiceCatalogAPIServers in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.ServiceCatalogAPIServer, err error)
+	List(selector labels.Selector) (ret []*operatorv1.ServiceCatalogAPIServer, err error)
 	// Get retrieves the ServiceCatalogAPIServer from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.ServiceCatalogAPIServer, error)
+	Get(name string) (*operatorv1.ServiceCatalogAPIServer, error)
 	ServiceCatalogAPIServerListerExpansion
 }
 
 // serviceCatalogAPIServerLister implements the ServiceCatalogAPIServerLister interface.
 type serviceCatalogAPIServerLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*operatorv1.ServiceCatalogAPIServer]
 }
 
 // NewServiceCatalogAPIServerLister returns a new ServiceCatalogAPIServerLister.
 func NewServiceCatalogAPIServerLister(indexer cache.Indexer) ServiceCatalogAPIServerLister {
-	return &serviceCatalogAPIServerLister{indexer: indexer}
-}
-
-// List lists all ServiceCatalogAPIServers in the indexer.
-func (s *serviceCatalogAPIServerLister) List(selector labels.Selector) (ret []*v1.ServiceCatalogAPIServer, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.ServiceCatalogAPIServer))
-	})
-	return ret, err
-}
-
-// Get retrieves the ServiceCatalogAPIServer from the index for a given name.
-func (s *serviceCatalogAPIServerLister) Get(name string) (*v1.ServiceCatalogAPIServer, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("servicecatalogapiserver"), name)
-	}
-	return obj.(*v1.ServiceCatalogAPIServer), nil
+	return &serviceCatalogAPIServerLister{listers.New[*operatorv1.ServiceCatalogAPIServer](indexer, operatorv1.Resource("servicecatalogapiserver"))}
 }

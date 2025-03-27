@@ -18,6 +18,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
+	"regexp"
 	"strings"
 
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -40,8 +42,8 @@ const (
 // +k8s:openapi-gen=true
 // +kubebuilder:resource:categories="prometheus-operator",shortName="amcfg"
 
-// AlertmanagerConfig defines a namespaced AlertmanagerConfig to be aggregated
-// across multiple namespaces configuring one Alertmanager cluster.
+// AlertmanagerConfig configures the Prometheus Alertmanager,
+// specifying how alerts should be grouped, inhibited and notified to external systems.
 type AlertmanagerConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -177,6 +179,9 @@ type Receiver struct {
 	TelegramConfigs []TelegramConfig `json:"telegramConfigs,omitempty"`
 	// List of Webex configurations.
 	WebexConfigs []WebexConfig `json:"webexConfigs,omitempty"`
+	// List of MSTeams configurations.
+	// It requires Alertmanager >= 0.26.0.
+	MSTeamsConfigs []MSTeamsConfig `json:"msteamsConfigs,omitempty"`
 }
 
 // PagerDutyConfig configures notifications via PagerDuty.
@@ -556,13 +561,28 @@ type OpsGenieConfigResponder struct {
 	Type string `json:"type"`
 }
 
+const opsgenieValidTypesRe = `^(team|teams|user|escalation|schedule)$`
+
+var opsgenieTypeMatcher = regexp.MustCompile(opsgenieValidTypesRe)
+
 // Validate ensures OpsGenieConfigResponder is valid.
 func (r *OpsGenieConfigResponder) Validate() error {
 	if r.ID == "" && r.Name == "" && r.Username == "" {
 		return errors.New("responder must have at least an ID, a Name or an Username defined")
 	}
 
-	return nil
+	if strings.Contains(r.Type, "{{") {
+		_, err := template.New("").Parse(r.Type)
+		if err != nil {
+			return fmt.Errorf("responder %v type is not a valid template: %w", r, err)
+		}
+		return nil
+	}
+
+	if opsgenieTypeMatcher.MatchString(strings.ToLower(r.Type)) {
+		return nil
+	}
+	return fmt.Errorf("opsGenieConfig responder %v type does not match valid options %s", r, opsgenieValidTypesRe)
 }
 
 // HTTPConfig defines a client HTTP configuration.
@@ -750,13 +770,25 @@ type PushoverConfig struct {
 	// The secret's key that contains the recipient user's user key.
 	// The secret needs to be in the same namespace as the AlertmanagerConfig
 	// object and accessible by the Prometheus Operator.
-	// +kubebuilder:validation:Required
+	// Either `userKey` or `userKeyFile` is required.
+	// +optional
 	UserKey *SecretKeySelector `json:"userKey,omitempty"`
+	// The user key file that contains the recipient user's user key.
+	// Either `userKey` or `userKeyFile` is required.
+	// It requires Alertmanager >= v0.26.0.
+	// +optional
+	UserKeyFile *string `json:"userKeyFile,omitempty"`
 	// The secret's key that contains the registered application's API token, see https://pushover.net/apps.
 	// The secret needs to be in the same namespace as the AlertmanagerConfig
 	// object and accessible by the Prometheus Operator.
-	// +kubebuilder:validation:Required
+	// Either `token` or `tokenFile` is required.
+	// +optional
 	Token *SecretKeySelector `json:"token,omitempty"`
+	// The token file that contains the registered application's API token, see https://pushover.net/apps.
+	// Either `token` or `tokenFile` is required.
+	// It requires Alertmanager >= v0.26.0.
+	// +optional
+	TokenFile *string `json:"tokenFile,omitempty"`
 	// Notification title.
 	// +optional
 	Title string `json:"title,omitempty"`
@@ -769,6 +801,9 @@ type PushoverConfig struct {
 	// A title for supplementary URL, otherwise just the URL is shown
 	// +optional
 	URLTitle string `json:"urlTitle,omitempty"`
+	// The name of a device to send the notification to
+	// +optional
+	Device *string `json:"device,omitempty"`
 	// The name of one of the sounds supported by device clients to override the user's default sound choice
 	// +optional
 	Sound string `json:"sound,omitempty"`
@@ -870,6 +905,30 @@ type TelegramConfig struct {
 	//+kubebuilder:validation:Enum=MarkdownV2;Markdown;HTML
 	// +optional
 	ParseMode string `json:"parseMode,omitempty"`
+	// HTTP client configuration.
+	// +optional
+	HTTPConfig *HTTPConfig `json:"httpConfig,omitempty"`
+}
+
+// MSTeamsConfig configures notifications via Microsoft Teams.
+// It requires Alertmanager >= 0.26.0.
+type MSTeamsConfig struct {
+	// Whether to notify about resolved alerts.
+	// +optional
+	SendResolved *bool `json:"sendResolved,omitempty"`
+	// MSTeams webhook URL.
+	// +kubebuilder:validation:Required
+	WebhookURL v1.SecretKeySelector `json:"webhookUrl"`
+	// Message title template.
+	// +optional
+	Title *string `json:"title,omitempty"`
+	// Message summary template.
+	// It requires Alertmanager >= 0.27.0.
+	// +optional
+	Summary *string `json:"summary,omitempty"`
+	// Message body template.
+	// +optional
+	Text *string `json:"text,omitempty"`
 	// HTTP client configuration.
 	// +optional
 	HTTPConfig *HTTPConfig `json:"httpConfig,omitempty"`
@@ -1058,7 +1117,7 @@ type DayOfMonthRange struct {
 
 // MonthRange is an inclusive range of months of the year beginning in January
 // Months can be specified by name (e.g 'January') by numerical month (e.g '1') or as an inclusive range (e.g 'January:March', '1:3', '1:March')
-// +kubebuilder:validation:Pattern=`^((?i)january|february|march|april|may|june|july|august|september|october|november|december|[1-12])(?:((:((?i)january|february|march|april|may|june|july|august|september|october|november|december|[1-12]))$)|$)`
+// +kubebuilder:validation:Pattern=`^((?i)january|february|march|april|may|june|july|august|september|october|november|december|1[0-2]|[1-9])(?:((:((?i)january|february|march|april|may|june|july|august|september|october|november|december|1[0-2]|[1-9]))$)|$)`
 type MonthRange string
 
 // YearRange is an inclusive range of years

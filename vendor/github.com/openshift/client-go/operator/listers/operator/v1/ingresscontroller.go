@@ -3,10 +3,10 @@
 package v1
 
 import (
-	v1 "github.com/openshift/api/operator/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	operatorv1 "github.com/openshift/api/operator/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // IngressControllerLister helps list IngressControllers.
@@ -14,7 +14,7 @@ import (
 type IngressControllerLister interface {
 	// List lists all IngressControllers in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.IngressController, err error)
+	List(selector labels.Selector) (ret []*operatorv1.IngressController, err error)
 	// IngressControllers returns an object that can list and get IngressControllers.
 	IngressControllers(namespace string) IngressControllerNamespaceLister
 	IngressControllerListerExpansion
@@ -22,25 +22,17 @@ type IngressControllerLister interface {
 
 // ingressControllerLister implements the IngressControllerLister interface.
 type ingressControllerLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*operatorv1.IngressController]
 }
 
 // NewIngressControllerLister returns a new IngressControllerLister.
 func NewIngressControllerLister(indexer cache.Indexer) IngressControllerLister {
-	return &ingressControllerLister{indexer: indexer}
-}
-
-// List lists all IngressControllers in the indexer.
-func (s *ingressControllerLister) List(selector labels.Selector) (ret []*v1.IngressController, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.IngressController))
-	})
-	return ret, err
+	return &ingressControllerLister{listers.New[*operatorv1.IngressController](indexer, operatorv1.Resource("ingresscontroller"))}
 }
 
 // IngressControllers returns an object that can list and get IngressControllers.
 func (s *ingressControllerLister) IngressControllers(namespace string) IngressControllerNamespaceLister {
-	return ingressControllerNamespaceLister{indexer: s.indexer, namespace: namespace}
+	return ingressControllerNamespaceLister{listers.NewNamespaced[*operatorv1.IngressController](s.ResourceIndexer, namespace)}
 }
 
 // IngressControllerNamespaceLister helps list and get IngressControllers.
@@ -48,36 +40,15 @@ func (s *ingressControllerLister) IngressControllers(namespace string) IngressCo
 type IngressControllerNamespaceLister interface {
 	// List lists all IngressControllers in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.IngressController, err error)
+	List(selector labels.Selector) (ret []*operatorv1.IngressController, err error)
 	// Get retrieves the IngressController from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.IngressController, error)
+	Get(name string) (*operatorv1.IngressController, error)
 	IngressControllerNamespaceListerExpansion
 }
 
 // ingressControllerNamespaceLister implements the IngressControllerNamespaceLister
 // interface.
 type ingressControllerNamespaceLister struct {
-	indexer   cache.Indexer
-	namespace string
-}
-
-// List lists all IngressControllers in the indexer for a given namespace.
-func (s ingressControllerNamespaceLister) List(selector labels.Selector) (ret []*v1.IngressController, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.IngressController))
-	})
-	return ret, err
-}
-
-// Get retrieves the IngressController from the indexer for a given namespace and name.
-func (s ingressControllerNamespaceLister) Get(name string) (*v1.IngressController, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("ingresscontroller"), name)
-	}
-	return obj.(*v1.IngressController), nil
+	listers.ResourceIndexer[*operatorv1.IngressController]
 }
