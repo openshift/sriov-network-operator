@@ -82,7 +82,7 @@ func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrai
 	var lastErr error
 
 	reqLogger.Info("drainNode(): Start draining")
-	if err = wait.ExponentialBackoff(backoff, func() (bool, error) {
+	if err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
 		err := drain.RunCordonOrUncordon(drainHelper, node, true)
 		if err != nil {
 			lastErr = err

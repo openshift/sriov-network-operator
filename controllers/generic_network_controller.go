@@ -40,7 +40,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
-type networkCRInstance interface {
+type NetworkCRInstance interface {
 	client.Object
 	// renders NetAttDef from the network instance
 	RenderNetAttDef() (*uns.Unstructured, error)
@@ -53,7 +53,7 @@ type networkController interface {
 	reconcile.Reconciler
 	// GetObject should return CR type which implements networkCRInstance
 	// interface
-	GetObject() networkCRInstance
+	GetObject() NetworkCRInstance
 	// should return CR list type
 	GetObjectList() client.ObjectList
 	// should return name of the controller
@@ -207,7 +207,7 @@ func (r *genericNetworkReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r.controller)
 }
 
-func (r *genericNetworkReconciler) namespaceHandlerCreate(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+func (r *genericNetworkReconciler) namespaceHandlerCreate(ctx context.Context, e event.TypedCreateEvent[client.Object], w workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	networkList := r.controller.GetObjectList()
 	err := r.List(ctx,
 		networkList,
@@ -227,7 +227,7 @@ func (r *genericNetworkReconciler) namespaceHandlerCreate(ctx context.Context, e
 	unsList.SetUnstructuredContent(unsContent)
 	_ = unsList.EachListItem(func(o runtime.Object) error {
 		unsObj := o.(*uns.Unstructured)
-		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
+		w.Add(reconcile.Request{NamespacedName: types.NamespacedName{
 			Namespace: unsObj.GetNamespace(),
 			Name:      unsObj.GetName(),
 		}})
@@ -236,7 +236,7 @@ func (r *genericNetworkReconciler) namespaceHandlerCreate(ctx context.Context, e
 }
 
 // deleteNetAttDef deletes the generated net-att-def CR
-func (r *genericNetworkReconciler) deleteNetAttDef(ctx context.Context, cr networkCRInstance) error {
+func (r *genericNetworkReconciler) deleteNetAttDef(ctx context.Context, cr NetworkCRInstance) error {
 	// Fetch the NetworkAttachmentDefinition instance
 	namespace := cr.NetworkNamespace()
 	if namespace == "" {

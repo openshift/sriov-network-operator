@@ -9,7 +9,7 @@ on:
       - v*
 jobs:
   package-and-push-helm-chart:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: install helm
         uses: azure/setup-helm@v4.2.0
