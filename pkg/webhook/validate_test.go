@@ -6,17 +6,16 @@ import (
 	"os"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
-
 	. "github.com/onsi/gomega"
+
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
-
-	fakesnclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/fake"
 )
 
 func TestMain(m *testing.M) {
@@ -168,7 +167,7 @@ func TestValidateSriovOperatorConfigWithDefaultOperatorConfig(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	config := newDefaultOperatorConfig()
-	snclient = fakesnclientset.NewSimpleClientset()
+	client = fake.NewClientBuilder().WithScheme(vars.Scheme).Build()
 
 	ok, w, err := validateSriovOperatorConfig(config, "DELETE")
 	g.Expect(err).NotTo(HaveOccurred())
@@ -202,10 +201,7 @@ func TestValidateSriovOperatorConfigDisableDrain(t *testing.T) {
 		},
 	}
 
-	snclient = fakesnclientset.NewSimpleClientset(
-		config,
-		nodeState,
-	)
+	client = fake.NewClientBuilder().WithScheme(vars.Scheme).WithObjects(config, nodeState).Build()
 
 	config.Spec.DisableDrain = true
 	ok, _, err := validateSriovOperatorConfig(config, "UPDATE")
@@ -214,8 +210,8 @@ func TestValidateSriovOperatorConfigDisableDrain(t *testing.T) {
 
 	// Simulate node update finished
 	nodeState.Status.SyncStatus = "Succeeded"
-	snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).
-		Update(context.Background(), nodeState, metav1.UpdateOptions{})
+	err = client.Update(context.Background(), nodeState)
+	g.Expect(err).ToNot(HaveOccurred())
 
 	ok, _, err = validateSriovOperatorConfig(config, "UPDATE")
 	g.Expect(err).NotTo(HaveOccurred())
@@ -226,7 +222,7 @@ func TestValidateSriovNetworkPoolConfigWithDefault(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	config := newDefaultNetworkPoolConfig()
-	snclient = fakesnclientset.NewSimpleClientset()
+	client = fake.NewClientBuilder().WithScheme(vars.Scheme).Build()
 
 	ok, _, err := validateSriovNetworkPoolConfig(config, "DELETE")
 	g.Expect(err).ToNot(HaveOccurred())
@@ -246,7 +242,7 @@ func TestValidateSriovNetworkPoolConfigWithParallelAndHWOffload(t *testing.T) {
 
 	config := newDefaultNetworkPoolConfig()
 	config.Spec.OvsHardwareOffloadConfig.Name = "test"
-	snclient = fakesnclientset.NewSimpleClientset()
+	client = fake.NewClientBuilder().WithScheme(vars.Scheme).Build()
 
 	ok, _, err := validateSriovNetworkPoolConfig(config, "UPDATE")
 	g.Expect(err).To(HaveOccurred())

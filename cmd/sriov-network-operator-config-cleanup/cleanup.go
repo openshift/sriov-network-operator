@@ -4,17 +4,19 @@ import (
 	"context"
 	"time"
 
+	ocpconfigapi "github.com/openshift/api/config/v1"
 	"github.com/spf13/cobra"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
-
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/watch"
-
-	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned/typed/sriovnetwork/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 var (
@@ -25,6 +27,14 @@ var (
 func init() {
 	rootCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "designated SriovOperatorConfig namespace")
 	rootCmd.Flags().IntVarP(&watchTO, "watch-timeout", "w", 10, "sriov-operator config post-delete watch timeout ")
+
+	// Init Scheme
+	newScheme := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(newScheme))
+	utilruntime.Must(sriovnetworkv1.AddToScheme(newScheme))
+	utilruntime.Must(ocpconfigapi.AddToScheme(newScheme))
+
+	vars.Scheme = newScheme
 }
 
 func runCleanupCmd(cmd *cobra.Command, args []string) error {
@@ -38,12 +48,22 @@ func runCleanupCmd(cmd *cobra.Command, args []string) error {
 	defer timeoutFunc()
 
 	restConfig := ctrl.GetConfigOrDie()
-	sriovcs, err := sriovnetworkv1.NewForConfig(restConfig)
+	c, err := client.New(restConfig, client.Options{Scheme: vars.Scheme})
 	if err != nil {
 		setupLog.Error(err, "failed to create 'sriovnetworkv1' clientset")
 	}
 
-	err = sriovcs.SriovOperatorConfigs(namespace).Delete(context.Background(), "default", metav1.DeleteOptions{})
+	operatorConfig := &sriovnetworkv1.SriovOperatorConfig{}
+	err = c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: "default"}, operatorConfig)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		setupLog.Error(err, "failed to get SriovOperatorConfig")
+		return err
+	}
+
+	err = c.Delete(ctx, operatorConfig)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil
@@ -52,32 +72,18 @@ func runCleanupCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// watching 'default' config deletion with context timeout, in case sriov-operator fails to delete 'default' config
-	watcher, err := sriovcs.SriovOperatorConfigs(namespace).Watch(ctx, metav1.ListOptions{Watch: true})
-	if err != nil {
-		setupLog.Error(err, "failed creating 'default' SriovOperatorConfig object watcher")
-		return err
-	}
-	defer watcher.Stop()
 	for {
-		select {
-		case event := <-watcher.ResultChan():
-			if event.Type == watch.Deleted {
-				setupLog.Info("'default' SriovOperatorConfig is deleted")
-				return nil
+		err = c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: "default"}, operatorConfig)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				break
 			}
-
-		case <-ctx.Done():
-			// check whether object might has been deleted before watch event triggered
-			_, err := sriovcs.SriovOperatorConfigs(namespace).Get(context.Background(), "default", metav1.GetOptions{})
-			if err != nil {
-				if errors.IsNotFound(err) {
-					return nil
-				}
-			}
-			err = ctx.Err()
-			setupLog.Error(err, "timeout has occurred for 'default' SriovOperatorConfig deletion")
+			setupLog.Error(err, "failed to check sriovOperatorConfig exist")
 			return err
 		}
+		time.Sleep(100 * time.Millisecond)
 	}
+
+	setupLog.Info("'default' SriovOperatorConfig is deleted")
+	return nil
 }

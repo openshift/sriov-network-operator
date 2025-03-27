@@ -6,12 +6,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
-var snclient snclientset.Interface
+var client runtimeclient.Client
 var kubeclient *kubernetes.Clientset
 
 func SetupInClusterClient() error {
@@ -27,12 +28,21 @@ func SetupInClusterClient() error {
 	}
 
 	if err != nil {
+		log.Log.Error(nil, "fail to create config")
+		return err
+	}
+
+	client, err = runtimeclient.New(config, runtimeclient.Options{Scheme: vars.Scheme})
+	if err != nil {
 		log.Log.Error(nil, "fail to setup client")
 		return err
 	}
 
-	snclient = snclientset.NewForConfigOrDie(config)
-	kubeclient = kubernetes.NewForConfigOrDie(config)
+	kubeclient, err = kubernetes.NewForConfig(config)
+	if err != nil {
+		log.Log.Error(nil, "fail to setup kubernetes client")
+		return err
+	}
 
 	return nil
 }

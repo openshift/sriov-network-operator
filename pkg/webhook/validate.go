@@ -13,6 +13,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -62,8 +63,8 @@ func validateSriovOperatorConfigDisableDrain(cr *sriovnetworkv1.SriovOperatorCon
 	if !cr.Spec.DisableDrain {
 		return nil
 	}
-
-	previousConfig, err := snclient.SriovnetworkV1().SriovOperatorConfigs(cr.Namespace).Get(context.Background(), cr.Name, metav1.GetOptions{})
+	previousConfig := &sriovnetworkv1.SriovOperatorConfig{}
+	err := client.Get(context.Background(), runtimeclient.ObjectKey{Name: cr.Name, Namespace: namespace}, previousConfig)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil
@@ -77,7 +78,8 @@ func validateSriovOperatorConfigDisableDrain(cr *sriovnetworkv1.SriovOperatorCon
 	}
 
 	// DisableDrain has been changed `false -> true`, check if any node is updating
-	nodeStates, err := snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(context.Background(), metav1.ListOptions{})
+	nodeStates := &sriovnetworkv1.SriovNetworkNodeStateList{}
+	err = client.List(context.Background(), nodeStates, &runtimeclient.ListOptions{Namespace: namespace})
 	if err != nil {
 		return fmt.Errorf("can't validate SriovOperatorConfig[%s] DisableDrain transition to true: %q", cr.Name, err)
 	}
@@ -245,11 +247,13 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	if err != nil {
 		return false, err
 	}
-	nsList, err := snclient.SriovnetworkV1().SriovNetworkNodeStates(namespace).List(context.Background(), metav1.ListOptions{})
+	nsList := &sriovnetworkv1.SriovNetworkNodeStateList{}
+	err = client.List(context.Background(), nsList, &runtimeclient.ListOptions{Namespace: namespace})
 	if err != nil {
 		return false, err
 	}
-	npList, err := snclient.SriovnetworkV1().SriovNetworkNodePolicies(namespace).List(context.Background(), metav1.ListOptions{})
+	npList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
+	err = client.List(context.Background(), npList, &runtimeclient.ListOptions{Namespace: namespace})
 	if err != nil {
 		return false, err
 	}
