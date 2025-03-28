@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -12,7 +13,9 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
+
 	"sort"
 	"strings"
 	"text/template"
@@ -44,20 +47,22 @@ import (
 	validate3 "github.com/coreos/ignition/v2/config/validate"
 	"github.com/ghodss/yaml"
 	"github.com/vincent-petithory/dataurl"
+	corev1 "k8s.io/api/core/v1"
 	kerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/tools/reference"
+	k8sapiflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 
-	mcfgv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-	mcfgclientset "github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned"
-	"github.com/openshift/machine-config-operator/pkg/generated/clientset/versioned/scheme"
+	configv1 "github.com/openshift/api/config/v1"
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
+	opv1 "github.com/openshift/api/operator/v1"
+	mcfgclientset "github.com/openshift/client-go/machineconfiguration/clientset/versioned"
+	"github.com/openshift/client-go/machineconfiguration/clientset/versioned/scheme"
+	"github.com/openshift/library-go/pkg/crypto"
 )
-
-// Gates whether or not the MCO uses the new format base OS container image by default
-var UseNewFormatImageByDefault = true
 
 // strToPtr converts the input string to a pointer to itself
 func strToPtr(s string) *string {
@@ -78,7 +83,27 @@ func MergeMachineConfigs(configs []*mcfgv1.MachineConfig, cconfig *mcfgv1.Contro
 	if len(configs) == 0 {
 		return nil, nil
 	}
-	sort.SliceStable(configs, func(i, j int) bool { return configs[i].Name < configs[j].Name })
+
+	// Overall the sort is alphanumerical, but custom pool configuration should take priority.
+	// Generally speaking if a custom pool is created, the expectation is that custom pool configuration should override base
+	// worker configuration.
+	// This mostly aims to help with generated configs (e.g. kubelet or containerruntime configs) where the pool name is
+	// part of the MachineConfig name, which cannot be directly modified.
+	var workerConfigs, otherConfigs []*mcfgv1.MachineConfig
+	for _, config := range configs {
+		if config.ObjectMeta.Labels == nil {
+			// This shouldn't really be possible
+			return nil, fmt.Errorf("Cannot find label in MachineConfig %s", config.ObjectMeta.Name)
+		}
+		if config.ObjectMeta.Labels[MachineConfigRoleLabel] == MachineConfigPoolWorker {
+			workerConfigs = append(workerConfigs, config)
+		} else {
+			otherConfigs = append(otherConfigs, config)
+		}
+	}
+	sort.SliceStable(workerConfigs, func(i, j int) bool { return workerConfigs[i].Name < workerConfigs[j].Name })
+	sort.SliceStable(otherConfigs, func(i, j int) bool { return otherConfigs[i].Name < otherConfigs[j].Name })
+	configs = append(configs[:0], append(workerConfigs, otherConfigs...)...)
 
 	var fips bool
 	var kernelType string
@@ -123,28 +148,24 @@ func MergeMachineConfigs(configs []*mcfgv1.MachineConfig, cconfig *mcfgv1.Contro
 		return nil, err
 	}
 
-	// Setting FIPS to true or kerneType to realtime in any MachineConfig takes priority in setting that field
+	// Setting FIPS to true or kernelType to a non-default value in any MachineConfig takes priority in setting that field
 	for _, cfg := range configs {
 		if cfg.Spec.FIPS {
 			fips = true
 		}
-		if cfg.Spec.KernelType == KernelTypeRealtime {
+		if cfg.Spec.KernelType == KernelTypeRealtime || cfg.Spec.KernelType == KernelType64kPages {
 			kernelType = cfg.Spec.KernelType
 		}
 	}
 
-	// If no MC sets kerneType, then set it to 'default' since that's what it is using
+	// If no MC sets kernelType, then set it to 'default' since that's what it is using
 	if kernelType == "" {
 		kernelType = KernelTypeDefault
 	}
 
 	kargs := []string{}
 	for _, cfg := range configs {
-		for _, arg := range cfg.Spec.KernelArguments {
-			if !InSlice(arg, kargs) {
-				kargs = append(kargs, arg)
-			}
-		}
+		kargs = append(kargs, cfg.Spec.KernelArguments...)
 	}
 
 	extensions := []string{}
@@ -508,7 +529,7 @@ func ValidateIgnition(ignconfig interface{}) error {
 // https://bugzilla.redhat.com/show_bug.cgi?id=2038240
 func validateIgn2FileModes(cfg ign2types.Config) error {
 	for _, file := range cfg.Storage.Files {
-		if file.Mode != nil && os.FileMode(*file.Mode) > os.ModePerm {
+		if file.Mode != nil && os.FileMode(*file.Mode) > os.ModePerm { //nolint:gosec
 			return fmt.Errorf("invalid mode %#o for %s, cannot exceed %#o", *file.Mode, file.Path, os.ModePerm)
 		}
 	}
@@ -520,7 +541,7 @@ func validateIgn2FileModes(cfg ign2types.Config) error {
 // https://bugzilla.redhat.com/show_bug.cgi?id=2038240
 func validateIgn3FileModes(cfg ign3types.Config) error {
 	for _, file := range cfg.Storage.Files {
-		if file.Mode != nil && os.FileMode(*file.Mode) > os.ModePerm {
+		if file.Mode != nil && os.FileMode(*file.Mode) > os.ModePerm { //nolint:gosec
 			return fmt.Errorf("invalid mode %#o for %s, cannot exceed %#o", *file.Mode, file.Path, os.ModePerm)
 		}
 	}
@@ -576,7 +597,7 @@ func InSlice(elem string, slice []string) bool {
 
 // ValidateMachineConfig validates that given MachineConfig Spec is valid.
 func ValidateMachineConfig(cfg mcfgv1.MachineConfigSpec) error {
-	if !(cfg.KernelType == "" || cfg.KernelType == KernelTypeDefault || cfg.KernelType == KernelTypeRealtime) {
+	if !(cfg.KernelType == "" || cfg.KernelType == KernelTypeDefault || cfg.KernelType == KernelTypeRealtime || cfg.KernelType == KernelType64kPages) {
 		return fmt.Errorf("kernelType=%s is invalid", cfg.KernelType)
 	}
 
@@ -588,8 +609,72 @@ func ValidateMachineConfig(cfg mcfgv1.MachineConfigSpec) error {
 		if err := ValidateIgnition(ignCfg); err != nil {
 			return err
 		}
+		// Validate MC extensions are in allowlist
+		if len(cfg.Extensions) > 0 {
+			if err := ValidateMachineConfigExtensions(cfg); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+// Validates that a given MachineConfig's extensions are supported.
+func ValidateMachineConfigExtensions(cfg mcfgv1.MachineConfigSpec) error {
+	return validateExtensions(cfg.Extensions)
+}
+
+func validateExtensions(exts []string) error {
+	supportedExtensions := SupportedExtensions()
+	invalidExts := []string{}
+	for _, ext := range exts {
+		if _, ok := supportedExtensions[ext]; !ok {
+			invalidExts = append(invalidExts, ext)
+		}
+	}
+	if len(invalidExts) != 0 {
+		return fmt.Errorf("invalid extensions found: %v", invalidExts)
+	}
+	return nil
+}
+
+// Resolves a list of supported extensions to the individual packages required
+// for each of those extensions. Returns an error is any of the supplied
+// extensions is invalid.
+func GetPackagesForSupportedExtensions(exts []string) ([]string, error) {
+	if err := validateExtensions(exts); err != nil {
+		return nil, err
+	}
+
+	pkgs := []string{}
+
+	supported := SupportedExtensions()
+	for _, ext := range exts {
+		for _, pkg := range supported[ext] {
+			pkgs = append(pkgs, pkg)
+		}
+	}
+
+	return pkgs, nil
+}
+
+// Returns list of extensions possible to install on a CoreOS based system.
+func SupportedExtensions() map[string][]string {
+	// In future when list of extensions grow, it will make
+	// more sense to populate it in a dynamic way.
+
+	// These are RHCOS supported extensions.
+	// Each extension keeps a list of packages required to get enabled on host.
+	return map[string][]string{
+		"two-node-ha":          {"pacemaker", "pcs", "fence-agents-all"},
+		"wasm":                 {"crun-wasm"},
+		"ipsec":                {"NetworkManager-libreswan", "libreswan"},
+		"usbguard":             {"usbguard"},
+		"kerberos":             {"krb5-workstation", "libkadm5"},
+		"kernel-devel":         {"kernel-devel", "kernel-headers"},
+		"sandboxed-containers": {"kata-containers"},
+		"sysstat":              {"sysstat"},
+	}
 }
 
 // IgnParseWrapper parses rawIgn for both V2 and V3 ignition configs and returns
@@ -656,7 +741,7 @@ var errConfigNotGzipped = fmt.Errorf("ignition config not gzipped")
 // Decode, decompress, and deserialize an Ignition config file.
 func ParseAndConvertGzippedConfig(rawIgn []byte) (ign3types.Config, error) {
 	// Try to decode and decompress our payload
-	out, err := decodeAndDecompressPayload(bytes.NewReader(rawIgn))
+	out, err := DecodeAndDecompressPayload(bytes.NewReader(rawIgn))
 	if err == nil {
 		// Our payload was decoded and decompressed, so parse it as Ignition.
 		klog.V(2).Info("ignition config was base64-decoded and gunzipped successfully")
@@ -686,7 +771,7 @@ func ParseAndConvertGzippedConfig(rawIgn []byte) (ign3types.Config, error) {
 }
 
 // Attempts to base64-decode and/or decompresses a given byte array.
-func decodeAndDecompressPayload(r io.Reader) ([]byte, error) {
+func DecodeAndDecompressPayload(r io.Reader) ([]byte, error) {
 	// Wrap the io.Reader in a base64 decoder (which implements io.Reader)
 	base64Dec := base64.NewDecoder(base64.StdEncoding, r)
 	out, err := decompressPayload(base64Dec)
@@ -957,6 +1042,8 @@ func dedupePasswdUserSSHKeys(passwdUser ign2types.PasswdUser) ign2types.PasswdUs
 
 // CalculateConfigFileDiffs compares the files present in two ignition configurations and returns the list of files
 // that are different between them
+//
+//nolint:dupl
 func CalculateConfigFileDiffs(oldIgnConfig, newIgnConfig *ign3types.Config) []string {
 	// Go through the files and see what is new or different
 	oldFileSet := make(map[string]ign3types.File)
@@ -973,8 +1060,6 @@ func CalculateConfigFileDiffs(oldIgnConfig, newIgnConfig *ign3types.Config) []st
 	for path := range oldFileSet {
 		_, ok := newFileSet[path]
 		if !ok {
-			// debug: remove
-			klog.Infof("File diff: %v was deleted", path)
 			diffFileSet = append(diffFileSet, path)
 		}
 	}
@@ -983,16 +1068,48 @@ func CalculateConfigFileDiffs(oldIgnConfig, newIgnConfig *ign3types.Config) []st
 	for path, newFile := range newFileSet {
 		oldFile, ok := oldFileSet[path]
 		if !ok {
-			// debug: remove
-			klog.Infof("File diff: %v was added", path)
 			diffFileSet = append(diffFileSet, path)
 		} else if !reflect.DeepEqual(oldFile, newFile) {
-			// debug: remove
-			klog.Infof("File diff: detected change to %v", newFile.Path)
 			diffFileSet = append(diffFileSet, path)
 		}
 	}
 	return diffFileSet
+}
+
+// CalculateConfigUnitDiffs compares the units present in two ignition configurations and returns the list of units
+// that are different between them
+//
+//nolint:dupl
+func CalculateConfigUnitDiffs(oldIgnConfig, newIgnConfig *ign3types.Config) []string {
+	// Go through the units and see what is new or different
+	oldUnitSet := make(map[string]ign3types.Unit)
+	for _, u := range oldIgnConfig.Systemd.Units {
+		oldUnitSet[u.Name] = u
+	}
+	newUnitSet := make(map[string]ign3types.Unit)
+	for _, u := range newIgnConfig.Systemd.Units {
+		newUnitSet[u.Name] = u
+	}
+	diffUnitSet := []string{}
+
+	// First check if any units were removed
+	for unit := range oldUnitSet {
+		_, ok := newUnitSet[unit]
+		if !ok {
+			diffUnitSet = append(diffUnitSet, unit)
+		}
+	}
+
+	// Now check if any units were added/changed
+	for name, newUnit := range newUnitSet {
+		oldUnit, ok := oldUnitSet[name]
+		if !ok {
+			diffUnitSet = append(diffUnitSet, name)
+		} else if !reflect.DeepEqual(oldUnit, newUnit) {
+			diffUnitSet = append(diffUnitSet, name)
+		}
+	}
+	return diffUnitSet
 }
 
 // NewIgnFile returns a simple ignition3 file from just path and file contents.
@@ -1058,13 +1175,9 @@ func GetIgnitionFileDataByPath(config *ign3types.Config, path string) ([]byte, e
 	return nil, nil
 }
 
-// GetDefaultBaseImageContainer is kind of a "soft feature gate" for using the "new format" image by default, its behavior
-// is determined by the "UseNewFormatImageByDefault" boolean
+// GetDefaultBaseImageContainer returns the default bootable host base image.
 func GetDefaultBaseImageContainer(cconfigspec *mcfgv1.ControllerConfigSpec) string {
-	if UseNewFormatImageByDefault {
-		return cconfigspec.BaseOSContainerImage
-	}
-	return cconfigspec.OSImageURL
+	return cconfigspec.BaseOSContainerImage
 }
 
 // Configures common template FuncMaps used across all renderers.
@@ -1159,63 +1272,128 @@ func (n namespacedEventRecorder) AnnotatedEventf(object runtime.Object, annotati
 	n.delegate.AnnotatedEventf(ensureEventNamespace(object), annotations, eventtype, reason, messageFmt, args...)
 }
 
-func IsLayeredPool(pool *mcfgv1.MachineConfigPool) bool {
-	if _, ok := pool.Labels[LayeringEnabledPoolLabel]; ok {
-		return true
-	}
-	return false
+func DoARebuild(pool *mcfgv1.MachineConfigPool) bool {
+	_, ok := pool.Labels[RebuildPoolLabel]
+	return ok
+
 }
 
-// DockerConfigJSON represents ~/.docker/config.json file info
-type DockerConfigJSON struct {
-	Auths DockerConfig `json:"auths"`
+// isSubdirectory checks if targetPath is a subdirectory of dirPath.
+func IsSubdirectory(dirPath, targetPath string) bool {
+	// Clean and add trailing separator to dirPath to ensure proper matching
+	dirPath = filepath.Clean(dirPath) + string(filepath.Separator)
+	targetPath = filepath.Clean(targetPath)
+
+	// Check if targetPath has dirPath as its prefix
+	return strings.HasPrefix(targetPath, dirPath)
 }
 
-// DockerConfig represents the config file used by the docker CLI.
-// This config that represents the credentials that should be used
-// when pulling images from specific image repositories.
-type DockerConfig map[string]DockerConfigEntry
+func FindClosestFilePolicyPathMatch(diffPath string, filePolicies []opv1.NodeDisruptionPolicyStatusFile) (bool, []opv1.NodeDisruptionPolicyStatusAction) {
+	matchLength := 0
+	matchFound := false
+	matchActions := []opv1.NodeDisruptionPolicyStatusAction{}
 
-// DockerConfigEntry wraps a docker config as a entry
-type DockerConfigEntry struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Email    string `json:"email"`
-	Auth     string `json:"auth"`
+	for _, filePolicy := range filePolicies {
+		klog.V(4).Infof("comparing policy path %s to diff path %s", filePolicy.Path, diffPath)
+		// Check if either of the following are true:
+		// (i) if diffPath and filePolicy.Path are an exact match
+		// (ii) if diffPath is a subdir of filePolicy.Path
+		if (diffPath == filePolicy.Path) || IsSubdirectory(filePolicy.Path, diffPath) {
+			// If a match was found, compare the length so the longest match is preserved
+			if len(filePolicy.Path) > matchLength {
+				matchFound = true
+				matchLength = len(filePolicy.Path)
+				matchActions = filePolicy.Actions
+			}
+		}
+	}
+	return matchFound, matchActions
 }
 
-// Merges kubernetes.io/dockercfg type secrets into a JSON map.
-// Returns an error on failure to marshal the incoming secret.
-func MergeDockerConfigstoJSONMap(secretRaw []byte, auths map[string]DockerConfigEntry) error {
-	var dockerConfig DockerConfig
-	// Unmarshal raw JSON
-	err := json.Unmarshal(secretRaw, &dockerConfig)
-	if err != nil {
-		return fmt.Errorf(" unmarshal failure: %w", err)
+// Extracts the minimum TLS version and cipher suites from apiServer object,
+func GetSecurityProfileCiphersFromAPIServer(apiServer *configv1.APIServer) (string, []string) {
+	// If no apiServer object exists, default to the intermediate profile by calling
+	// GetSecurityProfileCiphers with a nil object for TLSSecurityProfile
+	if apiServer == nil {
+		return GetSecurityProfileCiphers(nil)
 	}
-	// Step through the hosts and add them to the JSON map
-	for host := range dockerConfig {
-		auths[host] = dockerConfig[host]
-	}
-	return nil
+	return GetSecurityProfileCiphers(apiServer.Spec.TLSSecurityProfile)
 }
 
-// Converts a kubernetes.io/dockerconfigjson type secret to a
-// kubernetes.io/dockercfg type secret. Returns an error on failure
-// if the incoming secret is not formatted correctly.
-func ConvertSecretTodockercfg(secretBytes []byte) ([]byte, error) {
-	type newStyleAuth struct {
-		Auths map[string]interface{} `json:"auths,omitempty"`
+// Extracts the minimum TLS version and cipher suites from TLSSecurityProfile object,
+// Converts the ciphers to IANA names as supported by Kube ServingInfo config.
+// If profile is nil, returns config defined by the Intermediate TLS Profile
+func GetSecurityProfileCiphers(profile *configv1.TLSSecurityProfile) (string, []string) {
+	var profileType configv1.TLSProfileType
+	if profile == nil {
+		profileType = configv1.TLSProfileIntermediateType
+	} else {
+		profileType = profile.Type
 	}
 
-	// Un-marshal the new-style secret first
-	newStyleDecoded := &newStyleAuth{}
-	if err := json.Unmarshal(secretBytes, newStyleDecoded); err != nil {
-		return nil, fmt.Errorf("could not decode new-style pull secret: %w", err)
+	var profileSpec *configv1.TLSProfileSpec
+	if profileType == configv1.TLSProfileCustomType {
+		if profile.Custom != nil {
+			profileSpec = &profile.Custom.TLSProfileSpec
+		}
+	} else {
+		profileSpec = configv1.TLSProfiles[profileType]
 	}
 
-	// Marshal with old style, which is everything inside the Auths field
-	out, err := json.Marshal(newStyleDecoded.Auths)
+	// nothing found / custom type set but no actual custom spec
+	if profileSpec == nil {
+		profileSpec = configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+	}
 
-	return out, err
+	// need to remap all Ciphers to their respective IANA names used by Go
+	return string(profileSpec.MinTLSVersion), crypto.OpenSSLToIANACipherSuites(profileSpec.Ciphers)
+}
+
+// Converts tlsMinVersion and tlscipherSuites flags to a tlsConfig object that is used
+// by the http.Server() call used in apiserver.NewAPIServer() & apiserver.Serve()
+//
+//nolint:gosec
+func GetGoTLSConfig(tlsMinVersion string, tlscipherSuites []string) *tls.Config {
+	// Create tlsConfig from arguments, using k8sapiflag for the uint16 translation
+	tlsMinVersionID, tlsMinVersionErr := k8sapiflag.TLSVersion(tlsMinVersion)
+	tlscipherSuiteIDs, tlscipherSuiteIDsErr := k8sapiflag.TLSCipherSuites(tlscipherSuites)
+	// If any errors are encountered, log it and fallback to intermediate settings. This is very unlikely as tls arguments are guarded by API validation.
+	if tlsMinVersionErr != nil || tlscipherSuiteIDsErr != nil || len(tlscipherSuiteIDs) == 0 {
+		klog.Errorf("Error using provided tls arguments: tlsMinVersionErr: %v, tlscipherSuiteIDsErr: %v, tlscipherSuiteLength: %v", tlsMinVersionErr, tlscipherSuiteIDsErr, len(tlscipherSuiteIDs))
+		tlsMinVersionID, _ = k8sapiflag.TLSVersion(string(configv1.TLSProfiles[configv1.TLSProfileIntermediateType].MinTLSVersion))
+		tlscipherSuiteIDs, _ = k8sapiflag.TLSCipherSuites(configv1.TLSProfiles[configv1.TLSProfileIntermediateType].Ciphers)
+	}
+	// This causes a G402: TLS MinVersion too low. (gosec) verify error, possibly because the version is determined at runtime?
+	return &tls.Config{MinVersion: tlsMinVersionID, CipherSuites: tlscipherSuiteIDs}
+}
+
+func GetBootstrapAPIServer() (*configv1.APIServer, error) {
+	apiserverData, err := os.ReadFile(APIServerBootstrapFileLocation)
+	if os.IsNotExist(err) {
+		// This is not an error; it just means that an APIServer manifest was not provided at install time
+		klog.Infof("No bootstrap apiserver manifest found, bootstrap MCS will use defaults")
+		return nil, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("error getting apiserver from disk: %w", err)
+	}
+	klog.Infof("Reading in bootstrap apiserver manifest was successful")
+	apiserver := new(configv1.APIServer)
+	if err := yaml.Unmarshal(apiserverData, &apiserver); err != nil {
+		return nil, fmt.Errorf("unmarshal into apiserver failed %w", err)
+	}
+	return apiserver, nil
+}
+
+func GetCAsFromConfigMap(cm *corev1.ConfigMap, key string) ([]byte, error) {
+	if bd, bdok := cm.BinaryData[key]; bdok {
+		return bd, nil
+	}
+	if d, dok := cm.Data[key]; dok {
+		raw, err := base64.StdEncoding.DecodeString(d)
+		if err != nil {
+			return []byte(d), nil
+		}
+		return raw, nil
+	}
+	return nil, fmt.Errorf("%s not found in %s/%s", key, cm.Namespace, cm.Name)
 }

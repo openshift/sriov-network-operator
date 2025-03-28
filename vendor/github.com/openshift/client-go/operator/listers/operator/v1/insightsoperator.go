@@ -3,10 +3,10 @@
 package v1
 
 import (
-	v1 "github.com/openshift/api/operator/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	operatorv1 "github.com/openshift/api/operator/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // InsightsOperatorLister helps list InsightsOperators.
@@ -14,39 +14,19 @@ import (
 type InsightsOperatorLister interface {
 	// List lists all InsightsOperators in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.InsightsOperator, err error)
+	List(selector labels.Selector) (ret []*operatorv1.InsightsOperator, err error)
 	// Get retrieves the InsightsOperator from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.InsightsOperator, error)
+	Get(name string) (*operatorv1.InsightsOperator, error)
 	InsightsOperatorListerExpansion
 }
 
 // insightsOperatorLister implements the InsightsOperatorLister interface.
 type insightsOperatorLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*operatorv1.InsightsOperator]
 }
 
 // NewInsightsOperatorLister returns a new InsightsOperatorLister.
 func NewInsightsOperatorLister(indexer cache.Indexer) InsightsOperatorLister {
-	return &insightsOperatorLister{indexer: indexer}
-}
-
-// List lists all InsightsOperators in the indexer.
-func (s *insightsOperatorLister) List(selector labels.Selector) (ret []*v1.InsightsOperator, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.InsightsOperator))
-	})
-	return ret, err
-}
-
-// Get retrieves the InsightsOperator from the index for a given name.
-func (s *insightsOperatorLister) Get(name string) (*v1.InsightsOperator, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("insightsoperator"), name)
-	}
-	return obj.(*v1.InsightsOperator), nil
+	return &insightsOperatorLister{listers.New[*operatorv1.InsightsOperator](indexer, operatorv1.Resource("insightsoperator"))}
 }

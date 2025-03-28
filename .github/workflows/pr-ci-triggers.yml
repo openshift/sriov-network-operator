@@ -4,7 +4,7 @@ on:
 
 jobs:
   vendors-ci-triggers-list:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/github-script@v5
         env:

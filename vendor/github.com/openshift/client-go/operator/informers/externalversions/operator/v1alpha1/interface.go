@@ -8,8 +8,14 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ClusterVersionOperators returns a ClusterVersionOperatorInformer.
+	ClusterVersionOperators() ClusterVersionOperatorInformer
+	// EtcdBackups returns a EtcdBackupInformer.
+	EtcdBackups() EtcdBackupInformer
 	// ImageContentSourcePolicies returns a ImageContentSourcePolicyInformer.
 	ImageContentSourcePolicies() ImageContentSourcePolicyInformer
+	// OLMs returns a OLMInformer.
+	OLMs() OLMInformer
 }
 
 type version struct {
@@ -23,7 +29,22 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
+// ClusterVersionOperators returns a ClusterVersionOperatorInformer.
+func (v *version) ClusterVersionOperators() ClusterVersionOperatorInformer {
+	return &clusterVersionOperatorInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// EtcdBackups returns a EtcdBackupInformer.
+func (v *version) EtcdBackups() EtcdBackupInformer {
+	return &etcdBackupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // ImageContentSourcePolicies returns a ImageContentSourcePolicyInformer.
 func (v *version) ImageContentSourcePolicies() ImageContentSourcePolicyInformer {
 	return &imageContentSourcePolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// OLMs returns a OLMInformer.
+func (v *version) OLMs() OLMInformer {
+	return &oLMInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

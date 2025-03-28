@@ -3,10 +3,10 @@
 package v1
 
 import (
-	"net/http"
+	http "net/http"
 
-	v1 "github.com/openshift/api/operator/v1"
-	"github.com/openshift/client-go/operator/clientset/versioned/scheme"
+	operatorv1 "github.com/openshift/api/operator/v1"
+	scheme "github.com/openshift/client-go/operator/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 
@@ -26,7 +26,9 @@ type OperatorV1Interface interface {
 	KubeControllerManagersGetter
 	KubeSchedulersGetter
 	KubeStorageVersionMigratorsGetter
+	MachineConfigurationsGetter
 	NetworksGetter
+	OLMsGetter
 	OpenShiftAPIServersGetter
 	OpenShiftControllerManagersGetter
 	ServiceCAsGetter
@@ -96,8 +98,16 @@ func (c *OperatorV1Client) KubeStorageVersionMigrators() KubeStorageVersionMigra
 	return newKubeStorageVersionMigrators(c)
 }
 
+func (c *OperatorV1Client) MachineConfigurations() MachineConfigurationInterface {
+	return newMachineConfigurations(c)
+}
+
 func (c *OperatorV1Client) Networks() NetworkInterface {
 	return newNetworks(c)
+}
+
+func (c *OperatorV1Client) OLMs() OLMInterface {
+	return newOLMs(c)
 }
 
 func (c *OperatorV1Client) OpenShiftAPIServers() OpenShiftAPIServerInterface {
@@ -169,10 +179,10 @@ func New(c rest.Interface) *OperatorV1Client {
 }
 
 func setConfigDefaults(config *rest.Config) error {
-	gv := v1.SchemeGroupVersion
+	gv := operatorv1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
+	config.NegotiatedSerializer = rest.CodecFactoryForGeneratedClient(scheme.Scheme, scheme.Codecs).WithoutConversion()
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()

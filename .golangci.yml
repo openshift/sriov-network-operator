@@ -107,7 +107,6 @@ issues:
     - doc/
     - bindata/
     - pkg/client
-  # Excluding configuration per-path, per-linter, per-text and per-source
   exclude-rules:
     - path: _test\.go
       linters:

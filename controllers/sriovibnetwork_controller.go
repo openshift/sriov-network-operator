@@ -48,7 +48,7 @@ func (r *SriovIBNetworkReconciler) Name() string {
 }
 
 // return empty instance of the SriovIBNetwork CR
-func (r *SriovIBNetworkReconciler) GetObject() networkCRInstance {
+func (r *SriovIBNetworkReconciler) GetObject() NetworkCRInstance {
 	return &sriovnetworkv1.SriovIBNetwork{}
 }
 

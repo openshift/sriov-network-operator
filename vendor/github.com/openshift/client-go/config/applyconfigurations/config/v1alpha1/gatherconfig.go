@@ -3,17 +3,17 @@
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/openshift/api/config/v1alpha1"
+	configv1alpha1 "github.com/openshift/api/config/v1alpha1"
 )
 
-// GatherConfigApplyConfiguration represents an declarative configuration of the GatherConfig type for use
+// GatherConfigApplyConfiguration represents a declarative configuration of the GatherConfig type for use
 // with apply.
 type GatherConfigApplyConfiguration struct {
-	DataPolicy        *v1alpha1.DataPolicy `json:"dataPolicy,omitempty"`
-	DisabledGatherers []string             `json:"disabledGatherers,omitempty"`
+	DataPolicy        *configv1alpha1.DataPolicy `json:"dataPolicy,omitempty"`
+	DisabledGatherers []string                   `json:"disabledGatherers,omitempty"`
 }
 
-// GatherConfigApplyConfiguration constructs an declarative configuration of the GatherConfig type for use with
+// GatherConfigApplyConfiguration constructs a declarative configuration of the GatherConfig type for use with
 // apply.
 func GatherConfig() *GatherConfigApplyConfiguration {
 	return &GatherConfigApplyConfiguration{}
@@ -22,7 +22,7 @@ func GatherConfig() *GatherConfigApplyConfiguration {
 // WithDataPolicy sets the DataPolicy field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the DataPolicy field is set to the value of the last call.
-func (b *GatherConfigApplyConfiguration) WithDataPolicy(value v1alpha1.DataPolicy) *GatherConfigApplyConfiguration {
+func (b *GatherConfigApplyConfiguration) WithDataPolicy(value configv1alpha1.DataPolicy) *GatherConfigApplyConfiguration {
 	b.DataPolicy = &value
 	return b
 }

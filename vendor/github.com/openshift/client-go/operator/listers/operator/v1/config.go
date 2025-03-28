@@ -3,10 +3,10 @@
 package v1
 
 import (
-	v1 "github.com/openshift/api/operator/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
+	operatorv1 "github.com/openshift/api/operator/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ConfigLister helps list Configs.
@@ -14,39 +14,19 @@ import (
 type ConfigLister interface {
 	// List lists all Configs in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.Config, err error)
+	List(selector labels.Selector) (ret []*operatorv1.Config, err error)
 	// Get retrieves the Config from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.Config, error)
+	Get(name string) (*operatorv1.Config, error)
 	ConfigListerExpansion
 }
 
 // configLister implements the ConfigLister interface.
 type configLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*operatorv1.Config]
 }
 
 // NewConfigLister returns a new ConfigLister.
 func NewConfigLister(indexer cache.Indexer) ConfigLister {
-	return &configLister{indexer: indexer}
-}
-
-// List lists all Configs in the indexer.
-func (s *configLister) List(selector labels.Selector) (ret []*v1.Config, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.Config))
-	})
-	return ret, err
-}
-
-// Get retrieves the Config from the index for a given name.
-func (s *configLister) Get(name string) (*v1.Config, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("config"), name)
-	}
-	return obj.(*v1.Config), nil
+	return &configLister{listers.New[*operatorv1.Config](indexer, operatorv1.Resource("config"))}
 }
