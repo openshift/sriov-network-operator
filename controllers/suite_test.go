@@ -45,6 +45,7 @@ import (
 
 	//+kubebuilder:scaffold:imports
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
@@ -94,6 +95,7 @@ var _ = BeforeSuite(func() {
 		func(o *zap.Options) {
 			o.TimeEncoder = zapcore.RFC3339NanoTimeEncoder
 		}))
+	snolog.InitLog()
 
 	// Go to project root directory
 	err = os.Chdir("..")
