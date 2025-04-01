@@ -47,7 +47,6 @@ var _ = Describe("config daemon plugin loading tests", func() {
 			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgPciRealloc).Return(false).AnyTimes()
 			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaExclusive).Return(false).AnyTimes()
 			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaShared).Return(false).AnyTimes()
-			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPassthrough).Return(false).AnyTimes()
 
 			// k8s plugin is ATM the only plugin which require mocking/faking, as its New method performs additional logic
 			// other than simple plugin struct initialization
