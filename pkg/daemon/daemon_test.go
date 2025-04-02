@@ -185,7 +185,6 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgPciRealloc).Return(true).AnyTimes()
 			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIntelIommu).Return(true).AnyTimes()
 			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIommuPt).Return(true).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIommuPassthrough).Return(true).AnyTimes()
 			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaExclusive).Return(false).AnyTimes()
 			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaShared).Return(false).AnyTimes()
 			hostHelper.EXPECT().SetRDMASubsystem("").Return(nil).AnyTimes()
