@@ -261,23 +261,23 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 	if ifaceSpec.Mtu > 0 {
 		mtu := ifaceSpec.Mtu
 		if mtu > ifaceStatus.Mtu {
-			log.V(2).Info("NeedToUpdateSriov(): MTU needs update", "desired", mtu, "current", ifaceStatus.Mtu)
+			log.V(0).Info("NeedToUpdateSriov(): MTU needs update", "desired", mtu, "current", ifaceStatus.Mtu)
 			return true
 		}
 	}
 	currentEswitchMode := GetEswitchModeFromStatus(ifaceStatus)
 	desiredEswitchMode := GetEswitchModeFromSpec(ifaceSpec)
 	if currentEswitchMode != desiredEswitchMode {
-		log.V(2).Info("NeedToUpdateSriov(): EswitchMode needs update", "desired", desiredEswitchMode, "current", currentEswitchMode)
+		log.V(0).Info("NeedToUpdateSriov(): EswitchMode needs update", "desired", desiredEswitchMode, "current", currentEswitchMode)
 		return true
 	}
 	if ifaceSpec.NumVfs != ifaceStatus.NumVfs {
-		log.V(2).Info("NeedToUpdateSriov(): NumVfs needs update", "desired", ifaceSpec.NumVfs, "current", ifaceStatus.NumVfs)
+		log.V(0).Info("NeedToUpdateSriov(): NumVfs needs update", "desired", ifaceSpec.NumVfs, "current", ifaceStatus.NumVfs)
 		return true
 	}
 
 	if ifaceStatus.LinkAdminState == consts.LinkAdminStateDown {
-		log.V(2).Info("NeedToUpdateSriov(): PF link status needs update", "desired to include", "up", "current", ifaceStatus.LinkAdminState)
+		log.V(0).Info("NeedToUpdateSriov(): PF link status needs update", "desired to include", "up", "current", ifaceStatus.LinkAdminState)
 		return true
 	}
 
@@ -286,24 +286,24 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 			for _, groupSpec := range ifaceSpec.VfGroups {
 				if IndexInRange(vfStatus.VfID, groupSpec.VfRange) {
 					if vfStatus.Driver == "" {
-						log.V(2).Info("NeedToUpdateSriov(): Driver needs update - has no driver",
+						log.V(0).Info("NeedToUpdateSriov(): Driver needs update - has no driver",
 							"desired", groupSpec.DeviceType)
 						return true
 					}
 					if groupSpec.DeviceType != "" && groupSpec.DeviceType != consts.DeviceTypeNetDevice {
 						if groupSpec.DeviceType != vfStatus.Driver {
-							log.V(2).Info("NeedToUpdateSriov(): Driver needs update",
+							log.V(0).Info("NeedToUpdateSriov(): Driver needs update",
 								"desired", groupSpec.DeviceType, "current", vfStatus.Driver)
 							return true
 						}
 					} else {
 						if StringInArray(vfStatus.Driver, vars.DpdkDrivers) {
-							log.V(2).Info("NeedToUpdateSriov(): Driver needs update",
+							log.V(0).Info("NeedToUpdateSriov(): Driver needs update",
 								"desired", groupSpec.DeviceType, "current", vfStatus.Driver)
 							return true
 						}
 						if vfStatus.Mtu != 0 && groupSpec.Mtu != 0 && vfStatus.Mtu != groupSpec.Mtu {
-							log.V(2).Info("NeedToUpdateSriov(): VF MTU needs update",
+							log.V(0).Info("NeedToUpdateSriov(): VF MTU needs update",
 								"vf", vfStatus.VfID, "desired", groupSpec.Mtu, "current", vfStatus.Mtu)
 							return true
 						}
@@ -313,20 +313,20 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 							// Node GUID. We intentionally skip empty Node GUID in vfStatus because this may happen
 							// when the VF is allocated to a workload.
 							if vfStatus.GUID == consts.UninitializedNodeGUID {
-								log.V(2).Info("NeedToUpdateSriov(): VF GUID needs update",
+								log.V(0).Info("NeedToUpdateSriov(): VF GUID needs update",
 									"vf", vfStatus.VfID, "current", vfStatus.GUID)
 								return true
 							}
 						}
 						// this is needed to be sure the admin mac address is configured as expected
 						if ifaceSpec.ExternallyManaged {
-							log.V(2).Info("NeedToUpdateSriov(): need to update the device as it's externally manage",
+							log.V(0).Info("NeedToUpdateSriov(): need to update the device as it's externally manage",
 								"device", ifaceStatus.PciAddress)
 							return true
 						}
 					}
 					if groupSpec.VdpaType != vfStatus.VdpaType {
-						log.V(2).Info("NeedToUpdateSriov(): VF VdpaType mismatch",
+						log.V(0).Info("NeedToUpdateSriov(): VF VdpaType mismatch",
 							"desired", groupSpec.VdpaType, "current", vfStatus.VdpaType)
 						return true
 					}
