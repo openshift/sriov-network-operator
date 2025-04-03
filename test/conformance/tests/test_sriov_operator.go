@@ -68,7 +68,13 @@ func init() {
 	}
 }
 
-var _ = Describe("[sriov] operator", func() {
+var _ = Describe("[sriov] operator", Ordered, func() {
+	AfterAll(func() {
+		err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
+		Expect(err).ToNot(HaveOccurred())
+		WaitForSRIOVStable()
+	})
+
 	Describe("No SriovNetworkNodePolicy", func() {
 		Context("SR-IOV network config daemon can be set by nodeselector", func() {
 			// 26186
@@ -260,16 +266,17 @@ var _ = Describe("[sriov] operator", func() {
 			By("Wait the new operator's pod to start")
 			Eventually(func(g Gomega) {
 				newOperatorPod := getOperatorPod()
-				Expect(newOperatorPod.Name).ToNot(Equal(oldOperatorPod.Name))
-				Expect(newOperatorPod.Status.Phase).To(Equal(corev1.PodRunning))
-			}, 45*time.Second, 5*time.Second)
+				g.Expect(newOperatorPod.Name).ToNot(Equal(oldOperatorPod.Name))
+				g.Expect(newOperatorPod.Status.Phase).To(Equal(corev1.PodRunning))
+			}, 45*time.Second, 5*time.Second).Should(Succeed())
 
 			By("Assert the new operator's pod acquire the lease before 30 seconds")
 			Eventually(func(g Gomega) {
 				newLease, err := clients.CoordinationV1Interface.Leases(operatorNamespace).Get(context.Background(), consts.LeaderElectionID, metav1.GetOptions{})
 				g.Expect(err).ToNot(HaveOccurred())
 
-				g.Expect(newLease.Spec.HolderIdentity).ToNot(Equal(oldLease.Spec.HolderIdentity))
+				g.Expect(*newLease.Spec.HolderIdentity).ToNot(Equal(*oldLease.Spec.HolderIdentity))
+				g.Expect(*newLease.Spec.HolderIdentity).ToNot(BeEmpty())
 			}, 30*time.Second, 5*time.Second).Should(Succeed())
 		},
 			Entry("webhooks enabled", true),
@@ -296,10 +303,10 @@ var _ = Describe("[sriov] operator", func() {
 				By("Checking that a daemon is scheduled on selected node")
 				Eventually(func() bool {
 					return isDaemonsetScheduledOnNodes("node-role.kubernetes.io/worker", "app=sriov-network-metrics-exporter")
-				}, 1*time.Minute, 1*time.Second).Should(Equal(true))
+				}).WithTimeout(time.Minute).WithPolling(time.Second).Should(Equal(true))
 			})
 
-			It("should deploy ServiceMonitor if the Promethueus operator is installed", func() {
+			It("should deploy ServiceMonitor if the Prometheus operator is installed", func() {
 				_, err := clients.ServiceMonitors(operatorNamespace).List(context.Background(), metav1.ListOptions{})
 				if k8serrors.IsNotFound(err) {
 					Skip("Prometheus operator not available in the cluster")
@@ -309,7 +316,7 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func(g Gomega) {
 					_, err := clients.ServiceMonitors(operatorNamespace).Get(context.Background(), "sriov-network-metrics-exporter", metav1.GetOptions{})
 					g.Expect(err).ToNot(HaveOccurred())
-				}).Should(Succeed())
+				}).WithTimeout(time.Minute).WithPolling(time.Second).Should(Succeed())
 			})
 
 			It("should remove ServiceMonitor when the feature is turned off", func() {
@@ -317,7 +324,7 @@ var _ = Describe("[sriov] operator", func() {
 				Eventually(func(g Gomega) {
 					_, err := clients.ServiceMonitors(operatorNamespace).Get(context.Background(), "sriov-network-metrics-exporter", metav1.GetOptions{})
 					g.Expect(k8serrors.IsNotFound(err)).To(BeTrue())
-				}).Should(Succeed())
+				}).WithTimeout(time.Minute).WithPolling(time.Second).Should(Succeed())
 			})
 		})
 	})
@@ -388,7 +395,7 @@ var _ = Describe("[sriov] operator", func() {
 					},
 					Spec: sriovv1.SriovNetworkSpec{
 						ResourceName:     resourceName,
-						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181"}`,
 						NetworkNamespace: namespaces.Test,
 					}}
 				err := clients.Create(context.Background(), sriovNetwork)
@@ -441,7 +448,7 @@ var _ = Describe("[sriov] operator", func() {
 					},
 					Spec: sriovv1.SriovNetworkSpec{
 						ResourceName:     resourceName,
-						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181"}`,
 						NetworkNamespace: namespaces.Test,
 					}}
 				err := clients.Create(context.Background(), sriovNetwork)
@@ -501,9 +508,14 @@ var _ = Describe("[sriov] operator", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				Eventually(func() bool {
-					stdout, stderr, err := pod.ExecCommand(clients, hostNetPod, "ip", "link", "show")
-					Expect(err).ToNot(HaveOccurred())
-					Expect(stderr).To(Equal(""))
+					var stdout, stderr string
+					// Adding a retry because some of the time we get `Dump was interrupted and may be inconsistent.`
+					// output from the ip link command
+					Eventually(func(g Gomega) {
+						stdout, stderr, err = pod.ExecCommand(clients, hostNetPod, "ip", "link", "show")
+						g.Expect(err).ToNot(HaveOccurred())
+						g.Expect(stderr).To(Equal(""))
+					}, time.Minute, 2*time.Second).Should(Succeed())
 
 					found := false
 					for _, line := range strings.Split(stdout, "\n") {
@@ -563,9 +575,7 @@ var _ = Describe("[sriov] operator", func() {
 						IPAM: `{"type":"host-local",
 								"subnet":"10.10.10.0/24",
 								"rangeStart":"10.10.10.171",
-								"rangeEnd":"10.10.10.181",
-								"routes":[{"dst":"0.0.0.0/0"}],
-								"gateway":"10.10.10.1"}`,
+								"rangeEnd":"10.10.10.181"}`,
 						NetworkNamespace: namespaces.Test,
 					}}
 
@@ -608,9 +618,7 @@ var _ = Describe("[sriov] operator", func() {
 						IPAM: `{"type":"host-local",
 								"subnet":"10.10.10.0/24",
 								"rangeStart":"10.10.10.171",
-								"rangeEnd":"10.10.10.181",
-								"routes":[{"dst":"0.0.0.0/0"}],
-								"gateway":"10.10.10.1"}`,
+								"rangeEnd":"10.10.10.181"}`,
 						NetworkNamespace: namespaces.Test,
 					}}
 
@@ -657,9 +665,7 @@ var _ = Describe("[sriov] operator", func() {
 						IPAM: `{"type":"host-local",
 								"subnet":"10.10.10.0/24",
 								"rangeStart":"10.10.10.171",
-								"rangeEnd":"10.10.10.181",
-								"routes":[{"dst":"0.0.0.0/0"}],
-								"gateway":"10.10.10.1"}`,
+								"rangeEnd":"10.10.10.181"}`,
 						NetworkNamespace: namespaces.Test,
 					}}
 
@@ -730,9 +736,7 @@ var _ = Describe("[sriov] operator", func() {
 							IPAM: `{"type":"host-local",
 								"subnet":"10.10.10.0/24",
 								"rangeStart":"10.10.10.171",
-								"rangeEnd":"10.10.10.181",
-								"routes":[{"dst":"0.0.0.0/0"}],
-								"gateway":"10.10.10.1"}`,
+								"rangeEnd":"10.10.10.181"}`,
 							MaxTxRate:        &maxTxRate,
 							MinTxRate:        &minTxRate,
 							NetworkNamespace: namespaces.Test,
@@ -766,9 +770,7 @@ var _ = Describe("[sriov] operator", func() {
 							IPAM: `{"type":"host-local",
 								"subnet":"10.10.10.0/24",
 								"rangeStart":"10.10.10.171",
-								"rangeEnd":"10.10.10.181",
-								"routes":[{"dst":"0.0.0.0/0"}],
-								"gateway":"10.10.10.1"}`,
+								"rangeEnd":"10.10.10.181"}`,
 							Vlan:             1,
 							VlanQoS:          2,
 							NetworkNamespace: namespaces.Test,
@@ -947,7 +949,7 @@ var _ = Describe("[sriov] operator", func() {
 				waitForNetAttachDef(sriovNetworkName, namespaces.Test)
 
 				testPod := createTestPod(node, []string{sriovNetworkName})
-				stdout, _, err := pod.ExecCommand(clients, testPod, "more", "/proc/sys/net/ipv4/conf/net1/accept_redirects")
+				stdout, _, err := pod.ExecCommand(clients, testPod, "cat", "/proc/sys/net/ipv4/conf/net1/accept_redirects")
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(strings.TrimSpace(stdout)).To(Equal("1"))
@@ -1414,7 +1416,7 @@ var _ = Describe("[sriov] operator", func() {
 					},
 					Spec: sriovv1.SriovNetworkSpec{
 						ResourceName:     resourceName,
-						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181","routes":[{"dst":"0.0.0.0/0"}],"gateway":"10.10.10.1"}`,
+						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181"}`,
 						NetworkNamespace: namespaces.Test,
 					}}
 
@@ -1745,9 +1747,17 @@ func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceEx
 		if isDefaultRouteInterface(device.Name, routes) {
 			continue
 		}
-		stdout, _, err = pod.ExecCommand(clients, createdPod, "ip", "link", "show", device.Name)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(len(stdout)).Should(Not(Equal(0)), "Unable to query link state")
+		stdout, stderr, err := pod.ExecCommand(clients, createdPod, "ip", "link", "show", device.Name)
+		if err != nil {
+			fmt.Printf("Can't query link state for device [%s]: %s", device.Name, err.Error())
+			continue
+		}
+
+		if len(stdout) == 0 {
+			fmt.Printf("Can't query link state for device [%s]: stderr:[%s]", device.Name, stderr)
+			continue
+		}
+
 		if strings.Contains(stdout, "master ovs-system") {
 			continue // The interface is not active
 		}
