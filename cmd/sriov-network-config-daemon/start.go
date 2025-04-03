@@ -240,7 +240,6 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	config.Timeout = 5 * time.Second
 	writerclient := snclientset.NewForConfigOrDie(config)
 
 	eventRecorder := daemon.NewEventRecorder(writerclient, kubeclient)
