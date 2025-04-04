@@ -84,7 +84,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("default SriovOperatorConfig object not found. waiting for creation.")
-			return reconcile.Result{}, err
+			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
 		logger.Error(err, "Failed to get default SriovOperatorConfig object")
