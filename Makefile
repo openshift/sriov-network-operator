@@ -228,7 +228,7 @@ test-bindata-scripts: fakechroot
 	fakechroot ./test/scripts/kargs_test.sh
 
 test-%: generate manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test `go list ./$*/... | grep -v "/mock"` -coverprofile cover-$*-$(CLUSTER_TYPE).out -coverpkg ./... -v
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test `go list ./$*/... | grep -v "/mock" | grep -v "/pkg/client"` -coverprofile cover-$*-$(CLUSTER_TYPE).out -coverpkg ./... -v
 
 GOCOVMERGE = $(BIN_DIR)/gocovmerge
 gocovmerge: ## Download gocovmerge locally if necessary.

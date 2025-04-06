@@ -96,7 +96,6 @@ const (
 func NewK8sPlugin(helper helper.HostHelpersInterface) (plugins.VendorPlugin, error) {
 	k8sPluging := &K8sPlugin{
 		PluginName:   PluginName,
-		SpecVersion:  "1.0",
 		hostHelper:   helper,
 		updateTarget: &k8sUpdateTarget{},
 	}
@@ -107,11 +106,6 @@ func NewK8sPlugin(helper helper.HostHelpersInterface) (plugins.VendorPlugin, err
 // Name returns the name of the plugin
 func (p *K8sPlugin) Name() string {
 	return p.PluginName
-}
-
-// Spec returns the version of the spec expected by the plugin
-func (p *K8sPlugin) Spec() string {
-	return p.SpecVersion
 }
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	configv1 "github.com/openshift/api/config/v1"
 	mcv1 "github.com/openshift/api/machineconfiguration/v1"
 	mcoconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
 
@@ -27,6 +29,8 @@ const (
 	OpenshiftFlavorHypershift OpenshiftFlavor = "hypershift"
 	// OpenshiftFlavorDefault covers all remaining flavors of openshift not explicitly called out above
 	OpenshiftFlavorDefault OpenshiftFlavor = "default"
+	// default Infrastructure resource name for Openshift
+	infraResourceName = "cluster"
 )
 
 //go:generate ../../../bin/mockgen -destination mock/mock_openshift.go -source openshift.go
@@ -74,7 +78,7 @@ func New() (OpenshiftContextInterface, error) {
 		return nil, err
 	}
 
-	isHypershift, err := utils.IsExternalControlPlaneCluster(infraClient)
+	isHypershift, err := isExternalControlPlaneCluster(infraClient)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +141,8 @@ func (c *openshiftContext) OpenshiftBeforeDrainNode(ctx context.Context, node *c
 		if !mcp.Spec.Paused {
 			// if the machine config pool needs to update then we return false
 			// if they are equal we can pause the pool
-			if mcp.Spec.Configuration.Name != mcp.Status.Configuration.Name {
+			if mcp.Spec.Configuration.Name == "" || mcp.Status.Configuration.Name == "" ||
+				mcp.Spec.Configuration.Name != mcp.Status.Configuration.Name {
 				return false, err
 			} else {
 				err = c.ChangeMachineConfigPoolPause(ctx, mcp, true)
@@ -285,17 +290,27 @@ func (c *openshiftContext) OpenshiftAfterCompleteDrainNode(ctx context.Context, 
 }
 
 func (c *openshiftContext) GetNodeMachinePoolName(ctx context.Context, node *corev1.Node) (string, error) {
+	// if it's not an openshift cluster we return error
+	if !c.IsOpenshiftCluster() {
+		return "", fmt.Errorf("not an openshift cluster")
+	}
+
+	// hyperShift cluster don't have machine config
+	if c.IsHypershift() {
+		return "", fmt.Errorf("hypershift doesn't have machineConfig")
+	}
+
 	desiredConfig, ok := node.Annotations[mcoconsts.DesiredMachineConfigAnnotationKey]
 	if !ok {
 		log.Log.Error(nil, "getNodeMachinePool(): Failed to find the the desiredConfig Annotation")
-		return "", fmt.Errorf("getNodeMachinePool(): Failed to find the the desiredConfig Annotation")
+		return "", fmt.Errorf("failed to find the the desiredConfig Annotation")
 	}
 
 	mc := &mcv1.MachineConfig{}
 	err := c.kubeClient.Get(ctx, client.ObjectKey{Name: desiredConfig}, mc)
 	if err != nil {
 		log.Log.Error(err, "getNodeMachinePool(): Failed to get the desired Machine Config")
-		return "", err
+		return "", fmt.Errorf("failed to get the desired Machine Config: %v", err)
 	}
 	for _, owner := range mc.OwnerReferences {
 		if owner.Kind == "MachineConfigPool" {
@@ -304,7 +319,7 @@ func (c *openshiftContext) GetNodeMachinePoolName(ctx context.Context, node *cor
 	}
 
 	log.Log.Error(nil, "getNodeMachinePool(): Failed to find the MCP of the node")
-	return "", fmt.Errorf("getNodeMachinePool(): Failed to find the MCP of the node")
+	return "", fmt.Errorf("failed to find the MCP of the node")
 }
 
 func (c *openshiftContext) ChangeMachineConfigPoolPause(ctx context.Context, mcp *mcv1.MachineConfigPool, pause bool) error {
@@ -318,4 +333,24 @@ func (c *openshiftContext) ChangeMachineConfigPoolPause(ctx context.Context, mcp
 	}
 
 	return nil
+}
+
+// IsExternalControlPlaneCluster detects control plane location of the cluster.
+// On OpenShift, the control plane topology is configured in configv1.Infrastucture struct.
+// On kubernetes, it is determined by which node the sriov operator is scheduled on. If operator
+// pod is schedule on worker node, it is considered as external control plane.
+func isExternalControlPlaneCluster(c client.Client) (bool, error) {
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelFunc()
+
+	infra := &configv1.Infrastructure{}
+	err := c.Get(ctx, types.NamespacedName{Name: infraResourceName}, infra)
+	if err != nil {
+		return false, fmt.Errorf("openshiftControlPlaneTopologyStatus(): Failed to get Infrastructure (name: %s): %w", infraResourceName, err)
+	}
+
+	if infra.Status.ControlPlaneTopology == "External" {
+		return true, nil
+	}
+	return false, nil
 }
