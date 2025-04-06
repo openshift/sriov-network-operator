@@ -49,7 +49,6 @@ type KargStateMapType map[string]bool
 
 type GenericPlugin struct {
 	PluginName              string
-	SpecVersion             string
 	DesireState             *sriovnetworkv1.SriovNetworkNodeState
 	DriverStateMap          DriverStateMapType
 	DesiredKernelArgs       KargStateMapType
@@ -128,7 +127,6 @@ func NewGenericPlugin(helpers helper.HostHelpersInterface, options ...Option) (p
 
 	return &GenericPlugin{
 		PluginName:              PluginName,
-		SpecVersion:             "1.0",
 		DriverStateMap:          driverStateMap,
 		DesiredKernelArgs:       desiredKernelArgs,
 		helpers:                 helpers,
@@ -140,11 +138,6 @@ func NewGenericPlugin(helpers helper.HostHelpersInterface, options ...Option) (p
 // Name returns the name of the plugin
 func (p *GenericPlugin) Name() string {
 	return p.PluginName
-}
-
-// Spec returns the version of the spec expected by the plugin
-func (p *GenericPlugin) Spec() string {
-	return p.SpecVersion
 }
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need drain and/or reboot node

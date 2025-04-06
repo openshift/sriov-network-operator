@@ -98,17 +98,3 @@ func (mr *MockVendorPluginMockRecorder) OnNodeStateChange(arg0 any) *gomock.Call
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnNodeStateChange", reflect.TypeOf((*MockVendorPlugin)(nil).OnNodeStateChange), arg0)
 }
-
-// Spec mocks base method.
-func (m *MockVendorPlugin) Spec() string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Spec")
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// Spec indicates an expected call of Spec.
-func (mr *MockVendorPluginMockRecorder) Spec() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Spec", reflect.TypeOf((*MockVendorPlugin)(nil).Spec))
-}

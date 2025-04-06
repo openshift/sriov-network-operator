@@ -7,10 +7,8 @@ import (
 
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	helperMocks "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
-	fakePlugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/fake"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -47,12 +45,8 @@ var _ = Describe("config daemon plugin loading tests", func() {
 			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgPciRealloc).Return(false).AnyTimes()
 			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaExclusive).Return(false).AnyTimes()
 			helperMock.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaShared).Return(false).AnyTimes()
-
-			// k8s plugin is ATM the only plugin which require mocking/faking, as its New method performs additional logic
-			// other than simple plugin struct initialization
-			K8sPlugin = func(_ helper.HostHelpersInterface) (plugin.VendorPlugin, error) {
-				return &fakePlugin.FakePlugin{PluginName: "k8s"}, nil
-			}
+			helperMock.EXPECT().ReadServiceInjectionManifestFile(gomock.Any()).Return(nil, nil).AnyTimes()
+			helperMock.EXPECT().ReadServiceManifestFile(gomock.Any()).Return(nil, nil).AnyTimes()
 		})
 
 		It("loads relevant plugins Baremetal platform, kubernetes cluster type", func() {
