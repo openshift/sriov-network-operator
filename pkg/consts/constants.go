@@ -151,8 +151,9 @@ const (
 	SriovSystemdSupportedNicPath  = SriovConfBasePath + "/sriov-supported-nics-ids.yaml"
 	SriovSystemdServiceBinaryPath = "/var/lib/sriov/sriov-network-config-daemon"
 
-	SriovServicePath            = "/etc/systemd/system/sriov-config.service"
-	SriovPostNetworkServicePath = "/etc/systemd/system/sriov-config-post-network.service"
+	SriovServiceBasePath        = "/etc/systemd/system"
+	SriovServicePath            = SriovServiceBasePath + "/sriov-config.service"
+	SriovPostNetworkServicePath = SriovServiceBasePath + "sriov-config-post-network.service"
 
 	// Feature gates
 	// ParallelNicConfigFeatureGate: allow to configure nics in parallel
