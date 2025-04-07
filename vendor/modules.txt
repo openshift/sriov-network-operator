@@ -25,8 +25,8 @@ github.com/StackExchange/wmi
 # github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559
 ## explicit
 github.com/ajeddeloh/go-json
-# github.com/aws/aws-sdk-go v1.45.20
-## explicit; go 1.11
+# github.com/aws/aws-sdk-go v1.55.5
+## explicit; go 1.19
 github.com/aws/aws-sdk-go/aws/arn
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
@@ -410,7 +410,7 @@ github.com/onsi/gomega/types
 # github.com/openshift-kni/k8sreporter v1.0.4
 ## explicit; go 1.20
 github.com/openshift-kni/k8sreporter
-# github.com/openshift/api v0.0.0-20250129172457-b1a9b9a2e7fe
+# github.com/openshift/api v0.0.0-20250227152946-1ee1ef831100
 ## explicit; go 1.23.0
 github.com/openshift/api
 github.com/openshift/api/annotations
@@ -570,7 +570,7 @@ github.com/openshift/library-go/pkg/operator/resource/resourcemerge
 github.com/openshift/library-go/pkg/operator/resource/resourceread
 github.com/openshift/library-go/pkg/operator/resourcesynccontroller
 github.com/openshift/library-go/pkg/operator/v1helpers
-# github.com/openshift/machine-config-operator v0.0.1-0.20250304041132-19ba3dda6e7a
+# github.com/openshift/machine-config-operator v0.0.1-0.20250320230514-53e78f3692ee
 ## explicit; go 1.23.0
 github.com/openshift/machine-config-operator/internal/clients
 github.com/openshift/machine-config-operator/pkg/apihelpers
@@ -655,8 +655,8 @@ github.com/shopspring/decimal
 github.com/spf13/afero
 github.com/spf13/afero/internal/common
 github.com/spf13/afero/mem
-# github.com/spf13/cast v1.5.1
-## explicit; go 1.18
+# github.com/spf13/cast v1.7.0
+## explicit; go 1.19
 github.com/spf13/cast
 # github.com/spf13/cobra v1.8.1
 ## explicit; go 1.15
@@ -688,14 +688,14 @@ github.com/x448/float16
 # github.com/xlab/treeprint v1.2.0
 ## explicit; go 1.13
 github.com/xlab/treeprint
-# go.opentelemetry.io/otel v1.29.0
-## explicit; go 1.21
+# go.opentelemetry.io/otel v1.31.0
+## explicit; go 1.22
 go.opentelemetry.io/otel/attribute
 go.opentelemetry.io/otel/codes
 go.opentelemetry.io/otel/internal
 go.opentelemetry.io/otel/internal/attribute
-# go.opentelemetry.io/otel/trace v1.29.0
-## explicit; go 1.21
+# go.opentelemetry.io/otel/trace v1.31.0
+## explicit; go 1.22
 go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
 # go.uber.org/mock v0.5.0
@@ -815,11 +815,11 @@ golang.org/x/tools/internal/versions
 # gomodules.xyz/jsonpatch/v2 v2.4.0
 ## explicit; go 1.20
 gomodules.xyz/jsonpatch/v2
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1
-## explicit; go 1.21
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20250102185135-69823020774d
+## explicit; go 1.22
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.66.2
-## explicit; go 1.21
+# google.golang.org/grpc v1.69.4
+## explicit; go 1.22
 google.golang.org/grpc
 google.golang.org/grpc/attributes
 google.golang.org/grpc/backoff
@@ -827,6 +827,8 @@ google.golang.org/grpc/balancer
 google.golang.org/grpc/balancer/base
 google.golang.org/grpc/balancer/grpclb/state
 google.golang.org/grpc/balancer/pickfirst
+google.golang.org/grpc/balancer/pickfirst/internal
+google.golang.org/grpc/balancer/pickfirst/pickfirstleaf
 google.golang.org/grpc/balancer/roundrobin
 google.golang.org/grpc/binarylog/grpc_binarylog_v1
 google.golang.org/grpc/channelz

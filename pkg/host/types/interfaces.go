@@ -212,7 +212,7 @@ type SystemdInterface interface {
 	ReadConfFile() (spec *SriovConfig, err error)
 	WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (bool, error)
 	WriteSriovResult(result *SriovResult) error
-	ReadSriovResult() (*SriovResult, bool, error)
+	ReadSriovResult() (*SriovResult, error)
 	RemoveSriovResult() error
 	WriteSriovSupportedNics() error
 	ReadSriovSupportedNics() ([]string, error)

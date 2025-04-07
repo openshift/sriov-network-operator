@@ -16,9 +16,8 @@ import (
 var PluginName = "mellanox"
 
 type MellanoxPlugin struct {
-	PluginName  string
-	SpecVersion string
-	helpers     helper.HostHelpersInterface
+	PluginName string
+	helpers    helper.HostHelpersInterface
 }
 
 var pciAddressesToReset []string
@@ -31,20 +30,14 @@ func NewMellanoxPlugin(helpers helper.HostHelpersInterface) (plugin.VendorPlugin
 	mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}
 
 	return &MellanoxPlugin{
-		PluginName:  PluginName,
-		SpecVersion: "1.0",
-		helpers:     helpers,
+		PluginName: PluginName,
+		helpers:    helpers,
 	}, nil
 }
 
 // Name returns the name of the plugin
 func (p *MellanoxPlugin) Name() string {
 	return p.PluginName
-}
-
-// SpecVersion returns the version of the spec expected by the plugin
-func (p *MellanoxPlugin) Spec() string {
-	return p.SpecVersion
 }
 
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node

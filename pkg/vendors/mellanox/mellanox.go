@@ -40,7 +40,7 @@ const (
 	DeviceBF3      = "a2dc"
 
 	PreconfiguredLinkType = "Preconfigured"
-	UknownLinkType        = "Uknown"
+	UnknownLinkType       = "Unknown"
 	TotalVfs              = "NUM_OF_VFS"
 	EnableSriov           = "SRIOV_EN"
 	LinkTypeP1            = "LINK_TYPE_P1"
@@ -242,22 +242,6 @@ func ParseMstconfigOutput(mstOutput string, attributes []string) (fwCurrent, fwN
 	return
 }
 
-func HasMellanoxInterfacesInSpec(ifaceStatuses sriovnetworkv1.InterfaceExts, ifaceSpecs sriovnetworkv1.Interfaces) bool {
-	for _, ifaceStatus := range ifaceStatuses {
-		if ifaceStatus.Vendor == VendorMellanox {
-			for _, iface := range ifaceSpecs {
-				if iface.PciAddress == ifaceStatus.PciAddress {
-					log.Log.V(2).Info("hasMellanoxInterfacesInSpec(): Mellanox device specified in SriovNetworkNodeState spec",
-						"name", ifaceStatus.Name,
-						"address", ifaceStatus.PciAddress)
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
 func GetPciAddressPrefix(pciAddress string) string {
 	return pciAddress[:len(pciAddress)-1]
 }
@@ -272,7 +256,7 @@ func IsDualPort(pciAddress string, mellanoxNicsStatus map[string]map[string]srio
 func HandleTotalVfs(fwCurrent, fwNext, attrs *MlxNic, ifaceSpec sriovnetworkv1.Interface, isDualPort bool, mellanoxNicsSpec map[string]sriovnetworkv1.Interface) (
 	totalVfs int, needReboot, changeWithoutReboot bool) {
 	totalVfs = ifaceSpec.NumVfs
-	// Check if the other port is changing theGetMlnxNicFwData number of VF
+	// Check if the other port is changing the number of VF
 	if isDualPort {
 		otherIfaceSpec := getOtherPortSpec(ifaceSpec.PciAddress, mellanoxNicsSpec)
 		if otherIfaceSpec != nil {
@@ -401,7 +385,7 @@ func getLinkType(linkType string) string {
 	} else if len(linkType) > 0 {
 		log.Log.Error(nil, "mellanox-plugin getLinkType(): link type is not one of [ETH, IB], treating as unknown",
 			"link-type", linkType)
-		return UknownLinkType
+		return UnknownLinkType
 	} else {
 		log.Log.Info("mellanox-plugin getLinkType(): LINK_TYPE_P* attribute was not found, treating as preconfigured link type")
 		return PreconfiguredLinkType
@@ -415,7 +399,7 @@ func isLinkTypeRequireChange(iface sriovnetworkv1.Interface, ifaceStatus sriovne
 			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Not supported link type: %s,"+
 				" supported link types: [eth, ETH, ib, and IB]", iface.LinkType)
 		}
-		if fwLinkType == UknownLinkType {
+		if fwLinkType == UnknownLinkType {
 			return false, fmt.Errorf("mellanox-plugin OnNodeStateChange(): Unknown link type: %s", fwLinkType)
 		}
 		if fwLinkType == PreconfiguredLinkType {

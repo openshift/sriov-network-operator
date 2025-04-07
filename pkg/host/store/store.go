@@ -47,7 +47,7 @@ func createOperatorConfigFolderIfNeeded() error {
 	_, err := os.Stat(SriovConfBasePathUse)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = os.MkdirAll(SriovConfBasePathUse, os.ModeDir)
+			err = os.MkdirAll(SriovConfBasePathUse, 0777)
 			if err != nil {
 				return fmt.Errorf("failed to create the sriov config folder on host in path %s: %v", SriovConfBasePathUse, err)
 			}
@@ -60,7 +60,7 @@ func createOperatorConfigFolderIfNeeded() error {
 	_, err = os.Stat(PfAppliedConfigUse)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = os.MkdirAll(PfAppliedConfigUse, os.ModeDir)
+			err = os.MkdirAll(PfAppliedConfigUse, 0777)
 			if err != nil {
 				return fmt.Errorf("failed to create the pci folder on host in path %s: %v", PfAppliedConfigUse, err)
 			}
@@ -89,7 +89,7 @@ func (s *manager) ClearPCIAddressFolder() error {
 		return fmt.Errorf("failed to remove the PCI address folder on path %s: %v", PfAppliedConfigUse, err)
 	}
 
-	err = os.Mkdir(PfAppliedConfigUse, os.ModeDir)
+	err = os.Mkdir(PfAppliedConfigUse, 0777)
 	if err != nil {
 		return fmt.Errorf("failed to create the pci folder on host in path %s: %v", PfAppliedConfigUse, err)
 	}

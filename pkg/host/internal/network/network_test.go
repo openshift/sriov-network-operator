@@ -2,14 +2,16 @@ package network
 
 import (
 	"fmt"
+	"net"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netlink/nl"
-
 	"go.uber.org/mock/gomock"
 
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	hostMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
 	dputilsMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils/mock"
 	ethtoolMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/ethtool/mock"
@@ -51,6 +53,27 @@ var _ = Describe("Network", func() {
 
 	AfterEach(func() {
 		testCtrl.Finish()
+	})
+	Context("TryToGetVirtualInterfaceName", func() {
+		It("should get the interface name if attached to kernel interface", func() {
+			dputilsLibMock.EXPECT().GetNetNames("0000:d8:00.0").Return([]string{"eno1"}, nil)
+			name := n.TryToGetVirtualInterfaceName("0000:d8:00.0")
+			Expect(name).To(Equal("eno1"))
+		})
+		It("should get the virtio interface name via sysfs", func() {
+			dputilsLibMock.EXPECT().GetNetNames("0000:d8:00.0").Return([]string{""}, nil)
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{
+					"/sys/bus/pci/devices/0000:d8:00.0/virtio-1/net",
+					"/sys/bus/pci/devices/0000:d8:00.0/virtio-2/net"},
+				Files: map[string][]byte{
+					"/sys/bus/pci/devices/0000:d8:00.0/virtio-1/net/eno1": []byte(""),
+				},
+			})
+
+			name := n.TryToGetVirtualInterfaceName("0000:d8:00.0")
+			Expect(name).To(Equal("eno1"))
+		})
 	})
 	Context("GetDevlinkDeviceParam", func() {
 		It("get - string", func() {
@@ -292,6 +315,132 @@ var _ = Describe("Network", func() {
 			Expect(pci).To(Equal("shared"))
 		})
 	})
+	Context("GetPhysPortName", func() {
+		It("should return error if phys_port_name doesn't exist", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{
+					"/sys/class/net/eno1"},
+			})
+			name, err := n.GetPhysPortName("eno1")
+			Expect(err).To(HaveOccurred())
+			Expect(name).To(BeEmpty())
+		})
+		It("should return the empty and no error if the file content is empty", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{
+					"/sys/class/net/eno1"},
+				Files: map[string][]byte{
+					"/sys/class/net/eno1/phys_port_name": []byte(""),
+				},
+			})
+			name, err := n.GetPhysPortName("eno1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(name).To(BeEmpty())
+		})
+		It("should return the physical port name without spaces", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{
+					"/sys/class/net/eno1"},
+				Files: map[string][]byte{
+					"/sys/class/net/eno1/phys_port_name": []byte("eno1p "),
+				},
+			})
+			name, err := n.GetPhysPortName("eno1")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(name).To(Equal("eno1p"))
+		})
+	})
+	Context("GetNetdevMTU", func() {
+		It("should return 0 if not able to get interface name", func() {
+			dputilsLibMock.EXPECT().GetNetNames("0000:d8:00.0").Return([]string{""}, fmt.Errorf("failed to get interface name"))
+			mtu := n.GetNetdevMTU("0000:d8:00.0")
+			Expect(mtu).To(Equal(0))
+		})
+		It("should return 0 if not able to get interface by name", func() {
+			dputilsLibMock.EXPECT().GetNetNames("0000:d8:00.0").Return([]string{"eno1"}, nil)
+			netlinkLibMock.EXPECT().LinkByName("eno1").Return(nil, fmt.Errorf("failed to get interface"))
+			mtu := n.GetNetdevMTU("0000:d8:00.0")
+			Expect(mtu).To(Equal(0))
+		})
+		It("should return mtu for interface", func() {
+			dputilsLibMock.EXPECT().GetNetNames("0000:d8:00.0").Return([]string{"eno1"}, nil)
+			link := &netlink.GenericLink{LinkType: "PF", LinkAttrs: netlink.LinkAttrs{Name: "eno1", MTU: 1500}}
+			netlinkLibMock.EXPECT().LinkByName("eno1").Return(link, nil)
+			mtu := n.GetNetdevMTU("0000:d8:00.0")
+			Expect(mtu).To(Equal(1500))
+		})
+	})
+	Context("SetNetdevMTU", func() {
+		It("should return no error without configuring for mtu lower or equal to 0", func() {
+			err := n.SetNetdevMTU("0000:d8:00.0", 0)
+			Expect(err).ToNot(HaveOccurred())
+		})
+		It("should be able to configure mtu on a nic", func() {
+			dputilsLibMock.EXPECT().GetNetNames("0000:d8:00.0").Return([]string{"eno1"}, nil)
+			link := &netlink.GenericLink{LinkType: "PF", LinkAttrs: netlink.LinkAttrs{Name: "eno1"}}
+			netlinkLibMock.EXPECT().LinkByName("eno1").Return(link, nil)
+			netlinkLibMock.EXPECT().LinkSetMTU(link, 1500).Return(nil)
+			err := n.SetNetdevMTU("0000:d8:00.0", 1500)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+	Context("GetNetDevMac", func() {
+		It("should return empty mac address if not able to get interface by link", func() {
+			netlinkLibMock.EXPECT().LinkByName("eno1").Return(nil, fmt.Errorf("failed to find intreface"))
+			mac := n.GetNetDevMac("eno1")
+			Expect(mac).To(BeEmpty())
+		})
+		It("should return interface mac address", func() {
+			link := &netlink.GenericLink{LinkType: "PF", LinkAttrs: netlink.LinkAttrs{Name: "eno1", HardwareAddr: net.HardwareAddr{0x00, 0x00, 0x5e, 0x00, 0x53, 0x01}}}
+			netlinkLibMock.EXPECT().LinkByName("eno1").Return(link, nil)
+			mac := n.GetNetDevMac("eno1")
+			Expect(mac).To(Equal("00:00:5e:00:53:01"))
+		})
+	})
+	Context("GetNetDevLinkSpeed", func() {
+		It("should return empty string if the speed file doesn't exist", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{
+					"/sys/class/net/eno1"},
+			})
+			Expect(n.GetNetDevLinkSpeed("eno1")).To(BeEmpty())
+		})
+		It("should return the interface speed from sysfs", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{
+					"/sys/class/net/eno1"},
+				Files: map[string][]byte{
+					"/sys/class/net/eno1/speed": []byte("1000"),
+				},
+			})
+			Expect(n.GetNetDevLinkSpeed("eno1")).To(Equal("1000 Mb/s"))
+		})
+	})
+	Context("GetNetDevLinkAdminState", func() {
+		It("should return empty state if device name is empty", func() {
+			state := n.GetNetDevLinkAdminState("")
+			Expect(state).To(BeEmpty())
+		})
+		It("should return empty state if not able to get interface by name", func() {
+			netlinkLibMock.EXPECT().LinkByName("eno1").Return(nil, fmt.Errorf("failed to find intreface"))
+			state := n.GetNetDevLinkAdminState("eno1")
+			Expect(state).To(BeEmpty())
+		})
+		It("should return link up", func() {
+			link := &netlink.GenericLink{LinkType: "PF", LinkAttrs: netlink.LinkAttrs{Name: "eno1"}}
+			netlinkLibMock.EXPECT().LinkByName("eno1").Return(link, nil)
+			netlinkLibMock.EXPECT().IsLinkAdminStateUp(link).Return(true)
+			state := n.GetNetDevLinkAdminState("eno1")
+			Expect(state).To(Equal(consts.LinkAdminStateUp))
+		})
+		It("should return link down", func() {
+			link := &netlink.GenericLink{LinkType: "PF", LinkAttrs: netlink.LinkAttrs{Name: "eno1"}}
+			netlinkLibMock.EXPECT().LinkByName("eno1").Return(link, nil)
+			netlinkLibMock.EXPECT().IsLinkAdminStateUp(link).Return(false)
+			state := n.GetNetDevLinkAdminState("eno1")
+			Expect(state).To(Equal(consts.LinkAdminStateDown))
+		})
+	})
 	Context("SetRDMASubsystem", func() {
 		It("Should set RDMA Subsystem shared mode", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
@@ -312,6 +461,24 @@ var _ = Describe("Network", func() {
 			})
 			Expect(n.SetRDMASubsystem("exclusive")).NotTo(HaveOccurred())
 			helpers.GinkgoAssertFileContentsEquals("/host/etc/modprobe.d/sriov_network_operator_modules_config.conf", "# This file is managed by sriov-network-operator do not edit.\noptions ib_core netns_mode=0\n")
+		})
+
+		It("should remove the ib_core file if the mode is empty", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/host/etc/modprobe.d"},
+				Files: map[string][]byte{
+					"/host/etc/modprobe.d/sriov_network_operator_modules_config.conf": {},
+				},
+			})
+			Expect(n.SetRDMASubsystem("")).NotTo(HaveOccurred())
+			helpers.GinkgoAssertFileDoesNotExist("/host/etc/modprobe.d/sriov_network_operator_modules_config.conf")
+		})
+
+		It("should not return error if the files doesn't exist", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/host/etc/modprobe.d"},
+			})
+			Expect(n.SetRDMASubsystem("")).NotTo(HaveOccurred())
 		})
 	})
 })

@@ -8,8 +8,6 @@ import (
 type VendorPlugin interface {
 	// Name returns the name of plugin
 	Name() string
-	// Spec returns the SpecVersion followed by plugin
-	Spec() string
 	// OnNodeStateChange is invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 	OnNodeStateChange(*sriovnetworkv1.SriovNetworkNodeState) (bool, bool, error)
 	// Apply config change

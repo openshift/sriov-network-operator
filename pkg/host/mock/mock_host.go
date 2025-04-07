@@ -798,13 +798,12 @@ func (mr *MockHostManagerInterfaceMockRecorder) ReadServiceManifestFile(path any
 }
 
 // ReadSriovResult mocks base method.
-func (m *MockHostManagerInterface) ReadSriovResult() (*types.SriovResult, bool, error) {
+func (m *MockHostManagerInterface) ReadSriovResult() (*types.SriovResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReadSriovResult")
 	ret0, _ := ret[0].(*types.SriovResult)
-	ret1, _ := ret[1].(bool)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // ReadSriovResult indicates an expected call of ReadSriovResult.

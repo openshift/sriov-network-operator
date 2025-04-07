@@ -24,9 +24,9 @@ require (
 	github.com/onsi/ginkgo/v2 v2.22.1
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift-kni/k8sreporter v1.0.4
-	github.com/openshift/api v0.0.0-20250129172457-b1a9b9a2e7fe
+	github.com/openshift/api v0.0.0-20250227152946-1ee1ef831100
 	github.com/openshift/client-go v0.0.0-20250125113824-8e1f0b8fa9a7
-	github.com/openshift/machine-config-operator v0.0.1-0.20250304041132-19ba3dda6e7a
+	github.com/openshift/machine-config-operator v0.0.1-0.20250320230514-53e78f3692ee
 	github.com/ovn-org/libovsdb v0.6.1-0.20240125124854-03f787b1a892
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.74.0
@@ -62,7 +62,7 @@ require (
 	github.com/Mellanox/sriovnet v1.0.3 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/ajeddeloh/go-json v0.0.0-20200220154158-5ae607161559 // indirect
-	github.com/aws/aws-sdk-go v1.45.20 // indirect
+	github.com/aws/aws-sdk-go v1.55.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
@@ -137,14 +137,14 @@ require (
 	github.com/samber/lo v1.47.0 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
-	github.com/spf13/cast v1.5.1 // indirect
+	github.com/spf13/cast v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/vincent-petithory/dataurl v1.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
-	go.opentelemetry.io/otel v1.29.0 // indirect
-	go.opentelemetry.io/otel/trace v1.29.0 // indirect
+	go.opentelemetry.io/otel v1.31.0 // indirect
+	go.opentelemetry.io/otel/trace v1.31.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go4.org v0.0.0-20200104003542-c7e774b10ea0 // indirect
 	golang.org/x/crypto v0.32.0 // indirect
@@ -157,8 +157,8 @@ require (
 	golang.org/x/time v0.9.0 // indirect
 	golang.org/x/tools v0.29.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/grpc v1.66.2 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250102185135-69823020774d // indirect
+	google.golang.org/grpc v1.69.4 // indirect
 	google.golang.org/protobuf v1.36.4 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
