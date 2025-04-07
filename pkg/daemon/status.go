@@ -25,7 +25,7 @@ func (dn *NodeReconciler) updateSyncState(ctx context.Context, desiredNodeState 
 	desiredNodeState.Status.LastSyncError = failedMessage
 
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := dn.client.Get(ctx, client.ObjectKey{desiredNodeState.Namespace, desiredNodeState.Name}, currentNodeState); err != nil {
+		if err := dn.client.Get(ctx, client.ObjectKey{Namespace: desiredNodeState.Namespace, Name: desiredNodeState.Name}, currentNodeState); err != nil {
 			funcLog.Error(err, "failed to get latest node state",
 				"SyncStatus", status,
 				"LastSyncError", failedMessage)

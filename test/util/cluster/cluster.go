@@ -58,7 +58,8 @@ const NodeAndDeviceNameFilterEnvVar string = "SRIOV_NODE_AND_DEVICE_NAME_FILTER"
 
 // DiscoverSriov retrieves Sriov related information of a given cluster.
 func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*EnabledNodes, error) {
-	nodeStates, err := clients.SriovNetworkNodeStates(operatorNamespace).List(context.Background(), metav1.ListOptions{})
+	nodeStates := &sriovv1.SriovNetworkNodeStateList{}
+	err := clients.List(context.Background(), nodeStates, &runtimeclient.ListOptions{Namespace: operatorNamespace})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve note states %v", err)
 	}
@@ -268,7 +269,8 @@ func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.Interfa
 
 // SriovStable tells if all the node states are in sync (and the cluster is ready for another round of tests)
 func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool, error) {
-	nodeStates, err := clients.SriovNetworkNodeStates(operatorNamespace).List(context.Background(), metav1.ListOptions{})
+	nodeStates := &sriovv1.SriovNetworkNodeStateList{}
+	err := clients.List(context.Background(), nodeStates, &runtimeclient.ListOptions{Namespace: operatorNamespace})
 	switch err {
 	case io.ErrUnexpectedEOF:
 		return false, err
