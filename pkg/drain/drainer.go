@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/drain"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
@@ -58,8 +58,8 @@ func NewDrainer(platformHelpers platforms.Interface) (DrainInterface, error) {
 // if fullNodeDrain true all the pods on the system will get drained
 // for openshift system we also pause the machine config pool this machine is part of it
 func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrain, singleNode bool) (bool, error) {
-	reqLogger := log.FromContext(ctx).WithValues("drain node", node.Name)
-	reqLogger.Info("drainNode(): Node drain requested", "node", node.Name)
+	reqLogger := ctx.Value("logger").(logr.Logger).WithName("drainNode")
+	reqLogger.Info("Node drain requested")
 
 	completed, err := d.platformHelpers.OpenshiftBeforeDrainNode(ctx, node)
 	if err != nil {
@@ -117,8 +117,7 @@ func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrai
 // for openshift system we also remove the pause from the machine config pool this node is part of
 // only if we are the last draining node on that pool
 func (d *Drainer) CompleteDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
-	logger := log.FromContext(ctx).WithValues("complete node drain", node.Name)
-	logger.Info("CompleteDrainNode:()")
+	logger := ctx.Value("logger").(logr.Logger).WithName("CompleteDrainNode")
 
 	// Create drain helper object
 	// full drain is not important here
@@ -146,7 +145,8 @@ func (d *Drainer) CompleteDrainNode(ctx context.Context, node *corev1.Node) (boo
 // if fullDrain is false we only remove pods that have the resourcePrefix
 // if not we remove all the pods in the node
 func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, fullDrain bool) *drain.Helper {
-	logger := log.FromContext(ctx)
+	logger := ctx.Value("logger").(logr.Logger).WithName("createDrainHelper")
+
 	drainer := &drain.Helper{
 		Client:              kubeClient,
 		Force:               true,
@@ -154,16 +154,24 @@ func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, ful
 		DeleteEmptyDirData:  true,
 		GracePeriodSeconds:  -1,
 		Timeout:             DrainTimeOut,
-		OnPodDeletedOrEvicted: func(pod *corev1.Pod, usingEviction bool) {
+		OnPodDeletionOrEvictionFinished: func(pod *corev1.Pod, usingEviction bool, err error) {
+			if err != nil {
+				verbStr := constants.DrainDelete
+				if usingEviction {
+					verbStr = constants.DrainEvict
+				}
+				logger.Error(err, fmt.Sprintf("failed to %s pod %s/%s from node", verbStr, pod.Namespace, pod.Name))
+				return
+			}
 			verbStr := constants.DrainDeleted
 			if usingEviction {
 				verbStr = constants.DrainEvicted
 			}
-			log.Log.Info(fmt.Sprintf("%s pod from Node %s/%s", verbStr, pod.Namespace, pod.Name))
+			logger.Info(fmt.Sprintf("%s pod %s/%s from node", verbStr, pod.Namespace, pod.Name))
 		},
 		Ctx:    ctx,
-		Out:    writer{logger.Info},
-		ErrOut: writer{func(msg string, kv ...interface{}) { logger.Error(nil, msg, kv...) }},
+		Out:    writer{func(msg string, kv ...interface{}) { logger.Info(strings.ReplaceAll(msg, "\n", "")) }},
+		ErrOut: writer{func(msg string, kv ...interface{}) { logger.Error(nil, strings.ReplaceAll(msg, "\n", ""), kv...) }},
 	}
 
 	// when we just want to drain and not reboot we can only remove the pods using sriov devices

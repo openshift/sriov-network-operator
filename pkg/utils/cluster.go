@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,11 +32,19 @@ func AnnotateObject(ctx context.Context, obj client.Object, key, value string, c
 	}
 
 	if obj.GetAnnotations()[key] != value {
-		log.Log.V(2).Info("AnnotateObject(): Annotate object",
-			"objectName", obj.GetName(),
-			"objectKind", obj.GetObjectKind(),
-			"annotationKey", key,
-			"annotationValue", value)
+		logger, ok := ctx.Value("logger").(logr.Logger)
+		if !ok {
+			log.Log.Info("Annotate object",
+				"name", obj.GetName(),
+				"key", key,
+				"value", value)
+		} else {
+			logger.Info("Annotate object",
+				"name", obj.GetName(),
+				"key", key,
+				"value", value)
+		}
+
 		obj.GetAnnotations()[key] = value
 		patch := client.MergeFrom(original)
 		err := c.Patch(ctx,
@@ -51,7 +60,7 @@ func AnnotateObject(ctx context.Context, obj client.Object, key, value string, c
 // AnnotateNode add annotation to a node
 func AnnotateNode(ctx context.Context, nodeName string, key, value string, c client.Client) error {
 	node := &corev1.Node{}
-	err := c.Get(context.TODO(), client.ObjectKey{Name: nodeName}, node)
+	err := c.Get(ctx, client.ObjectKey{Name: nodeName}, node)
 	if err != nil {
 		return err
 	}
