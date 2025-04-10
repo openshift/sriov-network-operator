@@ -11,7 +11,6 @@ import (
 
 var sriovInfos *cluster.EnabledNodes
 
-
 var _ = BeforeSuite(func() {
 	err := clean.All()
 	Expect(err).NotTo(HaveOccurred())

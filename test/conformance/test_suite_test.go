@@ -57,4 +57,3 @@ func TestTest(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	RunSpecs(t, "SRIOV Operator conformance tests")
 }
-
