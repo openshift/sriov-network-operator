@@ -254,6 +254,19 @@ func main() {
 		namespacedManagerErr <- mgr.Start(namespacedManagerCtx)
 	}()
 
+	shutdownClient, err := client.New(restConfig, client.Options{
+		Scheme: vars.Scheme,
+		Cache: &client.CacheOptions{
+			DisableFor: []client.Object{
+				&sriovnetworkv1.SriovNetwork{},
+			},
+		},
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create generic client for shutdown process")
+		os.Exit(1)
+	}
+
 	select {
 	// Wait for a stop signal
 	case <-stopSignalCh.Done():
@@ -262,13 +275,13 @@ func main() {
 		namespacedManagerCancel()
 		<-globalManagerErr
 		<-namespacedManagerErr
-		utils.Shutdown()
+		utils.Shutdown(shutdownClient)
 
 	case err := <-globalManagerErr:
 		setupLog.Error(err, "Global Manager error")
 		namespacedManagerCancel()
 		<-namespacedManagerErr
-		utils.Shutdown()
+		utils.Shutdown(shutdownClient)
 
 		os.Exit(1)
 
@@ -276,7 +289,7 @@ func main() {
 		setupLog.Error(err, "Namsepaced Manager error")
 		globalManagerCancel()
 		<-globalManagerErr
-		utils.Shutdown()
+		utils.Shutdown(shutdownClient)
 
 		os.Exit(1)
 	}

@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -21,9 +20,9 @@ import (
 )
 
 func (dr *DrainReconcile) handleNodeIdleNodeStateDrainingOrCompleted(ctx context.Context,
-	reqLogger *logr.Logger,
 	node *corev1.Node,
 	nodeNetworkState *sriovnetworkv1.SriovNetworkNodeState) (ctrl.Result, error) {
+	reqLogger := ctx.Value("logger").(logr.Logger).WithName("handleNodeIdleNodeStateDrainingOrCompleted")
 	completed, err := dr.drainer.CompleteDrainNode(ctx, node)
 	if err != nil {
 		reqLogger.Error(err, "failed to complete drain on node")
@@ -61,11 +60,11 @@ func (dr *DrainReconcile) handleNodeIdleNodeStateDrainingOrCompleted(ctx context
 }
 
 func (dr *DrainReconcile) handleNodeDrainOrReboot(ctx context.Context,
-	reqLogger *logr.Logger,
 	node *corev1.Node,
 	nodeNetworkState *sriovnetworkv1.SriovNetworkNodeState,
 	nodeDrainAnnotation,
 	nodeStateDrainAnnotationCurrent string) (ctrl.Result, error) {
+	reqLogger := ctx.Value("logger").(logr.Logger).WithName("handleNodeDrainOrReboot")
 	// nothing to do here we need to wait for the node to move back to idle
 	if nodeStateDrainAnnotationCurrent == constants.DrainComplete {
 		reqLogger.Info("node requested a drain and nodeState is on drain completed nothing todo")
@@ -139,9 +138,7 @@ func (dr *DrainReconcile) handleNodeDrainOrReboot(ctx context.Context,
 }
 
 func (dr *DrainReconcile) tryDrainNode(ctx context.Context, node *corev1.Node) (*reconcile.Result, error) {
-	// configure logs
-	reqLogger := log.FromContext(ctx)
-	reqLogger.Info("checkForNodeDrain():")
+	reqLogger := ctx.Value("logger").(logr.Logger).WithName("tryDrainNode")
 
 	//critical section we need to check if we can start the draining
 	dr.drainCheckMutex.Lock()
@@ -169,7 +166,7 @@ func (dr *DrainReconcile) tryDrainNode(ctx context.Context, node *corev1.Node) (
 		err = dr.Get(ctx, client.ObjectKey{Name: nodeObj.GetName(), Namespace: vars.Namespace}, snns)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				reqLogger.V(2).Info("node doesn't have a sriovNetworkNodePolicy")
+				reqLogger.V(2).Info("node doesn't have a sriovNetworkNodeState, skipping")
 				continue
 			}
 			return nil, err
@@ -211,8 +208,7 @@ func (dr *DrainReconcile) tryDrainNode(ctx context.Context, node *corev1.Node) (
 }
 
 func (dr *DrainReconcile) findNodePoolConfig(ctx context.Context, node *corev1.Node) (*sriovnetworkv1.SriovNetworkPoolConfig, []corev1.Node, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("findNodePoolConfig():")
+	logger := ctx.Value("logger").(logr.Logger).WithName("findNodePoolConfig")
 	// get all the sriov network pool configs
 	npcl := &sriovnetworkv1.SriovNetworkPoolConfigList{}
 	err := dr.List(ctx, npcl)

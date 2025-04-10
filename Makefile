@@ -68,9 +68,6 @@ clean:
 	@rm -rf $(TARGET_DIR)
 	@rm -rf $(BIN_DIR)
 
-update-codegen:
-	hack/update-codegen.sh
-
 image: ; $(info Building images...)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE) -t $(IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)
 	$(IMAGE_BUILDER) build -f $(DOCKERFILE_CONFIG_DAEMON) -t $(CONFIG_DAEMON_IMAGE_TAG) $(CURPATH) $(IMAGE_BUILD_OPTS)

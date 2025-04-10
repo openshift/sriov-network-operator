@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -55,6 +56,7 @@ var _ = Describe("Openshift Package", Ordered, func() {
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
+		ctx = context.WithValue(ctx, "logger", log.FromContext(ctx))
 
 		op, err = openshift.New()
 		Expect(err).ToNot(HaveOccurred())
@@ -422,14 +424,14 @@ var _ = Describe("Openshift Package", Ordered, func() {
 
 				_, err = op.GetNodeMachinePoolName(ctx, n)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("failed to find the the desiredConfig Annotation"))
+				Expect(err.Error()).To(Equal("failed to find the the annotation [machineconfiguration.openshift.io/desiredConfig] on node [worker-0]"))
 			})
 
 			It("should return error if the name of the MC in the annotation doesn't exist", func() {
 				n := createNodeWithMCName("worker-0", "worker")
 				_, err = op.GetNodeMachinePoolName(ctx, n)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("failed to get the desired Machine Config: machineconfigs.machineconfiguration.openshift.io \"worker\" not found"))
+				Expect(err.Error()).To(Equal("failed to get the desired MachineConfig [worker] for node [worker-0]: machineconfigs.machineconfiguration.openshift.io \"worker\" not found"))
 			})
 
 			It("should return error if machine config pool doesn't exist in owner reference of machine config", func() {

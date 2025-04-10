@@ -3,7 +3,6 @@ package tests
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -23,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -53,12 +51,6 @@ const (
 	ipamIpv6                    = `{"type": "host-local","ranges": [[{"subnet": "3ffe:ffff:0:01ff::/64"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
 	ipamIpv4                    = `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
 )
-
-type patchBody struct {
-	Op    string `json:"op"`
-	Path  string `json:"path"`
-	Value string `json:"value"`
-}
 
 func init() {
 	waitingEnv := os.Getenv("SRIOV_WAITING_TIME")
@@ -830,13 +822,14 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				Expect(err).ToNot(HaveOccurred())
 				waitForNetAttachDef(sriovNetworkName, ns1)
 
-				body, _ := json.Marshal([]patchBody{{
-					Op:    "replace",
-					Path:  "/spec/networkNamespace",
-					Value: ns2,
-				}})
-				clients.SriovnetworkV1Interface.RESTClient().Patch(types.JSONPatchType).Namespace(operatorNamespace).Resource("sriovnetworks").Name(sriovNetworkName).Body(body).Do(context.Background())
+				srNetwork := &sriovv1.SriovNetwork{}
+				err = clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: sriovNetworkName}, srNetwork)
+				Expect(err).ToNot(HaveOccurred())
+				original := srNetwork.DeepCopy()
+				srNetwork.Spec.NetworkNamespace = ns2
 
+				err = clients.Patch(context.Background(), srNetwork, runtimeclient.MergeFrom(original))
+				Expect(err).ToNot(HaveOccurred())
 				waitForNetAttachDef(sriovNetworkName, ns2)
 
 				Consistently(func() error {
@@ -1096,7 +1089,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				By("waiting for the node state to be updated")
 				Eventually(func() sriovv1.Interfaces {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					nodeState := &sriovv1.SriovNetworkNodeState{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 					Expect(err).ToNot(HaveOccurred())
 					return nodeState.Spec.Interfaces
 				}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -1514,7 +1508,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 							if len(sriovDeviceList) == 0 {
 								return nil, false
 							}
-							nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+							nodeState := &sriovv1.SriovNetworkNodeState{}
+							err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 							Expect(err).ToNot(HaveOccurred())
 
 							for _, ifc := range nodeState.Spec.Interfaces {
@@ -1615,7 +1610,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				By("waiting for the mtu to be updated in the status")
 				Eventually(func() sriovv1.InterfaceExts {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					nodeState := &sriovv1.SriovNetworkNodeState{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 					Expect(err).ToNot(HaveOccurred())
 					return nodeState.Status.Interfaces
 				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -1629,7 +1625,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				By("waiting for the mtu to be restored")
 				Eventually(func() sriovv1.InterfaceExts {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					nodeState := &sriovv1.SriovNetworkNodeState{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 					Expect(err).ToNot(HaveOccurred())
 					return nodeState.Status.Interfaces
 				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -1650,7 +1647,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				By("waiting for the mtu to be updated in the status")
 				Eventually(func() sriovv1.InterfaceExts {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					nodeState := &sriovv1.SriovNetworkNodeState{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 					Expect(err).ToNot(HaveOccurred())
 					return nodeState.Status.Interfaces
 				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -1664,7 +1662,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				By("expecting the mtu to consistently stay at the new higher level")
 				Consistently(func() sriovv1.InterfaceExts {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					nodeState := &sriovv1.SriovNetworkNodeState{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 					Expect(err).ToNot(HaveOccurred())
 					return nodeState.Status.Interfaces
 				}, 3*time.Minute, 15*time.Second).Should(ContainElement(MatchFields(
@@ -1683,7 +1682,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				By("waiting for the mtu to be updated in the status")
 				Eventually(func() sriovv1.InterfaceExts {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					nodeState := &sriovv1.SriovNetworkNodeState{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 					Expect(err).ToNot(HaveOccurred())
 					return nodeState.Status.Interfaces
 				}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -1697,7 +1697,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				By("expecting the mtu to consistently stay at the original level")
 				Consistently(func() sriovv1.InterfaceExts {
-					nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+					nodeState := &sriovv1.SriovNetworkNodeState{}
+					err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 					Expect(err).ToNot(HaveOccurred())
 					return nodeState.Status.Interfaces
 				}, 3*time.Minute, 15*time.Second).Should(ContainElement(MatchFields(
@@ -1811,7 +1812,8 @@ func discoverResourceForMainSriov(nodes *cluster.EnabledNodes) (*sriovv1.Interfa
 			return nil, "", "", false
 		}
 
-		nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+		nodeState := &sriovv1.SriovNetworkNodeState{}
+		err = clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 		Expect(err).ToNot(HaveOccurred())
 		resourceName, ok := findSuitableResourceForMain(mainDevice, nodeState)
 		if ok {
@@ -2165,7 +2167,8 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 	}, 1*time.Minute, 5*time.Second).ShouldNot(HaveOccurred())
 
 	Eventually(func() sriovv1.Interfaces {
-		nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+		nodeState := &sriovv1.SriovNetworkNodeState{}
+		err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 		Expect(err).ToNot(HaveOccurred())
 		return nodeState.Spec.Interfaces
 	}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -2416,7 +2419,8 @@ func waitForPodRunning(p *corev1.Pod) *corev1.Pod {
 // assertNodeStateHasVFMatching asserts that the given node state has at least one VF matching the given fields
 func assertNodeStateHasVFMatching(nodeName string, fields Fields) {
 	EventuallyWithOffset(1, func(g Gomega) sriovv1.InterfaceExts {
-		nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), nodeName, metav1.GetOptions{})
+		nodeState := &sriovv1.SriovNetworkNodeState{}
+		err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: nodeName}, nodeState)
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(nodeState.Status.SyncStatus).To(Equal("Succeeded"))
 		return nodeState.Status.Interfaces

@@ -56,11 +56,11 @@ func (s *systemd) ReadConfFile() (spec *types.SriovConfig, err error) {
 func (s *systemd) WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	newFile := false
 	sriovConfig := &types.SriovConfig{
-		newState.Spec,
-		vars.DevMode,
-		vars.PlatformType,
-		vars.ManageSoftwareBridges,
-		vars.OVSDBSocketPath,
+		Spec:                  newState.Spec,
+		UnsupportedNics:       vars.DevMode,
+		PlatformType:          vars.PlatformType,
+		ManageSoftwareBridges: vars.ManageSoftwareBridges,
+		OVSDBSocketPath:       vars.OVSDBSocketPath,
 	}
 
 	_, err := os.Stat(utils.GetHostExtensionPath(consts.SriovSystemdConfigPath))

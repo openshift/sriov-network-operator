@@ -6,11 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	configv1 "github.com/openshift/api/config/v1"
 	mcv1 "github.com/openshift/api/machineconfiguration/v1"
@@ -302,15 +302,13 @@ func (c *openshiftContext) GetNodeMachinePoolName(ctx context.Context, node *cor
 
 	desiredConfig, ok := node.Annotations[mcoconsts.DesiredMachineConfigAnnotationKey]
 	if !ok {
-		log.Log.Error(nil, "getNodeMachinePool(): Failed to find the the desiredConfig Annotation")
-		return "", fmt.Errorf("failed to find the the desiredConfig Annotation")
+		return "", fmt.Errorf("failed to find the the annotation [%s] on node [%s]", mcoconsts.DesiredMachineConfigAnnotationKey, node.Name)
 	}
 
 	mc := &mcv1.MachineConfig{}
 	err := c.kubeClient.Get(ctx, client.ObjectKey{Name: desiredConfig}, mc)
 	if err != nil {
-		log.Log.Error(err, "getNodeMachinePool(): Failed to get the desired Machine Config")
-		return "", fmt.Errorf("failed to get the desired Machine Config: %v", err)
+		return "", fmt.Errorf("failed to get the desired MachineConfig [%s] for node [%s]: %w", desiredConfig, node.Name, err)
 	}
 	for _, owner := range mc.OwnerReferences {
 		if owner.Kind == "MachineConfigPool" {
@@ -318,12 +316,12 @@ func (c *openshiftContext) GetNodeMachinePoolName(ctx context.Context, node *cor
 		}
 	}
 
-	log.Log.Error(nil, "getNodeMachinePool(): Failed to find the MCP of the node")
 	return "", fmt.Errorf("failed to find the MCP of the node")
 }
 
 func (c *openshiftContext) ChangeMachineConfigPoolPause(ctx context.Context, mcp *mcv1.MachineConfigPool, pause bool) error {
-	log.Log.Info("ChangeMachineConfigPoolPause:()")
+	logger := ctx.Value("logger").(logr.Logger).WithName("ChangeMachineConfigPoolPause")
+	logger.Info("change machine config pool state", "pause", pause, "mcp", mcp.Name)
 
 	patchString := []byte(fmt.Sprintf(`{"spec":{"paused":%t}}`, pause))
 	patch := client.RawPatch(types.MergePatchType, patchString)

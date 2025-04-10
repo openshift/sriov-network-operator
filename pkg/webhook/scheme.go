@@ -9,13 +9,16 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
-var scheme = runtime.NewScheme()
-var Codecs = serializer.NewCodecFactory(scheme)
+var Codecs serializer.CodecFactory
 
 func init() {
+	scheme := runtime.NewScheme()
 	addToScheme(scheme)
+	Codecs = serializer.NewCodecFactory(scheme)
+	vars.Scheme = scheme
 }
 
 func addToScheme(scheme *runtime.Scheme) {

@@ -55,7 +55,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 					By("waiting for the node state to be updated")
 					Eventually(func() sriovv1.Interfaces {
-						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), vfioNode, metav1.GetOptions{})
+						nodeState := &sriovv1.SriovNetworkNodeState{}
+						err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: vfioNode}, nodeState)
 						Expect(err).ToNot(HaveOccurred())
 						return nodeState.Spec.Interfaces
 					}, 1*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -148,7 +149,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					Eventually(func() sriovv1.Interfaces {
-						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), vfioNode, metav1.GetOptions{})
+						nodeState := &sriovv1.SriovNetworkNodeState{}
+						err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: vfioNode}, nodeState)
 						Expect(err).ToNot(HaveOccurred())
 						return nodeState.Spec.Interfaces
 					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -180,7 +182,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					Eventually(func() sriovv1.Interfaces {
-						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), vfioNode, metav1.GetOptions{})
+						nodeState := &sriovv1.SriovNetworkNodeState{}
+						err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: vfioNode}, nodeState)
 						Expect(err).ToNot(HaveOccurred())
 						return nodeState.Spec.Interfaces
 					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -248,7 +251,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					Eventually(func() sriovv1.Interfaces {
-						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+						nodeState := &sriovv1.SriovNetworkNodeState{}
+						err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 						Expect(err).ToNot(HaveOccurred())
 						return nodeState.Spec.Interfaces
 					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -279,7 +283,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 					By(fmt.Sprintf("verifying that only VF 0 and 1 have mtu set to %d", newMtu))
 					Eventually(func() sriovv1.InterfaceExts {
-						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+						nodeState := &sriovv1.SriovNetworkNodeState{}
+						err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 						Expect(err).ToNot(HaveOccurred())
 						return nodeState.Status.Interfaces
 					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -342,7 +347,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					Eventually(func() sriovv1.Interfaces {
-						nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+						nodeState := &sriovv1.SriovNetworkNodeState{}
+						err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 						Expect(err).ToNot(HaveOccurred())
 						return nodeState.Spec.Interfaces
 					}, 3*time.Minute, 1*time.Second).Should(ContainElement(MatchFields(
@@ -526,7 +532,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 								if len(sriovDeviceList) == 0 {
 									return nil, false
 								}
-								nodeState, err := clients.SriovNetworkNodeStates(operatorNamespace).Get(context.Background(), node, metav1.GetOptions{})
+								nodeState := &sriovv1.SriovNetworkNodeState{}
+								err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: node}, nodeState)
 								Expect(err).ToNot(HaveOccurred())
 
 								for _, ifc := range nodeState.Spec.Interfaces {
