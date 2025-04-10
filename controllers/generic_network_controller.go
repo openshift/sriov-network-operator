@@ -18,10 +18,10 @@ package controllers
 
 import (
 	"context"
-	"reflect"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -180,7 +180,7 @@ func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	} else {
 		reqLogger.Info("NetworkAttachmentDefinition CR already exist")
-		if !reflect.DeepEqual(found.Spec, netAttDef.Spec) || !reflect.DeepEqual(found.GetAnnotations(), netAttDef.GetAnnotations()) {
+		if !equality.Semantic.DeepEqual(found.Spec, netAttDef.Spec) || !equality.Semantic.DeepEqual(found.GetAnnotations(), netAttDef.GetAnnotations()) {
 			reqLogger.Info("Update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 			netAttDef.SetResourceVersion(found.GetResourceVersion())
 			err = r.Update(ctx, netAttDef)

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/ovn-org/libovsdb/client"
 	"github.com/ovn-org/libovsdb/model"
 	"github.com/ovn-org/libovsdb/ovsdb"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -83,7 +83,7 @@ func (o *ovs) CreateOVSBridge(ctx context.Context, conf *sriovnetworkv1.OVSConfi
 		funcLog.Error(err, "CreateOVSBridge(): failed to read data from store")
 		return fmt.Errorf("failed to read data from store: %v", err)
 	}
-	if knownConfig == nil || !reflect.DeepEqual(conf, knownConfig) {
+	if knownConfig == nil || !equality.Semantic.DeepEqual(conf, knownConfig) {
 		funcLog.V(2).Info("CreateOVSBridge(): save current configuration to the store")
 		// config in store manager is not found or it is not the same config as passed with conf arg,
 		// update config in the store manager
@@ -102,13 +102,13 @@ func (o *ovs) CreateOVSBridge(ctx context.Context, conf *sriovnetworkv1.OVSConfi
 			return err
 		}
 		if currentState != nil {
-			if reflect.DeepEqual(conf, currentState) {
+			if equality.Semantic.DeepEqual(conf, currentState) {
 				// bridge already exist with the right config
 				funcLog.V(2).Info("CreateOVSBridge(): bridge state already match current configuration, no actions required")
 				return nil
 			}
 			funcLog.V(2).Info("CreateOVSBridge(): bridge state differs from the current configuration, reconfiguration required")
-			keepBridge = reflect.DeepEqual(conf.Bridge, currentState.Bridge)
+			keepBridge = equality.Semantic.DeepEqual(conf.Bridge, currentState.Bridge)
 		}
 	} else {
 		funcLog.V(2).Info("CreateOVSBridge(): configuration for the bridge not found in the store, create the bridge")
