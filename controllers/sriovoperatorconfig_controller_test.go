@@ -30,6 +30,8 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
+
+	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
@@ -117,21 +119,23 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		BeforeEach(func() {
 			var err error
 			config := &sriovnetworkv1.SriovOperatorConfig{}
-			err = util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
-			Expect(err).NotTo(HaveOccurred())
-			// in case controller yet to add object's finalizer (e.g whenever test deferCleanup is creating new 'default' config object)
-			if len(config.Finalizers) == 0 {
+
+			Eventually(func(g Gomega) {
 				err = util.WaitForNamespacedObject(config, k8sClient, testNamespace, "default", util.RetryInterval, util.APITimeout)
+				g.Expect(err).NotTo(HaveOccurred())
+				// in case controller yet to add object's finalizer (e.g whenever test deferCleanup is creating new 'default' config object)
+				g.Expect(config.Finalizers).ToNot(BeEmpty())
+
+				config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
+					EnableInjector:        true,
+					EnableOperatorWebhook: true,
+					LogLevel:              2,
+					FeatureGates:          map[string]bool{},
+				}
+				err = k8sClient.Update(ctx, config)
 				Expect(err).NotTo(HaveOccurred())
-			}
-			config.Spec = sriovnetworkv1.SriovOperatorConfigSpec{
-				EnableInjector:        true,
-				EnableOperatorWebhook: true,
-				LogLevel:              2,
-				FeatureGates:          map[string]bool{},
-			}
-			err = k8sClient.Update(ctx, config)
-			Expect(err).NotTo(HaveOccurred())
+			}).Should(Succeed())
+
 		})
 
 		It("should have webhook enable", func() {
@@ -289,6 +293,46 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				}
 				return config.Finalizers
 			}, util.APITimeout, util.RetryInterval).Should(Equal(empty))
+		})
+
+		It("should not remove fields with default values when SriovOperatorConfig is created", func() {
+			err := k8sClient.Delete(context.Background(), &sriovnetworkv1.SriovOperatorConfig{
+				ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: consts.DefaultConfigName},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			config := &uns.Unstructured{}
+			config.SetGroupVersionKind(sriovnetworkv1.GroupVersion.WithKind("SriovOperatorConfig"))
+			config.SetName(consts.DefaultConfigName)
+			config.SetNamespace(testNamespace)
+			config.Object["spec"] = map[string]interface{}{
+				"enableInjector":        false,
+				"enableOperatorWebhook": false,
+				"logLevel":              0,
+				"disableDrain":          false,
+			}
+
+			Eventually(func() error {
+				return k8sClient.Create(context.Background(), config)
+			}).Should(Succeed())
+
+			By("Wait for the operator to reconcile the object")
+			Eventually(func(g Gomega) {
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: consts.DefaultConfigName}, config)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(config.GetFinalizers()).To(ContainElement(sriovnetworkv1.OPERATORCONFIGFINALIZERNAME))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+			By("Verify default values have not been omitted")
+			obj := &uns.Unstructured{}
+			obj.SetGroupVersionKind(sriovnetworkv1.GroupVersion.WithKind("SriovOperatorConfig"))
+			err = k8sClient.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: consts.DefaultConfigName}, obj)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(obj.Object["spec"]).To(HaveKeyWithValue("enableInjector", false))
+			Expect(obj.Object["spec"]).To(HaveKeyWithValue("enableOperatorWebhook", false))
+			Expect(obj.Object["spec"]).To(HaveKeyWithValue("logLevel", int64(0)))
+			Expect(obj.Object["spec"]).To(HaveKeyWithValue("disableDrain", false))
 		})
 
 		It("should be able to update the node selector of sriov-network-config-daemon", func() {

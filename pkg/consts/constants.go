@@ -91,7 +91,9 @@ const (
 	SyncStatusInProgress = "InProgress"
 
 	DrainDeleted = "Deleted"
+	DrainDelete  = "delete"
 	DrainEvicted = "Evicted"
+	DrainEvict   = "evict"
 
 	MCPPauseAnnotationState = "sriovnetwork.openshift.io/state"
 	MCPPauseAnnotationTime  = "sriovnetwork.openshift.io/time"

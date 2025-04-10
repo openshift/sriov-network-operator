@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -59,6 +60,8 @@ var _ = Describe("Drainer", Ordered, func() {
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
+		ctx = context.WithValue(ctx, "logger", log.FromContext(ctx))
+
 		t = GinkgoT()
 		mockCtrl = gomock.NewController(t)
 		platformHelper = mock_platforms.NewMockInterface(mockCtrl)
