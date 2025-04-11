@@ -4,25 +4,25 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	typedv1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 type EventRecorder struct {
-	client           snclientset.Interface
+	client           client.Client
 	eventRecorder    record.EventRecorder
 	eventBroadcaster record.EventBroadcaster
 }
 
 // NewEventRecorder Create a new EventRecorder
-func NewEventRecorder(c snclientset.Interface, kubeclient kubernetes.Interface, s *runtime.Scheme) *EventRecorder {
+func NewEventRecorder(c client.Client, kubeclient kubernetes.Interface, s *runtime.Scheme) *EventRecorder {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(4)
 	eventBroadcaster.StartRecordingToSink(&typedv1core.EventSinkImpl{Interface: kubeclient.CoreV1().Events("")})
@@ -36,7 +36,8 @@ func NewEventRecorder(c snclientset.Interface, kubeclient kubernetes.Interface, 
 
 // SendEvent Send an Event on the NodeState object
 func (e *EventRecorder) SendEvent(ctx context.Context, eventType string, msg string) {
-	nodeState, err := e.client.SriovnetworkV1().SriovNetworkNodeStates(vars.Namespace).Get(ctx, vars.NodeName, metav1.GetOptions{})
+	nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
+	err := e.client.Get(ctx, client.ObjectKey{Namespace: vars.Namespace, Name: vars.NodeName}, nodeState)
 	if err != nil {
 		log.Log.V(2).Error(err, "SendEvent(): Failed to fetch node state, skip SendEvent", "name", vars.NodeName)
 		return

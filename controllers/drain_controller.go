@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,8 +77,8 @@ func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, r
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	reqLogger := log.FromContext(ctx)
-	reqLogger.Info("Reconciling Drain")
+	ctx = context.WithValue(ctx, "logger", log.FromContext(ctx))
+	reqLogger := log.FromContext(ctx).WithName("Drain Reconcile")
 
 	req.Namespace = vars.Namespace
 
@@ -149,14 +150,14 @@ func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		//  doesn't need to drain anymore, so we can stop the drain
 		if nodeStateDrainAnnotationCurrent == constants.DrainComplete ||
 			nodeStateDrainAnnotationCurrent == constants.Draining {
-			return dr.handleNodeIdleNodeStateDrainingOrCompleted(ctx, &reqLogger, node, nodeNetworkState)
+			return dr.handleNodeIdleNodeStateDrainingOrCompleted(ctx, node, nodeNetworkState)
 		}
 	}
 
 	// this cover the case a node request to drain or reboot
 	if nodeDrainAnnotation == constants.DrainRequired ||
 		nodeDrainAnnotation == constants.RebootRequired {
-		return dr.handleNodeDrainOrReboot(ctx, &reqLogger, node, nodeNetworkState, nodeDrainAnnotation, nodeStateDrainAnnotationCurrent)
+		return dr.handleNodeDrainOrReboot(ctx, node, nodeNetworkState, nodeDrainAnnotation, nodeStateDrainAnnotationCurrent)
 	}
 
 	reqLogger.Error(nil, "unexpected node drain annotation")
@@ -209,7 +210,17 @@ func (dr *DrainReconcile) SetupWithManager(mgr ctrl.Manager) error {
 	nodeStatePredicates := builder.WithPredicates(DrainStateAnnotationPredicate{})
 
 	return ctrl.NewControllerManagedBy(mgr).
-		WithOptions(controller.Options{MaxConcurrentReconciles: 50}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 50,
+			LogConstructor: func(request *reconcile.Request) logr.Logger {
+				logger := mgr.GetLogger().WithValues("Function", "Drain")
+				// Inspired by https://github.com/kubernetes-sigs/controller-runtime/blob/52b17917caa97ec546423867d9637f1787830f3e/pkg/builder/controller.go#L447
+				if req, ok := any(request).(*reconcile.Request); ok && req != nil {
+					logger = logger.WithValues("node", request.Name)
+				}
+				return logger
+			},
+		}).
 		For(&corev1.Node{}, nodePredicates).
 		Watches(&sriovnetworkv1.SriovNetworkNodeState{}, createUpdateEnqueue, nodeStatePredicates).
 		Complete(dr)
