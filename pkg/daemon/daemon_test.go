@@ -19,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
@@ -36,7 +35,6 @@ var (
 	cancel        context.CancelFunc
 	ctx           context.Context
 	k8sManager    manager.Manager
-	snclient      *snclientset.Clientset
 	kubeclient    *kubernetes.Clientset
 	eventRecorder *daemon.EventRecorder
 	wg            sync.WaitGroup
@@ -81,9 +79,8 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		err := k8sClient.Create(ctx, soc)
 		Expect(err).ToNot(HaveOccurred())
 
-		snclient = snclientset.NewForConfigOrDie(cfg)
 		kubeclient = kubernetes.NewForConfigOrDie(cfg)
-		eventRecorder = daemon.NewEventRecorder(snclient, kubeclient, scheme.Scheme)
+		eventRecorder = daemon.NewEventRecorder(k8sClient, kubeclient, scheme.Scheme)
 		DeferCleanup(func() {
 			eventRecorder.Shutdown()
 		})

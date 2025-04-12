@@ -117,7 +117,15 @@ spec:
           command:
             - /bin/bash
             - -c
-            - mkdir -p /host/var/lib/sriov/ && cp /usr/bin/sriov-network-config-daemon /host/var/lib/sriov/sriov-network-config-daemon && chcon -t bin_t /host/var/lib/sriov/sriov-network-config-daemon | true # Allow systemd to run the file, use pipe true to not failed if the system doesn't have selinux or apparmor enabled
+            - |
+              set -e
+              if [ ! -f /host/usr/share/hwdata/pci.ids ]; then # If pci.ids file is missing on the host, config daemon won't be able to discover PCI devices
+                mkdir -p /host/usr/share/hwdata/
+                cp /usr/share/hwdata/pci.ids /host/usr/share/hwdata/pci.ids
+              fi
+              mkdir -p /host/var/lib/sriov/
+              cp /usr/bin/sriov-network-config-daemon /host/var/lib/sriov/sriov-network-config-daemon
+              chcon -t bin_t /host/var/lib/sriov/sriov-network-config-daemon || true # Allow systemd to run the file, use pipe true to not failed if the system doesn't have selinux or apparmor enabled
           securityContext:
             privileged: true
           resources:

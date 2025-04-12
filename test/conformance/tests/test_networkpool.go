@@ -85,9 +85,9 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			Expect(cmdlineOutput).To(ContainSubstring("ib_core.netns_mode=0"), errDescription)
 			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=1"), errDescription)
 
-			output, _, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/etc/modprobe.d/sriov_network_operator_modules_config.conf  | grep mode=0 | wc -l")
+			output, _, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/etc/modprobe.d/sriov_network_operator_modules_config.conf")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "1")).To(BeTrue())
+			Expect(output).To(ContainSubstring("mode=0"))
 
 			By("configure rdma mode to shared")
 			Eventually(func(g Gomega) {
@@ -114,9 +114,9 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=0"), errDescription)
 			Expect(cmdlineOutput).To(ContainSubstring("ib_core.netns_mode=1"), errDescription)
 
-			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/etc/modprobe.d/sriov_network_operator_modules_config.conf  | grep mode=1 | wc -l")
+			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/etc/modprobe.d/sriov_network_operator_modules_config.conf")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "1")).To(BeTrue(), fmt.Sprintf("kernel args are not right, printing current kernel args %s", cmdlineOutput))
+			Expect(output).To(ContainSubstring("mode=1"))
 
 			By("removing rdma mode configuration")
 			Eventually(func(g Gomega) {
@@ -141,9 +141,9 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=0"), errDescription)
 			Expect(cmdlineOutput).ToNot(ContainSubstring("ib_core.netns_mode=1"), errDescription)
 
-			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/modprobe.d | grep sriov_network_operator_modules_config.conf | wc -l")
+			output, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/modprobe.d")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(output, "0")).To(BeTrue(), fmt.Sprintf("kernel args are not right, printing current kernel args %s", cmdlineOutput))
+			Expect(output).ToNot(ContainSubstring("sriov_network_operator_modules_config.conf"))
 		})
 	})
 
@@ -275,7 +275,7 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			By("checking counters inside the pods")
 			strOut, _, err := pod.ExecCommand(clients, firstPod, "/bin/bash", "-c", "ip link show net1 | grep net1 | wc -l")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(strOut, "1")).To(BeTrue())
+			Expect(strOut).To(ContainSubstring("net1"))
 			strOut, _, err = pod.ExecCommand(clients, firstPod, "/bin/bash", "-c", "ls /sys/bus/pci/devices/${PCIDEVICE_OPENSHIFT_IO_TESTRDMA}/infiniband/*/ports/*/hw_counters | wc -l")
 			strOut = strings.TrimSpace(strOut)
 			Expect(err).ToNot(HaveOccurred())

@@ -7,51 +7,50 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	conf "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 var shutdownLog = ctrl.Log.WithName("shutdown")
 
 var failurePolicyIgnore = admv1.Ignore
 
-func Shutdown() {
-	updateFinalizers()
+func Shutdown(c client.Client) {
+	updateFinalizers(c)
 	updateWebhooks()
 }
 
-func updateFinalizers() {
+func updateFinalizers(c client.Client) {
 	shutdownLog.Info("Clearing finalizers on exit")
-	c, err := snclientset.NewForConfig(conf.GetConfigOrDie())
-	if err != nil {
-		shutdownLog.Error(err, "Error creating client")
-	}
-	sriovNetworkClient := c.SriovnetworkV1()
-	networkList, err := sriovNetworkClient.SriovNetworks("").List(context.TODO(), metav1.ListOptions{})
+	networkList := &sriovnetworkv1.SriovNetworkList{}
+	err := c.List(context.TODO(), networkList, &client.ListOptions{Namespace: vars.Namespace})
 	if err != nil {
 		shutdownLog.Error(err, "Failed to list SriovNetworks")
-	} else {
-		for _, instance := range networkList.Items {
-			if len(instance.ObjectMeta.Finalizers) == 0 {
-				continue
-			}
+		return
+	}
+
+	for _, instance := range networkList.Items {
+		if len(instance.ObjectMeta.Finalizers) == 0 {
+			continue
+		}
+		if err != nil {
+			shutdownLog.Error(err, "Failed get finalizers map")
+		}
+		shutdownLog.Info("Clearing finalizers on SriovNetwork ", "namespace", instance.GetNamespace(), "name", instance.GetName())
+		var found bool
+		instance.ObjectMeta.Finalizers, found = sriovnetworkv1.RemoveString(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers)
+		if found {
+			err = c.Update(context.TODO(), &instance)
 			if err != nil {
-				shutdownLog.Error(err, "Failed get finalizers map")
-			}
-			shutdownLog.Info("Clearing finalizers on SriovNetwork ", "namespace", instance.GetNamespace(), "name", instance.GetName())
-			var found bool
-			instance.ObjectMeta.Finalizers, found = sriovnetworkv1.RemoveString(sriovnetworkv1.NETATTDEFFINALIZERNAME, instance.ObjectMeta.Finalizers)
-			if found {
-				_, err = sriovNetworkClient.SriovNetworks(instance.GetNamespace()).Update(context.TODO(), &instance, metav1.UpdateOptions{})
-				if err != nil {
-					shutdownLog.Error(err, "Failed to remove finalizer")
-				}
+				shutdownLog.Error(err, "Failed to remove finalizer")
 			}
 		}
 	}
+
 	shutdownLog.Info("Done clearing finalizers on exit")
 }
 

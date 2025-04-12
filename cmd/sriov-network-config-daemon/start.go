@@ -40,7 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	snclientset "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/client/clientset/versioned"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
@@ -243,7 +242,6 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	// create clients
-	snclient := snclientset.NewForConfigOrDie(config)
 	kubeclient := kubernetes.NewForConfigOrDie(config)
 	kClient, err := runtimeclient.New(
 		config,
@@ -254,7 +252,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
-	eventRecorder := daemon.NewEventRecorder(snclient, kubeclient, scheme)
+	eventRecorder := daemon.NewEventRecorder(kClient, kubeclient, scheme)
 	defer eventRecorder.Shutdown()
 
 	nodeInfo, err := kubeclient.CoreV1().Nodes().Get(context.Background(), vars.NodeName, v1.GetOptions{})
