@@ -75,7 +75,6 @@ func (n *network) TryToGetVirtualInterfaceName(pciAddr string) string {
 func (n *network) TryGetInterfaceName(pciAddr string) string {
 	names, err := n.dputilsLib.GetNetNames(pciAddr)
 	if err != nil || len(names) < 1 {
-		log.Log.Error(err, "TryGetInterfaceName(): failed to get interface name", "pciAddress", pciAddr)
 		return ""
 	}
 	netDevName := names[0]
@@ -96,7 +95,6 @@ func (n *network) TryGetInterfaceName(pciAddr string) string {
 		return name
 	}
 
-	log.Log.V(2).Info("TryGetInterfaceName()", "name", netDevName)
 	return netDevName
 }
 

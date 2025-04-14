@@ -176,18 +176,20 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 	nodeEvenHandler := handler.Funcs{
 		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
 			log.Log.WithName("SriovNetworkNodePolicy").
-				Info("Enqueuing sync for create event", "resource", e.Object.GetName())
+				Info("Enqueuing sync for create event", "resource", e.Object.GetName(), "type", e.Object.GetObjectKind().GroupVersionKind().String())
 			qHandler(q)
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
-			reflect.DeepEqual(e.ObjectOld.GetLabels(), e.ObjectNew.GetLabels())
+			if reflect.DeepEqual(e.ObjectOld.GetLabels(), e.ObjectNew.GetLabels()) {
+				return
+			}
 			log.Log.WithName("SriovNetworkNodePolicy").
-				Info("Enqueuing sync for create event", "resource", e.ObjectNew.GetName())
+				Info("Enqueuing sync for create event", "resource", e.ObjectNew.GetName(), "type", e.ObjectNew.GetObjectKind().GroupVersionKind().String())
 			qHandler(q)
 		},
 		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
 			log.Log.WithName("SriovNetworkNodePolicy").
-				Info("Enqueuing sync for delete event", "resource", e.Object.GetName())
+				Info("Enqueuing sync for delete event", "resource", e.Object.GetName(), "type", e.Object.GetObjectKind().GroupVersionKind().String())
 			qHandler(q)
 		},
 	}
