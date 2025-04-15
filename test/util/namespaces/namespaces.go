@@ -129,6 +129,25 @@ func CleanNetworks(operatorNamespace string, cs *testclient.ClientSet) error {
 	return waitForSriovNetworkDeletion(operatorNamespace, cs, 15*time.Second)
 }
 
+func CleanPools(operatorNamespace string, cs *testclient.ClientSet) error {
+	pools := sriovv1.SriovNetworkPoolConfigList{}
+	err := cs.List(context.Background(),
+		&pools,
+		runtimeclient.InNamespace(operatorNamespace))
+	if err != nil {
+		return err
+	}
+	for _, p := range pools.Items {
+		if strings.HasPrefix(p.Name, "test-") {
+			err := cs.Delete(context.Background(), &p)
+			if err != nil {
+				return fmt.Errorf("failed to delete networkPoolConfig %v", err)
+			}
+		}
+	}
+	return err
+}
+
 func waitForSriovNetworkDeletion(operatorNamespace string, cs *testclient.ClientSet, timeout time.Duration) error {
 	return wait.PollImmediate(time.Second, timeout, func() (bool, error) {
 		networks := sriovv1.SriovNetworkList{}
@@ -164,7 +183,8 @@ func Clean(operatorNamespace, namespace string, cs *testclient.ClientSet, discov
 	if err != nil {
 		return err
 	}
-	return nil
+
+	return CleanPools(operatorNamespace, cs)
 }
 
 func AddLabel(cs corev1client.NamespacesGetter, ctx context.Context, namespaceName, key, value string) error {
