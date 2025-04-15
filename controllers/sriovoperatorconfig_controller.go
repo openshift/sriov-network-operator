@@ -84,7 +84,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("default SriovOperatorConfig object not found. waiting for creation.")
-			return reconcile.Result{}, err
+			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
 		logger.Error(err, "Failed to get default SriovOperatorConfig object")
@@ -98,12 +98,9 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		// The object is being deleted
 		return r.handleSriovOperatorConfigDeletion(ctx, defaultConfig, logger)
 	}
-	// add finalizer if needed
-	if !sriovnetworkv1.StringInArray(sriovnetworkv1.OPERATORCONFIGFINALIZERNAME, defaultConfig.ObjectMeta.Finalizers) {
-		defaultConfig.ObjectMeta.Finalizers = append(defaultConfig.ObjectMeta.Finalizers, sriovnetworkv1.OPERATORCONFIGFINALIZERNAME)
-		if err := r.Update(ctx, defaultConfig); err != nil {
-			return reconcile.Result{}, err
-		}
+
+	if err = r.syncOperatorConfigFinalizers(ctx, defaultConfig, logger); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	r.FeatureGate.Init(defaultConfig.Spec.FeatureGates)
@@ -444,6 +441,29 @@ func (r *SriovOperatorConfigReconciler) syncOpenShiftSystemdService(ctx context.
 
 	// Sync machine config
 	return r.setLabelInsideObject(ctx, cr, objs)
+}
+
+func (r SriovOperatorConfigReconciler) syncOperatorConfigFinalizers(ctx context.Context, defaultConfig *sriovnetworkv1.SriovOperatorConfig, logger logr.Logger) error {
+	if sriovnetworkv1.StringInArray(sriovnetworkv1.OPERATORCONFIGFINALIZERNAME, defaultConfig.ObjectMeta.Finalizers) {
+		return nil
+	}
+
+	newObj := defaultConfig.DeepCopyObject().(client.Object)
+	newObj.SetFinalizers(
+		append(newObj.GetFinalizers(), sriovnetworkv1.OPERATORCONFIGFINALIZERNAME),
+	)
+
+	logger.WithName("syncOperatorConfigFinalizers").
+		Info("Adding finalizer", "key", sriovnetworkv1.OPERATORCONFIGFINALIZERNAME)
+
+	patch := client.MergeFrom(defaultConfig)
+	err := r.Patch(ctx, newObj, patch)
+	if err != nil {
+		return fmt.Errorf("can't patch SriovOperatorConfig to add finalizer [%s]: %w", sriovnetworkv1.OPERATORCONFIGFINALIZERNAME, err)
+	}
+
+	// Refresh the defaultConfig object with the latest changes
+	return r.Get(ctx, types.NamespacedName{Namespace: defaultConfig.Namespace, Name: defaultConfig.Name}, defaultConfig)
 }
 
 func (r *SriovOperatorConfigReconciler) handleSriovOperatorConfigDeletion(ctx context.Context,
