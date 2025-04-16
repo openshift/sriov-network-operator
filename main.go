@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"context"
 	"flag"
 	"os"
@@ -82,6 +83,7 @@ func main() {
 	snolog.InitLog()
 
 	restConfig := ctrl.GetConfigOrDie()
+	fmt.Println("Testing to install SRIOV operator in a BM cluster")
 
 	if vars.ResourcePrefix == "" {
 		setupLog.Error(nil, "RESOURCE_PREFIX environment variable can't be empty")
