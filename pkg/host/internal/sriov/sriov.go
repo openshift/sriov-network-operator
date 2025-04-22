@@ -658,7 +658,7 @@ func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interf
 			}
 		}
 
-		if !configured && ifaceStatus.NumVfs > 0 {
+		if !configured {
 			toBeResetted = append(toBeResetted, ifaceStatus)
 		}
 	}
@@ -824,8 +824,10 @@ func (s *sriov) checkForConfigAndReset(ifaceStatus sriovnetworkv1.InterfaceExt, 
 		return err
 	}
 
-	if err = s.ResetSriovDevice(ifaceStatus); err != nil {
-		return err
+	if ifaceStatus.NumVfs > 0 {
+		if err = s.ResetSriovDevice(ifaceStatus); err != nil {
+			return err
+		}
 	}
 
 	// remove pf status from host

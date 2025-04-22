@@ -315,6 +315,7 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 			return err
 		}
 	}
+
 	logger.V(1).Info("Remove SriovNetworkNodeState custom resource for unselected node")
 	nsList := &sriovnetworkv1.SriovNetworkNodeStateList{}
 	err := r.List(ctx, nsList, &client.ListOptions{})
@@ -333,10 +334,10 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 				}
 			}
 			if !found {
-				// remove device plugin labels
+				// remove device plugin labels if the node doesn't exist we continue to handle the stale nodeState
 				logger.Info("removing device plugin label from node as SriovNetworkNodeState doesn't exist", "nodeStateName", ns.Name)
 				err = utils.RemoveLabelFromNode(ctx, ns.Name, constants.SriovDevicePluginLabel, r.Client)
-				if err != nil {
+				if err != nil && !errors.IsNotFound(err) {
 					logger.Error(err, "Fail to remove device plugin label from node", "node", ns.Name)
 					return err
 				}
