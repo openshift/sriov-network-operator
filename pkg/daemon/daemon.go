@@ -157,14 +157,12 @@ func (dn *Daemon) Run(stopCh <-chan struct{}, exitCh <-chan error) error {
 		log.Log.Error(err, "failed to prepare udev files to rename VF representors for requested VFs")
 	}
 
-	var timeout int64 = 5
 	var metadataKey = "metadata.name"
 	informerFactory := sninformer.NewFilteredSharedInformerFactory(dn.sriovClient,
 		time.Second*15,
 		vars.Namespace,
 		func(lo *metav1.ListOptions) {
 			lo.FieldSelector = metadataKey + "=" + vars.NodeName
-			lo.TimeoutSeconds = &timeout
 		},
 	)
 
