@@ -155,7 +155,7 @@ const (
 
 	SriovServiceBasePath        = "/etc/systemd/system"
 	SriovServicePath            = SriovServiceBasePath + "/sriov-config.service"
-	SriovPostNetworkServicePath = SriovServiceBasePath + "sriov-config-post-network.service"
+	SriovPostNetworkServicePath = SriovServiceBasePath + "/sriov-config-post-network.service"
 
 	// Feature gates
 	// ParallelNicConfigFeatureGate: allow to configure nics in parallel
