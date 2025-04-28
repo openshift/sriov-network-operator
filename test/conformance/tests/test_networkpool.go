@@ -273,7 +273,7 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			}, 1*time.Minute, 5*time.Second).Should(Equal(allocatable))
 
 			By("checking counters inside the pods")
-			strOut, _, err := pod.ExecCommand(clients, firstPod, "/bin/bash", "-c", "ip link show net1 | grep net1 | wc -l")
+			strOut, _, err := pod.ExecCommand(clients, firstPod, "/bin/bash", "-c", "ip link show net1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(strOut).To(ContainSubstring("net1"))
 			strOut, _, err = pod.ExecCommand(clients, firstPod, "/bin/bash", "-c", "ls /sys/bus/pci/devices/${PCIDEVICE_OPENSHIFT_IO_TESTRDMA}/infiniband/*/ports/*/hw_counters | wc -l")
@@ -357,9 +357,9 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 			firstPod = waitForPodRunning(firstPod)
 
-			strOut, _, err := pod.ExecCommand(clients, firstPod, "/bin/bash", "-c", "ip link show net1 | grep net1 | wc -l")
+			strOut, _, err := pod.ExecCommand(clients, firstPod, "/bin/bash", "-c", "ip link show net1")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(strings.HasPrefix(strOut, "1")).To(BeTrue())
+			Expect(strOut).To(ContainSubstring("net1"))
 			strOut, _, err = pod.ExecCommand(clients, firstPod, "/bin/bash", "-c", "ls /sys/bus/pci/devices/${PCIDEVICE_OPENSHIFT_IO_TESTRDMA}/infiniband/*/ports/* | grep hw_counters | wc -l")
 			strOut = strings.TrimSpace(strOut)
 			Expect(err).ToNot(HaveOccurred())
