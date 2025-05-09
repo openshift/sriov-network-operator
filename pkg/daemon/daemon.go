@@ -666,16 +666,19 @@ func (dn *NodeReconciler) annotate(
 	funcLog := log.Log.WithName("annotate")
 
 	funcLog.Info(fmt.Sprintf("apply '%s' annotation for node", annotationState))
-	err := utils.AnnotateNode(ctx, desiredNodeState.Name, consts.NodeDrainAnnotation, annotationState, dn.client)
-	if err != nil {
-		log.Log.Error(err, "Failed to annotate node")
+	if err := utils.AnnotateNode(ctx,
+		desiredNodeState.Name,
+		consts.NodeDrainAnnotation,
+		annotationState, dn.client); err != nil {
+		funcLog.Error(err, "Failed to annotate node")
 		return err
 	}
 
 	funcLog.Info(fmt.Sprintf("apply '%s' annotation for nodeState", annotationState))
-	if err := utils.AnnotateObject(context.Background(), desiredNodeState,
+	if err := utils.AnnotateObject(ctx, desiredNodeState,
 		consts.NodeStateDrainAnnotation,
 		annotationState, dn.client); err != nil {
+		funcLog.Error(err, "Failed to annotate nodeState")
 		return err
 	}
 
