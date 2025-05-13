@@ -1,0 +1,3 @@
+resources:
+- deny_all.yaml
+- allow_egress_api_server.yaml
