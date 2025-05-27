@@ -2,8 +2,8 @@ package daemon
 
 import (
 	"context"
-	"reflect"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,7 +48,7 @@ func (oc *OperatorConfigNodeReconcile) Reconcile(ctx context.Context, req ctrl.R
 		log.Log.Info("Set Disable Drain", "value", vars.DisableDrain)
 	}
 
-	if !reflect.DeepEqual(oc.latestFeatureGates, operatorConfig.Spec.FeatureGates) {
+	if !equality.Semantic.DeepEqual(oc.latestFeatureGates, operatorConfig.Spec.FeatureGates) {
 		vars.FeatureGate.Init(operatorConfig.Spec.FeatureGates)
 		oc.latestFeatureGates = operatorConfig.Spec.FeatureGates
 		log.Log.Info("Updated featureGates", "featureGates", vars.FeatureGate.String())

@@ -4,10 +4,6 @@ import (
 	goctx "context"
 	"encoding/json"
 	"fmt"
-	"reflect"
-
-	// "strings"
-	// "testing"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +12,7 @@ import (
 	// "github.com/operator-framework/operator-sdk/pkg/test/e2eutil"
 	appsv1 "k8s.io/api/apps/v1"
 	// corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -229,7 +226,7 @@ func validateSelector(rc *dptypes.NetDeviceSelectors, ns *sriovnetworkv1.SriovNe
 		}
 	}
 	if len(ns.PfNames) > 0 {
-		if !reflect.DeepEqual(ns.PfNames, rc.PfNames) {
+		if !equality.Semantic.DeepEqual(ns.PfNames, rc.PfNames) {
 			return false
 		}
 	}
