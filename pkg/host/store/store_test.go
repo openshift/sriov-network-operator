@@ -3,11 +3,10 @@ package store
 import (
 	"os"
 	"path"
-	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -258,7 +257,7 @@ var _ = Describe("Store", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ns).ToNot(BeNil())
 			Expect(sriovnetworkv1.InitialState.Name).To(Equal("worker-0"))
-			Expect(reflect.DeepEqual(*ns, sriovnetworkv1.InitialState)).To(BeTrue())
+			Expect(equality.Semantic.DeepEqual(*ns, sriovnetworkv1.InitialState)).To(BeTrue())
 		})
 	})
 

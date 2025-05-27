@@ -3,8 +3,8 @@ package daemon
 import (
 	"context"
 	"fmt"
-	"reflect"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -66,12 +66,12 @@ func (dn *NodeReconciler) shouldUpdateStatus(current, desiredNodeState *sriovnet
 	}
 
 	// check for bridges
-	if !reflect.DeepEqual(current.Status.Bridges, desiredNodeState.Status.Bridges) {
+	if !equality.Semantic.DeepEqual(current.Status.Bridges, desiredNodeState.Status.Bridges) {
 		return true
 	}
 
 	// check for system
-	if !reflect.DeepEqual(current.Status.System, desiredNodeState.Status.System) {
+	if !equality.Semantic.DeepEqual(current.Status.System, desiredNodeState.Status.System) {
 		return true
 	}
 
@@ -89,7 +89,7 @@ func (dn *NodeReconciler) shouldUpdateStatus(current, desiredNodeState *sriovnet
 		d[idx].VFs = nil
 		c[idx].VFs = nil
 
-		if !reflect.DeepEqual(d[idx], c[idx]) {
+		if !equality.Semantic.DeepEqual(d[idx], c[idx]) {
 			return true
 		}
 	}

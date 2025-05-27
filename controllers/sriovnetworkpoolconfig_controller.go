@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -196,7 +196,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 			// ignition and compare.
 			json.Unmarshal(foundMC.Spec.Config.Raw, &foundIgn)
 			json.Unmarshal(mc.Spec.Config.Raw, &renderedIgn)
-			if !reflect.DeepEqual(foundIgn, renderedIgn) {
+			if !equality.Semantic.DeepEqual(foundIgn, renderedIgn) {
 				logger.Info("MachineConfig already exists, updating")
 				mc.SetResourceVersion(foundMC.GetResourceVersion())
 				err = r.Update(ctx, mc)
