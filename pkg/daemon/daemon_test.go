@@ -262,6 +262,90 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 
 			Expect(nodeState.Status.LastSyncError).To(Equal(""))
 		})
+
+		It("Should apply the reset configuration when disableDrain is true", func() {
+			DeferCleanup(func(x bool) { vars.DisableDrain = x }, vars.DisableDrain)
+			vars.DisableDrain = true
+
+			By("Init mock functions")
+			hostHelper.EXPECT().DiscoverSriovDevices(hostHelper).DoAndReturn(func(helpersInterface helper.HostHelpersInterface) ([]sriovnetworkv1.InterfaceExt, error) {
+				interfaceExtList := []sriovnetworkv1.InterfaceExt{
+					{
+						Name:           "eno1",
+						Driver:         "ice",
+						PciAddress:     "0000:16:00.0",
+						DeviceID:       "1593",
+						Vendor:         "8086",
+						EswitchMode:    "legacy",
+						LinkAdminState: "up",
+						LinkSpeed:      "10000 Mb/s",
+						LinkType:       "ETH",
+						Mac:            "aa:bb:cc:dd:ee:ff",
+						Mtu:            1500,
+						TotalVfs:       2,
+						NumVfs:         2,
+						VFs: []sriovnetworkv1.VirtualFunction{
+							{
+								Name:       "eno1f0",
+								PciAddress: "0000:16:00.1",
+								VfID:       0,
+							},
+							{
+								Name:       "eno1f1",
+								PciAddress: "0000:16:00.2",
+								VfID:       1,
+							}},
+					},
+				}
+
+				return interfaceExtList, nil
+			}).AnyTimes()
+
+			hostHelper.EXPECT().LoadPfsStatus("0000:16:00.0").Return(&sriovnetworkv1.Interface{ExternallyManaged: false}, true, nil).AnyTimes()
+
+			hostHelper.EXPECT().ClearPCIAddressFolder().Return(nil).AnyTimes()
+			hostHelper.EXPECT().DiscoverRDMASubsystem().Return("shared", nil).AnyTimes()
+			hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil).AnyTimes()
+			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgPciRealloc).Return(true).AnyTimes()
+			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIntelIommu).Return(true).AnyTimes()
+			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIommuPt).Return(true).AnyTimes()
+			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaExclusive).Return(false).AnyTimes()
+			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaShared).Return(false).AnyTimes()
+			hostHelper.EXPECT().SetRDMASubsystem("").Return(nil).AnyTimes()
+
+			hostHelper.EXPECT().ConfigSriovInterfaces(gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).AnyTimes()
+
+			_, nodeState := createNode("node1")
+			nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{
+				{Name: "eno1",
+					PciAddress: "0000:16:00.0",
+					LinkType:   "eth",
+					NumVfs:     2,
+					VfGroups: []sriovnetworkv1.VfGroup{
+						{ResourceName: "test",
+							DeviceType: "netdevice",
+							PolicyName: "test-policy",
+							VfRange:    "eno1#0-1"},
+					}},
+			}
+			err := k8sClient.Update(ctx, nodeState)
+			Expect(err).ToNot(HaveOccurred())
+
+			featureGates := featuregate.New()
+			featureGates.Init(map[string]bool{})
+			dc := createDaemon(hostHelper, platformHelper, featureGates, []string{})
+			startDaemon(dc)
+
+			eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
+
+			By("Simulate node policy removal")
+			nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{}
+			err = k8sClient.Update(ctx, nodeState)
+			Expect(err).ToNot(HaveOccurred())
+
+			eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
+			assertLastStatusTransitionsContains(nodeState, 2, constants.SyncStatusInProgress)
+		})
 	})
 })
 
@@ -328,4 +412,31 @@ func createDaemon(
 	Expect(err).ToNot(HaveOccurred())
 
 	return configController
+}
+
+func eventuallySyncStatusEqual(nodeState *sriovnetworkv1.SriovNetworkNodeState, expectedState string) {
+	EventuallyWithOffset(1, func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+			ToNot(HaveOccurred())
+		g.Expect(nodeState.Status.SyncStatus).To(Equal(expectedState))
+	}, 10*time.Second, 100*time.Millisecond).Should(Succeed())
+}
+
+func assertLastStatusTransitionsContains(nodeState *sriovnetworkv1.SriovNetworkNodeState, numberOfTransitions int, status string) {
+	events := &corev1.EventList{}
+	err := k8sClient.List(
+		context.Background(),
+		events,
+		client.MatchingFields{
+			"involvedObject.name": nodeState.Name,
+			"reason":              "SyncStatusChanged",
+		},
+		client.Limit(numberOfTransitions),
+	)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Status transition events are in the form
+	// `Status changed from: Succeed to: InProgress`
+	Expect(events.Items).To(ContainElement(
+		HaveField("Message", ContainSubstring("to: "+status))))
 }

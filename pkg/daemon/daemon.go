@@ -644,6 +644,10 @@ func (dn *NodeReconciler) prepareNMUdevRule() error {
 
 // isDrainCompleted returns true if the current-state annotation is drain completed
 func (dn *NodeReconciler) isDrainCompleted(reqDrain bool, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState) bool {
+	if vars.DisableDrain {
+		return true
+	}
+
 	// if we need to drain check the drain status
 	if reqDrain {
 		return utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainComplete)
