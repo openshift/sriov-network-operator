@@ -1,8 +1,7 @@
 package virtual
 
 import (
-	"reflect"
-
+	"k8s.io/apimachinery/pkg/api/equality"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -90,7 +89,7 @@ func (p *VirtualPlugin) Apply() error {
 
 	if p.LastState != nil {
 		log.Log.Info("virtual plugin Apply()", "last-state", p.LastState.Spec)
-		if reflect.DeepEqual(p.LastState.Spec.Interfaces, p.DesireState.Spec.Interfaces) {
+		if equality.Semantic.DeepEqual(p.LastState.Spec.Interfaces, p.DesireState.Spec.Interfaces) {
 			log.Log.Info("virtual plugin Apply(): nothing to apply")
 			return nil
 		}

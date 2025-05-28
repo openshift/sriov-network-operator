@@ -338,6 +338,19 @@ var _ = Describe("OVS", func() {
 				// dbContent should be exactly same
 				Expect(dbContent).To(Equal(initialDBContent))
 			})
+			It("Bridge already exists, provided config semantically the same", func() {
+				storedConf := getManagedBridges()["br-0000_d8_00.0"]
+				providedConf := storedConf.DeepCopy()
+				storedConf.Uplinks[0].Interface.ExternalIDs = nil
+				providedConf.Uplinks[0].Interface.ExternalIDs = map[string]string{}
+				store.EXPECT().GetManagedOVSBridge("br-0000_d8_00.0").Return(storedConf, nil)
+				initialDBContent := getDefaultInitialDBContent()
+				createInitialDBContent(ctx, ovsClient, initialDBContent)
+				Expect(ovs.CreateOVSBridge(ctx, providedConf)).NotTo(HaveOccurred())
+				dbContent := getDBContent(ctx, ovsClient)
+				// dbContent should be exactly the same
+				Expect(dbContent).To(Equal(initialDBContent))
+			})
 			It("No Bridge, create bridge", func() {
 				expectedConf := getManagedBridges()["br-0000_d8_00.0"]
 				store.EXPECT().GetManagedOVSBridge("br-0000_d8_00.0").Return(nil, nil)
