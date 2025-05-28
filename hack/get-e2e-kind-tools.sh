@@ -14,14 +14,14 @@ if [ ! -d "${root}/bin" ]; then
 fi
 
 echo "retrieving kind"
-curl --max-time 10 --retry 10 --retry-delay 5 --retry-max-time 60 -Lo "${root}/bin/kind" "${KIND_BINARY_URL}"
+curl -Lo "${root}/bin/kind" "${KIND_BINARY_URL}"
 chmod +x "${root}/bin/kind"
 
 echo "retrieving kubectl"
-curl --max-time 10 --retry 10 --retry-delay 5 --retry-max-time 60 -Lo "${root}/bin/kubectl" "https://storage.googleapis.com/kubernetes-release/release/$(curl -s ${K8_STABLE_RELEASE_URL})/bin/linux/amd64/kubectl"
+curl -Lo "${root}/bin/kubectl" "https://storage.googleapis.com/kubernetes-release/release/$(curl -s ${K8_STABLE_RELEASE_URL})/bin/linux/amd64/kubectl"
 chmod +x "${root}/bin/kubectl"
 
 echo "retrieving jq"
-curl --max-time 10 --retry 10 --retry-delay 5 --retry-max-time 60 -Lo "${root}/bin/jq" "${JQ_RELEASE_URL}"
+curl -Lo "${root}/bin/jq" "${JQ_RELEASE_URL}"
 chmod +x "${root}/bin/jq"
 export PATH="$PATH:$root/bin"

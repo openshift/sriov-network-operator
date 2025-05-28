@@ -1,0 +1,45 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+ name: operator-allow-egress-to-api-server
+spec:
+ podSelector:
+   matchLabels:
+    name: sriov-network-operator
+ egress:
+ - ports:
+   - protocol: TCP
+     port: 6443
+ policyTypes:
+ - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+ name: operator-webhook-allow-egress-to-api-server
+spec:
+ podSelector:
+   matchLabels:
+    app: operator-webhook
+ egress:
+ - ports:
+   - protocol: TCP
+     port: 6443
+ policyTypes:
+ - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+ name: network-resources-injector-allow-egress-to-api-server
+spec:
+ podSelector:
+   matchLabels:
+    app: network-resources-injector
+ egress:
+ - ports:
+   - protocol: TCP
+     port: 6443
+ policyTypes:
+ - Egress
+---
