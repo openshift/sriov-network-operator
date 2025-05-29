@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -42,6 +43,11 @@ var (
 	mockCtrl       *gomock.Controller
 	hostHelper     *mock_helper.MockHostHelpersInterface
 	platformHelper *mock_platforms.MockInterface
+
+	discoverSriovReturn atomic.Pointer[[]sriovnetworkv1.InterfaceExt]
+	nodeState           *sriovnetworkv1.SriovNetworkNodeState
+
+	daemonReconciler *daemon.NodeReconciler
 )
 
 const (
@@ -94,9 +100,8 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		} else {
 			vars.ClusterType = constants.ClusterTypeKubernetes
 		}
-	})
 
-	BeforeEach(func() {
+		By("Init mock functions")
 		t = GinkgoT()
 		mockCtrl = gomock.NewController(t)
 		hostHelper = mock_helper.NewMockHostHelpersInterface(mockCtrl)
@@ -115,9 +120,41 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		hostHelper.EXPECT().Chroot(gomock.Any()).Return(func() error { return nil }, nil).AnyTimes()
 		hostHelper.EXPECT().RunCommand("/bin/sh", gomock.Any(), gomock.Any(), gomock.Any()).Return("", "", nil).AnyTimes()
 
+		discoverSriovReturn.Store(&[]sriovnetworkv1.InterfaceExt{})
+
+		hostHelper.EXPECT().DiscoverSriovDevices(hostHelper).DoAndReturn(func(helpersInterface helper.HostHelpersInterface) ([]sriovnetworkv1.InterfaceExt, error) {
+			return *discoverSriovReturn.Load(), nil
+		}).AnyTimes()
+
+		hostHelper.EXPECT().LoadPfsStatus("0000:16:00.0").Return(&sriovnetworkv1.Interface{ExternallyManaged: false}, true, nil).AnyTimes()
+
+		hostHelper.EXPECT().ClearPCIAddressFolder().Return(nil).AnyTimes()
+		hostHelper.EXPECT().DiscoverRDMASubsystem().Return("shared", nil).AnyTimes()
+		hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgPciRealloc).Return(true).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIntelIommu).Return(true).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIommuPt).Return(true).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaExclusive).Return(false).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaShared).Return(false).AnyTimes()
+		hostHelper.EXPECT().SetRDMASubsystem("").Return(nil).AnyTimes()
+
+		hostHelper.EXPECT().ConfigSriovInterfaces(gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).AnyTimes()
+
+		// k8s plugin for k8s cluster type
+		if vars.ClusterType == constants.ClusterTypeKubernetes {
+			hostHelper.EXPECT().ReadServiceManifestFile(gomock.Any()).Return(&hostTypes.Service{Name: "test"}, nil).AnyTimes()
+			hostHelper.EXPECT().ReadServiceInjectionManifestFile(gomock.Any()).Return(&hostTypes.Service{Name: "test"}, nil).AnyTimes()
+		}
+
+		featureGates := featuregate.New()
+		featureGates.Init(map[string]bool{})
+		daemonReconciler = createDaemon(hostHelper, platformHelper, featureGates, []string{})
+		startDaemon(daemonReconciler)
+
+		_, nodeState = createNode("node1")
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		Expect(k8sClient.DeleteAllOf(context.Background(), &corev1.Node{})).ToNot(HaveOccurred())
 
 		Expect(k8sClient.DeleteAllOf(context.Background(), &sriovnetworkv1.SriovNetworkNodeState{}, client.InNamespace(testNamespace))).ToNot(HaveOccurred())
@@ -125,80 +162,29 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 	})
 
 	Context("Config Daemon generic flow", func() {
-		BeforeEach(func() {
-			// k8s plugin for k8s cluster type
-			if vars.ClusterType == constants.ClusterTypeKubernetes {
-				hostHelper.EXPECT().ReadServiceManifestFile(gomock.Any()).Return(&hostTypes.Service{Name: "test"}, nil).AnyTimes()
-				hostHelper.EXPECT().ReadServiceInjectionManifestFile(gomock.Any()).Return(&hostTypes.Service{Name: "test"}, nil).AnyTimes()
-			}
-		})
 
 		It("Should expose nodeState Status section", func(ctx context.Context) {
-			By("Init mock functions")
-			afterConfig := false
-			hostHelper.EXPECT().DiscoverSriovDevices(hostHelper).DoAndReturn(func(helpersInterface helper.HostHelpersInterface) ([]sriovnetworkv1.InterfaceExt, error) {
-				interfaceExtList := []sriovnetworkv1.InterfaceExt{
-					{
-						Name:           "eno1",
-						Driver:         "ice",
-						PciAddress:     "0000:16:00.0",
-						DeviceID:       "1593",
-						Vendor:         "8086",
-						EswitchMode:    "legacy",
-						LinkAdminState: "up",
-						LinkSpeed:      "10000 Mb/s",
-						LinkType:       "ETH",
-						Mac:            "aa:bb:cc:dd:ee:ff",
-						Mtu:            1500,
-						TotalVfs:       2,
-						NumVfs:         0,
-					},
-				}
 
-				if afterConfig {
-					interfaceExtList[0].NumVfs = 2
-					interfaceExtList[0].VFs = []sriovnetworkv1.VirtualFunction{
-						{
-							Name:       "eno1f0",
-							PciAddress: "0000:16:00.1",
-							VfID:       0,
-						},
-						{
-							Name:       "eno1f1",
-							PciAddress: "0000:16:00.2",
-							VfID:       1,
-						}}
-				}
-				return interfaceExtList, nil
-			}).AnyTimes()
+			discoverSriovReturn.Store(&[]sriovnetworkv1.InterfaceExt{
+				{
+					Name:           "eno1",
+					Driver:         "ice",
+					PciAddress:     "0000:16:00.0",
+					DeviceID:       "1593",
+					Vendor:         "8086",
+					EswitchMode:    "legacy",
+					LinkAdminState: "up",
+					LinkSpeed:      "10000 Mb/s",
+					LinkType:       "ETH",
+					Mac:            "aa:bb:cc:dd:ee:ff",
+					Mtu:            1500,
+					TotalVfs:       2,
+					NumVfs:         0,
+				},
+			})
 
-			hostHelper.EXPECT().LoadPfsStatus("0000:16:00.0").Return(&sriovnetworkv1.Interface{ExternallyManaged: false}, true, nil).AnyTimes()
-
-			hostHelper.EXPECT().ClearPCIAddressFolder().Return(nil).AnyTimes()
-			hostHelper.EXPECT().DiscoverRDMASubsystem().Return("shared", nil).AnyTimes()
-			hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgPciRealloc).Return(true).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIntelIommu).Return(true).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIommuPt).Return(true).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaExclusive).Return(false).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaShared).Return(false).AnyTimes()
-			hostHelper.EXPECT().SetRDMASubsystem("").Return(nil).AnyTimes()
-
-			hostHelper.EXPECT().ConfigSriovInterfaces(gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).AnyTimes()
-
-			featureGates := featuregate.New()
-			featureGates.Init(map[string]bool{})
-			dc := createDaemon(hostHelper, platformHelper, featureGates, []string{})
-			startDaemon(dc)
-
-			_, nodeState := createNode("node1")
 			By("waiting for state to be succeeded")
-			EventuallyWithOffset(1, func(g Gomega) {
-				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
-					ToNot(HaveOccurred())
-
-				g.Expect(nodeState.Status.SyncStatus).To(Equal(constants.SyncStatusSucceeded))
-			}, waitTime, retryTime).Should(Succeed())
+			eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
 
 			By("add spec to node state")
 			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
@@ -216,14 +202,44 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 							VfRange:    "eno1#0-1"},
 					}},
 			}
-			afterConfig = true
+
+			discoverSriovReturn.Store(&[]sriovnetworkv1.InterfaceExt{
+				{
+					Name:           "eno1",
+					Driver:         "ice",
+					PciAddress:     "0000:16:00.0",
+					DeviceID:       "1593",
+					Vendor:         "8086",
+					EswitchMode:    "legacy",
+					LinkAdminState: "up",
+					LinkSpeed:      "10000 Mb/s",
+					LinkType:       "ETH",
+					Mac:            "aa:bb:cc:dd:ee:ff",
+					Mtu:            1500,
+					TotalVfs:       2,
+					NumVfs:         2,
+					VFs: []sriovnetworkv1.VirtualFunction{
+						{
+							Name:       "eno1f0",
+							PciAddress: "0000:16:00.1",
+							VfID:       0,
+						},
+						{
+							Name:       "eno1f1",
+							PciAddress: "0000:16:00.2",
+							VfID:       1,
+						}},
+				},
+			})
+
 			err = k8sClient.Update(ctx, nodeState)
 			Expect(err).ToNot(HaveOccurred())
+
 			By("waiting to require drain")
 			EventuallyWithOffset(1, func(g Gomega) {
 				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
 					ToNot(HaveOccurred())
-				g.Expect(dc.GetLastAppliedGeneration()).To(Equal(int64(2)))
+				g.Expect(daemonReconciler.GetLastAppliedGeneration()).To(Equal(int64(2)))
 			}, waitTime, retryTime).Should(Succeed())
 
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
@@ -264,55 +280,35 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 			DeferCleanup(func(x bool) { vars.DisableDrain = x }, vars.DisableDrain)
 			vars.DisableDrain = true
 
-			By("Init mock functions")
-			hostHelper.EXPECT().DiscoverSriovDevices(hostHelper).DoAndReturn(func(helpersInterface helper.HostHelpersInterface) ([]sriovnetworkv1.InterfaceExt, error) {
-				interfaceExtList := []sriovnetworkv1.InterfaceExt{
-					{
-						Name:           "eno1",
-						Driver:         "ice",
-						PciAddress:     "0000:16:00.0",
-						DeviceID:       "1593",
-						Vendor:         "8086",
-						EswitchMode:    "legacy",
-						LinkAdminState: "up",
-						LinkSpeed:      "10000 Mb/s",
-						LinkType:       "ETH",
-						Mac:            "aa:bb:cc:dd:ee:ff",
-						Mtu:            1500,
-						TotalVfs:       2,
-						NumVfs:         2,
-						VFs: []sriovnetworkv1.VirtualFunction{
-							{
-								Name:       "eno1f0",
-								PciAddress: "0000:16:00.1",
-								VfID:       0,
-							},
-							{
-								Name:       "eno1f1",
-								PciAddress: "0000:16:00.2",
-								VfID:       1,
-							}},
-					},
-				}
+			discoverSriovReturn.Store(&[]sriovnetworkv1.InterfaceExt{
+				{
+					Name:           "eno1",
+					Driver:         "ice",
+					PciAddress:     "0000:16:00.0",
+					DeviceID:       "1593",
+					Vendor:         "8086",
+					EswitchMode:    "legacy",
+					LinkAdminState: "up",
+					LinkSpeed:      "10000 Mb/s",
+					LinkType:       "ETH",
+					Mac:            "aa:bb:cc:dd:ee:ff",
+					Mtu:            1500,
+					TotalVfs:       2,
+					NumVfs:         2,
+					VFs: []sriovnetworkv1.VirtualFunction{
+						{
+							Name:       "eno1f0",
+							PciAddress: "0000:16:00.1",
+							VfID:       0,
+						},
+						{
+							Name:       "eno1f1",
+							PciAddress: "0000:16:00.2",
+							VfID:       1,
+						}},
+				},
+			})
 
-				return interfaceExtList, nil
-			}).AnyTimes()
-
-			hostHelper.EXPECT().LoadPfsStatus("0000:16:00.0").Return(&sriovnetworkv1.Interface{ExternallyManaged: false}, true, nil).AnyTimes()
-
-			hostHelper.EXPECT().ClearPCIAddressFolder().Return(nil).AnyTimes()
-			hostHelper.EXPECT().DiscoverRDMASubsystem().Return("shared", nil).AnyTimes()
-			hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgPciRealloc).Return(true).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIntelIommu).Return(true).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIommuPt).Return(true).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaExclusive).Return(false).AnyTimes()
-			hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaShared).Return(false).AnyTimes()
-			hostHelper.EXPECT().SetRDMASubsystem("").Return(nil).AnyTimes()
-
-			hostHelper.EXPECT().ConfigSriovInterfaces(gomock.Any(), gomock.Any(), gomock.Any(), false).Return(nil).AnyTimes()
-
-			_, nodeState := createNode("node1")
 			nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{
 				{Name: "eno1",
 					PciAddress: "0000:16:00.0",
@@ -327,11 +323,6 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 			}
 			err := k8sClient.Update(ctx, nodeState)
 			Expect(err).ToNot(HaveOccurred())
-
-			featureGates := featuregate.New()
-			featureGates.Init(map[string]bool{})
-			dc := createDaemon(hostHelper, platformHelper, featureGates, []string{})
-			startDaemon(dc)
 
 			eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
 
