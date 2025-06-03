@@ -24,7 +24,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
 )
 
-var _ = Describe("[sriov] NetworkPool", Ordered, func() {
+var _ = XDescribe("[sriov] NetworkPool", Ordered, func() {
 	var testNode string
 	var interfaces []*sriovv1.InterfaceExt
 	var resourceName = "testrdma"

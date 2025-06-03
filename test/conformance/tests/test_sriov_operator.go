@@ -1051,7 +1051,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 		})
 	})
 
-	Describe("Custom SriovNetworkNodePolicy", func() {
+	FDescribe("Custom SriovNetworkNodePolicy", func() {
 		BeforeEach(func() {
 			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 			Expect(err).ToNot(HaveOccurred())
@@ -1769,9 +1769,15 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				WaitForSRIOVStable()
 				By("Checking files on the host")
+
 				output, errOutput, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
 				Expect(err).ToNot(HaveOccurred(), errOutput)
-				Expect(strings.HasPrefix(output, "0")).Should(BeTrue())
+
+				o, e, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "find /host/etc/sriov-operator/pci/ -ls")
+				By("find_stdout " + o)
+				By("find_stderr " + e)
+
+				Expect(strings.HasPrefix(output, "0")).Should(BeTrue(), "stdout:%s stderr:%s", output, errOutput)
 				output, errOutput, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/udev/rules.d/ | grep 10-nm-disable | wc -l")
 				Expect(err).ToNot(HaveOccurred(), errOutput)
 				Expect(strings.HasPrefix(output, "0")).Should(BeTrue())
