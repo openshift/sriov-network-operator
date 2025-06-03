@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+ name: operator-webhook-allow-ingress-port-6443
+spec:
+ podSelector:
+   matchLabels:
+    app: operator-webhook
+ ingress:
+ - ports:
+   - protocol: TCP
+     port: 6443
+ policyTypes:
+ - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+ name: network-resources-injector-allow-ingress-port-6443
+spec:
+ podSelector:
+   matchLabels:
+    app: network-resources-injector
+ ingress:
+ - ports:
+   - protocol: TCP
+     port: 6443
+ policyTypes:
+ - Ingress
+---
