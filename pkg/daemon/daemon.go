@@ -260,9 +260,13 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			reqLogger.Error(err, "failed to handle drain")
 			return ctrl.Result{}, err
 		}
-		// drain is still in progress we don't need to re-queue the request as the operator will update the annotation
+
+		// TODO: remove this after we stop using the node annotation
+		// drain is still in progress we will still requeue the request in case there is an un-expect state in the draining
+		// this will allow the daemon to try again.
 		if drainInProcess {
-			return ctrl.Result{}, nil
+			reqLogger.Info("node drain still in progress, requeue")
+			return ctrl.Result{RequeueAfter: consts.DaemonRequeueTime}, nil
 		}
 	}
 
