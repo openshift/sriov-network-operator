@@ -1051,7 +1051,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 		})
 	})
 
-	FDescribe("Custom SriovNetworkNodePolicy", func() {
+	Describe("Custom SriovNetworkNodePolicy", func() {
 		BeforeEach(func() {
 			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 			Expect(err).ToNot(HaveOccurred())
