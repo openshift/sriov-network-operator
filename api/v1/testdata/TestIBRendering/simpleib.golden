@@ -3,12 +3,13 @@
   "kind": "NetworkAttachmentDefinition",
   "metadata": {
     "annotations": {
-      "k8s.v1.cni.cncf.io/resourceName": "/testresource"
+      "k8s.v1.cni.cncf.io/resourceName": "/testresource",
+      "sriovnetwork.openshift.io/owner-ref": "SriovIBNetwork.sriovnetwork.openshift.io/ns/test"
     },
-    "name": null,
+    "name": "test",
     "namespace": "testnamespace"
   },
   "spec": {
-    "config": "{ \"cniVersion\":\"1.0.0\", \"name\":\"\",\"type\":\"ib-sriov\",\"capabilities\":foo,\"ipam\":{} }"
+    "config": "{ \"cniVersion\":\"1.0.0\", \"name\":\"test\",\"type\":\"ib-sriov\",\"capabilities\":foo,\"ipam\":{} }"
   }
 }

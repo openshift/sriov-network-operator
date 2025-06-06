@@ -3,7 +3,8 @@
   "kind": "NetworkAttachmentDefinition",
   "metadata": {
     "annotations": {
-      "k8s.v1.cni.cncf.io/resourceName": "/testresource"
+      "k8s.v1.cni.cncf.io/resourceName": "/testresource",
+      "sriovnetwork.openshift.io/owner-ref": "OVSNetwork.sriovnetwork.openshift.io/ns/test"
     },
     "name": "test",
     "namespace": "testnamespace"
