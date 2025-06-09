@@ -1,0 +1,4 @@
+resources:
+- deny_all.yaml
+- allow_egress_api_server.yaml
+- allow_ingress_to_webhooks.yaml
