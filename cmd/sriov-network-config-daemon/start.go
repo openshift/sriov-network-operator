@@ -24,7 +24,7 @@ import (
 
 	ocpconfigapi "github.com/openshift/api/config/v1"
 	"github.com/spf13/cobra"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -45,7 +45,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -228,19 +228,6 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 	}
 	vars.Config = config
 
-	// create helpers
-	hostHelpers, err := helper.NewDefaultHostHelpers()
-	if err != nil {
-		setupLog.Error(err, "failed to create hostHelpers")
-		return err
-	}
-
-	platformHelper, err := platforms.NewDefaultPlatformHelper()
-	if err != nil {
-		setupLog.Error(err, "failed to create platformHelper")
-		return err
-	}
-
 	// create clients
 	kubeclient := kubernetes.NewForConfigOrDie(config)
 	kClient, err := runtimeclient.New(
@@ -252,22 +239,34 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
-	eventRecorder := daemon.NewEventRecorder(kClient, kubeclient, scheme)
-	defer eventRecorder.Shutdown()
-
-	nodeInfo, err := kubeclient.CoreV1().Nodes().Get(context.Background(), vars.NodeName, v1.GetOptions{})
+	nodeInfo, err := kubeclient.CoreV1().Nodes().Get(context.Background(), vars.NodeName, metav1.GetOptions{})
 	if err != nil {
 		setupLog.Error(err, "failed to fetch node state, exiting", "node-name", startOpts.nodeName)
 		return err
 	}
-
-	// check for platform
+	// check for a platform
 	for key, pType := range vars.PlatformsMap {
 		if strings.Contains(strings.ToLower(nodeInfo.Spec.ProviderID), strings.ToLower(key)) {
 			vars.PlatformType = pType
 		}
 	}
 	setupLog.Info("Running on", "platform", vars.PlatformType.String())
+
+	// create helpers
+	hostHelpers, err := helper.NewDefaultHostHelpers()
+	if err != nil {
+		setupLog.Error(err, "failed to create hostHelpers")
+		return err
+	}
+
+	plat, err := platform.New(hostHelpers)
+	if err != nil {
+		setupLog.Error(err, "failed to create hypervisor")
+		return err
+	}
+
+	eventRecorder := daemon.NewEventRecorder(kClient, kubeclient, scheme)
+	defer eventRecorder.Shutdown()
 
 	// Initial supported nic IDs
 	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, vars.Namespace); err != nil {
@@ -325,14 +324,12 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 
 	dm := daemon.New(
 		kClient,
-		hostHelpers,
-		platformHelper,
+		plat,
 		eventRecorder,
-		fg,
-		startOpts.disabledPlugins)
+		fg)
 
 	// Init Daemon configuration on the node
-	if err = dm.Init(); err != nil {
+	if err = dm.Init(startOpts.disabledPlugins); err != nil {
 		setupLog.Error(err, "unable to initialize daemon")
 		os.Exit(1)
 	}

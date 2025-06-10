@@ -25,8 +25,6 @@ const (
 	Baremetal PlatformTypes = iota
 	// VirtualOpenStack platform
 	VirtualOpenStack
-	// VirtualAWS platform
-	VirtualAWS
 )
 
 func (e PlatformTypes) String() string {
@@ -35,8 +33,6 @@ func (e PlatformTypes) String() string {
 		return "Baremetal"
 	case VirtualOpenStack:
 		return "Virtual/Openstack"
-	case VirtualAWS:
-		return "Virtual/AWS"
 	default:
 		return fmt.Sprintf("%d", int(e))
 	}

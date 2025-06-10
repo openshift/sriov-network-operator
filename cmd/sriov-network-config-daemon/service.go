@@ -30,19 +30,14 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	hosttypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/generic"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/virtual"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/version"
 )
 
 const (
-	PhasePre  = "pre"
-	PhasePost = "post"
-
 	// InitializationDeviceDiscoveryTimeoutSec constant defines the number of
 	// seconds to wait for devices to be registered in the system with the expected name.
 	InitializationDeviceDiscoveryTimeoutSec = 60
@@ -59,23 +54,22 @@ var (
 	}
 	phaseArg string
 
-	newGenericPluginFunc  = generic.NewGenericPlugin
-	newVirtualPluginFunc  = virtual.NewVirtualPlugin
-	newHostHelpersFunc    = helper.NewDefaultHostHelpers
-	newPlatformHelperFunc = platforms.NewDefaultPlatformHelper
+	newPlatformFunc    = platform.New
+	newHostHelpersFunc = helper.NewDefaultHostHelpers
 )
 
 // ServiceConfig is a struct that encapsulates the configuration and dependencies
 // needed by the SriovNetworkConfigDaemon systemd service.
 type ServiceConfig struct {
-	hostHelper  helper.HostHelpersInterface // Provides host-specific helper functions
-	log         logr.Logger                 // Handles logging for the service
-	sriovConfig *hosttypes.SriovConfig      // Contains the SR-IOV network configuration settings
+	hostHelper        helper.HostHelpersInterface // Provides host-specific helper functions
+	platformInterface platform.Interface          // Provides platform helpers function
+	log               logr.Logger                 // Handles logging for the service
+	sriovConfig       *hosttypes.SriovConfig      // Contains the SR-IOV network configuration settings
 }
 
 func init() {
 	rootCmd.AddCommand(serviceCmd)
-	serviceCmd.Flags().StringVarP(&phaseArg, "phase", "p", PhasePre, fmt.Sprintf("configuration phase, supported values are: %s, %s", PhasePre, PhasePost))
+	serviceCmd.Flags().StringVarP(&phaseArg, "phase", "p", consts.PhasePre, fmt.Sprintf("configuration phase, supported values are: %s, %s", consts.PhasePre, consts.PhasePost))
 }
 
 func newServiceConfig(setupLog logr.Logger) (*ServiceConfig, error) {
@@ -83,12 +77,27 @@ func newServiceConfig(setupLog logr.Logger) (*ServiceConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create host helpers: %v", err)
 	}
-
-	return &ServiceConfig{
+	sc := &ServiceConfig{
 		hostHelpers,
+		nil,
 		setupLog,
 		nil,
-	}, nil
+	}
+
+	err = sc.readConf()
+	if err != nil {
+		return nil, sc.updateSriovResultErr(phaseArg, err)
+	}
+
+	// init globals
+	vars.PlatformType = sc.sriovConfig.PlatformType
+	platformInterface, err := newPlatformFunc(hostHelpers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to creeate serviceConfig: %w", err)
+	}
+	sc.platformInterface = platformInterface
+
+	return sc, nil
 }
 
 // The service supports two configuration phases:
@@ -102,8 +111,8 @@ func newServiceConfig(setupLog logr.Logger) (*ServiceConfig, error) {
 // If the result of the "pre" phase is different than "InProgress", then the "post" phase will not be executed
 // and the execution result will be forcefully set to "Failed".
 func runServiceCmd(cmd *cobra.Command, args []string) error {
-	if phaseArg != PhasePre && phaseArg != PhasePost {
-		return fmt.Errorf("invalid value for \"--phase\" argument, valid values are: %s, %s", PhasePre, PhasePost)
+	if phaseArg != consts.PhasePre && phaseArg != consts.PhasePost {
+		return fmt.Errorf("invalid value for \"--phase\" argument, valid values are: %s, %s", consts.PhasePre, consts.PhasePost)
 	}
 	// init logger
 	snolog.InitLog()
@@ -115,16 +124,12 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 	// Mark that we are running on host
 	vars.UsingSystemdMode = true
 	vars.InChroot = true
+	vars.Destdir = "/tmp"
 
 	sc, err := newServiceConfig(setupLog)
 	if err != nil {
 		setupLog.Error(err, "failed to create the service configuration controller, Exiting")
 		return err
-	}
-
-	err = sc.readConf()
-	if err != nil {
-		return sc.updateSriovResultErr(phaseArg, err)
 	}
 
 	setupLog.V(2).Info("sriov-config-service", "config", sc.sriovConfig)
@@ -138,7 +143,12 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 
 	sc.waitForDevicesInitialization()
 
-	if phaseArg == PhasePre {
+	err = sc.platformInterface.Init()
+	if err != nil {
+		return sc.updateSriovResultErr(phaseArg, fmt.Errorf("failed to init platform configuration: %w", err))
+	}
+
+	if phaseArg == consts.PhasePre {
 		err = sc.phasePre()
 	} else {
 		err = sc.phasePost()
@@ -189,7 +199,7 @@ func (s *ServiceConfig) phasePre() error {
 	s.hostHelper.TryEnableTun()
 	s.hostHelper.TryEnableVhostNet()
 
-	return s.callPlugin(PhasePre)
+	return s.callPlugin(consts.PhasePre)
 }
 
 func (s *ServiceConfig) phasePost() error {
@@ -203,7 +213,7 @@ func (s *ServiceConfig) phasePost() error {
 	}
 	s.log.V(0).Info("Pre phase succeed, continue execution")
 
-	return s.callPlugin(PhasePost)
+	return s.callPlugin(consts.PhasePost)
 }
 
 func (s *ServiceConfig) callPlugin(phase string) error {
@@ -234,36 +244,7 @@ func (s *ServiceConfig) callPlugin(phase string) error {
 }
 
 func (s *ServiceConfig) getPlugin(phase string) (plugin.VendorPlugin, error) {
-	var (
-		configPlugin plugin.VendorPlugin
-		err          error
-	)
-	switch s.sriovConfig.PlatformType {
-	case consts.Baremetal:
-		switch phase {
-		case PhasePre:
-			configPlugin, err = newGenericPluginFunc(s.hostHelper,
-				generic.WithSkipVFConfiguration(),
-				generic.WithSkipBridgeConfiguration())
-		case PhasePost:
-			configPlugin, err = newGenericPluginFunc(s.hostHelper)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to create generic plugin for %v", err)
-		}
-	case consts.VirtualOpenStack:
-		switch phase {
-		case PhasePre:
-			configPlugin, err = newVirtualPluginFunc(s.hostHelper)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create virtual plugin %v", err)
-			}
-		case PhasePost:
-			s.log.Info("skip post configuration phase for virtual cluster")
-			return nil, nil
-		}
-	}
-	return configPlugin, nil
+	return s.platformInterface.SystemdGetPlugin(phase)
 }
 
 func (s *ServiceConfig) getNetworkNodeState(phase string) (*sriovv1.SriovNetworkNodeState, error) {
@@ -272,33 +253,18 @@ func (s *ServiceConfig) getNetworkNodeState(phase string) (*sriovv1.SriovNetwork
 		bridges       sriovv1.Bridges
 		err           error
 	)
-	switch s.sriovConfig.PlatformType {
-	case consts.Baremetal:
-		ifaceStatuses, err = s.hostHelper.DiscoverSriovDevices(s.hostHelper)
+	ifaceStatuses, err = s.platformInterface.DiscoverSriovDevices()
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover sriov devices on the host:  %v", err)
+	}
+	if phase != consts.PhasePre && vars.ManageSoftwareBridges {
+		// openvswitch is not available during the pre-phase
+		bridges, err = s.platformInterface.DiscoverBridges()
 		if err != nil {
-			return nil, fmt.Errorf("failed to discover sriov devices on the host:  %v", err)
-		}
-		if phase != PhasePre && vars.ManageSoftwareBridges {
-			// openvswitch is not available during the pre phase
-			bridges, err = s.hostHelper.DiscoverBridges()
-			if err != nil {
-				return nil, fmt.Errorf("failed to discover managed bridges on the host:  %v", err)
-			}
-		}
-	case consts.VirtualOpenStack:
-		platformHelper, err := newPlatformHelperFunc()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create platformHelpers")
-		}
-		err = platformHelper.CreateOpenstackDevicesInfo()
-		if err != nil {
-			return nil, fmt.Errorf("failed to read OpenStack data: %v", err)
-		}
-		ifaceStatuses, err = platformHelper.DiscoverSriovDevicesVirtual()
-		if err != nil {
-			return nil, fmt.Errorf("failed to discover devices: %v", err)
+			return nil, fmt.Errorf("failed to discover managed bridges on the host:  %v", err)
 		}
 	}
+
 	return &sriovv1.SriovNetworkNodeState{
 		Spec:   s.sriovConfig.Spec,
 		Status: sriovv1.SriovNetworkNodeStateStatus{Interfaces: ifaceStatuses, Bridges: bridges},
@@ -317,7 +283,7 @@ func (s *ServiceConfig) updateSriovResultErr(phase string, origErr error) error 
 func (s *ServiceConfig) updateSriovResultOk(phase string) error {
 	s.log.V(0).Info("service call succeed")
 	syncStatus := consts.SyncStatusSucceeded
-	if phase == PhasePre {
+	if phase == consts.PhasePre {
 		syncStatus = consts.SyncStatusInProgress
 	}
 	return s.updateResult(syncStatus, "")

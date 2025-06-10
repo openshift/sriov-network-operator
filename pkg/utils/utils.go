@@ -3,10 +3,14 @@ package utils
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -14,10 +18,15 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
+const (
+	requestTimeout = 5 * time.Second
+)
+
 //go:generate ../../bin/mockgen -destination mock/mock_utils.go -source utils.go
 type CmdInterface interface {
 	Chroot(string) (func() error, error)
 	RunCommand(string, ...string) (string, string, error)
+	HTTPGetFetchData(string) (string, error)
 }
 
 type utilsHelper struct {
@@ -27,6 +36,7 @@ func New() CmdInterface {
 	return &utilsHelper{}
 }
 
+// Chroot run a chroot command on a specific path
 func (u *utilsHelper) Chroot(path string) (func() error, error) {
 	root, err := os.Open("/")
 	if err != nil {
@@ -47,6 +57,36 @@ func (u *utilsHelper) Chroot(path string) (func() error, error) {
 		vars.InChroot = false
 		return syscall.Chroot(".")
 	}, nil
+}
+
+func (u *utilsHelper) HTTPGetFetchData(url string) (string, error) {
+	// Initialize an HTTP client with a specific timeout.
+	client := http.Client{
+		Timeout: requestTimeout,
+	}
+
+	// Perform the GET request.
+	resp, err := client.Get(url)
+	if err != nil {
+		// This error typically indicates a network issue or that the server is unreachable.
+		return "", fmt.Errorf("HTTP GET request to %s failed: %w", url, err)
+	}
+	// Ensure the response body is closed after the function returns.
+	defer resp.Body.Close()
+
+	// Check if the HTTP status code is OK (200).
+	if resp.StatusCode != http.StatusOK {
+		// Attempt to read the body for more detailed error information if available.
+		errorBodyBytes, _ := ioutil.ReadAll(resp.Body) // ReadAll might return its own error, but we prioritize the status code error.
+		return "", fmt.Errorf("request to %s returned status %s: %s", url, resp.Status, string(errorBodyBytes))
+	}
+
+	// Read the entire response body.
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body from %s: %w", url, err)
+	}
+	return string(bodyBytes), nil
 }
 
 // RunCommand runs a command

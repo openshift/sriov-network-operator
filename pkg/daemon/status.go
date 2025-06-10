@@ -10,8 +10,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 const (
@@ -98,32 +96,25 @@ func (dn *NodeReconciler) shouldUpdateStatus(current, desiredNodeState *sriovnet
 }
 
 func (dn *NodeReconciler) updateStatusFromHost(nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
-	log.Log.WithName("updateStatusFromHost").Info("Getting host network status")
-	var ifaces []sriovnetworkv1.InterfaceExt
-	var bridges sriovnetworkv1.Bridges
-	var err error
-
-	if vars.PlatformType == consts.VirtualOpenStack {
-		ifaces, err = dn.platformHelpers.DiscoverSriovDevicesVirtual()
-		if err != nil {
-			return err
-		}
-	} else {
-		ifaces, err = dn.HostHelpers.DiscoverSriovDevices(dn.HostHelpers)
-		if err != nil {
-			return err
-		}
-		if vars.ManageSoftwareBridges {
-			bridges, err = dn.HostHelpers.DiscoverBridges()
-			if err != nil {
-				return err
-			}
-		}
+	funcLog := log.Log.WithName("updateStatusFromHost")
+	funcLog.Info("Getting host network status")
+	ifaces, err := dn.platformInterface.DiscoverSriovDevices()
+	if err != nil {
+		funcLog.Error(err, "failed to discover sriov devices")
+		return err
+	}
+	bridges, err := dn.platformInterface.DiscoverBridges()
+	if err != nil {
+		funcLog.Error(err, "failed to discover bridges")
+		return err
 	}
 
 	nodeState.Status.Interfaces = ifaces
 	nodeState.Status.Bridges = bridges
-	nodeState.Status.System.RdmaMode, err = dn.HostHelpers.DiscoverRDMASubsystem()
+	nodeState.Status.System.RdmaMode, err = dn.hostHelpers.DiscoverRDMASubsystem()
+	if err != nil {
+		funcLog.Error(err, "failed to discover rdma subsystem")
+	}
 	return err
 }
 

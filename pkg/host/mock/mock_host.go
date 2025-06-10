@@ -431,6 +431,21 @@ func (mr *MockHostManagerInterfaceMockRecorder) GetInterfaceIndex(pciAddr any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceIndex", reflect.TypeOf((*MockHostManagerInterface)(nil).GetInterfaceIndex), pciAddr)
 }
 
+// GetInterfaces mocks base method.
+func (m *MockHostManagerInterface) GetInterfaces() ([]v1.InterfaceExt, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaces")
+	ret0, _ := ret[0].([]v1.InterfaceExt)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetInterfaces indicates an expected call of GetInterfaces.
+func (mr *MockHostManagerInterfaceMockRecorder) GetInterfaces() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaces", reflect.TypeOf((*MockHostManagerInterface)(nil).GetInterfaces))
+}
+
 // GetLinkType mocks base method.
 func (m *MockHostManagerInterface) GetLinkType(name string) string {
 	m.ctrl.T.Helper()
@@ -710,17 +725,17 @@ func (mr *MockHostManagerInterfaceMockRecorder) LoadUdevRules() *gomock.Call {
 }
 
 // PrepareNMUdevRule mocks base method.
-func (m *MockHostManagerInterface) PrepareNMUdevRule(supportedVfIds []string) error {
+func (m *MockHostManagerInterface) PrepareNMUdevRule() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PrepareNMUdevRule", supportedVfIds)
+	ret := m.ctrl.Call(m, "PrepareNMUdevRule")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PrepareNMUdevRule indicates an expected call of PrepareNMUdevRule.
-func (mr *MockHostManagerInterfaceMockRecorder) PrepareNMUdevRule(supportedVfIds any) *gomock.Call {
+func (mr *MockHostManagerInterfaceMockRecorder) PrepareNMUdevRule() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareNMUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).PrepareNMUdevRule), supportedVfIds)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareNMUdevRule", reflect.TypeOf((*MockHostManagerInterface)(nil).PrepareNMUdevRule))
 }
 
 // PrepareVFRepUdevRule mocks base method.

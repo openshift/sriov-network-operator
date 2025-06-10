@@ -34,7 +34,6 @@ var (
 	// PlatformsMap contains supported platforms for virtual VF
 	PlatformsMap = map[string]consts.PlatformTypes{
 		"openstack": consts.VirtualOpenStack,
-		"aws":       consts.VirtualAWS,
 	}
 
 	// SupportedVfIds list of supported virtual functions IDs
