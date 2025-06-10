@@ -17,7 +17,7 @@ var (
 
 	// ClusterType used by the operator to specify the platform it's running on
 	// supported values [kubernetes,openshift]
-	ClusterType string
+	ClusterType consts.ClusterType
 
 	// DevMode controls the developer mode in the operator
 	// developer mode allows the operator to use un-supported network devices
@@ -34,6 +34,7 @@ var (
 	// PlatformsMap contains supported platforms for virtual VF
 	PlatformsMap = map[string]consts.PlatformTypes{
 		"openstack": consts.VirtualOpenStack,
+		"aws":       consts.VirtualAWS,
 	}
 
 	// SupportedVfIds list of supported virtual functions IDs
@@ -84,7 +85,7 @@ var (
 func init() {
 	Namespace = os.Getenv("NAMESPACE")
 
-	ClusterType = os.Getenv("CLUSTER_TYPE")
+	ClusterType = consts.ClusterType(os.Getenv("CLUSTER_TYPE"))
 
 	DevMode = false
 	mode := os.Getenv("DEV_MODE")

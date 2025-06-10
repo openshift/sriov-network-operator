@@ -4,21 +4,19 @@ import (
 	"context"
 	"sync"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
+	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"go.uber.org/mock/gomock"
-
-	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
-
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
+	orchestratorMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
@@ -45,15 +43,27 @@ var _ = Describe("SriovNetworkPoolConfig controller", Ordered, func() {
 
 		t := GinkgoT()
 		mockCtrl := gomock.NewController(t)
-		platformHelper := mock_platforms.NewMockInterface(mockCtrl)
-		platformHelper.EXPECT().GetFlavor().Return(openshift.OpenshiftFlavorDefault).AnyTimes()
-		platformHelper.EXPECT().IsOpenshiftCluster().Return(false).AnyTimes()
-		platformHelper.EXPECT().IsHypershift().Return(false).AnyTimes()
+		orchestrator := orchestratorMock.NewMockInterface(mockCtrl)
+
+		orchestrator.EXPECT().ClusterType().DoAndReturn(func() consts.ClusterType {
+			if vars.ClusterType == consts.ClusterTypeOpenshift {
+				return consts.ClusterTypeOpenshift
+			}
+			return consts.ClusterTypeKubernetes
+		}).AnyTimes()
+
+		// TODO: Change this to add tests for hypershift
+		orchestrator.EXPECT().Flavor().DoAndReturn(func() consts.ClusterFlavor {
+			if vars.ClusterType == consts.ClusterTypeOpenshift {
+				return consts.DefaultConfigName
+			}
+			return consts.ClusterFlavorVanillaK8s
+		}).AnyTimes()
 
 		err = (&SriovNetworkPoolConfigReconciler{
-			Client:         k8sManager.GetClient(),
-			Scheme:         k8sManager.GetScheme(),
-			PlatformHelper: platformHelper,
+			Client:       k8sManager.GetClient(),
+			Scheme:       k8sManager.GetScheme(),
+			Orchestrator: orchestrator,
 		}).SetupWithManager(k8sManager)
 		Expect(err).ToNot(HaveOccurred())
 

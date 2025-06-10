@@ -7,6 +7,10 @@ import (
 	"sync"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"go.uber.org/mock/gomock"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -15,24 +19,18 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"go.uber.org/mock/gomock"
-
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
-	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/openshift"
+	orchestratorMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
-
-	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
@@ -62,15 +60,27 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 		t := GinkgoT()
 		mockCtrl := gomock.NewController(t)
-		platformHelper := mock_platforms.NewMockInterface(mockCtrl)
-		platformHelper.EXPECT().GetFlavor().Return(openshift.OpenshiftFlavorDefault).AnyTimes()
-		platformHelper.EXPECT().IsOpenshiftCluster().Return(false).AnyTimes()
-		platformHelper.EXPECT().IsHypershift().Return(false).AnyTimes()
+		orchestrator := orchestratorMock.NewMockInterface(mockCtrl)
+
+		orchestrator.EXPECT().ClusterType().DoAndReturn(func() consts.ClusterType {
+			if vars.ClusterType == consts.ClusterTypeOpenshift {
+				return consts.ClusterTypeOpenshift
+			}
+			return consts.ClusterTypeKubernetes
+		}).AnyTimes()
+
+		// TODO: Change this to add tests for hypershift
+		orchestrator.EXPECT().Flavor().DoAndReturn(func() consts.ClusterFlavor {
+			if vars.ClusterType == consts.ClusterTypeOpenshift {
+				return consts.DefaultConfigName
+			}
+			return consts.ClusterFlavorVanillaK8s
+		}).AnyTimes()
 
 		err = (&SriovOperatorConfigReconciler{
 			Client:            k8sManager.GetClient(),
 			Scheme:            k8sManager.GetScheme(),
-			PlatformHelper:    platformHelper,
+			Orchestrator:      orchestrator,
 			FeatureGate:       featuregate.New(),
 			UncachedAPIReader: k8sManager.GetAPIReader(),
 		}).SetupWithManager(k8sManager)
@@ -597,7 +607,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			// echo "ca-bundle-2" | base64 -w 0
 			os.Setenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT", "Y2EtYnVuZGxlLTIK")
 
-			DeferCleanup(func(old string) { vars.ClusterType = old }, vars.ClusterType)
+			DeferCleanup(func(old consts.ClusterType) { vars.ClusterType = old }, vars.ClusterType)
 			vars.ClusterType = consts.ClusterTypeKubernetes
 
 			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
