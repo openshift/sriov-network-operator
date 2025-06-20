@@ -17,7 +17,7 @@ endef
 
 OPERATORSDK = $(BIN_DIR)/operator-sdk
 operator-sdk: ## Download operator-sdk locally if necessary.
-	$(call download-tool,$(OPERATORSDK),https://github.com/operator-framework/operator-sdk/releases/download/v1.34.1/operator-sdk_linux_amd64)
+	$(call download-tool,$(OPERATORSDK),https://github.com/operator-framework/operator-sdk/releases/download/v1.40.0/operator-sdk_linux_amd64)
 
 # Generate bundle manifests and metadata, then validate generated files.
 .PHONY: bundle

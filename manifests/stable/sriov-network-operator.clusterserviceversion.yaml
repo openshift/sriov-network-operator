@@ -142,9 +142,9 @@ metadata:
           }
         }
       }
-    operators.operatorframework.io/builder: operator-sdk-v1.34.1
+    operators.operatorframework.io/builder: operator-sdk-v1.40.0
     operators.operatorframework.io/internal-objects: '["sriovnetworknodestates.sriovnetwork.openshift.io"]'
-    operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
     target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
