@@ -816,17 +816,17 @@ func (mr *MockHostHelpersInterfaceMockRecorder) MlxConfigFW(attributesToChange a
 }
 
 // MlxResetFW mocks base method.
-func (m *MockHostHelpersInterface) MlxResetFW(pciAddresses []string) error {
+func (m *MockHostHelpersInterface) MlxResetFW(pciAddresses []string, mellanoxNicsStatus map[string]map[string]v1.InterfaceExt) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MlxResetFW", pciAddresses)
+	ret := m.ctrl.Call(m, "MlxResetFW", pciAddresses, mellanoxNicsStatus)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // MlxResetFW indicates an expected call of MlxResetFW.
-func (mr *MockHostHelpersInterfaceMockRecorder) MlxResetFW(pciAddresses any) *gomock.Call {
+func (mr *MockHostHelpersInterfaceMockRecorder) MlxResetFW(pciAddresses, mellanoxNicsStatus any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MlxResetFW", reflect.TypeOf((*MockHostHelpersInterface)(nil).MlxResetFW), pciAddresses)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MlxResetFW", reflect.TypeOf((*MockHostHelpersInterface)(nil).MlxResetFW), pciAddresses, mellanoxNicsStatus)
 }
 
 // MstConfigReadData mocks base method.

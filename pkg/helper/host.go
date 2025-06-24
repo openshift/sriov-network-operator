@@ -26,12 +26,12 @@ type hostHelpers struct {
 
 func NewDefaultHostHelpers() (HostHelpersInterface, error) {
 	utilsHelper := utils.New()
-	mlxHelper := mlx.New(utilsHelper)
 	hostManager, err := host.NewHostManager(utilsHelper)
 	if err != nil {
 		log.Log.Error(err, "failed to create host manager")
 		return nil, err
 	}
+	mlxHelper := mlx.New(utilsHelper, hostManager)
 	storeManager, err := store.NewManager()
 	if err != nil {
 		log.Log.Error(err, "failed to create store manager")
