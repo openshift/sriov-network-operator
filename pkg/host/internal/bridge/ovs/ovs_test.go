@@ -437,6 +437,46 @@ var _ = Describe("OVS", func() {
 				Expect(dbContent.Bridge[0].UUID).To(Equal(initialDBContent.Bridge[0].UUID))
 				Expect(dbContent.Interface[0].UUID).NotTo(Equal(initialDBContent.Interface[0].UUID))
 			})
+			It("Bridge and internal interface exist and are valid, should not recreate them", func() {
+				expectedConf := getManagedBridges()["br-0000_d8_00.0"]
+				store.EXPECT().GetManagedOVSBridge("br-0000_d8_00.0").Return(expectedConf, nil)
+
+				initialDBContent := getDefaultInitialDBContent()
+				// Add valid internal interface
+				internalIface := &InterfaceEntry{
+					Name: expectedConf.Name,
+					UUID: uuid.NewString(),
+					Type: "internal",
+				}
+				internalPort := &PortEntry{
+					Name:       expectedConf.Name,
+					UUID:       uuid.NewString(),
+					Interfaces: []string{internalIface.UUID},
+				}
+				initialDBContent.Interface = append(initialDBContent.Interface, internalIface)
+				initialDBContent.Port = append(initialDBContent.Port, internalPort)
+				initialDBContent.Bridge[0].Ports = append(initialDBContent.Bridge[0].Ports, internalPort.UUID)
+				createInitialDBContent(ctx, ovsClient, initialDBContent)
+
+				Expect(ovs.CreateOVSBridge(ctx, expectedConf)).NotTo(HaveOccurred())
+
+				dbContent := getDBContent(ctx, ovsClient)
+				validateDBConfig(dbContent, expectedConf)
+
+				// All components should remain unchanged
+				Expect(dbContent.Bridge[0].UUID).To(Equal(initialDBContent.Bridge[0].UUID))
+				// Find internal interface in the result
+				var internalIfaceFound bool
+				for _, iface := range dbContent.Interface {
+					if iface.Name == expectedConf.Name {
+						internalIfaceFound = true
+						Expect(iface.UUID).To(Equal(internalIface.UUID))
+						Expect(iface.Error).To(BeNil())
+						break
+					}
+				}
+				Expect(internalIfaceFound).To(BeTrue())
+			})
 		})
 		Context("GetOVSBridges", func() {
 			It("Bridge exist, but no managed bridges in config", func() {

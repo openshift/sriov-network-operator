@@ -408,13 +408,13 @@ func GetNodeSecureBootState(clients *testclient.ClientSet, nodeName, namespace s
 		return false, err
 	}
 
-	stdout, _, err := pod.ExecCommand(clients, runningPod, "cat", "/host/sys/kernel/security/lockdown")
+	stdout, stderr, err := pod.ExecCommand(clients, runningPod, "cat", "/host/sys/kernel/security/lockdown")
 
-	if strings.Contains(stdout, "No such file or directory") {
+	if strings.Contains(stderr, "No such file or directory") {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("secureboot check error stdout:[%s] stderr:[%s]: %w", stdout, stderr, err)
 	}
 
 	return strings.Contains(stdout, "[integrity]") || strings.Contains(stdout, "[confidentiality]"), nil
