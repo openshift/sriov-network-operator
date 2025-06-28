@@ -20,6 +20,8 @@ The following SR-IOV capable hardware is supported with sriov-network-operator:
 | Intel E825-C Backplane Family | 8086 | 579c |
 | Intel E825-C QSFP Family | 8086 | 579d |
 | Intel E825-C SFP Family | 8086 | 579e |
+| Intel E830-CC QSFP Family | 8086 | 12d2 |
+| Intel E830-CC SFP Family | 8086 | 12d3 |
 | Mellanox MT27700 Family [ConnectX-4] | 15b3 | 1013 |
 | Mellanox MT27710 Family [ConnectX-4 Lx] | 15b3 | 1015 |
 | Mellanox MT27800 Family [ConnectX-5] | 15b3 | 1017 |
