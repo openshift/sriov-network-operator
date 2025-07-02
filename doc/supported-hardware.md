@@ -69,6 +69,8 @@ The following table depicts the supported SR-IOV hardware features of each suppo
 | Intel E825-C Backplane | V | V | X |
 | Intel E825-C QSFP Family | V | V | X |
 | Intel E825-C SFP Family | V | V | X |
+| Intel E830-CC QSFP Family | V | V | X |
+| Intel E830-CC SFP Family | V | V | X |
 | Mellanox MT27700 Family [ConnectX-4] | V | V | V |
 | Mellanox MT27710 Family [ConnectX-4 Lx] | V | V | V |
 | Mellanox MT27800 Family [ConnectX-5] | V | V | V |
