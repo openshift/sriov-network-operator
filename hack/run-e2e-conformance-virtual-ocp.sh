@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -xeo pipefail
 
-OCP_VERSION=${OCP_VERSION:-4.16.0}
+OCP_VERSION=${OCP_VERSION:-4.18}
 cluster_name=${CLUSTER_NAME:-ocp-virt}
 domain_name=lab
 
@@ -216,7 +216,7 @@ DELAY_SECONDS=10
 retries=0
 until [ $retries -ge $MAX_RETRIES ]; do
   # wait for all the openshift cluster operators to be running
-  if [ $(kubectl get clusteroperator --no-headers | awk '{print $3}' | grep True | wc -l) -eq 33 ]; then
+  if [ $(kubectl get clusteroperator --no-headers | awk '{print $3}' | grep -v True | wc -l) -eq 0 ]; then
     break
   fi
   retries=$((retries+1))
