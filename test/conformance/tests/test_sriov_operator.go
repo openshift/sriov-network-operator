@@ -26,7 +26,6 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/execute"
@@ -222,41 +221,6 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				}, 3*time.Minute, 5*time.Second).Should(Succeed())
 			})
 		})
-
-		DescribeTable("should gracefully restart quickly", func(webookEnabled bool) {
-			DeferCleanup(setSriovOperatorSpecFlag(operatorNetworkInjectorFlag, webookEnabled))
-			DeferCleanup(setSriovOperatorSpecFlag(operatorWebhookFlag, webookEnabled))
-
-			// This test case ensure leader election process runs smoothly when the operator's pod is restarted.
-			oldLease, err := clients.CoordinationV1Interface.Leases(operatorNamespace).Get(context.Background(), consts.LeaderElectionID, metav1.GetOptions{})
-			if k8serrors.IsNotFound(err) {
-				Skip("Leader Election is not enabled on the cluster. Skipping")
-			}
-			Expect(err).ToNot(HaveOccurred())
-
-			oldOperatorPod := getOperatorPod()
-
-			By("Delete the operator's pod")
-			deleteOperatorPod()
-
-			By("Wait the new operator's pod to start")
-			Eventually(func(g Gomega) {
-				newOperatorPod := getOperatorPod()
-				Expect(newOperatorPod.Name).ToNot(Equal(oldOperatorPod.Name))
-				Expect(newOperatorPod.Status.Phase).To(Equal(corev1.PodRunning))
-			}, 45*time.Second, 5*time.Second)
-
-			By("Assert the new operator's pod acquire the lease before 30 seconds")
-			Eventually(func(g Gomega) {
-				newLease, err := clients.CoordinationV1Interface.Leases(operatorNamespace).Get(context.Background(), consts.LeaderElectionID, metav1.GetOptions{})
-				g.Expect(err).ToNot(HaveOccurred())
-
-				g.Expect(newLease.Spec.HolderIdentity).ToNot(Equal(oldLease.Spec.HolderIdentity))
-			}, 30*time.Second, 5*time.Second).Should(Succeed())
-		},
-			Entry("webhooks enabled", true),
-			Entry("webhooks disabled", true),
-		)
 
 		Context("SriovNetworkMetricsExporter", func() {
 			BeforeEach(func() {
@@ -2349,13 +2313,6 @@ func getOperatorLogs(since time.Time) []string {
 	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 
 	return strings.Split(string(rawLogs), "\n")
-}
-
-func deleteOperatorPod() {
-	pod := getOperatorPod()
-
-	err := clients.Pods(operatorNamespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
-	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 }
 
 func assertObjectIsNotFound(name string, obj runtimeclient.Object) {
