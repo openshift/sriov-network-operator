@@ -1,6 +1,6 @@
 domain: openshift.io
 layout:
-- go.kubebuilder.io/v3
+- go.kubebuilder.io/v4
 projectName: sriov-network-operator
 repo: github.com/k8snetworkplumbingwg/sriov-network-operator
 resources:
