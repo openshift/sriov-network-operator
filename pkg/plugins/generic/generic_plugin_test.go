@@ -41,7 +41,6 @@ var _ = Describe("Generic plugin", func() {
 		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgPciRealloc).Return(false).AnyTimes()
 		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaExclusive).Return(false).AnyTimes()
 		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgRdmaShared).Return(false).AnyTimes()
-		hostHelper.EXPECT().IsKernelArgsSet("", consts.KernelArgIommuPassthrough).Return(false).AnyTimes()
 
 		hostHelper.EXPECT().RunCommand(gomock.Any(), gomock.Any()).Return("", "", nil).AnyTimes()
 
@@ -933,12 +932,6 @@ var _ = Describe("Generic plugin", func() {
 				hostHelper.EXPECT().GetCPUVendor().Return(hostTypes.CPUVendorAMD, nil)
 				genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(vfioNetworkNodeState)
 				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgIommuPt]).To(BeTrue())
-			})
-
-			It("should set the correct kernel args on ARM CPUs", func() {
-				hostHelper.EXPECT().GetCPUVendor().Return(hostTypes.CPUVendorARM, nil)
-				genericPlugin.(*GenericPlugin).addVfioDesiredKernelArg(vfioNetworkNodeState)
-				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgIommuPassthrough]).To(BeTrue())
 			})
 
 			It("should enable rdma shared mode", func() {
