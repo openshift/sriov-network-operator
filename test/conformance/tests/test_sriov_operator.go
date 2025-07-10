@@ -22,7 +22,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/utils/pointer"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -90,10 +91,10 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(len(selectedNodes)).To(BeNumerically(">", 0), "There must be at least one worker")
-				candidate := selectedNodes[0]
-				candidate.Labels["sriovenabled"] = "true"
-				_, err = clients.CoreV1Interface.Nodes().Update(context.Background(), &candidate, metav1.UpdateOptions{})
+				patch := []byte(`{"metadata":{"labels":{"sriovenabled":"true"}}}`)
+				candidate, err := clients.CoreV1Interface.Nodes().Patch(context.Background(), selectedNodes[0].Name, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
 				Expect(err).ToNot(HaveOccurred())
+				selectedNodes[0] = *candidate
 
 				By("Setting the node selector for each daemon")
 				cfg := sriovv1.SriovOperatorConfig{}
@@ -468,7 +469,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					}
 
 					err = clients.Pods(namespaces.Test).Delete(context.Background(), podObj.Name, metav1.DeleteOptions{
-						GracePeriodSeconds: pointer.Int64Ptr(0)})
+						GracePeriodSeconds: ptr.To(int64(0))})
 					Expect(err).ToNot(HaveOccurred())
 
 					return found
@@ -953,8 +954,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				}, 2*time.Minute, 10*time.Second).Should(BeTrue(), "Error to detect Required Event")
 				By("Delete first pod and release all VFs")
 				err = clients.Pods(namespaces.Test).Delete(context.Background(), runningPodA.Name, metav1.DeleteOptions{
-					GracePeriodSeconds: pointer.Int64Ptr(0),
-				})
+					GracePeriodSeconds: ptr.To(int64(0))})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to delete pod %s", runningPodA.Name))
 				By("Checking that second pod is able to use released VF")
 				waitForPodRunning(runningPodB)
