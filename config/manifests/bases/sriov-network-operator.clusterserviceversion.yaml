@@ -35,6 +35,9 @@ metadata:
           "enableInjector": true,
           "enableOperatorWebhook": true,
           "logLevel": 2
+          "featureGates": {
+              "resourceInjectorMatchCondition": true
+          }
         }
       }
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
