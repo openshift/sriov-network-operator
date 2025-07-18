@@ -35,6 +35,15 @@ rules:
   - update
   - delete
 - apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - create
+  - update
+  - delete
+- apiGroups:
   - apps
   resourceNames:
   - sriov-network-operator

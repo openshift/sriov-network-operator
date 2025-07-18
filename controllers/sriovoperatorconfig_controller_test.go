@@ -10,6 +10,7 @@ import (
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -177,6 +178,10 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			err = util.WaitForNamespacedObjectDeleted(daemonSet, k8sClient, testNamespace, "network-resources-injector", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 
+			networkPolicy := &networkv1.NetworkPolicy{}
+			err = util.WaitForNamespacedObjectDeleted(networkPolicy, k8sClient, testNamespace, "network-resources-injector-allow-traffic-api-server", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
 			mutateCfg := &admv1.MutatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObjectDeleted(mutateCfg, k8sClient, testNamespace, "network-resources-injector-config", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
@@ -191,6 +196,10 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 			daemonSet = &appsv1.DaemonSet{}
 			err = util.WaitForNamespacedObject(daemonSet, k8sClient, testNamespace, "network-resources-injector", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
+			networkPolicy = &networkv1.NetworkPolicy{}
+			err = util.WaitForNamespacedObject(networkPolicy, k8sClient, testNamespace, "network-resources-injector-allow-traffic-api-server", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 
 			mutateCfg = &admv1.MutatingWebhookConfiguration{}
@@ -212,6 +221,10 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			err = util.WaitForNamespacedObjectDeleted(daemonSet, k8sClient, testNamespace, "operator-webhook", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 
+			networkPolicy := &networkv1.NetworkPolicy{}
+			err = util.WaitForNamespacedObjectDeleted(networkPolicy, k8sClient, testNamespace, "operator-webhook-allow-traffic-api-server", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
 			mutateCfg := &admv1.MutatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObjectDeleted(mutateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
@@ -220,7 +233,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			err = util.WaitForNamespacedObjectDeleted(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("set disable to enableOperatorWebhook")
+			By("set enable to enableOperatorWebhook")
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)).NotTo(HaveOccurred())
 
 			config.Spec.EnableOperatorWebhook = true
@@ -229,6 +242,10 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 			daemonSet = &appsv1.DaemonSet{}
 			err = util.WaitForNamespacedObject(daemonSet, k8sClient, testNamespace, "operator-webhook", util.RetryInterval, util.APITimeout)
+			Expect(err).NotTo(HaveOccurred())
+
+			networkPolicy = &networkv1.NetworkPolicy{}
+			err = util.WaitForNamespacedObject(networkPolicy, k8sClient, testNamespace, "operator-webhook-allow-traffic-api-server", util.RetryInterval, util.APITimeout)
 			Expect(err).NotTo(HaveOccurred())
 
 			mutateCfg = &admv1.MutatingWebhookConfiguration{}
