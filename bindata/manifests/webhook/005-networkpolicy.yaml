@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: network-resources-injector-allow-traffic-api-server
+  namespace: {{.Namespace}}
+spec:
+  podSelector:
+    matchLabels:
+      app: network-resources-injector
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 6443
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 6443
+  policyTypes:
+  - Ingress
+  - Egress
