@@ -9,21 +9,24 @@ import (
 	"go.uber.org/mock/gomock"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	mock_host "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/mock"
 	mock_utils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils/mock"
 )
 
 var _ = Describe("SRIOV", func() {
 	var (
-		m        MellanoxInterface
-		u        *mock_utils.MockCmdInterface
-		testCtrl *gomock.Controller
+		m              MellanoxInterface
+		u              *mock_utils.MockCmdInterface
+		mockHostHelper *mock_host.MockHostManagerInterface
+		testCtrl       *gomock.Controller
 
 		testError = fmt.Errorf("test")
 	)
 	BeforeEach(func() {
 		testCtrl = gomock.NewController(GinkgoT())
 		u = mock_utils.NewMockCmdInterface(testCtrl)
-		m = New(u)
+		mockHostHelper = mock_host.NewMockHostManagerInterface(testCtrl)
+		m = New(u, mockHostHelper)
 	})
 
 	AfterEach(func() {
@@ -51,20 +54,170 @@ var _ = Describe("SRIOV", func() {
 	})
 
 	Context("MlxResetFW", func() {
-		It("should return not error if is able to run mstfwreset", func() {
-			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return(
-				"", "", nil)
-			err := m.MlxResetFW([]string{"0000:d8:00.0"})
+		var (
+			mellanoxNicsStatus map[string]map[string]sriovnetworkv1.InterfaceExt
+		)
+
+		BeforeEach(func() {
+			mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}
+		})
+
+		It("should reset VFs and firmware for single-port NIC", func() {
+			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+			}
+
+			// Expect VF reset for the primary port
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(nil)
+
+			// Expect firmware reset
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "", nil)
+
+			err := m.MlxResetFW([]string{"0000:d8:00.0"}, mellanoxNicsStatus)
 			Expect(err).ToNot(HaveOccurred())
 		})
-		It("should return error if one of the interfaces is not able to reset", func() {
-			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return(
-				"", "", nil)
-			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.1", "--skip_driver", "-l", "3", "-y", "reset").Return(
-				"", "-E- Failed to open the device", testError)
-			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.2", "--skip_driver", "-l", "3", "-y", "reset").Return(
-				"", "-E- Failed to open the device", testError)
-			err := m.MlxResetFW([]string{"0000:d8:00.0", "0000:d8:00.1", "0000:d8:00.2"})
+
+		It("should reset VFs on both ports and firmware for dual-port NIC", func() {
+			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+				"0000:d8:00.1": {PciAddress: "0000:d8:00.1", Vendor: "15b3"},
+			}
+
+			// Expect VF reset for both ports
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(nil)
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.1", 0).Return(nil)
+
+			// Expect firmware reset only for the specified port
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "", nil)
+
+			err := m.MlxResetFW([]string{"0000:d8:00.0"}, mellanoxNicsStatus)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should return error if VF reset fails on primary port", func() {
+			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+			}
+
+			// VF reset fails on primary port
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(fmt.Errorf("failed to reset VFs"))
+
+			err := m.MlxResetFW([]string{"0000:d8:00.0"}, mellanoxNicsStatus)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to reset VFs"))
+		})
+
+		It("should return error if VF reset fails on secondary port of dual-port NIC", func() {
+			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+				"0000:d8:00.1": {PciAddress: "0000:d8:00.1", Vendor: "15b3"},
+			}
+
+			// Primary port succeeds, secondary port fails
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(nil)
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.1", 0).Return(fmt.Errorf("failed to reset VFs on secondary port"))
+
+			err := m.MlxResetFW([]string{"0000:d8:00.0"}, mellanoxNicsStatus)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to reset VFs on secondary port"))
+		})
+
+		It("should return error if firmware reset fails", func() {
+			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+			}
+
+			// VF reset succeeds but firmware reset fails
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(nil)
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "-E- Failed to open the device", testError)
+
+			err := m.MlxResetFW([]string{"0000:d8:00.0"}, mellanoxNicsStatus)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("should handle multiple single-port NICs", func() {
+			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+			}
+			mellanoxNicsStatus["0000:d9:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d9:00.0": {PciAddress: "0000:d9:00.0", Vendor: "15b3"},
+			}
+
+			// VF reset for both NICs
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(nil)
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d9:00.0", 0).Return(nil)
+
+			// Firmware reset for both NICs
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "", nil)
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d9:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "", nil)
+
+			err := m.MlxResetFW([]string{"0000:d8:00.0", "0000:d9:00.0"}, mellanoxNicsStatus)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle multiple dual-port NICs", func() {
+			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+				"0000:d8:00.1": {PciAddress: "0000:d8:00.1", Vendor: "15b3"},
+			}
+			mellanoxNicsStatus["0000:d9:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d9:00.0": {PciAddress: "0000:d9:00.0", Vendor: "15b3"},
+				"0000:d9:00.1": {PciAddress: "0000:d9:00.1", Vendor: "15b3"},
+			}
+
+			// VF reset for all ports
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(nil)
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.1", 0).Return(nil)
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d9:00.0", 0).Return(nil)
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d9:00.1", 0).Return(nil)
+
+			// Firmware reset for specified ports
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "", nil)
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d9:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "", nil)
+
+			err := m.MlxResetFW([]string{"0000:d8:00.0", "0000:d9:00.0"}, mellanoxNicsStatus)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should handle mixed single and dual-port NICs", func() {
+			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+				"0000:d8:00.1": {PciAddress: "0000:d8:00.1", Vendor: "15b3"},
+			}
+			mellanoxNicsStatus["0000:d9:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d9:00.0": {PciAddress: "0000:d9:00.0", Vendor: "15b3"},
+			}
+
+			// VF reset for dual-port NIC (both ports) and single-port NIC
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(nil)
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.1", 0).Return(nil)
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d9:00.0", 0).Return(nil)
+
+			// Firmware reset for specified ports
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "", nil)
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d9:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "", nil)
+
+			err := m.MlxResetFW([]string{"0000:d8:00.0", "0000:d9:00.0"}, mellanoxNicsStatus)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should aggregate errors from multiple firmware reset failures", func() {
+			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+			}
+			mellanoxNicsStatus["0000:d9:00."] = map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d9:00.0": {PciAddress: "0000:d9:00.0", Vendor: "15b3"},
+			}
+
+			// VF reset succeeds for both
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(nil)
+			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d9:00.0", 0).Return(nil)
+
+			// Both firmware resets fail
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "-E- Failed to open the device", testError)
+			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d9:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "-E- Failed to open the device", testError)
+
+			err := m.MlxResetFW([]string{"0000:d8:00.0", "0000:d9:00.0"}, mellanoxNicsStatus)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -430,6 +583,23 @@ var _ = Describe("SRIOV", func() {
 			Expect(needChange).To(BeTrue())
 			Expect(attrs.LinkTypeP1).To(Equal("IB"))
 			Expect(attrs.LinkTypeP2).To(Equal("IB"))
+		})
+	})
+
+	Context("getOtherPortPCIAddress", func() {
+		It("should return port 1 when given port 0", func() {
+			result := getOtherPortPCIAddress("0000:d8:00.0")
+			Expect(result).To(Equal("0000:d8:00.1"))
+		})
+
+		It("should return port 0 when given port 1", func() {
+			result := getOtherPortPCIAddress("0000:d8:00.1")
+			Expect(result).To(Equal("0000:d8:00.0"))
+		})
+
+		It("should handle different PCI prefixes", func() {
+			result := getOtherPortPCIAddress("0000:d9:00.0")
+			Expect(result).To(Equal("0000:d9:00.1"))
 		})
 	})
 })

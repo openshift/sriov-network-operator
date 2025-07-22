@@ -12,6 +12,7 @@ package mock_mlxutils
 import (
 	reflect "reflect"
 
+	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	mlxutils "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vendors/mellanox"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -86,17 +87,17 @@ func (mr *MockMellanoxInterfaceMockRecorder) MlxConfigFW(attributesToChange any)
 }
 
 // MlxResetFW mocks base method.
-func (m *MockMellanoxInterface) MlxResetFW(pciAddresses []string) error {
+func (m *MockMellanoxInterface) MlxResetFW(pciAddresses []string, mellanoxNicsStatus map[string]map[string]v1.InterfaceExt) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MlxResetFW", pciAddresses)
+	ret := m.ctrl.Call(m, "MlxResetFW", pciAddresses, mellanoxNicsStatus)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // MlxResetFW indicates an expected call of MlxResetFW.
-func (mr *MockMellanoxInterfaceMockRecorder) MlxResetFW(pciAddresses any) *gomock.Call {
+func (mr *MockMellanoxInterfaceMockRecorder) MlxResetFW(pciAddresses, mellanoxNicsStatus any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MlxResetFW", reflect.TypeOf((*MockMellanoxInterface)(nil).MlxResetFW), pciAddresses)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MlxResetFW", reflect.TypeOf((*MockMellanoxInterface)(nil).MlxResetFW), pciAddresses, mellanoxNicsStatus)
 }
 
 // MstConfigReadData mocks base method.

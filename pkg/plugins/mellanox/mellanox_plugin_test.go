@@ -350,9 +350,85 @@ var _ = Describe("SRIOV", Ordered, func() {
 			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
 			h.EXPECT().IsKernelLockdownMode().Return(false)
 			h.EXPECT().MlxConfigFW(gomock.Any()).Return(nil)
-			h.EXPECT().MlxResetFW(gomock.Any()).Return(nil)
+			h.EXPECT().MlxResetFW(gomock.Any(), gomock.Any()).Return(nil)
 			err := m.Apply()
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should reset VFs on both ports for dual-port NIC when firmware reset is required", func() {
+			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
+
+			// Setup dual-port NIC status
+			mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.": {
+					"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+					"0000:d8:00.1": {PciAddress: "0000:d8:00.1", Vendor: "15b3"},
+				},
+			}
+
+			// Setup dual-port NIC spec
+			mellanoxNicsSpec = map[string]sriovnetworkv1.Interface{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", NumVfs: 10},
+				"0000:d8:00.1": {PciAddress: "0000:d8:00.1", NumVfs: 8},
+			}
+
+			// Only one port needs firmware reset
+			pciAddressesToReset = []string{"0000:d8:00.0"}
+
+			h.EXPECT().IsKernelLockdownMode().Return(false)
+			h.EXPECT().MlxConfigFW(gomock.Any()).Return(nil)
+
+			h.EXPECT().MlxResetFW([]string{"0000:d8:00.0"}, gomock.Any()).Return(nil)
+
+			err := m.Apply()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should reset VFs on single port NIC when firmware reset is required", func() {
+			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
+
+			// Setup single-port NIC status
+			mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{
+				"0000:d8:00.": {
+					"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
+				},
+			}
+
+			// Setup single-port NIC spec
+			mellanoxNicsSpec = map[string]sriovnetworkv1.Interface{
+				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", NumVfs: 10},
+			}
+
+			pciAddressesToReset = []string{"0000:d8:00.0"}
+
+			h.EXPECT().IsKernelLockdownMode().Return(false)
+			h.EXPECT().MlxConfigFW(gomock.Any()).Return(nil)
+
+			h.EXPECT().MlxResetFW([]string{"0000:d8:00.0"}, gomock.Any()).Return(nil)
+
+			err := m.Apply()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should call MlxResetFW with correct parameters for multiple NICs", func() {
+			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
+
+			pciAddressesToReset = []string{"0000:d8:00.0", "0000:d9:00.0"}
+
+			h.EXPECT().IsKernelLockdownMode().Return(false)
+			h.EXPECT().MlxConfigFW(gomock.Any()).Return(nil)
+
+			h.EXPECT().MlxResetFW([]string{"0000:d8:00.0", "0000:d9:00.0"}, gomock.Any()).Return(nil)
+
+			err := m.Apply()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		BeforeEach(func() {
+			// Reset global state before each test
+			pciAddressesToReset = []string{}
+			mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{}
+			mellanoxNicsSpec = map[string]sriovnetworkv1.Interface{}
 		})
 	})
 })
