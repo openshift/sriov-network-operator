@@ -206,7 +206,7 @@ func (p *MellanoxPlugin) Apply() error {
 		return err
 	}
 	if vars.FeatureGate.IsEnabled(consts.MellanoxFirmwareResetFeatureGate) {
-		return p.helpers.MlxResetFW(pciAddressesToReset)
+		return p.helpers.MlxResetFW(pciAddressesToReset, mellanoxNicsStatus)
 	}
 	return nil
 }

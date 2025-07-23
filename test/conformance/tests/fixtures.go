@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/clean"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
@@ -32,6 +33,10 @@ var _ = BeforeSuite(func() {
 			Expect(err).ToNot(HaveOccurred())
 			clean.RestoreNodeDrainState = true
 		}
+	}
+
+	if !isFeatureFlagEnabled(consts.ResourceInjectorMatchConditionFeatureGate) {
+		setFeatureFlag(consts.ResourceInjectorMatchConditionFeatureGate, true)
 	}
 
 	err = namespaces.Create(namespaces.Test, clients)
