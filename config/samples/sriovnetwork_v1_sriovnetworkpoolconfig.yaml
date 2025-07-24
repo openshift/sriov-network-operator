@@ -1,7 +1,0 @@
-apiVersion: sriovnetwork.openshift.io/v1
-kind: SriovNetworkPoolConfig
-metadata:
-  name: sriovnetworkpoolconfig-sample
-spec:
-  # Add fields here
-  foo: bar
