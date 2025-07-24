@@ -1720,12 +1720,15 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				WaitForSRIOVStable()
 				By("Checking files on the host")
-				output, errOutput, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
-				Expect(err).ToNot(HaveOccurred(), errOutput)
-				Expect(strings.HasPrefix(output, "0")).Should(BeTrue())
-				output, errOutput, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/udev/rules.d/ | grep 10-nm-disable | wc -l")
-				Expect(err).ToNot(HaveOccurred(), errOutput)
-				Expect(strings.HasPrefix(output, "0")).Should(BeTrue())
+				Eventually(func(g Gomega) {
+					output, errOutput, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
+					g.Expect(err).ToNot(HaveOccurred(), errOutput)
+					g.Expect(strings.HasPrefix(output, "0")).Should(BeTrue())
+
+					output, errOutput, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "ls /host/etc/udev/rules.d/ | grep 10-nm-disable | wc -l")
+					g.Expect(err).ToNot(HaveOccurred(), errOutput)
+					g.Expect(strings.HasPrefix(output, "0")).Should(BeTrue())
+				}, 3*time.Minute, 1*time.Second).Should(Succeed())
 			})
 		})
 	})
