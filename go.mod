@@ -8,7 +8,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/coreos/go-systemd/v22 v22.4.0
 	github.com/fsnotify/fsnotify v1.6.0
-	github.com/golang/glog v1.0.0
+	github.com/golang/glog v1.2.4
 	github.com/golang/mock v1.4.4
 	github.com/google/go-cmp v0.6.0
 	github.com/hashicorp/go-retryablehttp v0.7.7
