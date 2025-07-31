@@ -556,6 +556,15 @@ spec:
           verbs:
           - '*'
         - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies
+          verbs:
+          - get
+          - create
+          - update
+          - delete
+        - apiGroups:
           - monitoring.coreos.com
           resources:
           - servicemonitors
