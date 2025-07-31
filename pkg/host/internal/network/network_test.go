@@ -12,11 +12,11 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	hostMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
 	dputilsMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/dputils/mock"
 	ethtoolMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/ethtool/mock"
 	netlinkMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
+	utilsMockPkg "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/fakefilesystem"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/helpers"
 )
@@ -36,7 +36,7 @@ var _ = Describe("Network", func() {
 		netlinkLibMock *netlinkMockPkg.MockNetlinkLib
 		ethtoolLibMock *ethtoolMockPkg.MockEthtoolLib
 		dputilsLibMock *dputilsMockPkg.MockDPUtilsLib
-		hostMock       *hostMockPkg.MockHostHelpersInterface
+		utilsMock      *utilsMockPkg.MockCmdInterface
 
 		testCtrl *gomock.Controller
 		testErr  = fmt.Errorf("test")
@@ -46,9 +46,9 @@ var _ = Describe("Network", func() {
 		netlinkLibMock = netlinkMockPkg.NewMockNetlinkLib(testCtrl)
 		ethtoolLibMock = ethtoolMockPkg.NewMockEthtoolLib(testCtrl)
 		dputilsLibMock = dputilsMockPkg.NewMockDPUtilsLib(testCtrl)
-		hostMock = hostMockPkg.NewMockHostHelpersInterface(testCtrl)
+		utilsMock = utilsMockPkg.NewMockCmdInterface(testCtrl)
 
-		n = New(hostMock, dputilsLibMock, netlinkLibMock, ethtoolLibMock)
+		n = New(utilsMock, dputilsLibMock, netlinkLibMock, ethtoolLibMock)
 	})
 
 	AfterEach(func() {
