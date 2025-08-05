@@ -100,7 +100,7 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:4.20
-    createdAt: "2025-07-23T23:50:16Z"
+    createdAt: "2025-08-05T11:50:34Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     features.operators.openshift.io/cnf: "false"
@@ -128,6 +128,9 @@ metadata:
           "enableInjector": true,
           "enableOperatorWebhook": true,
           "logLevel": 2
+          "featureGates": {
+              "resourceInjectorMatchCondition": true
+          }
         }
       }
     operatorframework.io/suggested-namespace: openshift-sriov-network-operator
