@@ -20,7 +20,7 @@ updates:
       - "dependencies"
       - "docker"
 
-  # Go modules
+  # Go modules - k8s dependencies
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -29,3 +29,33 @@ updates:
     labels:
       - "dependencies"
       - "go"
+      - "k8s"
+    allow:
+      - dependency-name: "k8s.io/*"
+
+  # Go modules - controller-runtime dependencies
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "go"
+      - "controller-runtime"
+    allow:
+      - dependency-name: "sigs.k8s.io/controller-runtime/*"
+
+  # Go modules - general dependencies
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "go"
+      - "general"
+    ignore:
+      - dependency-name: "k8s.io/*"
+      - dependency-name: "sigs.k8s.io/controller-runtime/*"
