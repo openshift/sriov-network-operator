@@ -1,6 +1,6 @@
 module github.com/k8snetworkplumbingwg/sriov-network-operator
 
-go 1.17
+go 1.19
 
 require (
 	github.com/Masterminds/sprig/v3 v3.2.2
@@ -8,7 +8,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/fsnotify/fsnotify v1.7.0
-	github.com/golang/glog v1.1.0
+	github.com/golang/glog v1.2.4
 	github.com/golang/mock v1.5.0
 	github.com/google/go-cmp v0.6.0
 	github.com/hashicorp/go-retryablehttp v0.7.7
