@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ovn-org/libovsdb/client"
-	"github.com/ovn-org/libovsdb/database/inmemory"
-	"github.com/ovn-org/libovsdb/model"
-	"github.com/ovn-org/libovsdb/ovsdb"
-	"github.com/ovn-org/libovsdb/server"
+	"github.com/ovn-kubernetes/libovsdb/client"
+	"github.com/ovn-kubernetes/libovsdb/database/inmemory"
+	"github.com/ovn-kubernetes/libovsdb/model"
+	"github.com/ovn-kubernetes/libovsdb/ovsdb"
+	"github.com/ovn-kubernetes/libovsdb/server"
 	"go.uber.org/mock/gomock"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -637,13 +638,15 @@ func startServer(protocol, path string) func() {
 	clientDBModels, err := DatabaseModel()
 	Expect(err).NotTo(HaveOccurred())
 	schema := getSchema()
+
+	ovslog := log.Log.WithName("ovs")
 	ovsDB := inmemory.NewDatabase(map[string]model.ClientDBModel{
 		schema.Name: clientDBModels,
-	})
+	}, &ovslog)
 
 	dbModel, errs := model.NewDatabaseModel(schema, clientDBModels)
 	Expect(errs).To(BeEmpty())
-	s, err := server.NewOvsdbServer(ovsDB, dbModel)
+	s, err := server.NewOvsdbServer(ovsDB, nil, dbModel)
 	Expect(err).NotTo(HaveOccurred())
 
 	stopped := make(chan struct{})
