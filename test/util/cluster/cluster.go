@@ -214,24 +214,24 @@ func (n *EnabledNodes) FindOneVfioSriovDevice() (string, sriovv1.InterfaceExt) {
 
 // FindOneMellanoxSriovDevice retrieves a valid sriov device for the given node.
 func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.InterfaceExt, error) {
-	s, ok := n.States[node]
-	if !ok {
-		return nil, fmt.Errorf("node %s not found", node)
-	}
-
 	// return error here as mlx interfaces are not supported when secure boot is enabled
 	// TODO: remove this when mlx support secure boot/lockdown mode
 	if n.IsSecureBootEnabled[node] {
 		return nil, fmt.Errorf("secure boot is enabled on the node mellanox cards are not supported")
 	}
 
-	for _, itf := range s.Status.Interfaces {
-		if itf.Vendor == mlxVendorID && sriovv1.IsSupportedModel(itf.Vendor, itf.DeviceID) {
-			return &itf, nil
+	devices, err := n.FindSriovDevices(node)
+	if err != nil {
+		return nil, fmt.Errorf("unable to find a mellanox sriov devices in node %s: %w", node, err)
+	}
+
+	for _, nic := range devices {
+		if nic.Vendor == mlxVendorID && sriovv1.IsSupportedModel(nic.Vendor, nic.DeviceID) {
+			return nic, nil
 		}
 	}
 
-	return nil, fmt.Errorf("unable to find a mellanox sriov devices in node %s", node)
+	return nil, fmt.Errorf("no Mellanox devices found in node %s. Available devices [%+v]", node, devices)
 }
 
 // SriovStable tells if all the node states are in sync (and the cluster is ready for another round of tests)
