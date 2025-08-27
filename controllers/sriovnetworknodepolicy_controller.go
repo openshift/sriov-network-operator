@@ -584,10 +584,7 @@ func createDevicePluginResource(
 	if len(p.Spec.NicSelector.RootDevices) > 0 {
 		netDeviceSelectors.RootDevices = append(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
 	}
-	// Removed driver constraint for "netdevice" DeviceType
-	if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
-		netDeviceSelectors.Drivers = append(netDeviceSelectors.Drivers, p.Spec.DeviceType)
-	}
+
 	// Enable the selection of devices using NetFilter
 	if p.Spec.NicSelector.NetFilter != "" {
 		// Loop through interfaces status to find a match for NetworkID or NetworkTag
@@ -657,10 +654,7 @@ func updateDevicePluginResource(
 	if len(p.Spec.NicSelector.RootDevices) > 0 {
 		netDeviceSelectors.RootDevices = sriovnetworkv1.UniqueAppend(netDeviceSelectors.RootDevices, p.Spec.NicSelector.RootDevices...)
 	}
-	// Removed driver constraint for "netdevice" DeviceType
-	if p.Spec.DeviceType == constants.DeviceTypeVfioPci {
-		netDeviceSelectors.Drivers = sriovnetworkv1.UniqueAppend(netDeviceSelectors.Drivers, p.Spec.DeviceType)
-	}
+
 	// Enable the selection of devices using NetFilter
 	if p.Spec.NicSelector.NetFilter != "" {
 		// Loop through interfaces status to find a match for NetworkID or NetworkTag

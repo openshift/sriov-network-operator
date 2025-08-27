@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -36,6 +37,13 @@ func mustMarshallSelector(t *testing.T, input *dptypes.NetDeviceSelectors) *json
 		return nil
 	}
 	ret := json.RawMessage(out)
+	return &ret
+}
+
+func mustUnmarshallSelector(input *json.RawMessage) *dptypes.NetDeviceSelectors {
+	ret := dptypes.NetDeviceSelectors{}
+	err := json.Unmarshal(*input, &ret)
+	ExpectWithOffset(1, err).ToNot(HaveOccurred())
 	return &ret
 }
 
@@ -540,6 +548,75 @@ var _ = Describe("SriovNetworkNodePolicyReconciler", Ordered, func() {
 			nodeState := nodeState.DeepCopy()
 			Expect(r.handleStaleNodeState(ctx, nodeState)).NotTo(HaveOccurred())
 			Expect(errors.IsNotFound(r.Get(ctx, types.NamespacedName{Name: nodeState.Name}, nodeState))).To(BeTrue())
+		})
+	})
+
+	Context("renderDevicePluginConfigData", func() {
+		It("should render device plugin config data when policies with the same resource name target different devices", func() {
+
+			intelNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "intelNode", Labels: map[string]string{"node-role.kubernetes.io/worker": ""}}}
+			mlxNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "mlxNode", Labels: map[string]string{"node-role.kubernetes.io/worker": ""}}}
+
+			objs := []client.Object{
+				intelNode,
+				&sriovnetworkv1.SriovNetworkNodeState{ObjectMeta: metav1.ObjectMeta{Name: "intelNode", Namespace: testNamespace}, Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
+					Interfaces: sriovnetworkv1.InterfaceExts{
+						{Driver: "ice", DeviceID: "159b", Vendor: "8086", PciAddress: "0000:31:00.0"},
+					},
+				}},
+				mlxNode,
+				&sriovnetworkv1.SriovNetworkNodeState{ObjectMeta: metav1.ObjectMeta{Name: "mlxNode", Namespace: testNamespace}, Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
+					Interfaces: sriovnetworkv1.InterfaceExts{
+						{Driver: "mlx5_core", DeviceID: "101d", Vendor: "15b3", PciAddress: "0000:ca:00.0"},
+					},
+				}},
+			}
+
+			r := &SriovNetworkNodePolicyReconciler{Client: fake.NewClientBuilder().WithObjects(objs...).Build()}
+
+			pl := &sriovnetworkv1.SriovNetworkNodePolicyList{
+				Items: []sriovnetworkv1.SriovNetworkNodePolicy{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "intel-vfio-pci"},
+						Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+							ResourceName: "resource1",
+							DeviceType:   "vfio-pci",
+							NicSelector: sriovnetworkv1.SriovNetworkNicSelector{
+								Vendor:      "8086",
+								DeviceID:    "159b",
+								RootDevices: []string{"0000:31:00.0"},
+							},
+							NumVfs:       128,
+							NodeSelector: map[string]string{"node-role.kubernetes.io/worker": ""},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "mellanox-rdma"},
+						Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+							ResourceName: "resource1",
+							DeviceType:   "netdevice",
+							IsRdma:       true,
+							NicSelector: sriovnetworkv1.SriovNetworkNicSelector{
+								Vendor:      "15b3",
+								DeviceID:    "101d",
+								RootDevices: []string{"0000:ca:00.0"},
+							},
+							NumVfs:       128,
+							NodeSelector: map[string]string{"node-role.kubernetes.io/worker": ""},
+						},
+					},
+				},
+			}
+			rcl, err := r.renderDevicePluginConfigData(context.Background(), pl, mlxNode)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(rcl.ResourceList)).To(Equal(1))
+			Expect(rcl.ResourceList[0].ResourceName).To(Equal("resource1"))
+			selectors := mustUnmarshallSelector(rcl.ResourceList[0].Selectors)
+			Expect(selectors.Vendors).To(ContainElements("8086", "15b3"))
+			Expect(selectors.RootDevices).To(ContainElements("0000:31:00.0", "0000:ca:00.0"))
+
+			// Having drivers in the selector cause the device plugin to fail to select the mellanox devices in the mlxNode
+			Expect(selectors.Drivers).To(BeEmpty())
 		})
 	})
 })
