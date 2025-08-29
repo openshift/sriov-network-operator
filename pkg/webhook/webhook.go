@@ -97,6 +97,49 @@ func ValidateCustomResource(ar v1.AdmissionReview) *v1.AdmissionResponse {
 				Reason: metav1.StatusReason(err.Error()),
 			}
 		}
+
+	case "SriovNetwork":
+		network := sriovnetworkv1.SriovNetwork{}
+
+		err = json.Unmarshal(raw, &network)
+		if err != nil {
+			log.Log.Error(err, "failed to unmarshal object")
+			return toV1AdmissionResponse(err)
+		}
+
+		if reviewResponse.Allowed, reviewResponse.Warnings, err = validateSriovNetwork(&network, ar.Request.Operation); err != nil {
+			reviewResponse.Result = &metav1.Status{
+				Reason: metav1.StatusReason(err.Error()),
+			}
+		}
+	case "SriovIBNetwork":
+		network := sriovnetworkv1.SriovIBNetwork{}
+
+		err = json.Unmarshal(raw, &network)
+		if err != nil {
+			log.Log.Error(err, "failed to unmarshal object")
+			return toV1AdmissionResponse(err)
+		}
+
+		if reviewResponse.Allowed, reviewResponse.Warnings, err = validateSriovIBNetwork(&network, ar.Request.Operation); err != nil {
+			reviewResponse.Result = &metav1.Status{
+				Reason: metav1.StatusReason(err.Error()),
+			}
+		}
+	case "OVSNetwork":
+		network := sriovnetworkv1.OVSNetwork{}
+
+		err = json.Unmarshal(raw, &network)
+		if err != nil {
+			log.Log.Error(err, "failed to unmarshal object")
+			return toV1AdmissionResponse(err)
+		}
+
+		if reviewResponse.Allowed, reviewResponse.Warnings, err = validateOVSNetwork(&network, ar.Request.Operation); err != nil {
+			reviewResponse.Result = &metav1.Status{
+				Reason: metav1.StatusReason(err.Error()),
+			}
+		}
 	}
 
 	return &reviewResponse
