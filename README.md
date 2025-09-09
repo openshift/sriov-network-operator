@@ -103,6 +103,96 @@ spec:
     }
 ```
 
+#### Configuring SriovNetwork with the RDMA CNI Plugin
+
+RDMA CNI enables Pod exclusive access to RDMA resources (and their associated hardware counters).
+To use RDMA CNI the following is required:
+
+**1. RDMA subsystem mode set to `exclusive`**
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: rdma-workers
+  namespace: sriov-network-operator
+spec:
+  maxUnavailable: 1
+  rdmaMode: exclusive
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
+```
+
+**2. SriovNetwork is using RDMA CNI plugin as a meta plugin**
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetwork
+metadata:
+  name: rdma-network
+  namespace: sriov-network-operator
+spec:
+  resourceName: rdma_exclusive_device
+  networkNamespace: default
+  ipam: |
+    {
+      "type": "host-local",
+      "subnet": "10.10.10.0/24",
+      "rangeStart": "10.10.10.171",
+      "rangeEnd": "10.10.10.181"
+    }
+  metaPluginsConfig: |
+    {
+      "type": "rdma"
+    }
+```
+
+This configuration:
+- Uses `metaPluginsConfig` to inject the RDMA CNI plugin
+- Allows pods using this network exclusive access to RDMA resources including their associated hardware counters
+- Requires the nodes to be configured with RDMA mode set to exclusive
+- Works with SR-IOV network policies that have `isRdma: true` specified
+
+**3. SriovNetworkNodePolicy with `spec.isRdma=true` is used**
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: policy-1
+  namespace: sriov-network-operator
+spec:
+  deviceType: netdevice
+  nicSelector:
+    pfName: ["eno1"]
+  nodeSelector:
+    feature.node.kubernetes.io/network-sriov.capable: "true"
+  numVfs: 4
+  priority: 90
+  resourceName: rdma_exclusive_device
+```
+
+**4. Pod references the SriovNetwork from step 2**
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vdpa-pod1
+  namespace: vdpa
+  annotations:
+    k8s.v1.cni.cncf.io/networks: policy-1
+spec:
+  containers:
+  - name: vdpa-pod
+    image: centos:latest
+    imagePullPolicy: IfNotPresent
+    command:
+      - sleep
+      - "3600"
+```
+
 ### OVSNetwork
 
 A custom resource of OVSNetwork could represent the a layer-2 broadcast domain attached to Open vSwitch that works in HW-offloading mode. 
@@ -301,32 +391,6 @@ spec:
 
 > **NOTE**: Currently only `mellanox` plugin can be disabled.
 
-### Parallel draining
-
-It is possible to drain more than one node at a time using this operator.
-
-The configuration is done via the SriovNetworkNodePool, selecting a number of nodes using the node selector and how many
-nodes in parallel from the pool the operator can drain in parallel. maxUnavailable can be a number or a percentage.
-
-> **NOTE**: every node can only be part of one pool, if a node is selected by more than one pool, then it will not be drained
-
-> **NOTE**: If a node is not part of any pool it will have a default configuration of maxUnavailable 1
-
-**Example**:
-
-```yaml
-apiVersion: sriovnetwork.openshift.io/v1
-kind: SriovNetworkPoolConfig
-metadata:
-  name: worker
-  namespace: sriov-network-operator
-spec:
-  maxUnavailable: 2
-  nodeSelector:
-    matchLabels:
-      node-role.kubernetes.io/worker: ""
-```
-
 ## Feature Gates
 
 Feature gates are used to enable or disable specific features in the operator.
@@ -369,6 +433,90 @@ spec:
   featureGates:
     resourceInjectorMatchCondition: true
   ...
+```
+
+## SriovNetworkPoolConfig Configuration
+
+The `SriovNetworkPoolConfig` CRD provides advanced configuration capabilities for managing groups of nodes in SR-IOV network environments.
+This custom resource allows cluster administrators to define node-level configuration policies that apply to specific sets of nodes selected by label selectors.
+
+
+The `SriovNetworkPoolConfig` CRD serves multiple purposes:
+
+1. **Node Pool Management**: Groups nodes into logical pools for coordinated configuration updates
+2. **Parallel Operations**: Enables controlled parallel draining and configuration updates across multiple nodes
+3. **RDMA Configuration**: Provides centralized RDMA mode configuration for selected nodes
+
+### Key Configuration Fields
+
+#### Parallel Draining
+
+It is possible to drain more than one node at a time using this operator.
+
+
+The configuration is done via the SriovNetworkPoolConfig, selecting a number of nodes using the node selector and how many
+nodes in parallel from the pool the operator can drain in parallel. maxUnavailable can be a number or a percentage.
+
+- **nodeSelector**: Specifies which nodes belong to this pool using Kubernetes label selectors
+- **maxUnavailable**: Controls how many nodes can be unavailable simultaneously during updates (supports both integer and percentage values)
+
+> **NOTE**: every node can only be part of one pool, if a node is selected by more than one pool, then it will not be drained
+
+> **NOTE**: If a node is not part of any pool it will have a default configuration of maxUnavailable 1
+
+
+#### RDMA Mode Configuration
+
+The `rdmaMode` field allows you to configure the RDMA (Remote Direct Memory Access) subsystem behavior for all nodes in the pool:
+
+- **shared**: Multiple processes can share RDMA resources simultaneously
+- **exclusive**: RDMA resources are exclusively assigned to a single process
+
+
+### Configuration Examples
+
+#### Basic Parallel Draining Configuration
+
+The following configuration will allow to drain maximum 2 nodes in parallel for all the nodes requesting drain or reboot in the cluster.
+This will apply only to nodes with the matching label selector.
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: worker
+  namespace: sriov-network-operator
+spec:
+  maxUnavailable: 2
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
+```
+
+### RDMA Mode
+
+The RDMA mode setting affects how RDMA resources are managed across the nodes in the pool.
+The RDMA mode configuration is applied during node configuration updates and affects all The Mellanox SR-IOV devices on the selected nodes.
+
+*NOTE:* swtiching rdma mode will trigger a reboot to all the nodes in the pool based on the maxUnavailable configuration
+
+#### Exclusive RDMA Mode Configuration
+
+The following configuration will switch the host RDMA mode to `Exclusive`.
+This will apply only to nodes with the matching label selector, and done one node at a time.
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: rdma-workers
+  namespace: sriov-network-operator
+spec:
+  maxUnavailable: 1
+  rdmaMode: exclusive
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
 ```
 
 ## Components and design
