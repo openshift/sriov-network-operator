@@ -618,5 +618,61 @@ var _ = Describe("SriovNetworkNodePolicyReconciler", Ordered, func() {
 			// Having drivers in the selector cause the device plugin to fail to select the mellanox devices in the mlxNode
 			Expect(selectors.Drivers).To(BeEmpty())
 		})
+
+		It("should render device plugin config data when policies configure vfio-pci and netdevice", func() {
+			node1 := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"node-role.kubernetes.io/worker": ""}}}
+			objs := []client.Object{
+				node1,
+				&sriovnetworkv1.SriovNetworkNodeState{ObjectMeta: metav1.ObjectMeta{Name: "node1", Namespace: testNamespace}, Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
+					Interfaces: sriovnetworkv1.InterfaceExts{
+						{Driver: "ice", DeviceID: "159b", Vendor: "8086", PciAddress: "0000:31:00.0", Name: "ens0"},
+					},
+				}},
+			}
+
+			r := &SriovNetworkNodePolicyReconciler{Client: fake.NewClientBuilder().WithObjects(objs...).Build()}
+
+			pl := &sriovnetworkv1.SriovNetworkNodePolicyList{
+				Items: []sriovnetworkv1.SriovNetworkNodePolicy{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "intel-vfio-pci"},
+						Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+							ResourceName: "resvfiopci",
+							DeviceType:   "vfio-pci",
+							NicSelector: sriovnetworkv1.SriovNetworkNicSelector{
+								Vendor:   "8086",
+								DeviceID: "159b",
+								PfNames:  []string{"ens0#0-9"},
+							},
+							NumVfs:       128,
+							NodeSelector: map[string]string{"node-role.kubernetes.io/worker": ""},
+						},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "mellanox-rdma"},
+						Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+							ResourceName: "resnetdevice",
+							DeviceType:   "netdevice",
+							NicSelector: sriovnetworkv1.SriovNetworkNicSelector{
+								Vendor:   "8086",
+								DeviceID: "159b",
+								PfNames:  []string{"ens0#10-19"},
+							},
+							NumVfs:       128,
+							NodeSelector: map[string]string{"node-role.kubernetes.io/worker": ""},
+						},
+					},
+				},
+			}
+			rcl, err := r.renderDevicePluginConfigData(context.Background(), pl, node1)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(rcl.ResourceList)).To(Equal(2))
+			selectors := map[string]string{
+				rcl.ResourceList[0].ResourceName: string(*rcl.ResourceList[0].Selectors),
+				rcl.ResourceList[1].ResourceName: string(*rcl.ResourceList[1].Selectors),
+			}
+			Expect(selectors).To(HaveKeyWithValue("resvfiopci", `{"vendors":["8086"],"pfNames":["ens0#0-9"],"IsRdma":false,"NeedVhostNet":false}`))
+			Expect(selectors).To(HaveKeyWithValue("resnetdevice", `{"vendors":["8086"],"pfNames":["ens0#10-19"],"IsRdma":false,"NeedVhostNet":false}`))
+		})
 	})
 })
