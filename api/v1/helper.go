@@ -19,6 +19,7 @@ import (
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	intstrutil "k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -651,6 +652,7 @@ func (cr *SriovIBNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	} else {
 		data.Data["SriovNetworkNamespace"] = cr.Spec.NetworkNamespace
 	}
+	data.Data["Owner"] = OwnerRefToString(cr)
 	data.Data["SriovCniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
 
 	data.Data["StateConfigured"] = true
@@ -719,6 +721,7 @@ func (cr *SriovNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	} else {
 		data.Data["SriovNetworkNamespace"] = cr.Spec.NetworkNamespace
 	}
+	data.Data["Owner"] = OwnerRefToString(cr)
 	data.Data["SriovCniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
 	data.Data["SriovCniVlan"] = cr.Spec.Vlan
 
@@ -837,6 +840,7 @@ func (cr *OVSNetwork) RenderNetAttDef() (*uns.Unstructured, error) {
 	} else {
 		data.Data["NetworkNamespace"] = cr.Spec.NetworkNamespace
 	}
+	data.Data["Owner"] = OwnerRefToString(cr)
 	data.Data["CniResourceName"] = os.Getenv("RESOURCE_PREFIX") + "/" + cr.Spec.ResourceName
 
 	if cr.Spec.Capabilities == "" {
@@ -993,4 +997,15 @@ func (s *SriovNetworkNodeState) ResetKeepUntilTime() bool {
 	delete(annotations, consts.NodeStateKeepUntilAnnotation)
 	s.SetAnnotations(annotations)
 	return true
+}
+
+func OwnerRefToString(cr client.Object) string {
+	if cr == nil {
+		return "owner-object-not-found"
+	}
+	if cr.GetObjectKind().GroupVersionKind().Empty() {
+		return "unknown/" + cr.GetNamespace() + "/" + cr.GetName()
+	}
+
+	return cr.GetObjectKind().GroupVersionKind().GroupKind().String() + "/" + cr.GetNamespace() + "/" + cr.GetName()
 }
