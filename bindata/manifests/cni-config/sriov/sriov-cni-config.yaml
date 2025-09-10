@@ -5,6 +5,7 @@ metadata:
   namespace: {{.SriovNetworkNamespace}}
   annotations:
     k8s.v1.cni.cncf.io/resourceName: {{.SriovCniResourceName}}
+    sriovnetwork.openshift.io/owner-ref: {{.Owner}}
 spec:
   config: '{
   "cniVersion":"1.0.0",

@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	dynclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -474,25 +473,4 @@ func generateExpectedNetConfig(cr *sriovnetworkv1.SriovNetwork) string {
 		panic(err)
 	}
 	return configStr
-}
-
-func cleanNetworksInNamespace(namespace string) {
-	ctx := context.Background()
-	EventuallyWithOffset(1, func(g Gomega) {
-		err := k8sClient.DeleteAllOf(ctx, &sriovnetworkv1.SriovNetwork{}, client.InNamespace(namespace))
-		g.Expect(err).NotTo(HaveOccurred())
-
-		k8sClient.DeleteAllOf(ctx, &netattdefv1.NetworkAttachmentDefinition{}, client.InNamespace(namespace))
-		g.Expect(err).NotTo(HaveOccurred())
-
-		sriovNetworks := &sriovnetworkv1.SriovNetworkList{}
-		err = k8sClient.List(ctx, sriovNetworks, client.InNamespace(namespace))
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(sriovNetworks.Items).To(BeEmpty())
-
-		netAttachDefs := &netattdefv1.NetworkAttachmentDefinitionList{}
-		err = k8sClient.List(ctx, netAttachDefs, client.InNamespace(namespace))
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(netAttachDefs.Items).To(BeEmpty())
-	}).WithPolling(100 * time.Millisecond).WithTimeout(10 * time.Second).Should(Succeed())
 }

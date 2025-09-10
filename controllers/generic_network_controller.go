@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
@@ -189,6 +190,20 @@ func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	} else {
 		reqLogger.Info("NetworkAttachmentDefinition CR already exist")
+
+		foundOwner := found.GetAnnotations()[consts.OwnerRefAnnotation]
+		expectedOwner := netAttDef.GetAnnotations()[consts.OwnerRefAnnotation]
+
+		// Note for the future: the `foundOwner != ""` condition can be removed to make the operator not touching the NetworkAttachmentDefinition created
+		// by the user.
+		if foundOwner != "" && foundOwner != expectedOwner {
+			reqLogger.Info("A NetworkAttachmentDefinition with the same name already exists and it does not belong to this resource",
+				"Namespace", netAttDef.Namespace, "Name", netAttDef.Name,
+				"CurrentOwner", foundOwner, "ExpectedOwner", expectedOwner,
+			)
+			return reconcile.Result{}, nil
+		}
+
 		if !equality.Semantic.DeepEqual(found.Spec, netAttDef.Spec) || !equality.Semantic.DeepEqual(found.GetAnnotations(), netAttDef.GetAnnotations()) {
 			reqLogger.Info("Update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 			netAttDef.SetResourceVersion(found.GetResourceVersion())
