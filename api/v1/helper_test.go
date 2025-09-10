@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	intstrutil "k8s.io/apimachinery/pkg/util/intstr"
 
@@ -149,6 +150,8 @@ func TestRendering(t *testing.T) {
 		{
 			tname: "simple",
 			network: v1.SriovNetwork{
+				TypeMeta:   metav1.TypeMeta{APIVersion: v1.GroupVersion.String(), Kind: "SriovNetwork"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "test"},
 				Spec: v1.SriovNetworkSpec{
 					NetworkNamespace: "testnamespace",
 					ResourceName:     "testresource",
@@ -158,6 +161,8 @@ func TestRendering(t *testing.T) {
 		{
 			tname: "chained",
 			network: v1.SriovNetwork{
+				TypeMeta:   metav1.TypeMeta{APIVersion: v1.GroupVersion.String(), Kind: "SriovNetwork"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "test"},
 				Spec: v1.SriovNetworkSpec{
 					NetworkNamespace: "testnamespace",
 					ResourceName:     "testresource",
@@ -194,10 +199,8 @@ func TestRendering(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed reading .golden: %s", err)
 			}
-			t.Log(b.String())
-			if !bytes.Equal(b.Bytes(), g) {
-				t.Errorf("bytes do not match .golden file")
-			}
+
+			assert.Equal(t, string(g), b.String(), "bytes do not match .golden file [%s]", gp)
 		})
 	}
 }
@@ -210,6 +213,8 @@ func TestIBRendering(t *testing.T) {
 		{
 			tname: "simpleib",
 			network: v1.SriovIBNetwork{
+				TypeMeta:   metav1.TypeMeta{APIVersion: v1.GroupVersion.String(), Kind: "SriovIBNetwork"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "test"},
 				Spec: v1.SriovIBNetworkSpec{
 					NetworkNamespace: "testnamespace",
 					ResourceName:     "testresource",
@@ -241,10 +246,8 @@ func TestIBRendering(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed reading .golden: %s", err)
 			}
-			t.Log(b.String())
-			if !bytes.Equal(b.Bytes(), g) {
-				t.Errorf("bytes do not match .golden file")
-			}
+
+			assert.Equal(t, string(g), b.String(), "bytes do not match .golden file [%s]", gp)
 		})
 	}
 }
@@ -257,9 +260,8 @@ func TestOVSRendering(t *testing.T) {
 		{
 			tname: "simpleovs",
 			network: v1.OVSNetwork{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-				},
+				TypeMeta:   metav1.TypeMeta{APIVersion: v1.GroupVersion.String(), Kind: "OVSNetwork"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "test"},
 				Spec: v1.OVSNetworkSpec{
 					NetworkNamespace: "testnamespace",
 					ResourceName:     "testresource",
@@ -269,9 +271,8 @@ func TestOVSRendering(t *testing.T) {
 		{
 			tname: "chained",
 			network: v1.OVSNetwork{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-				},
+				TypeMeta:   metav1.TypeMeta{APIVersion: v1.GroupVersion.String(), Kind: "OVSNetwork"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "test"},
 				Spec: v1.OVSNetworkSpec{
 					NetworkNamespace: "testnamespace",
 					ResourceName:     "testresource",
@@ -288,9 +289,8 @@ func TestOVSRendering(t *testing.T) {
 		{
 			tname: "complexconf",
 			network: v1.OVSNetwork{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test",
-				},
+				TypeMeta:   metav1.TypeMeta{APIVersion: v1.GroupVersion.String(), Kind: "OVSNetwork"},
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "test"},
 				Spec: v1.OVSNetworkSpec{
 					NetworkNamespace: "testnamespace",
 					ResourceName:     "testresource",
@@ -334,10 +334,8 @@ func TestOVSRendering(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed reading .golden: %s", err)
 			}
-			t.Log(b.String())
-			if !bytes.Equal(b.Bytes(), g) {
-				t.Errorf("bytes do not match .golden file")
-			}
+
+			assert.Equal(t, string(g), b.String(), "bytes do not match .golden file [%s]", gp)
 		})
 	}
 }
