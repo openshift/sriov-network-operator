@@ -6,7 +6,7 @@ jobs:
     name: "remove the lgtm label"
     runs-on: ubuntu-24.04
     steps:
-      - uses: jpmcb/prow-github-actions@v1.1.2
+      - uses: jpmcb/prow-github-actions@v2.0.0
         with:
           jobs: 'lgtm'
           github-token: "${{ secrets.GITHUB_TOKEN }}"
