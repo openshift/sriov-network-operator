@@ -6,7 +6,7 @@ jobs:
   vendors-ci-triggers-list:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/github-script@v5
+      - uses: actions/github-script@v8
         env:
           MESSAGE: >-
             Thanks for your PR,\n
