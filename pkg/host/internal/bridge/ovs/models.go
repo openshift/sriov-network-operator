@@ -20,6 +20,7 @@ type BridgeEntry struct {
 	ExternalIDs  map[string]string `ovsdb:"external_ids"`
 	OtherConfig  map[string]string `ovsdb:"other_config"`
 	Ports        []string          `ovsdb:"ports"`
+	FailMode     *string           `ovsdb:"fail_mode"`
 }
 
 // HasPort returns true if portUUID is found in Ports slice

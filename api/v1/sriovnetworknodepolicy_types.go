@@ -107,6 +107,9 @@ type OVSBridgeConfig struct {
 	ExternalIDs map[string]string `json:"externalIDs,omitempty"`
 	// additional options to inject to other_config field in the bridge table in OVSDB
 	OtherConfig map[string]string `json:"otherConfig,omitempty"`
+	// configure fail_mode field in the Bridge table in OVSDB (optional). 'secure' or 'standalone'.
+	// +kubebuilder:validation:Enum=secure;standalone
+	FailMode string `json:"failMode,omitempty"`
 }
 
 // OVSUplinkConfig contains PF interface configuration for the bridge
