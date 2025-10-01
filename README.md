@@ -38,7 +38,7 @@ The SR-IOV network operator introduces following new CRDs:
 
 A custom resource of SriovNetwork could represent the a layer-2 broadcast domain where some SR-IOV devices are attach to. It is primarily used to generate a NetworkAttachmentDefinition CR with an SR-IOV CNI plugin configuration. 
 
-This SriovNetwork CR also contains the ‘resourceName’ which is aligned with the ‘resourceName’ of SR-IOV device plugin. One SriovNetwork obj maps to one ‘resoureName’, but one ‘resourceName’ can be shared by different SriovNetwork CRs.
+This SriovNetwork CR also contains the 'resourceName' which is aligned with the 'resourceName' of SR-IOV device plugin. One SriovNetwork obj maps to one 'resourceName', but one 'resourceName' can be shared by different SriovNetwork CRs.
 
 This CR should be managed by cluster admin. Here is an example:
 
