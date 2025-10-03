@@ -86,11 +86,11 @@ run: skopeo install
 
 # Install CRDs into a cluster
 install: manifests kustomize
-	$(KUSTOMIZE) build config/crd | kubectl apply -f -
+	kubectl apply -f $(CRD_BASES)
 
 # Uninstall CRDs from a cluster
 uninstall: manifests kustomize
-	$(KUSTOMIZE) build config/crd | kubectl delete --ignore-not-found -f -
+	kubectl delete --ignore-not-found -f $(CRD_BASES)
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 # deploy: manifests kustomize
