@@ -1,4 +1,4 @@
 packageName: sriov-network-operator
 channels:
 - name: "stable"
-  currentCSV: sriov-network-operator.v4.20.0
+  currentCSV: sriov-network-operator.v4.21.0
