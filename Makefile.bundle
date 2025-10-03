@@ -1,6 +1,6 @@
 include Makefile
 # Current Operator version
-VERSION ?= 4.20.0
+VERSION ?= 4.21.0
 # Default bundle image tag
 BUNDLE_IMG ?= controller-bundle:$(VERSION)
 
