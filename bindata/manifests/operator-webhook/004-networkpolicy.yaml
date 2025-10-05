@@ -10,11 +10,11 @@ spec:
   ingress:
   - ports:
     - protocol: TCP
-      port: 6443
+      port: {{.OperatorWebhookNetworkPolicyPort}}
   egress:
   - ports:
     - protocol: TCP
-      port: 6443
+      port: {{.OperatorWebhookNetworkPolicyPort}}
   policyTypes:
   - Ingress
   - Egress

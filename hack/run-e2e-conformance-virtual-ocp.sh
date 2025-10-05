@@ -183,6 +183,8 @@ kubectl patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spe
 kubectl patch ingresscontrollers.operator.openshift.io/default -n openshift-ingress-operator --patch '{"spec":{"replicas": 1}}' --type=merge
 
 export ADMISSION_CONTROLLERS_ENABLED=true
+export OPERATOR_WEBHOOK_NETWORK_POLICY_PORT=${OPERATOR_WEBHOOK_NETWORK_POLICY_PORT:-"6443"}
+export INJECTOR_WEBHOOK_NETWORK_POLICY_PORT=${INJECTOR_WEBHOOK_NETWORK_POLICY_PORT:-"6443"}
 export SKIP_VAR_SET=""
 export NAMESPACE="openshift-sriov-network-operator"
 export OPERATOR_NAMESPACE=$NAMESPACE
