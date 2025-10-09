@@ -113,6 +113,10 @@ spec:
             - name: STALE_NODE_STATE_CLEANUP_DELAY_MINUTES
               value: "{{ .Values.operator.staleNodeStateCleanupDelayMinutes }}"
         {{- if .Values.operator.admissionControllers.enabled }}
+            - name: OPERATOR_WEBHOOK_NETWORK_POLICY_PORT
+              value: "{{ .Values.operator.admissionControllers.networkPolicy.operator.port }}"
+            - name: INJECTOR_WEBHOOK_NETWORK_POLICY_PORT
+              value: "{{ .Values.operator.admissionControllers.networkPolicy.injector.port }}"
             - name: ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_SECRET_NAME
               value: {{ .Values.operator.admissionControllers.certificates.secretNames.operator }}
             - name: ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME

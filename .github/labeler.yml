@@ -1,8 +1,16 @@
-# labels to be used with /area command
-area:
-  - 'bug'
-  - 'important'
-
-# File globs for PR labeler
+# Label PRs that touch Go test files
 tests:
-  - '**/*.test.ts'
+  - changed-files:
+      - any-glob-to-any-file: "**/*_test.go"
+      - any-glob-to-any-file: "test/**"
+
+# Label PRs that touch documentation
+docs:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.md"
+      - any-glob-to-any-file: "doc/**"
+
+# Label PRs that touch GitHub workflows
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/workflows/**"

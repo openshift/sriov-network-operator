@@ -42,6 +42,11 @@ operator:
       deployRules: false
   admissionControllers:
     enabled: false
+    networkPolicy:
+      operator:
+        port: "6443"
+      injector:
+        port: "6443"
     certificates:
       secretNames:
         operator: "operator-webhook-cert"

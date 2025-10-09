@@ -311,6 +311,18 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 		data.Data["InjectorWebhookSecretName"] = os.Getenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_SECRET_NAME")
 		data.Data["InjectorWebhookCA"] = os.Getenv("ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT")
 
+		operatorWebhookPort := os.Getenv("OPERATOR_WEBHOOK_NETWORK_POLICY_PORT")
+		if operatorWebhookPort == "" {
+			operatorWebhookPort = "6443"
+		}
+		data.Data["OperatorWebhookNetworkPolicyPort"] = operatorWebhookPort
+
+		injectorWebhookPort := os.Getenv("INJECTOR_WEBHOOK_NETWORK_POLICY_PORT")
+		if injectorWebhookPort == "" {
+			injectorWebhookPort = "6443"
+		}
+		data.Data["InjectorWebhookNetworkPolicyPort"] = injectorWebhookPort
+
 		data.Data["ExternalControlPlane"] = false
 		if r.PlatformHelper.IsOpenshiftCluster() {
 			external := r.PlatformHelper.IsHypershift()
