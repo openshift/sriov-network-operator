@@ -174,11 +174,11 @@ func getBodyFromURL(url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	rawBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 	return rawBytes, nil
 }
 

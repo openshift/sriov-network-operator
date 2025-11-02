@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"fmt"
+
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -11,17 +13,17 @@ func (dn *NodeReconciler) loadPlugins(ns *sriovnetworkv1.SriovNetworkNodeState, 
 	funcLog := log.Log.WithName("loadPlugins").WithValues("platform", vars.PlatformType, "orchestrator", vars.ClusterType)
 	funcLog.Info("loading plugins", "disabled", disabledPlugins)
 
-	mainPlugin, additionalPlugins, err := dn.platformInterface.GetPlugins(ns)
+	mainPlugin, additionalPlugins, err := dn.platformInterface.GetVendorPlugins(ns)
 	if err != nil {
 		funcLog.Error(err, "Failed to load plugins", "platform", vars.PlatformType, "orchestrator", vars.ClusterType)
 		return err
 	}
 
-	// check for the main plugin disabled
-	// TODO: we really want to allow the disable of the main plugin?
-	if !isPluginDisabled(mainPlugin.Name(), disabledPlugins) {
-		dn.mainPlugin = mainPlugin
+	// Check if the main plugin is disabled - this is not allowed
+	if isPluginDisabled(mainPlugin.Name(), disabledPlugins) {
+		return fmt.Errorf("main plugin %s cannot be disabled", mainPlugin.Name())
 	}
+	dn.mainPlugin = mainPlugin
 
 	for _, plugin := range additionalPlugins {
 		if !isPluginDisabled(plugin.Name(), disabledPlugins) {

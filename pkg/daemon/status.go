@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 const (
@@ -103,10 +104,14 @@ func (dn *NodeReconciler) updateStatusFromHost(nodeState *sriovnetworkv1.SriovNe
 		funcLog.Error(err, "failed to discover sriov devices")
 		return err
 	}
-	bridges, err := dn.platformInterface.DiscoverBridges()
-	if err != nil {
-		funcLog.Error(err, "failed to discover bridges")
-		return err
+
+	var bridges sriovnetworkv1.Bridges
+	if vars.ManageSoftwareBridges {
+		bridges, err = dn.platformInterface.DiscoverBridges()
+		if err != nil {
+			funcLog.Error(err, "failed to discover bridges")
+			return err
+		}
 	}
 
 	nodeState.Status.Interfaces = ifaces
@@ -114,8 +119,9 @@ func (dn *NodeReconciler) updateStatusFromHost(nodeState *sriovnetworkv1.SriovNe
 	nodeState.Status.System.RdmaMode, err = dn.hostHelpers.DiscoverRDMASubsystem()
 	if err != nil {
 		funcLog.Error(err, "failed to discover rdma subsystem")
+		return err
 	}
-	return err
+	return nil
 }
 
 func (dn *NodeReconciler) recordStatusChangeEvent(ctx context.Context, oldStatus, newStatus, lastError string) {

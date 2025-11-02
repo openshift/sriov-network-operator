@@ -53,12 +53,7 @@ var _ = Describe("SriovNetworkPoolConfig controller", Ordered, func() {
 		}).AnyTimes()
 
 		// TODO: Change this to add tests for hypershift
-		orchestrator.EXPECT().Flavor().DoAndReturn(func() consts.ClusterFlavor {
-			if vars.ClusterType == consts.ClusterTypeOpenshift {
-				return consts.DefaultConfigName
-			}
-			return consts.ClusterFlavorVanillaK8s
-		}).AnyTimes()
+		orchestrator.EXPECT().Flavor().Return(consts.ClusterFlavorDefault).AnyTimes()
 
 		err = (&SriovNetworkPoolConfigReconciler{
 			Client:       k8sManager.GetClient(),

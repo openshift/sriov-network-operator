@@ -151,7 +151,7 @@ func main() {
 	vars.Config = restConfig
 	vars.Scheme = mgrGlobal.GetScheme()
 
-	orch, err := orchestrator.New()
+	orch, err := orchestrator.New(vars.ClusterType)
 	if err != nil {
 		setupLog.Error(err, "couldn't create orchestrator")
 		os.Exit(1)

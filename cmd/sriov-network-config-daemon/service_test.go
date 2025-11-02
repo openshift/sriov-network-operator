@@ -124,7 +124,7 @@ var _ = Describe("Service", func() {
 		genericPlugin = plugins_mock.NewMockVendorPlugin(testCtrl)
 		virtualPlugin = plugins_mock.NewMockVendorPlugin(testCtrl)
 
-		newPlatformFunc = func(hostHelpers helper.HostHelpersInterface) (platform.Interface, error) {
+		newPlatformFunc = func(platformType consts.PlatformTypes, hostHelpers helper.HostHelpersInterface) (platform.Interface, error) {
 			return platformMock, nil
 		}
 		newHostHelpersFunc = func() (helper.HostHelpersInterface, error) {
@@ -146,7 +146,7 @@ var _ = Describe("Service", func() {
 		hostHelpers.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelpers.EXPECT().TryEnableTun().Return()
 		hostHelpers.EXPECT().TryEnableVhostNet().Return()
-		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(0), nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(consts.Baremetal), nil)
 		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
 		hostHelpers.EXPECT().RemoveSriovResult().Return(nil)
 		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusInProgress})
@@ -154,7 +154,7 @@ var _ = Describe("Service", func() {
 		genericPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil)
 		genericPlugin.EXPECT().Apply().Return(nil)
 
-		platformMock.EXPECT().SystemdGetPlugin(phaseArg).Return(genericPlugin, nil)
+		platformMock.EXPECT().SystemdGetVendorPlugin(phaseArg).Return(genericPlugin, nil)
 		platformMock.EXPECT().DiscoverSriovDevices().Return([]sriovnetworkv1.InterfaceExt{{
 			Name: "enp216s0f0np0",
 		}}, nil)
@@ -168,12 +168,12 @@ var _ = Describe("Service", func() {
 		hostHelpers.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelpers.EXPECT().TryEnableTun().Return()
 		hostHelpers.EXPECT().TryEnableVhostNet().Return()
-		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(1), nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(consts.VirtualOpenStack), nil)
 		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
 		hostHelpers.EXPECT().RemoveSriovResult().Return(nil)
 		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusInProgress})
 
-		platformMock.EXPECT().SystemdGetPlugin(phaseArg).Return(virtualPlugin, nil)
+		platformMock.EXPECT().SystemdGetVendorPlugin(phaseArg).Return(virtualPlugin, nil)
 		platformMock.EXPECT().DiscoverSriovDevices().Return([]sriovnetworkv1.InterfaceExt{{
 			Name: "enp216s0f0np0",
 		}}, nil)
@@ -192,7 +192,7 @@ var _ = Describe("Service", func() {
 		hostHelpers.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelpers.EXPECT().TryEnableTun().Return()
 		hostHelpers.EXPECT().TryEnableVhostNet().Return()
-		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(0), nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(consts.Baremetal), nil)
 		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
 		hostHelpers.EXPECT().RemoveSriovResult().Return(nil)
 		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusFailed, LastSyncError: "pre: failed to apply configuration: test"})
@@ -200,7 +200,7 @@ var _ = Describe("Service", func() {
 		genericPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil).AnyTimes()
 		genericPlugin.EXPECT().Apply().Return(testError)
 
-		platformMock.EXPECT().SystemdGetPlugin(phaseArg).Return(genericPlugin, nil)
+		platformMock.EXPECT().SystemdGetVendorPlugin(phaseArg).Return(genericPlugin, nil)
 		platformMock.EXPECT().DiscoverSriovDevices().Return([]sriovnetworkv1.InterfaceExt{{
 			Name: "enp216s0f0np0",
 		}}, nil)
@@ -214,14 +214,14 @@ var _ = Describe("Service", func() {
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.0").Return("enp216s0f0np0")
 		hostHelpers.EXPECT().WaitUdevEventsProcessed(60).Return(nil)
 		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("InProgress", ""), nil)
-		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(0), nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(consts.Baremetal), nil)
 		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
 		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusSucceeded})
 
 		genericPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil)
 		genericPlugin.EXPECT().Apply().Return(nil)
 
-		platformMock.EXPECT().SystemdGetPlugin(phaseArg).Return(genericPlugin, nil)
+		platformMock.EXPECT().SystemdGetVendorPlugin(phaseArg).Return(genericPlugin, nil)
 		platformMock.EXPECT().DiscoverSriovDevices().Return([]sriovnetworkv1.InterfaceExt{{
 			Name: "enp216s0f0np0",
 		}}, nil)
@@ -233,7 +233,7 @@ var _ = Describe("Service", func() {
 
 	It("Post phase - virtual cluster", func() {
 		phaseArg = consts.PhasePost
-		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(1), nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(consts.VirtualOpenStack), nil)
 		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
 		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("InProgress", ""), nil)
 		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusSucceeded})
@@ -241,7 +241,7 @@ var _ = Describe("Service", func() {
 		virtualPlugin.EXPECT().OnNodeStateChange(newNodeStateContainsDeviceMatcher("enp216s0f0np0")).Return(true, false, nil)
 		virtualPlugin.EXPECT().Apply().Return(nil)
 
-		platformMock.EXPECT().SystemdGetPlugin(phaseArg).Return(virtualPlugin, nil)
+		platformMock.EXPECT().SystemdGetVendorPlugin(phaseArg).Return(virtualPlugin, nil)
 		platformMock.EXPECT().DiscoverSriovDevices().Return([]sriovnetworkv1.InterfaceExt{{
 			Name: "enp216s0f0np0",
 		}}, nil)
@@ -253,7 +253,7 @@ var _ = Describe("Service", func() {
 
 	It("Post phase - wrong result of the pre phase", func() {
 		phaseArg = consts.PhasePost
-		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(1), nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(consts.VirtualOpenStack), nil)
 		hostHelpers.EXPECT().ReadSriovSupportedNics().Return(testSriovSupportedNicIDs, nil)
 		hostHelpers.EXPECT().ReadSriovResult().Return(getTestResultFileContent("Failed", "pretest"), nil)
 		hostHelpers.EXPECT().WriteSriovResult(&hosttypes.SriovResult{SyncStatus: consts.SyncStatusFailed, LastSyncError: "post: unexpected result of the pre phase: Failed, syncError: pretest"})
@@ -261,17 +261,18 @@ var _ = Describe("Service", func() {
 		Expect(runServiceCmd(&cobra.Command{}, []string{})).To(HaveOccurred())
 	})
 	It("waitForDevicesInitialization", func() {
-		cfg := &hosttypes.SriovConfig{Spec: sriovnetworkv1.SriovNetworkNodeStateSpec{
-			Interfaces: []sriovnetworkv1.Interface{
-				{Name: "name1", PciAddress: "0000:d8:00.0"},
-				{Name: "name2", PciAddress: "0000:d8:00.1"}}}}
+		cfg := getTestSriovInterfaceConfig(consts.Baremetal)
+		cfg.Spec.Interfaces = []sriovnetworkv1.Interface{
+			{Name: "name1", PciAddress: "0000:d8:00.0"},
+			{Name: "name2", PciAddress: "0000:d8:00.1"},
+		}
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.0").Return("other")
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.1").Return("")
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.0").Return("name1")
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.1").Return("")
 		hostHelpers.EXPECT().TryGetInterfaceName("0000:d8:00.1").Return("name2")
 		hostHelpers.EXPECT().WaitUdevEventsProcessed(60).Return(nil)
-		hostHelpers.EXPECT().ReadConfFile().Return(getTestSriovInterfaceConfig(0), nil)
+		hostHelpers.EXPECT().ReadConfFile().Return(cfg, nil)
 		sc, err := newServiceConfig(logr.Discard())
 		Expect(err).ToNot(HaveOccurred())
 		sc.sriovConfig = cfg

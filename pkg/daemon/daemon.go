@@ -48,13 +48,14 @@ type NodeReconciler struct {
 // New creates a new instance of NodeReconciler.
 func New(
 	client client.Client,
+	hostHelpers helper.HostHelpersInterface,
 	platformInterface platform.Interface,
 	er *EventRecorder,
 	featureGates featuregate.FeatureGate,
 ) *NodeReconciler {
 	return &NodeReconciler{
 		client:            client,
-		hostHelpers:       platformInterface.GetHostHelpers(),
+		hostHelpers:       hostHelpers,
 		platformInterface: platformInterface,
 
 		lastAppliedGeneration: 0,

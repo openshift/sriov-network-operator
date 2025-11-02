@@ -431,21 +431,6 @@ func (mr *MockHostManagerInterfaceMockRecorder) GetInterfaceIndex(pciAddr any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceIndex", reflect.TypeOf((*MockHostManagerInterface)(nil).GetInterfaceIndex), pciAddr)
 }
 
-// GetInterfaces mocks base method.
-func (m *MockHostManagerInterface) GetInterfaces() ([]v1.InterfaceExt, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetInterfaces")
-	ret0, _ := ret[0].([]v1.InterfaceExt)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetInterfaces indicates an expected call of GetInterfaces.
-func (mr *MockHostManagerInterfaceMockRecorder) GetInterfaces() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaces", reflect.TypeOf((*MockHostManagerInterface)(nil).GetInterfaces))
-}
-
 // GetLinkType mocks base method.
 func (m *MockHostManagerInterface) GetLinkType(name string) string {
 	m.ctrl.T.Helper()

@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	requestTimeout = 5 * time.Second
+	httpRequestTimeout = 5 * time.Second
 )
 
 //go:generate ../../bin/mockgen -destination mock/mock_utils.go -source utils.go
@@ -62,7 +62,7 @@ func (u *utilsHelper) Chroot(path string) (func() error, error) {
 func (u *utilsHelper) HTTPGetFetchData(url string) (string, error) {
 	// Initialize an HTTP client with a specific timeout.
 	client := http.Client{
-		Timeout: requestTimeout,
+		Timeout: httpRequestTimeout,
 	}
 
 	// Perform the GET request.

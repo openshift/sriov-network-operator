@@ -44,7 +44,7 @@ var _ = Describe("Kubernetes Platform", func() {
 		})
 
 		It("should correctly identify the cluster flavor as Vanilla Kubernetes", func() {
-			Expect(k8s.Flavor()).To(Equal(consts.ClusterFlavorVanillaK8s))
+			Expect(k8s.Flavor()).To(Equal(consts.ClusterFlavorDefault))
 		})
 	})
 

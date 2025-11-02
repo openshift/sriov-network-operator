@@ -26,8 +26,10 @@ const (
 	infraResourceName = "cluster"
 )
 
-// OpenshiftContext contains metadata and structs utilized to interact with Openshift clusters
-type OpenshiftContext struct {
+// OpenshiftOrchestrator implements the orchestrator.Interface for OpenShift clusters.
+// It contains metadata and structs utilized to interact with OpenShift clusters,
+// including MachineConfigPool management for safe node draining.
+type OpenshiftOrchestrator struct {
 	// openshiftFlavor holds metadata about the type of Openshift environment the operator is in.
 	openshiftFlavor consts.ClusterFlavor
 
@@ -38,21 +40,17 @@ type OpenshiftContext struct {
 	mcpPauseMutex sync.Mutex
 }
 
-func New() (*OpenshiftContext, error) {
+// New creates a new OpenshiftOrchestrator orchestrator instance.
+// Detects whether the cluster is Hypershift or standard OpenShift by checking the Infrastructure resource.
+// Returns a configured OpenshiftOrchestrator or an error if initialization fails.
+func New() (*OpenshiftOrchestrator, error) {
 	kubeClient, err := client.New(vars.Config, client.Options{Scheme: vars.Scheme})
 	if err != nil {
 		return nil, err
 	}
 
-	openshiftFlavor := consts.ClusterFlavorOpenshift
-	infraClient, err := client.New(vars.Config, client.Options{
-		Scheme: vars.Scheme,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	isHypershift, err := isExternalControlPlaneCluster(infraClient)
+	openshiftFlavor := consts.ClusterFlavorDefault
+	isHypershift, err := isExternalControlPlaneCluster(kubeClient)
 	if err != nil {
 		return nil, err
 	}
@@ -61,18 +59,28 @@ func New() (*OpenshiftContext, error) {
 		openshiftFlavor = consts.ClusterFlavorHypershift
 	}
 
-	return &OpenshiftContext{openshiftFlavor, kubeClient, sync.Mutex{}}, nil
+	return &OpenshiftOrchestrator{openshiftFlavor, kubeClient, sync.Mutex{}}, nil
 }
 
-func (c *OpenshiftContext) ClusterType() consts.ClusterType {
+// Name returns the name of the OpenShift orchestrator.
+func (c *OpenshiftOrchestrator) Name() string {
+	return "OpenShift"
+}
+
+// ClusterType returns the cluster type for OpenShift.
+func (c *OpenshiftOrchestrator) ClusterType() consts.ClusterType {
 	return consts.ClusterTypeOpenshift
 }
 
-func (c *OpenshiftContext) Flavor() consts.ClusterFlavor {
+// Flavor returns the OpenShift cluster flavor (standard or Hypershift).
+func (c *OpenshiftOrchestrator) Flavor() consts.ClusterFlavor {
 	return c.openshiftFlavor
 }
 
-func (c *OpenshiftContext) BeforeDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
+// BeforeDrainNode pauses the node's MachineConfigPool before draining to prevent automatic reboots.
+// For Hypershift clusters, returns true immediately as there is no MachineConfigOperator.
+// Returns true if the MCP was successfully paused and drain can proceed, false if more time is needed.
+func (c *OpenshiftOrchestrator) BeforeDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
 	// if the operator is running on hypershift variation of openshift there is no machine config operator
 	// just return true here
 	if c.Flavor() == consts.ClusterFlavorHypershift {
@@ -168,7 +176,11 @@ func (c *OpenshiftContext) BeforeDrainNode(ctx context.Context, node *corev1.Nod
 	return true, nil
 }
 
-func (c *OpenshiftContext) AfterCompleteDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
+// AfterCompleteDrainNode unpauses the node's MachineConfigPool after drain is complete.
+// For Hypershift clusters, returns true immediately as there is no MachineConfigOperator.
+// Only unpauses the MCP if this is the last node in the pool completing the drain.
+// Returns true if the MCP was successfully unpaused or if no unpause was needed, false if more time is needed.
+func (c *OpenshiftOrchestrator) AfterCompleteDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
 	// if the operator is running on hypershift variation of openshift, there is no machine config operator
 	// just return true here
 	if c.Flavor() == consts.ClusterFlavorHypershift {
@@ -249,7 +261,7 @@ func (c *OpenshiftContext) AfterCompleteDrainNode(ctx context.Context, node *cor
 	return true, nil
 }
 
-func (c *OpenshiftContext) GetNodeMachinePoolName(ctx context.Context, node *corev1.Node) (string, error) {
+func (c *OpenshiftOrchestrator) GetNodeMachinePoolName(ctx context.Context, node *corev1.Node) (string, error) {
 	// hyperShift cluster doesn't have a machine config
 	if c.Flavor() == consts.ClusterFlavorHypershift {
 		return "", fmt.Errorf("hypershift doesn't have machineConfig")
@@ -274,7 +286,7 @@ func (c *OpenshiftContext) GetNodeMachinePoolName(ctx context.Context, node *cor
 	return "", fmt.Errorf("failed to find the MCP of the node")
 }
 
-func (c *OpenshiftContext) ChangeMachineConfigPoolPause(ctx context.Context, mcp *mcv1.MachineConfigPool, pause bool) error {
+func (c *OpenshiftOrchestrator) ChangeMachineConfigPoolPause(ctx context.Context, mcp *mcv1.MachineConfigPool, pause bool) error {
 	logger := ctx.Value("logger").(logr.Logger).WithName("ChangeMachineConfigPoolPause")
 	logger.Info("change machine config pool state", "pause", pause, "mcp", mcp.Name)
 

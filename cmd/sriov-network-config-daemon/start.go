@@ -250,7 +250,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 			vars.PlatformType = pType
 		}
 	}
-	setupLog.Info("Running on", "platform", vars.PlatformType.String())
+	setupLog.Info("Running on", "platform", vars.PlatformType)
 
 	// create helpers
 	hostHelpers, err := helper.NewDefaultHostHelpers()
@@ -259,7 +259,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	plat, err := platform.New(hostHelpers)
+	plat, err := platform.New(vars.PlatformType, hostHelpers)
 	if err != nil {
 		setupLog.Error(err, "failed to create hypervisor")
 		return err
@@ -324,6 +324,7 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 
 	dm := daemon.New(
 		kClient,
+		hostHelpers,
 		plat,
 		eventRecorder,
 		fg)

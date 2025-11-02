@@ -147,12 +147,7 @@ func newConfigController() *configController {
 	}).AnyTimes()
 
 	// TODO: Change this to add tests for hypershift
-	orchestrator.EXPECT().Flavor().DoAndReturn(func() consts.ClusterFlavor {
-		if vars.ClusterType == consts.ClusterTypeOpenshift {
-			return consts.DefaultConfigName
-		}
-		return consts.ClusterFlavorVanillaK8s
-	}).AnyTimes()
+	orchestrator.EXPECT().Flavor().Return(consts.ClusterFlavorDefault).AnyTimes()
 
 	err = (&controllers.SriovOperatorConfigReconciler{
 		Client:            k8sManager.GetClient(),

@@ -37,17 +37,25 @@ var (
 	ospMetaDataFile    = ospMetaDataDir + "/" + ospMetaDataJSON
 )
 
+// Openstack implements the platform.Interface for OpenStack virtual platforms.
+// It handles SR-IOV device discovery for virtual functions in OpenStack environments,
+// using metadata from the OpenStack metadata service or config drive.
 type Openstack struct {
 	hostHelpers          helper.HostHelpersInterface
 	openStackDevicesInfo OSPDevicesInfo
 }
 
+// New creates a new Openstack platform instance.
+// Returns a configured Openstack platform or an error if initialization fails.
 func New(hostHelper helper.HostHelpersInterface) (*Openstack, error) {
 	return &Openstack{
 		hostHelpers: hostHelper,
 	}, nil
 }
 
+// Init initializes the OpenStack platform by loading device information.
+// If a checkpoint exists, it loads device info from the saved node state.
+// Otherwise, it queries the OpenStack metadata service or config drive.
 func (o *Openstack) Init() error {
 	ns, err := o.hostHelpers.GetCheckPointNodeState()
 	if err != nil {
@@ -63,16 +71,22 @@ func (o *Openstack) Init() error {
 	return nil
 }
 
-func (o *Openstack) GetHostHelpers() helper.HostHelpersInterface {
-	return o.hostHelpers
+// Name returns the name of the OpenStack platform.
+func (o *Openstack) Name() string {
+	return "OpenStack"
 }
 
-func (o *Openstack) GetPlugins(_ *sriovnetworkv1.SriovNetworkNodeState) (plugin.VendorPlugin, []plugin.VendorPlugin, error) {
+// GetVendorPlugins returns the virtual plugin as the main plugin for OpenStack.
+// OpenStack platforms only use the virtual plugin, with no additional plugins.
+func (o *Openstack) GetVendorPlugins(_ *sriovnetworkv1.SriovNetworkNodeState) (plugin.VendorPlugin, []plugin.VendorPlugin, error) {
 	virtual, err := virtualplugin.NewVirtualPlugin(o.hostHelpers)
 	return virtual, []plugin.VendorPlugin{}, err
 }
 
-func (o *Openstack) SystemdGetPlugin(phase string) (plugin.VendorPlugin, error) {
+// SystemdGetVendorPlugin returns the appropriate plugin for systemd mode on OpenStack.
+// For PhasePre, returns the virtual plugin.
+// For PhasePost, returns nil as no post-configuration is needed for virtual platforms.
+func (o *Openstack) SystemdGetVendorPlugin(phase string) (plugin.VendorPlugin, error) {
 	switch phase {
 	case consts.PhasePre:
 		return virtualplugin.NewVirtualPlugin(o.hostHelpers)
@@ -83,7 +97,9 @@ func (o *Openstack) SystemdGetPlugin(phase string) (plugin.VendorPlugin, error) 
 	}
 }
 
-// DiscoverSriovDevices discovers VFs on a virtual platform
+// DiscoverSriovDevices discovers VFs on the OpenStack virtual platform.
+// Each network device is treated as a single VF with TotalVfs=1 and NumVfs=1.
+// Device metadata (MAC address, network ID) is enriched from OpenStack metadata.
 func (o *Openstack) DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error) {
 	log.Log.V(2).Info("DiscoverSriovDevices()")
 	pfList := []sriovnetworkv1.InterfaceExt{}
@@ -163,11 +179,10 @@ func (o *Openstack) DiscoverSriovDevices() ([]sriovnetworkv1.InterfaceExt, error
 	return pfList, nil
 }
 
+// DiscoverBridges is not supported on OpenStack virtual platforms.
+// Returns ErrOperationNotSupportedByPlatform as OpenStack does not support software bridge management.
 func (o *Openstack) DiscoverBridges() (sriovnetworkv1.Bridges, error) {
-	if vars.ManageSoftwareBridges {
-		return sriovnetworkv1.Bridges{}, fmt.Errorf("bridge configuration not supported on openstack platform")
-	}
-	return sriovnetworkv1.Bridges{}, nil
+	return sriovnetworkv1.Bridges{}, vars.ErrOperationNotSupportedByPlatform
 }
 
 // CreateOpenstackDevicesInfo create the openstack device info map

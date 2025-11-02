@@ -13,7 +13,6 @@ import (
 	reflect "reflect"
 
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	helper "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -72,34 +71,20 @@ func (mr *MockInterfaceMockRecorder) DiscoverSriovDevices() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverSriovDevices", reflect.TypeOf((*MockInterface)(nil).DiscoverSriovDevices))
 }
 
-// GetHostHelpers mocks base method.
-func (m *MockInterface) GetHostHelpers() helper.HostHelpersInterface {
+// GetVendorPlugins mocks base method.
+func (m *MockInterface) GetVendorPlugins(ns *v1.SriovNetworkNodeState) (plugin.VendorPlugin, []plugin.VendorPlugin, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetHostHelpers")
-	ret0, _ := ret[0].(helper.HostHelpersInterface)
-	return ret0
-}
-
-// GetHostHelpers indicates an expected call of GetHostHelpers.
-func (mr *MockInterfaceMockRecorder) GetHostHelpers() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHostHelpers", reflect.TypeOf((*MockInterface)(nil).GetHostHelpers))
-}
-
-// GetPlugins mocks base method.
-func (m *MockInterface) GetPlugins(ns *v1.SriovNetworkNodeState) (plugin.VendorPlugin, []plugin.VendorPlugin, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPlugins", ns)
+	ret := m.ctrl.Call(m, "GetVendorPlugins", ns)
 	ret0, _ := ret[0].(plugin.VendorPlugin)
 	ret1, _ := ret[1].([]plugin.VendorPlugin)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
 
-// GetPlugins indicates an expected call of GetPlugins.
-func (mr *MockInterfaceMockRecorder) GetPlugins(ns any) *gomock.Call {
+// GetVendorPlugins indicates an expected call of GetVendorPlugins.
+func (mr *MockInterfaceMockRecorder) GetVendorPlugins(ns any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPlugins", reflect.TypeOf((*MockInterface)(nil).GetPlugins), ns)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetVendorPlugins", reflect.TypeOf((*MockInterface)(nil).GetVendorPlugins), ns)
 }
 
 // Init mocks base method.
@@ -116,17 +101,31 @@ func (mr *MockInterfaceMockRecorder) Init() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockInterface)(nil).Init))
 }
 
-// SystemdGetPlugin mocks base method.
-func (m *MockInterface) SystemdGetPlugin(phase string) (plugin.VendorPlugin, error) {
+// Name mocks base method.
+func (m *MockInterface) Name() string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SystemdGetPlugin", phase)
+	ret := m.ctrl.Call(m, "Name")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// Name indicates an expected call of Name.
+func (mr *MockInterfaceMockRecorder) Name() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Name", reflect.TypeOf((*MockInterface)(nil).Name))
+}
+
+// SystemdGetVendorPlugin mocks base method.
+func (m *MockInterface) SystemdGetVendorPlugin(phase string) (plugin.VendorPlugin, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SystemdGetVendorPlugin", phase)
 	ret0, _ := ret[0].(plugin.VendorPlugin)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SystemdGetPlugin indicates an expected call of SystemdGetPlugin.
-func (mr *MockInterfaceMockRecorder) SystemdGetPlugin(phase any) *gomock.Call {
+// SystemdGetVendorPlugin indicates an expected call of SystemdGetVendorPlugin.
+func (mr *MockInterfaceMockRecorder) SystemdGetVendorPlugin(phase any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SystemdGetPlugin", reflect.TypeOf((*MockInterface)(nil).SystemdGetPlugin), phase)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SystemdGetVendorPlugin", reflect.TypeOf((*MockInterface)(nil).SystemdGetVendorPlugin), phase)
 }

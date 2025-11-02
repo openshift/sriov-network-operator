@@ -46,10 +46,6 @@ var _ = Describe("Baremetal", func() {
 		It("should return nil from Init", func() {
 			Expect(bm.Init()).To(BeNil())
 		})
-
-		It("should return the host helper", func() {
-			Expect(bm.GetHostHelpers()).To(Equal(hostHelper))
-		})
 	})
 
 	Context("Device and Bridge Discovery", func() {
@@ -77,6 +73,7 @@ var _ = Describe("Baremetal", func() {
 		When("ManageSoftwareBridges is false", func() {
 			It("should return empty bridges without calling the helper", func() {
 				vars.ManageSoftwareBridges = false
+				hostHelper.EXPECT().DiscoverBridges().Return(sriovnetworkv1.Bridges{}, nil)
 				bridges, err := bm.DiscoverBridges()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bridges.OVS).To(BeNil())
@@ -114,7 +111,7 @@ var _ = Describe("Baremetal", func() {
 			})
 
 			It("should load generic, k8s, and all unique vendor plugins", func() {
-				mainPlugin, addPlugins, err := bm.GetPlugins(ns)
+				mainPlugin, addPlugins, err := bm.GetVendorPlugins(ns)
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mainPlugin.Name()).To(Equal("generic"))
@@ -134,7 +131,7 @@ var _ = Describe("Baremetal", func() {
 					Vendor: "8086", PciAddress: "0000:01:00.1", // Another Intel
 				})
 
-				_, addPlugins, err := bm.GetPlugins(ns)
+				_, addPlugins, err := bm.GetVendorPlugins(ns)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Still expect only 3 additional plugins
@@ -155,7 +152,7 @@ var _ = Describe("Baremetal", func() {
 					return nil, errors.New("intel plugin load failure")
 				}
 
-				_, _, err := bm.GetPlugins(ns)
+				_, _, err := bm.GetVendorPlugins(ns)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("intel plugin load failure"))
 			})
@@ -181,7 +178,7 @@ var _ = Describe("Baremetal", func() {
 			})
 
 			It("should load generic and vendor plugins, but not the k8s plugin", func() {
-				mainPlugin, addPlugins, err := bm.GetPlugins(ns)
+				mainPlugin, addPlugins, err := bm.GetVendorPlugins(ns)
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(mainPlugin.Name()).To(Equal("generic"))
@@ -201,7 +198,7 @@ var _ = Describe("Baremetal", func() {
 
 	Context("Systemd Plugin Retrieval", func() {
 		It("should return a configured generic plugin for PhasePre", func() {
-			p, err := bm.SystemdGetPlugin(consts.PhasePre)
+			p, err := bm.SystemdGetVendorPlugin(consts.PhasePre)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(p).NotTo(BeNil())
 			Expect(p.Name()).To(Equal("generic"))
@@ -211,14 +208,14 @@ var _ = Describe("Baremetal", func() {
 		})
 
 		It("should return a standard generic plugin for PhasePost", func() {
-			p, err := bm.SystemdGetPlugin(consts.PhasePost)
+			p, err := bm.SystemdGetVendorPlugin(consts.PhasePost)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(p).NotTo(BeNil())
 			Expect(p.Name()).To(Equal("generic"))
 		})
 
 		It("should return an error for an invalid phase", func() {
-			p, err := bm.SystemdGetPlugin("invalid-phase")
+			p, err := bm.SystemdGetVendorPlugin("invalid-phase")
 			Expect(err).To(HaveOccurred())
 			Expect(p).To(BeNil())
 			Expect(err.Error()).To(Equal(fmt.Sprintf("invalid phase %s", "invalid-phase")))

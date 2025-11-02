@@ -143,7 +143,6 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		}
 
 		platformMock.EXPECT().Init().Return(nil)
-		platformMock.EXPECT().GetHostHelpers().Return(hostHelper).AnyTimes()
 		// TODO: remove this when adding unit tests for switchdev
 		platformMock.EXPECT().DiscoverBridges().Return(sriovnetworkv1.Bridges{}, nil).AnyTimes()
 		platformMock.EXPECT().DiscoverSriovDevices().DoAndReturn(func() ([]sriovnetworkv1.InterfaceExt, error) {
@@ -152,7 +151,7 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 
 		genericPlugin, err = generic.NewGenericPlugin(hostHelper)
 		Expect(err).ToNot(HaveOccurred())
-		platformMock.EXPECT().GetPlugins(gomock.Any()).Return(genericPlugin, []plugin.VendorPlugin{}, nil)
+		platformMock.EXPECT().GetVendorPlugins(gomock.Any()).Return(genericPlugin, []plugin.VendorPlugin{}, nil)
 
 		featureGates := featuregate.New()
 		featureGates.Init(map[string]bool{})
@@ -398,7 +397,7 @@ func createDaemon(
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	configController := daemon.New(kClient, platformInterface, eventRecorder, featureGates)
+	configController := daemon.New(kClient, hostHelper, platformInterface, eventRecorder, featureGates)
 	err = configController.Init(disablePlugins)
 	Expect(err).ToNot(HaveOccurred())
 	err = configController.SetupWithManager(k8sManager)

@@ -40,7 +40,7 @@ var _ = Describe("Openshift Package", Ordered, func() {
 		}
 		Expect(k8sClient.Create(ctx, node)).To(Succeed())
 
-		o, err = orchestrator.New()
+		o, err = orchestrator.New(vars.ClusterType)
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -68,9 +68,9 @@ var _ = Describe("Openshift Package", Ordered, func() {
 			})
 		})
 		It("should return error with unknow cluster type", func() {
-			_, err := orchestrator.New()
+			_, err := orchestrator.New("unknown")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("unknown orchestration type: "))
+			Expect(err.Error()).To(ContainSubstring("unknown cluster type: "))
 		})
 	})
 
@@ -89,7 +89,7 @@ var _ = Describe("Openshift Package", Ordered, func() {
 
 		Context("Flavor", func() {
 			It("should return flavor", func() {
-				Expect(o.Flavor()).To(Equal(constants.ClusterFlavorVanillaK8s))
+				Expect(o.Flavor()).To(Equal(constants.ClusterFlavorDefault))
 			})
 		})
 
@@ -125,7 +125,7 @@ var _ = Describe("Openshift Package", Ordered, func() {
 
 		Context("Flavor", func() {
 			It("should return flavor", func() {
-				Expect(o.Flavor()).To(Equal(constants.ClusterFlavorOpenshift))
+				Expect(o.Flavor()).To(Equal(constants.ClusterFlavorDefault))
 			})
 		})
 	})

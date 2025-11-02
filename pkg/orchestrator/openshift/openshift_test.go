@@ -28,7 +28,7 @@ var (
 	cancel context.CancelFunc
 	ctx    context.Context
 	err    error
-	op     *openshift.OpenshiftContext
+	op     *openshift.OpenshiftOrchestrator
 )
 
 var _ = Describe("Openshift Package", Ordered, func() {

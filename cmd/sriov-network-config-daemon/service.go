@@ -77,25 +77,28 @@ func newServiceConfig(setupLog logr.Logger) (*ServiceConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create host helpers: %v", err)
 	}
-	sc := &ServiceConfig{
-		hostHelpers,
-		nil,
-		setupLog,
-		nil,
-	}
 
-	err = sc.readConf()
+	// Read config first to get platform type
+
+	sriovConfig, err := readConf(hostHelpers, setupLog)
 	if err != nil {
-		return nil, sc.updateSriovResultErr(phaseArg, err)
+		return nil, fmt.Errorf("failed to read configuration: %w", err)
 	}
 
 	// init globals
-	vars.PlatformType = sc.sriovConfig.PlatformType
-	platformInterface, err := newPlatformFunc(hostHelpers)
+	vars.PlatformType = sriovConfig.PlatformType
+	platformInterface, err := newPlatformFunc(vars.PlatformType, hostHelpers)
 	if err != nil {
-		return nil, fmt.Errorf("failed to creeate serviceConfig: %w", err)
+		return nil, fmt.Errorf("failed to create serviceConfig: %w", err)
 	}
-	sc.platformInterface = platformInterface
+
+	// Create final ServiceConfig with all fields initialized
+	sc := &ServiceConfig{
+		hostHelper:        hostHelpers,
+		platformInterface: platformInterface,
+		log:               setupLog,
+		sriovConfig:       sriovConfig,
+	}
 
 	return sc, nil
 }
@@ -159,21 +162,20 @@ func runServiceCmd(cmd *cobra.Command, args []string) error {
 	return sc.updateSriovResultOk(phaseArg)
 }
 
-func (s *ServiceConfig) readConf() error {
-	nodeStateSpec, err := s.hostHelper.ReadConfFile()
+func readConf(hostHelper helper.HostHelpersInterface, log logr.Logger) (*hosttypes.SriovConfig, error) {
+	nodeStateSpec, err := hostHelper.ReadConfFile()
 	if err != nil {
 		if _, err := os.Stat(utils.GetHostExtensionPath(consts.SriovSystemdConfigPath)); !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("failed to read the sriov configuration file in path %s: %v", utils.GetHostExtensionPath(consts.SriovSystemdConfigPath), err)
+			return nil, fmt.Errorf("failed to read the sriov configuration file in path %s: %v", utils.GetHostExtensionPath(consts.SriovSystemdConfigPath), err)
 		}
-		s.log.Info("configuration file not found, use default config")
+		log.Info("configuration file not found, use default config")
 		nodeStateSpec = &hosttypes.SriovConfig{
 			Spec:            sriovv1.SriovNetworkNodeStateSpec{},
 			UnsupportedNics: false,
 			PlatformType:    consts.Baremetal,
 		}
 	}
-	s.sriovConfig = nodeStateSpec
-	return nil
+	return nodeStateSpec, nil
 }
 
 func (s *ServiceConfig) initSupportedNics() error {
@@ -244,7 +246,7 @@ func (s *ServiceConfig) callPlugin(phase string) error {
 }
 
 func (s *ServiceConfig) getPlugin(phase string) (plugin.VendorPlugin, error) {
-	return s.platformInterface.SystemdGetPlugin(phase)
+	return s.platformInterface.SystemdGetVendorPlugin(phase)
 }
 
 func (s *ServiceConfig) getNetworkNodeState(phase string) (*sriovv1.SriovNetworkNodeState, error) {
@@ -259,9 +261,11 @@ func (s *ServiceConfig) getNetworkNodeState(phase string) (*sriovv1.SriovNetwork
 	}
 	if phase != consts.PhasePre && vars.ManageSoftwareBridges {
 		// openvswitch is not available during the pre-phase
-		bridges, err = s.platformInterface.DiscoverBridges()
-		if err != nil {
-			return nil, fmt.Errorf("failed to discover managed bridges on the host:  %v", err)
+		if vars.ManageSoftwareBridges {
+			bridges, err = s.platformInterface.DiscoverBridges()
+			if err != nil {
+				return nil, fmt.Errorf("failed to discover managed bridges on the host:  %v", err)
+			}
 		}
 	}
 

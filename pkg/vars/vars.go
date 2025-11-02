@@ -1,6 +1,7 @@
 package vars
 
 import (
+	"errors"
 	"os"
 	"regexp"
 
@@ -79,6 +80,9 @@ var (
 
 	// FeatureGates interface to interact with feature gates
 	FeatureGate featuregate.FeatureGate
+
+	// ErrOperationNotSupportedByPlatform is returned when a platform operation is not supported by the platform implementation.
+	ErrOperationNotSupportedByPlatform = errors.New("operation not supported by the platform")
 )
 
 func init() {

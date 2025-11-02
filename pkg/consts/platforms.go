@@ -1,39 +1,31 @@
 package consts
 
-import "fmt"
-
+// ClusterType represents the type of Kubernetes cluster (e.g., OpenShift, vanilla Kubernetes)
 type ClusterType string
 
 const (
-	ClusterTypeOpenshift  ClusterType = "openshift"
+	// ClusterTypeOpenshift represents an OpenShift cluster
+	ClusterTypeOpenshift ClusterType = "openshift"
+	// ClusterTypeKubernetes represents a vanilla Kubernetes cluster
 	ClusterTypeKubernetes ClusterType = "kubernetes"
 )
 
+// ClusterFlavor represents the specific flavor or variant of a cluster type
 type ClusterFlavor string
 
 const (
-	ClusterFlavorVanillaK8s ClusterFlavor = "vanilla"
-	ClusterFlavorOpenshift  ClusterFlavor = "default"
+	// ClusterFlavorDefault represents the standard/default flavor of any cluster type
+	ClusterFlavorDefault ClusterFlavor = "default"
+	// ClusterFlavorHypershift represents an OpenShift Hypershift cluster
 	ClusterFlavorHypershift ClusterFlavor = "hypershift"
 )
 
-// PlatformTypes
-type PlatformTypes int
+// PlatformTypes represents the type of platform the cluster is running on (baremetal, virtual, etc.)
+type PlatformTypes string
 
 const (
-	// Baremetal platform
-	Baremetal PlatformTypes = iota
-	// VirtualOpenStack platform
-	VirtualOpenStack
+	// Baremetal represents a bare metal platform
+	Baremetal PlatformTypes = "Baremetal"
+	// VirtualOpenStack represents a virtual OpenStack platform
+	VirtualOpenStack PlatformTypes = "Virtual/Openstack"
 )
-
-func (e PlatformTypes) String() string {
-	switch e {
-	case Baremetal:
-		return "Baremetal"
-	case VirtualOpenStack:
-		return "Virtual/Openstack"
-	default:
-		return fmt.Sprintf("%d", int(e))
-	}
-}
