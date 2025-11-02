@@ -17,7 +17,7 @@ import (
 
 var _ = Describe("Store", func() {
 	var (
-		tempDir = "/tmp/sriov-test/"
+		tempDir = "/tmp/sriov-store-test/"
 		err     error
 		m       ManagerInterface
 

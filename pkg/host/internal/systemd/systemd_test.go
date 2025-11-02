@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("Systemd", func() {
 	var (
-		tempDir              = "/tmp/sriov-test/"
+		tempDir              = "/tmp/sriov-systemd-test/"
 		validTestContentJson = []byte(`{
   "spec": {
     "interfaces": [
