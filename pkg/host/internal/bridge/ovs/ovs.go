@@ -129,12 +129,17 @@ func (o *ovs) CreateOVSBridge(ctx context.Context, conf *sriovnetworkv1.OVSConfi
 			return err
 		}
 		funcLog.V(2).Info("CreateOVSBridge(): create OVS bridge", "config", conf)
+		var failMode *string
+		if conf.Bridge.FailMode != "" {
+			failMode = &conf.Bridge.FailMode
+		}
 		if err := o.createBridge(ctx, dbClient, &BridgeEntry{
 			Name:         conf.Name,
 			UUID:         uuid.NewString(),
 			DatapathType: conf.Bridge.DatapathType,
 			ExternalIDs:  conf.Bridge.ExternalIDs,
 			OtherConfig:  conf.Bridge.OtherConfig,
+			FailMode:     failMode,
 		}); err != nil {
 			return err
 		}
@@ -581,6 +586,10 @@ func (o *ovs) getCurrentBridgeState(ctx context.Context, dbClient client.Client,
 	if bridge == nil {
 		return nil, nil
 	}
+	var failMode string
+	if bridge.FailMode != nil {
+		failMode = *bridge.FailMode
+	}
 	currentConfig := &sriovnetworkv1.OVSConfigExt{
 		Name: bridge.Name,
 		Bridge: sriovnetworkv1.OVSBridgeConfig{
@@ -589,6 +598,7 @@ func (o *ovs) getCurrentBridgeState(ctx context.Context, dbClient client.Client,
 			// were set by the operator
 			ExternalIDs: updateMap(knownConfig.Bridge.ExternalIDs, bridge.ExternalIDs),
 			OtherConfig: updateMap(knownConfig.Bridge.OtherConfig, bridge.OtherConfig),
+			FailMode:    failMode,
 		},
 	}
 	if len(knownConfig.Uplinks) == 0 {
@@ -742,6 +752,7 @@ func getClient(ctx context.Context) (client.Client, error) {
 			&bridgeEntry.ExternalIDs,
 			&bridgeEntry.OtherConfig,
 			&bridgeEntry.Ports,
+			&bridgeEntry.FailMode,
 		),
 		client.WithTable(interfaceEntry,
 			&interfaceEntry.UUID,

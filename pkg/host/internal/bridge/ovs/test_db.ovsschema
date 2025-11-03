@@ -7,6 +7,15 @@
         "datapath_type": {
           "type": "string"
         },
+        "fail_mode": {
+          "type": {
+            "key": {
+              "type": "string"
+            },
+            "min": 0,
+            "max": 1
+          }
+        },
         "external_ids": {
           "type": {
             "key": {
