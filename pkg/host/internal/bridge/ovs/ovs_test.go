@@ -365,6 +365,21 @@ var _ = Describe("OVS", func() {
 
 				validateDBConfig(getDBContent(ctx, ovsClient), expectedConf)
 			})
+			It("No Bridge, create bridge with fail mode", func() {
+				expectedConf := getManagedBridges()["br-0000_d8_00.0"]
+				expectedConf.Bridge.FailMode = "secure"
+				store.EXPECT().GetManagedOVSBridge("br-0000_d8_00.0").Return(nil, nil)
+
+				rootUUID := uuid.NewString()
+				initialDBContent := &testDBEntries{OpenVSwitch: []*OpenvSwitchEntry{{UUID: rootUUID}}}
+
+				createInitialDBContent(ctx, ovsClient, initialDBContent)
+
+				store.EXPECT().AddManagedOVSBridge(expectedConf).Return(nil)
+				Expect(ovs.CreateOVSBridge(ctx, expectedConf)).NotTo(HaveOccurred())
+
+				validateDBConfig(getDBContent(ctx, ovsClient), expectedConf)
+			})
 			It("Bridge exist, no data in store, should recreate", func() {
 				expectedConf := getManagedBridges()["br-0000_d8_00.0"]
 				store.EXPECT().GetManagedOVSBridge("br-0000_d8_00.0").Return(nil, nil)
@@ -385,6 +400,24 @@ var _ = Describe("OVS", func() {
 			It("Bridge exist with wrong config, should recreate", func() {
 				expectedConf := getManagedBridges()["br-0000_d8_00.0"]
 				expectedConf.Bridge.DatapathType = "test"
+
+				oldConfig := getManagedBridges()["br-0000_d8_00.0"]
+				store.EXPECT().GetManagedOVSBridge("br-0000_d8_00.0").Return(oldConfig, nil)
+				store.EXPECT().AddManagedOVSBridge(expectedConf).Return(nil)
+
+				initialDBContent := getDefaultInitialDBContent()
+				createInitialDBContent(ctx, ovsClient, initialDBContent)
+
+				Expect(ovs.CreateOVSBridge(ctx, expectedConf)).NotTo(HaveOccurred())
+
+				dbContent := getDBContent(ctx, ovsClient)
+				validateDBConfig(dbContent, expectedConf)
+
+				Expect(dbContent.Bridge[0].UUID).NotTo(Equal(initialDBContent.Bridge[0].UUID))
+			})
+			It("Bridge exist with wrong config (fail mode), should recreate", func() {
+				expectedConf := getManagedBridges()["br-0000_d8_00.0"]
+				expectedConf.Bridge.FailMode = "secure"
 
 				oldConfig := getManagedBridges()["br-0000_d8_00.0"]
 				store.EXPECT().GetManagedOVSBridge("br-0000_d8_00.0").Return(oldConfig, nil)
