@@ -35,7 +35,7 @@ type SriovNetworkSpec struct {
 	//IPAM configuration to be used for this network.
 	IPAM string `json:"ipam,omitempty"`
 	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=4096
+	// +kubebuilder:validation:Maximum=4094
 	// VLAN ID to assign for the VF. Defaults to 0.
 	Vlan int `json:"vlan,omitempty"`
 	// +kubebuilder:validation:Minimum=0
