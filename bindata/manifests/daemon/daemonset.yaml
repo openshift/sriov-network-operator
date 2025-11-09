@@ -143,6 +143,7 @@ spec:
           - sriov-network-config-daemon
         securityContext:
           privileged: true
+          readOnlyRootFilesystem: true
         args:
           - "start"
         {{- if .UsedSystemdMode}}

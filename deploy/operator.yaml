@@ -49,6 +49,9 @@ spec:
           image: $SRIOV_NETWORK_OPERATOR_IMAGE
           command:
           - sriov-network-operator
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
           resources:
             requests:
               cpu: 100m
