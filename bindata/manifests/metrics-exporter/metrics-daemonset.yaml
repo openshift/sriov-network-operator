@@ -78,6 +78,9 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: status.hostIP
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
         resources:
           requests:
             cpu: 10m
