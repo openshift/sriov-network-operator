@@ -49,7 +49,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	//+kubebuilder:scaffold:imports
@@ -151,9 +151,9 @@ func main() {
 	vars.Config = restConfig
 	vars.Scheme = mgrGlobal.GetScheme()
 
-	platformsHelper, err := platforms.NewDefaultPlatformHelper()
+	orch, err := orchestrator.New(vars.ClusterType)
 	if err != nil {
-		setupLog.Error(err, "couldn't create openshift context")
+		setupLog.Error(err, "couldn't create orchestrator")
 		os.Exit(1)
 	}
 
@@ -191,7 +191,7 @@ func main() {
 	if err = (&controllers.SriovOperatorConfigReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
-		PlatformHelper:    platformsHelper,
+		Orchestrator:      orch,
 		FeatureGate:       featureGate,
 		UncachedAPIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
@@ -199,9 +199,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.SriovNetworkPoolConfigReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		PlatformHelper: platformsHelper,
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		Orchestrator: orch,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovNetworkPoolConfig")
 		os.Exit(1)
@@ -223,10 +223,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	drainController, err := controllers.NewDrainReconcileController(drainKClient,
+	drainController, err := controllers.NewDrainReconcileController(
+		drainKClient,
 		mgr.GetScheme(),
 		mgr.GetEventRecorderFor("SR-IOV operator"),
-		platformsHelper)
+		orch)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "DrainReconcile")
 		os.Exit(1)

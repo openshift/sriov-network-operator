@@ -7,111 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/net"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	dputils "github.com/k8snetworkplumbingwg/sriov-network-device-plugin/pkg/utils"
-
-	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host"
 )
-
-const (
-	varConfigPath      = "/var/config"
-	ospMetaDataBaseDir = "/openstack/2018-08-27"
-	ospMetaDataDir     = varConfigPath + ospMetaDataBaseDir
-	ospMetaDataBaseURL = "http://169.254.169.254" + ospMetaDataBaseDir
-	ospNetworkDataJSON = "network_data.json"
-	ospMetaDataJSON    = "meta_data.json"
-	ospNetworkDataURL  = ospMetaDataBaseURL + "/" + ospNetworkDataJSON
-	ospMetaDataURL     = ospMetaDataBaseURL + "/" + ospMetaDataJSON
-	// Config drive is defined as an iso9660 or vfat (deprecated) drive
-	// with the "config-2" label.
-	//https://docs.openstack.org/nova/latest/user/config-drive.html
-	configDriveLabel = "config-2"
-)
-
-var (
-	ospNetworkDataFile = ospMetaDataDir + "/" + ospNetworkDataJSON
-	ospMetaDataFile    = ospMetaDataDir + "/" + ospMetaDataJSON
-)
-
-//go:generate ../../../bin/mockgen -destination mock/mock_openstack.go -source openstack.go
-type OpenstackInterface interface {
-	CreateOpenstackDevicesInfo() error
-	CreateOpenstackDevicesInfoFromNodeStatus(*sriovnetworkv1.SriovNetworkNodeState)
-	DiscoverSriovDevicesVirtual() ([]sriovnetworkv1.InterfaceExt, error)
-}
-
-type openstackContext struct {
-	hostManager          host.HostManagerInterface
-	openStackDevicesInfo OSPDevicesInfo
-}
-
-// OSPMetaDataDevice -- Device structure within meta_data.json
-type OSPMetaDataDevice struct {
-	Vlan      int      `json:"vlan,omitempty"`
-	VfTrusted bool     `json:"vf_trusted,omitempty"`
-	Type      string   `json:"type,omitempty"`
-	Mac       string   `json:"mac,omitempty"`
-	Bus       string   `json:"bus,omitempty"`
-	Address   string   `json:"address,omitempty"`
-	Tags      []string `json:"tags,omitempty"`
-}
-
-// OSPMetaData -- Openstack meta_data.json format
-type OSPMetaData struct {
-	UUID             string              `json:"uuid,omitempty"`
-	AdminPass        string              `json:"admin_pass,omitempty"`
-	Name             string              `json:"name,omitempty"`
-	LaunchIndex      int                 `json:"launch_index,omitempty"`
-	AvailabilityZone string              `json:"availability_zone,omitempty"`
-	ProjectID        string              `json:"project_id,omitempty"`
-	Devices          []OSPMetaDataDevice `json:"devices,omitempty"`
-}
-
-// OSPNetworkLink OSP Link metadata
-type OSPNetworkLink struct {
-	ID          string `json:"id"`
-	VifID       string `json:"vif_id,omitempty"`
-	Type        string `json:"type"`
-	Mtu         int    `json:"mtu,omitempty"`
-	EthernetMac string `json:"ethernet_mac_address"`
-}
-
-// OSPNetwork OSP Network metadata
-type OSPNetwork struct {
-	ID        string `json:"id"`
-	Type      string `json:"type"`
-	Link      string `json:"link"`
-	NetworkID string `json:"network_id"`
-}
-
-// OSPNetworkData OSP Network metadata
-type OSPNetworkData struct {
-	Links    []OSPNetworkLink `json:"links,omitempty"`
-	Networks []OSPNetwork     `json:"networks,omitempty"`
-	// Omit Services
-}
-
-type OSPDevicesInfo map[string]*OSPDeviceInfo
-
-type OSPDeviceInfo struct {
-	MacAddress string
-	NetworkID  string
-}
-
-func New(hostManager host.HostManagerInterface) OpenstackInterface {
-	return &openstackContext{
-		hostManager: hostManager,
-	}
-}
 
 // GetOpenstackData gets the metadata and network_data
 func getOpenstackData(mountConfigDrive bool) (metaData *OSPMetaData, networkData *OSPNetworkData, err error) {
@@ -272,11 +174,11 @@ func getBodyFromURL(url string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 	rawBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 	return rawBytes, nil
 }
 
@@ -324,178 +226,4 @@ func getPCIAddressFromMACAddress(macAddress string, nics []*net.NIC) (string, er
 	}
 
 	return "", fmt.Errorf("no device found with MAC address %s", macAddress)
-}
-
-// CreateOpenstackDevicesInfo create the openstack device info map
-func (o *openstackContext) CreateOpenstackDevicesInfo() error {
-	log.Log.Info("CreateOpenstackDevicesInfo()")
-	devicesInfo := make(OSPDevicesInfo)
-
-	metaData, networkData, err := getOpenstackData(true)
-	if err != nil {
-		log.Log.Error(err, "failed to read OpenStack data")
-		return err
-	}
-
-	if metaData == nil || networkData == nil {
-		o.openStackDevicesInfo = make(OSPDevicesInfo)
-		return nil
-	}
-
-	// use this for hw pass throw interfaces
-	for _, device := range metaData.Devices {
-		for _, link := range networkData.Links {
-			if device.Mac == link.EthernetMac {
-				for _, network := range networkData.Networks {
-					if network.Link == link.ID {
-						networkID := sriovnetworkv1.OpenstackNetworkID.String() + ":" + network.NetworkID
-						devicesInfo[device.Address] = &OSPDeviceInfo{MacAddress: device.Mac, NetworkID: networkID}
-					}
-				}
-			}
-		}
-	}
-
-	// for vhostuser interface type we check the interfaces on the node
-	pci, err := ghw.PCI()
-	if err != nil {
-		return fmt.Errorf("CreateOpenstackDevicesInfo(): error getting PCI info: %v", err)
-	}
-
-	devices := pci.Devices
-	if len(devices) == 0 {
-		return fmt.Errorf("CreateOpenstackDevicesInfo(): could not retrieve PCI devices")
-	}
-
-	for _, device := range devices {
-		if _, exist := devicesInfo[device.Address]; exist {
-			//we already discover the device via openstack metadata
-			continue
-		}
-
-		devClass, err := strconv.ParseInt(device.Class.ID, 16, 64)
-		if err != nil {
-			log.Log.Error(err, "CreateOpenstackDevicesInfo(): unable to parse device class for device, skipping",
-				"device", device)
-			continue
-		}
-		if devClass != consts.NetClass {
-			// Not network device
-			continue
-		}
-
-		macAddress := ""
-		if name := o.hostManager.TryToGetVirtualInterfaceName(device.Address); name != "" {
-			if mac := o.hostManager.GetNetDevMac(name); mac != "" {
-				macAddress = mac
-			}
-		}
-		if macAddress == "" {
-			// we didn't manage to find a mac address for the nic skipping
-			continue
-		}
-
-		for _, link := range networkData.Links {
-			if macAddress == link.EthernetMac {
-				for _, network := range networkData.Networks {
-					if network.Link == link.ID {
-						networkID := sriovnetworkv1.OpenstackNetworkID.String() + ":" + network.NetworkID
-						devicesInfo[device.Address] = &OSPDeviceInfo{MacAddress: macAddress, NetworkID: networkID}
-					}
-				}
-			}
-		}
-	}
-
-	o.openStackDevicesInfo = devicesInfo
-	return nil
-}
-
-// DiscoverSriovDevicesVirtual discovers VFs on a virtual platform
-func (o *openstackContext) DiscoverSriovDevicesVirtual() ([]sriovnetworkv1.InterfaceExt, error) {
-	log.Log.V(2).Info("DiscoverSriovDevicesVirtual()")
-	pfList := []sriovnetworkv1.InterfaceExt{}
-
-	pci, err := ghw.PCI()
-	if err != nil {
-		return nil, fmt.Errorf("DiscoverSriovDevicesVirtual(): error getting PCI info: %v", err)
-	}
-
-	devices := pci.Devices
-	if len(devices) == 0 {
-		return nil, fmt.Errorf("DiscoverSriovDevicesVirtual(): could not retrieve PCI devices")
-	}
-
-	for _, device := range devices {
-		devClass, err := strconv.ParseInt(device.Class.ID, 16, 64)
-		if err != nil {
-			log.Log.Error(err, "DiscoverSriovDevicesVirtual(): unable to parse device class for device, skipping",
-				"device", device)
-			continue
-		}
-		if devClass != consts.NetClass {
-			// Not network device
-			continue
-		}
-
-		deviceInfo, exist := o.openStackDevicesInfo[device.Address]
-		if !exist {
-			log.Log.Error(nil, "DiscoverSriovDevicesVirtual(): unable to find device in devicesInfo list, skipping",
-				"device", device.Address)
-			continue
-		}
-		netFilter := deviceInfo.NetworkID
-		metaMac := deviceInfo.MacAddress
-
-		driver, err := dputils.GetDriverName(device.Address)
-		if err != nil {
-			log.Log.Error(err, "DiscoverSriovDevicesVirtual(): unable to parse device driver for device, skipping",
-				"device", device)
-			continue
-		}
-		iface := sriovnetworkv1.InterfaceExt{
-			PciAddress: device.Address,
-			Driver:     driver,
-			Vendor:     device.Vendor.ID,
-			DeviceID:   device.Product.ID,
-			NetFilter:  netFilter,
-		}
-		if mtu := o.hostManager.GetNetdevMTU(device.Address); mtu > 0 {
-			iface.Mtu = mtu
-		}
-		if name := o.hostManager.TryToGetVirtualInterfaceName(device.Address); name != "" {
-			iface.Name = name
-			if iface.Mac = o.hostManager.GetNetDevMac(name); iface.Mac == "" {
-				iface.Mac = metaMac
-			}
-			iface.LinkSpeed = o.hostManager.GetNetDevLinkSpeed(name)
-			iface.LinkType = o.hostManager.GetLinkType(name)
-		}
-
-		iface.TotalVfs = 1
-		iface.NumVfs = 1
-
-		vf := sriovnetworkv1.VirtualFunction{
-			PciAddress: device.Address,
-			Driver:     driver,
-			VfID:       0,
-			Vendor:     iface.Vendor,
-			DeviceID:   iface.DeviceID,
-			Mtu:        iface.Mtu,
-			Mac:        iface.Mac,
-		}
-		iface.VFs = append(iface.VFs, vf)
-
-		pfList = append(pfList, iface)
-	}
-	return pfList, nil
-}
-
-func (o *openstackContext) CreateOpenstackDevicesInfoFromNodeStatus(networkState *sriovnetworkv1.SriovNetworkNodeState) {
-	devicesInfo := make(OSPDevicesInfo)
-	for _, iface := range networkState.Status.Interfaces {
-		devicesInfo[iface.PciAddress] = &OSPDeviceInfo{MacAddress: iface.Mac, NetworkID: iface.NetFilter}
-	}
-
-	o.openStackDevicesInfo = devicesInfo
 }

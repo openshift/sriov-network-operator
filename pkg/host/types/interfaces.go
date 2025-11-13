@@ -147,7 +147,7 @@ type SriovInterface interface {
 type UdevInterface interface {
 	// PrepareNMUdevRule creates the needed udev rules to disable NetworkManager from
 	// our managed SR-IOV virtual functions
-	PrepareNMUdevRule(supportedVfIds []string) error
+	PrepareNMUdevRule() error
 	// PrepareVFRepUdevRule creates a script which helps to configure representor name for the VF
 	PrepareVFRepUdevRule() error
 	// AddDisableNMUdevRule adds udev rule that disables NetworkManager for VFs on the concrete PF:

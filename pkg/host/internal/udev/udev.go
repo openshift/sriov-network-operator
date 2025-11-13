@@ -10,6 +10,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
@@ -24,7 +25,7 @@ func New(utilsHelper utils.CmdInterface) types.UdevInterface {
 	return &udev{utilsHelper: utilsHelper}
 }
 
-func (u *udev) PrepareNMUdevRule(supportedVfIds []string) error {
+func (u *udev) PrepareNMUdevRule() error {
 	log.Log.V(2).Info("PrepareNMUdevRule()")
 	filePath := filepath.Join(vars.FilesystemRoot, consts.HostUdevRulesFolder, "10-nm-unmanaged.rules")
 
@@ -46,7 +47,7 @@ func (u *udev) PrepareNMUdevRule(supportedVfIds []string) error {
 	log.Log.V(2).Info("PrepareNMUdevRule()", "stdout", stdout)
 
 	//save the device list to use for udev rules
-	vars.SupportedVfIds = supportedVfIds
+	vars.SupportedVfIds = sriovnetworkv1.GetSupportedVfIds()
 	return nil
 }
 

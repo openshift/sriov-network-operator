@@ -54,6 +54,21 @@ func (mr *MockCmdInterfaceMockRecorder) Chroot(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Chroot", reflect.TypeOf((*MockCmdInterface)(nil).Chroot), arg0)
 }
 
+// HTTPGetFetchData mocks base method.
+func (m *MockCmdInterface) HTTPGetFetchData(arg0 string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HTTPGetFetchData", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HTTPGetFetchData indicates an expected call of HTTPGetFetchData.
+func (mr *MockCmdInterfaceMockRecorder) HTTPGetFetchData(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HTTPGetFetchData", reflect.TypeOf((*MockCmdInterface)(nil).HTTPGetFetchData), arg0)
+}
+
 // RunCommand mocks base method.
 func (m *MockCmdInterface) RunCommand(arg0 string, arg1 ...string) (string, string, error) {
 	m.ctrl.T.Helper()
