@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("Systemd", func() {
 	var (
-		tempDir              = "/tmp/sriov-test/"
+		tempDir              = "/tmp/sriov-systemd-test/"
 		validTestContentJson = []byte(`{
   "spec": {
     "interfaces": [
@@ -38,7 +38,7 @@ var _ = Describe("Systemd", func() {
   "mtu": 2000,
   "isRdma": true,
   "unsupportedNics": false,
-  "platformType": 0,
+  "platformType": "Baremetal",
   "manageSoftwareBridges": false,
   "ovsdbSocketPath": ""
 }`)
@@ -56,7 +56,7 @@ var _ = Describe("Systemd", func() {
       mtu: 2000
       isRdma: true
 unsupportedNics: false
-platformType: 0
+platformType: "Baremetal"
 manageSoftwareBridges: false
 ovsdbSocketPath: ""`)
 
@@ -103,6 +103,7 @@ lastSyncError: ""`)
 
 		vars.InChroot = true
 		vars.FilesystemRoot = tempDir
+		vars.PlatformType = consts.Baremetal
 		sriovnetworkv1.NicIDMap = []string{}
 
 		s = &systemd{}

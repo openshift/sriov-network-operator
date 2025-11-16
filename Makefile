@@ -75,7 +75,7 @@ image: ; $(info Building images...)
 
 # Run tests
 test: generate lint manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test -coverprofile cover.out -v ${TESTPKGS}
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test -coverprofile cover.out -v ${TESTPKGS}
 
 # Build manager binary
 manager: generate _build-manager
@@ -216,7 +216,7 @@ test-e2e-validation-only: ginkgo
 	SUITE=./test/validation ./hack/run-e2e-conformance.sh	
 
 test-e2e: generate manifests skopeo envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use --bin-dir=/tmp -p path)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
 
 test-e2e-k8s: export NAMESPACE=sriov-network-operator
 test-e2e-k8s: test-e2e
@@ -225,7 +225,7 @@ test-bindata-scripts: fakechroot
 	fakechroot ./test/scripts/kargs_test.sh
 
 test-%: generate manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test `go list ./$*/... | grep -v "/mock" | grep -v "/pkg/client"` -coverprofile cover-$*-$(CLUSTER_TYPE).out -coverpkg ./... -v
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test `go list ./$*/... | grep -v "/mock" | grep -v "/pkg/client"` -coverprofile cover-$*-$(CLUSTER_TYPE).out -coverpkg ./... -v
 
 GOCOVMERGE = $(BIN_DIR)/gocovmerge
 gocovmerge: ## Download gocovmerge locally if necessary.

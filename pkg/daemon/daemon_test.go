@@ -23,12 +23,13 @@ import (
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	mock_helper "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper/mock"
 	hostTypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
-	mock_platforms "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms/mock"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform"
+	mock_platform "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform/mock"
+	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins/generic"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -39,11 +40,11 @@ var (
 	wg            sync.WaitGroup
 	startDaemon   func(dc *daemon.NodeReconciler)
 
-	t              FullGinkgoTInterface
-	mockCtrl       *gomock.Controller
-	hostHelper     *mock_helper.MockHostHelpersInterface
-	platformHelper *mock_platforms.MockInterface
-
+	t                   FullGinkgoTInterface
+	mockCtrl            *gomock.Controller
+	hostHelper          *mock_helper.MockHostHelpersInterface
+	genericPlugin       plugin.VendorPlugin
+	platformMock        *mock_platform.MockInterface
 	discoverSriovReturn atomic.Pointer[[]sriovnetworkv1.InterfaceExt]
 	nodeState           *sriovnetworkv1.SriovNetworkNodeState
 
@@ -95,7 +96,7 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 
 		snolog.SetLogLevel(2)
 		// Check if the environment variable CLUSTER_TYPE is set
-		if clusterType, ok := os.LookupEnv("CLUSTER_TYPE"); ok && clusterType == constants.ClusterTypeOpenshift {
+		if clusterType, ok := os.LookupEnv("CLUSTER_TYPE"); ok && constants.ClusterType(clusterType) == constants.ClusterTypeOpenshift {
 			vars.ClusterType = constants.ClusterTypeOpenshift
 		} else {
 			vars.ClusterType = constants.ClusterTypeKubernetes
@@ -105,14 +106,14 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		t = GinkgoT()
 		mockCtrl = gomock.NewController(t)
 		hostHelper = mock_helper.NewMockHostHelpersInterface(mockCtrl)
-		platformHelper = mock_platforms.NewMockInterface(mockCtrl)
+		platformMock = mock_platform.NewMockInterface(mockCtrl)
 
 		// daemon initialization default mocks
 		hostHelper.EXPECT().CheckRDMAEnabled().Return(true, nil)
 		hostHelper.EXPECT().CleanSriovFilesFromHost(vars.ClusterType == constants.ClusterTypeOpenshift).Return(nil)
 		hostHelper.EXPECT().TryEnableTun()
 		hostHelper.EXPECT().TryEnableVhostNet()
-		hostHelper.EXPECT().PrepareNMUdevRule([]string{}).Return(nil)
+		hostHelper.EXPECT().PrepareNMUdevRule().Return(nil)
 		hostHelper.EXPECT().PrepareVFRepUdevRule().Return(nil)
 		hostHelper.EXPECT().WriteCheckpointFile(gomock.Any()).Return(nil)
 
@@ -122,12 +123,7 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 
 		discoverSriovReturn.Store(&[]sriovnetworkv1.InterfaceExt{})
 
-		hostHelper.EXPECT().DiscoverSriovDevices(hostHelper).DoAndReturn(func(helpersInterface helper.HostHelpersInterface) ([]sriovnetworkv1.InterfaceExt, error) {
-			return *discoverSriovReturn.Load(), nil
-		}).AnyTimes()
-
 		hostHelper.EXPECT().LoadPfsStatus("0000:16:00.0").Return(&sriovnetworkv1.Interface{ExternallyManaged: false}, true, nil).AnyTimes()
-
 		hostHelper.EXPECT().ClearPCIAddressFolder().Return(nil).AnyTimes()
 		hostHelper.EXPECT().DiscoverRDMASubsystem().Return("shared", nil).AnyTimes()
 		hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil).AnyTimes()
@@ -146,9 +142,20 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 			hostHelper.EXPECT().ReadServiceInjectionManifestFile(gomock.Any()).Return(&hostTypes.Service{Name: "test"}, nil).AnyTimes()
 		}
 
+		platformMock.EXPECT().Init().Return(nil)
+		// TODO: remove this when adding unit tests for switchdev
+		platformMock.EXPECT().DiscoverBridges().Return(sriovnetworkv1.Bridges{}, nil).AnyTimes()
+		platformMock.EXPECT().DiscoverSriovDevices().DoAndReturn(func() ([]sriovnetworkv1.InterfaceExt, error) {
+			return *discoverSriovReturn.Load(), nil
+		}).AnyTimes()
+
+		genericPlugin, err = generic.NewGenericPlugin(hostHelper)
+		Expect(err).ToNot(HaveOccurred())
+		platformMock.EXPECT().GetVendorPlugins(gomock.Any()).Return(genericPlugin, []plugin.VendorPlugin{}, nil)
+
 		featureGates := featuregate.New()
 		featureGates.Init(map[string]bool{})
-		daemonReconciler = createDaemon(hostHelper, platformHelper, featureGates, []string{})
+		daemonReconciler = createDaemon(platformMock, featureGates, []string{})
 		startDaemon(daemonReconciler)
 
 		_, nodeState = createNode("node1")
@@ -162,9 +169,7 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 	})
 
 	Context("Config Daemon generic flow", func() {
-
 		It("Should expose nodeState Status section", func(ctx context.Context) {
-
 			discoverSriovReturn.Store(&[]sriovnetworkv1.InterfaceExt{
 				{
 					Name:           "eno1",
@@ -377,8 +382,7 @@ func createNode(nodeName string) (*corev1.Node, *sriovnetworkv1.SriovNetworkNode
 }
 
 func createDaemon(
-	hostHelper helper.HostHelpersInterface,
-	platformHelper platforms.Interface,
+	platformInterface platform.Interface,
 	featureGates featuregate.FeatureGate,
 	disablePlugins []string) *daemon.NodeReconciler {
 	kClient, err := client.New(
@@ -393,8 +397,8 @@ func createDaemon(
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	configController := daemon.New(kClient, hostHelper, platformHelper, eventRecorder, featureGates, disablePlugins)
-	err = configController.Init()
+	configController := daemon.New(kClient, hostHelper, platformInterface, eventRecorder, featureGates)
+	err = configController.Init(disablePlugins)
 	Expect(err).ToNot(HaveOccurred())
 	err = configController.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())

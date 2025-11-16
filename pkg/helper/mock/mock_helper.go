@@ -650,6 +650,21 @@ func (mr *MockHostHelpersInterfaceMockRecorder) GetPhysSwitchID(name any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPhysSwitchID", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetPhysSwitchID), name)
 }
 
+// HTTPGetFetchData mocks base method.
+func (m *MockHostHelpersInterface) HTTPGetFetchData(arg0 string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HTTPGetFetchData", arg0)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HTTPGetFetchData indicates an expected call of HTTPGetFetchData.
+func (mr *MockHostHelpersInterfaceMockRecorder) HTTPGetFetchData(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HTTPGetFetchData", reflect.TypeOf((*MockHostHelpersInterface)(nil).HTTPGetFetchData), arg0)
+}
+
 // HasDriver mocks base method.
 func (m *MockHostHelpersInterface) HasDriver(pciAddr string) (bool, string) {
 	m.ctrl.T.Helper()
@@ -846,17 +861,17 @@ func (mr *MockHostHelpersInterfaceMockRecorder) MstConfigReadData(arg0 any) *gom
 }
 
 // PrepareNMUdevRule mocks base method.
-func (m *MockHostHelpersInterface) PrepareNMUdevRule(supportedVfIds []string) error {
+func (m *MockHostHelpersInterface) PrepareNMUdevRule() error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PrepareNMUdevRule", supportedVfIds)
+	ret := m.ctrl.Call(m, "PrepareNMUdevRule")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PrepareNMUdevRule indicates an expected call of PrepareNMUdevRule.
-func (mr *MockHostHelpersInterfaceMockRecorder) PrepareNMUdevRule(supportedVfIds any) *gomock.Call {
+func (mr *MockHostHelpersInterfaceMockRecorder) PrepareNMUdevRule() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareNMUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).PrepareNMUdevRule), supportedVfIds)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrepareNMUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).PrepareNMUdevRule))
 }
 
 // PrepareVFRepUdevRule mocks base method.

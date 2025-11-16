@@ -1,14 +1,10 @@
 package consts
 
 import (
-	"fmt"
 	"time"
 )
 
 type DrainState string
-
-// PlatformTypes
-type PlatformTypes int
 
 const (
 	Chroot = "/host"
@@ -59,9 +55,6 @@ const (
 	RdmaSubsystemModeShared    = "shared"
 	RdmaSubsystemModeExclusive = "exclusive"
 
-	ClusterTypeOpenshift  = "openshift"
-	ClusterTypeKubernetes = "kubernetes"
-
 	SriovConfBasePath          = "/etc/sriov-operator"
 	PfAppliedConfig            = SriovConfBasePath + "/pci"
 	SriovSwitchDevConfPath     = SriovConfBasePath + "/sriov_config.json"
@@ -93,6 +86,9 @@ const (
 	DrainDelete  = "delete"
 	DrainEvicted = "Evicted"
 	DrainEvict   = "evict"
+
+	PhasePre  = "pre"
+	PhasePost = "post"
 
 	MCPPauseAnnotationState = "sriovnetwork.openshift.io/state"
 	MCPPauseAnnotationTime  = "sriovnetwork.openshift.io/time"
@@ -178,21 +174,3 @@ const (
 	// The path to the file on the host filesystem that contains the IB GUID distribution for IB VFs
 	InfinibandGUIDConfigFilePath = SriovConfBasePath + "/infiniband/guids"
 )
-
-const (
-	// Baremetal platform
-	Baremetal PlatformTypes = iota
-	// VirtualOpenStack platform
-	VirtualOpenStack
-)
-
-func (e PlatformTypes) String() string {
-	switch e {
-	case Baremetal:
-		return "Baremetal"
-	case VirtualOpenStack:
-		return "Virtual/Openstack"
-	default:
-		return fmt.Sprintf("%d", int(e))
-	}
-}
