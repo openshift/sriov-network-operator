@@ -40,7 +40,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/drain"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
@@ -54,8 +54,8 @@ type DrainReconcile struct {
 	drainCheckMutex sync.Mutex
 }
 
-func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, recorder record.EventRecorder, platformHelper platforms.Interface) (*DrainReconcile, error) {
-	drainer, err := drain.NewDrainer(platformHelper)
+func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, recorder record.EventRecorder, orchestrator orchestrator.Interface) (*DrainReconcile, error) {
+	drainer, err := drain.NewDrainer(orchestrator)
 	if err != nil {
 		return nil, err
 	}

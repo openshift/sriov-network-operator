@@ -3,7 +3,7 @@ package ovs
 import (
 	"slices"
 
-	"github.com/ovn-org/libovsdb/model"
+	"github.com/ovn-kubernetes/libovsdb/model"
 )
 
 // OpenvSwitchEntry represents some fields of the object in the Open_vSwitch table

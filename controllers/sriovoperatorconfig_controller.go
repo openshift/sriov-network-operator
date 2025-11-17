@@ -48,7 +48,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platforms"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
@@ -57,7 +57,7 @@ import (
 type SriovOperatorConfigReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
-	PlatformHelper    platforms.Interface
+	Orchestrator      orchestrator.Interface
 	FeatureGate       featuregate.FeatureGate
 	UncachedAPIReader client.Reader
 }
@@ -147,9 +147,9 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	}
 
 	// For Openshift we need to create the systemd files using a machine config
-	if vars.ClusterType == consts.ClusterTypeOpenshift {
+	if r.Orchestrator.ClusterType() == consts.ClusterTypeOpenshift {
 		// TODO: add support for hypershift as today there is no MCO on hypershift clusters
-		if r.PlatformHelper.IsHypershift() {
+		if r.Orchestrator.Flavor() == consts.ClusterFlavorHypershift {
 			return ctrl.Result{}, fmt.Errorf("systemd mode is not supported on hypershift")
 		}
 
@@ -252,7 +252,8 @@ func (r *SriovOperatorConfigReconciler) syncMetricsExporter(ctx context.Context,
 	data.Data["MetricsExporterSecretName"] = os.Getenv("METRICS_EXPORTER_SECRET_NAME")
 	data.Data["MetricsExporterPort"] = os.Getenv("METRICS_EXPORTER_PORT")
 	data.Data["MetricsExporterKubeRbacProxyImage"] = os.Getenv("METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE")
-	data.Data["IsOpenshift"] = r.PlatformHelper.IsOpenshiftCluster()
+
+	data.Data["IsOpenshift"] = r.Orchestrator.ClusterType() == consts.ClusterTypeOpenshift
 
 	data.Data["IsPrometheusOperatorInstalled"] = strings.ToLower(os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED")) == trueString
 	data.Data["PrometheusOperatorDeployRules"] = strings.ToLower(os.Getenv("METRICS_EXPORTER_PROMETHEUS_DEPLOY_RULES")) == trueString
@@ -324,9 +325,9 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 		data.Data["InjectorWebhookNetworkPolicyPort"] = injectorWebhookPort
 
 		data.Data["ExternalControlPlane"] = false
-		if r.PlatformHelper.IsOpenshiftCluster() {
-			external := r.PlatformHelper.IsHypershift()
-			data.Data["ExternalControlPlane"] = external
+		if r.Orchestrator.ClusterType() == consts.ClusterTypeOpenshift &&
+			r.Orchestrator.Flavor() == consts.ClusterFlavorHypershift {
+			data.Data["ExternalControlPlane"] = true
 		}
 
 		// check for ResourceInjectorMatchConditionFeatureGate feature gate

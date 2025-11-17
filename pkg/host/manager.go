@@ -50,6 +50,11 @@ type hostManager struct {
 	types.SystemdInterface
 }
 
+func NewDefaultHostManager() (HostManagerInterface, error) {
+	utilsHelper := utils.New()
+	return NewHostManager(utilsHelper)
+}
+
 func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, error) {
 	dpUtils := dputils.New()
 	netlinkLib := netlink.New()

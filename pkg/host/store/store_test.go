@@ -17,7 +17,7 @@ import (
 
 var _ = Describe("Store", func() {
 	var (
-		tempDir = "/tmp/sriov-test/"
+		tempDir = "/tmp/sriov-store-test/"
 		err     error
 		m       ManagerInterface
 
@@ -119,6 +119,7 @@ var _ = Describe("Store", func() {
 		vars.InChroot = true
 		vars.FilesystemRoot = tempDir
 		vars.Destdir = tempDir
+		vars.PlatformType = consts.Baremetal
 		sriovnetworkv1.NicIDMap = []string{}
 
 		m, err = NewManager()
