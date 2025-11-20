@@ -513,7 +513,6 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 		}
 
 		found, i := resourceNameInList(p.Spec.ResourceName, &rcl)
-
 		if found {
 			err := updateDevicePluginResource(&rcl.ResourceList[i], &p, nodeState)
 			if err != nil {
@@ -539,6 +538,32 @@ func resourceNameInList(name string, rcl *dptypes.ResourceConfList) (bool, int) 
 		}
 	}
 	return false, 0
+}
+
+// resolvePfNames resolves alternative interface names to actual interface names
+// using the provided node state and returns the resolved names as a slice.
+// If a pfName contains a VF range suffix (e.g., "ens0#0-9"), it resolves the
+// interface name part and re-appends the range suffix to the resolved name.
+func resolvePfNames(pfNames []string, nodeState *sriovnetworkv1.SriovNetworkNodeState) []string {
+	resolvedPfNames := make([]string, 0, len(pfNames))
+	for _, pfName := range pfNames {
+		var rangeSuffix string
+		nameToResolve := pfName
+
+		// Check if pfName contains a VF range suffix (e.g., "ens0#0-9")
+		if strings.Contains(pfName, "#") {
+			parts := strings.SplitN(pfName, "#", 2)
+			nameToResolve = parts[0]
+			rangeSuffix = "#" + parts[1]
+		}
+
+		// Resolve the interface name part
+		actualName := sriovnetworkv1.ResolveInterfaceName(nameToResolve, nodeState)
+
+		// Append the range suffix back if it existed
+		resolvedPfNames = append(resolvedPfNames, actualName+rangeSuffix)
+	}
+	return resolvedPfNames
 }
 
 func createDevicePluginResource(
@@ -569,7 +594,8 @@ func createDevicePluginResource(
 		}
 	}
 	if len(p.Spec.NicSelector.PfNames) > 0 {
-		netDeviceSelectors.PfNames = append(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
+		resolvedPfNames := resolvePfNames(p.Spec.NicSelector.PfNames, nodeState)
+		netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, resolvedPfNames...)
 	}
 	// vfio-pci device link type is not detectable
 	if p.Spec.DeviceType != constants.DeviceTypeVfioPci {
@@ -637,7 +663,8 @@ func updateDevicePluginResource(
 		}
 	}
 	if len(p.Spec.NicSelector.PfNames) > 0 {
-		netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, p.Spec.NicSelector.PfNames...)
+		resolvedPfNames := resolvePfNames(p.Spec.NicSelector.PfNames, nodeState)
+		netDeviceSelectors.PfNames = sriovnetworkv1.UniqueAppend(netDeviceSelectors.PfNames, resolvedPfNames...)
 	}
 	// vfio-pci device link type is not detectable
 	if p.Spec.DeviceType != constants.DeviceTypeVfioPci {

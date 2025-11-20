@@ -70,6 +70,8 @@ type NetlinkLib interface {
 	IsLinkAdminStateUp(link Link) bool
 	// RdmaSystemGetNetnsMode returns RDMA subsystem mode
 	RdmaSystemGetNetnsMode() (string, error)
+	// GetAltNames returns a list of alternative names for a link
+	GetAltNames(name string) ([]string, error)
 }
 
 type libWrapper struct{}
@@ -191,4 +193,18 @@ func (w *libWrapper) IsLinkAdminStateUp(link Link) bool {
 // RdmaSystemGetNetnsMode returns RDMA subsystem mode
 func (w *libWrapper) RdmaSystemGetNetnsMode() (string, error) {
 	return netlink.RdmaSystemGetNetnsMode()
+}
+
+// GetAltNames returns a list of alternative names for a link
+func (w *libWrapper) GetAltNames(name string) ([]string, error) {
+	link, err := netlink.LinkByName(name)
+	if err != nil {
+		return nil, err
+	}
+	// The AltNames field was added in netlink LinkAttrs struct
+	attrs := link.Attrs()
+	if attrs == nil || len(attrs.AltNames) == 0 {
+		return []string{}, nil
+	}
+	return attrs.AltNames, nil
 }

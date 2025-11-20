@@ -75,6 +75,7 @@ var _ = Describe("SRIOV", func() {
 			dputilsLibMock.EXPECT().IsSriovVF("0000:3b:00.0").Return(false)
 			dputilsLibMock.EXPECT().GetDriverName("0000:d8:00.0").Return("mlx5_core", nil)
 			hostMock.EXPECT().TryGetInterfaceName("0000:d8:00.0").Return("enp216s0f0np0")
+			netlinkLibMock.EXPECT().GetAltNames("enp216s0f0np0").Return([]string{"alt-enp216s0f0np0", "pf0"}, nil)
 
 			pfLinkMock := netlinkMockPkg.NewMockLink(testCtrl)
 			netlinkLibMock.EXPECT().LinkByName("enp216s0f0np0").Return(pfLinkMock, nil)
@@ -131,6 +132,7 @@ var _ = Describe("SRIOV", func() {
 				EswitchMode:       "switchdev",
 				ExternallyManaged: false,
 				TotalVfs:          1,
+				AltNames:          []string{"alt-enp216s0f0np0", "pf0"},
 				VFs: []sriovnetworkv1.VirtualFunction{{
 					Name:            "enp216s0f0v0",
 					Mac:             "4e:fd:3d:08:59:b1",
