@@ -41,8 +41,31 @@ spec:
         - name: {{ . }}
       {{- end }}
       {{- end }}
+      {{- if .BlockDevicePluginUntilConfigured }}
+      initContainers:
+      - name: sriov-device-plugin-init
+        image: {{.SRIOVNetworkConfigDaemonImage}}
+        command:
+        - sriov-network-config-daemon
+        - wait-for-config
+        - --pod-name=$(POD_NAME)
+        - --pod-namespace=$(POD_NAMESPACE)
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+      {{- end }}
       containers:
+      {{- if .BlockDevicePluginUntilConfigured }}
+      - name: sriov-device-plugin-main
+      {{- else }}
       - name: sriov-device-plugin
+      {{- end }}
         image: {{.SRIOVDevicePluginImage}}
         args:
         - --log-level=10
