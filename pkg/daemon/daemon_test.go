@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -334,6 +335,97 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 			eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
 			assertLastStatusTransitionsContains(nodeState, 2, constants.SyncStatusInProgress)
 		})
+
+		It("Should unblock the device plugin pod when configuration is finished", func(ctx context.Context) {
+			DeferCleanup(func(x bool) { vars.DisableDrain = x }, vars.DisableDrain)
+			vars.DisableDrain = true
+			DeferCleanup(func(m map[string]bool) { vars.FeatureGate.Init(m) }, map[string]bool{})
+			vars.FeatureGate.Init(map[string]bool{constants.BlockDevicePluginUntilConfiguredFeatureGate: true})
+
+			devicePluginPodName := client.ObjectKey{
+				Name:      "sriov-device-plugin-test",
+				Namespace: testNamespace,
+			}
+			devicePluginPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      devicePluginPodName.Name,
+					Namespace: devicePluginPodName.Namespace,
+					Labels: map[string]string{
+						"app": "sriov-device-plugin",
+					},
+					Annotations: map[string]string{
+						constants.DevicePluginWaitConfigAnnotation: "true",
+					},
+				},
+				Spec: corev1.PodSpec{
+					NodeName: "node1",
+					Containers: []corev1.Container{
+						{
+							Name:  "device-plugin",
+							Image: "test-image",
+						},
+					},
+				},
+			}
+			pr := newPodRecreator(k8sClient, devicePluginPod, 100*time.Millisecond)
+			pr.Start(ctx)
+			DeferCleanup(pr.Stop)
+
+			discoverSriovReturn.Store(&[]sriovnetworkv1.InterfaceExt{
+				{
+					Name:           "eno1",
+					Driver:         "ice",
+					PciAddress:     "0000:16:00.0",
+					DeviceID:       "1593",
+					Vendor:         "8086",
+					EswitchMode:    "legacy",
+					LinkAdminState: "up",
+					LinkSpeed:      "10000 Mb/s",
+					LinkType:       "ETH",
+					Mac:            "aa:bb:cc:dd:ee:ff",
+					Mtu:            1500,
+					TotalVfs:       1,
+					NumVfs:         1,
+					VFs: []sriovnetworkv1.VirtualFunction{
+						{
+							Name:       "eno1f0",
+							PciAddress: "0000:16:00.1",
+							VfID:       0,
+							Driver:     "iavf",
+						},
+					},
+				},
+			})
+			EventuallyWithOffset(1, func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+
+				nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{
+					{Name: "eno1",
+						PciAddress: "0000:16:00.0",
+						LinkType:   "eth",
+						NumVfs:     12,
+						VfGroups: []sriovnetworkv1.VfGroup{
+							{ResourceName: "test",
+								DeviceType: "netdevice",
+								PolicyName: "test-policy",
+								VfRange:    "eno1#0-0"},
+						}},
+				}
+				err = k8sClient.Update(ctx, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, waitTime, retryTime).Should(Succeed())
+
+			eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
+			assertLastStatusTransitionsContains(nodeState, 2, constants.SyncStatusInProgress)
+
+			// Verify that the device plugin pod is present and the 'wait-for-config' annotation has been removed upon completion of configuration
+			Eventually(func(g Gomega) {
+				devicePluginPod := &corev1.Pod{}
+				g.Expect(k8sClient.Get(ctx, devicePluginPodName, devicePluginPod)).ToNot(HaveOccurred())
+				g.Expect(devicePluginPod.Annotations).ToNot(HaveKey(constants.DevicePluginWaitConfigAnnotation))
+			}, waitTime, retryTime).Should(Succeed())
+		})
 	})
 })
 
@@ -427,4 +519,76 @@ func assertLastStatusTransitionsContains(nodeState *sriovnetworkv1.SriovNetworkN
 	// `Status changed from: Succeed to: InProgress`
 	Expect(events.Items).To(ContainElement(
 		HaveField("Message", ContainSubstring("to: "+status))))
+}
+
+// podRecreator manages a pod lifecycle in the background, ensuring the pod
+// is recreated if it gets deleted until explicitly stopped.
+type podRecreator struct {
+	client       client.Client
+	podSpec      *corev1.Pod
+	pollInterval time.Duration
+
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+}
+
+// newPodRecreator creates a new podRecreator instance.
+// podSpec must have Name and Namespace set.
+func newPodRecreator(c client.Client, podSpec *corev1.Pod, pollInterval time.Duration) *podRecreator {
+	return &podRecreator{
+		client:       c,
+		podSpec:      podSpec,
+		pollInterval: pollInterval,
+	}
+}
+
+// Start begins the background loop that ensures the pod exists.
+// It creates the pod if it doesn't exist and periodically checks
+// if the pod was removed, recreating it if necessary.
+func (pr *podRecreator) Start(ctx context.Context) {
+	ctx, pr.cancel = context.WithCancel(ctx)
+	pr.ensurePodExists(ctx)
+	pr.wg.Add(1)
+	go func() {
+		defer pr.wg.Done()
+		pr.ensurePodExists(ctx)
+		ticker := time.NewTicker(pr.pollInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				pr.ensurePodExists(ctx)
+			}
+		}
+	}()
+}
+
+// Stop stops the background loop and waits for it to finish.
+func (pr *podRecreator) Stop() {
+	if pr.cancel != nil {
+		pr.cancel()
+	}
+	pr.wg.Wait()
+	pr.client.Delete(context.Background(), pr.podSpec)
+}
+
+// ensurePodExists checks if the pod exists and creates it if not found.
+func (pr *podRecreator) ensurePodExists(ctx context.Context) {
+	pod := &corev1.Pod{}
+	err := pr.client.Get(ctx, types.NamespacedName{
+		Name:      pr.podSpec.Name,
+		Namespace: pr.podSpec.Namespace,
+	}, pod)
+	if apiErrors.IsNotFound(err) {
+		// Pod not found, create it
+		newPod := pr.podSpec.DeepCopy()
+		_ = pr.client.Create(ctx, newPod)
+		return
+	}
+	if err == nil && pod.DeletionTimestamp != nil {
+		// the pod has nodeName set, we need to force delete it to simulate kubelet behavior
+		_ = pr.client.Delete(ctx, pod, client.GracePeriodSeconds(0))
+	}
 }
