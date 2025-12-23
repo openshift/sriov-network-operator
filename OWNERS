@@ -10,8 +10,8 @@ reviewers:
   - wizhaoredhat
   - SalDaniele
   - zeeke
-  - yash2189
   - kunalmemane
+  - MrSanketKumar
 approvers:
   - pliurh
   - zshi-redhat
@@ -25,7 +25,7 @@ approvers:
   - wizhaoredhat
   - SalDaniele
   - zeeke
-  - yash2189
   - kunalmemane
+  - MrSanketKumar
 component: "Networking"
 subcomponent: "SR-IOV"
