@@ -1042,6 +1042,58 @@ func (s *sriov) setEswitchModeAndNumVFs(pciAddr string, desiredEswitchMode strin
 	return fn(pciAddr, desiredEswitchMode, numVFs)
 }
 
+func (s *sriov) waitForVFLinks(pciAddr string, expectedNum int, maxTimeout time.Duration) error {
+	// VF destruction is asynchronous and safe to ignore
+	if expectedNum == 0 {
+		log.Log.V(2).Info("waitForVFLinks(): skipping wait for cleanup (expected 0 VFs) - async destroy", "device", pciAddr)
+		return nil
+	}
+
+	log.Log.V(2).Info("waitForVFLinks(): waiting for VF symlinks",
+		"device", pciAddr,
+		"expected", expectedNum,
+		"maxTimeout", maxTimeout)
+
+	start := time.Now()
+	sleepDuration := 500 * time.Millisecond
+
+	for time.Since(start) < maxTimeout {
+		vfAddrs, err := s.dputilsLib.GetVFList(pciAddr)
+		if err != nil {
+			log.Log.V(2).Info("waitForVFLinks(): GetVFList failed, retrying", "err", err)
+			time.Sleep(sleepDuration)
+			continue
+		}
+
+		current := len(vfAddrs)
+		if current >= expectedNum {
+			// Check all have physfn symlink
+			allReady := true
+			for _, vfAddr := range vfAddrs {
+				linkPath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, vfAddr, "physfn")
+				if _, err := os.Lstat(linkPath); err != nil {
+					log.Log.V(2).Info("waitForVFLinks(): physfn symlink missing", "vf", vfAddr, "err", err)
+					allReady = false
+					break
+				}
+			}
+			if allReady {
+				log.Log.V(2).Info("waitForVFLinks(): all expected VF symlinks ready")
+				return nil
+			}
+		}
+
+		time.Sleep(sleepDuration)
+
+		sleepDuration = time.Duration(float64(sleepDuration) * 1.5)
+		if sleepDuration > 5*time.Second {
+			sleepDuration = 5 * time.Second
+		}
+	}
+
+	return fmt.Errorf("timeout waiting for %d VF symlinks on %s (max %v)", expectedNum, pciAddr, maxTimeout)
+}
+
 // setEswitchModeAndNumVFsMlx configures PF eSwitch and sriov_numvfs in the following order:
 // a. set eSwitchMode to legacy
 // b. set the desired number of Virtual Functions
@@ -1068,6 +1120,9 @@ func (s *sriov) setEswitchModeAndNumVFsMlx(pciAddr string, desiredEswitchMode st
 		}
 	}
 	if err := s.SetSriovNumVfs(pciAddr, numVFs); err != nil {
+		return err
+	}
+	if err := s.waitForVFLinks(pciAddr, numVFs, 120*time.Second); err != nil {
 		return err
 	}
 
