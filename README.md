@@ -421,7 +421,7 @@ Feature gates are used to enable or disable specific features in the operator.
 
 6. **Block Device Plugin Until Configured** (`blockDevicePluginUntilConfigured`)
   - **Description:** Prevents the SR-IOV device plugin from starting until the sriov-config-daemon has applied the SR-IOV configuration for the node. When enabled, the device plugin daemonset runs an init container that sets a wait-for-config annotation on its pod and waits until the sriov-config-daemon removes this annotation after applying the configuration. This addresses the race condition where the device plugin starts and reports available resources before the configuration is actually applied, which can lead to pods being scheduled prematurely.
-  - **Default:** Disabled
+  - **Default:** Enabled
 
 ### Enabling Feature Gates
 
