@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
@@ -141,7 +142,7 @@ func startWaitForConfigManager(setupLog logr.Logger, config *rest.Config, podNam
 
 	// Set annotation on pod to signal that we are waiting for config
 	setupLog.Info("Setting annotation on pod", "annotation", consts.DevicePluginWaitConfigAnnotation)
-	err = setAnnotationOnPod(context.Background(), setupLog, tempClient, podName)
+	err = setAnnotationOnPod(ctx, setupLog, tempClient, podName)
 	if err != nil {
 		setupLog.Error(err, "failed to set annotation on pod")
 		return err
@@ -152,6 +153,7 @@ func startWaitForConfigManager(setupLog logr.Logger, config *rest.Config, podNam
 	// Watch only specific pod object
 	selector := fields.SelectorFromSet(fields.Set{"metadata.name": podName.Name})
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
+		Metrics: metricsserver.Options{BindAddress: "0"},
 		Cache: cache.Options{
 			DefaultNamespaces: map[string]cache.Config{podName.Namespace: {}},
 			ByObject: map[client.Object]cache.ByObject{
