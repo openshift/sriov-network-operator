@@ -1054,44 +1054,57 @@ func (s *sriov) waitForVFLinks(pciAddr string, expectedNum int, maxTimeout time.
 		"expected", expectedNum,
 		"maxTimeout", maxTimeout)
 
-	start := time.Now()
-	sleepDuration := 500 * time.Millisecond
+	err := wait.PollUntilContextTimeout(
+		context.Background(),
+		time.Second, // poll interval
+		maxTimeout,  // overall timeout
+		true,        // run immediately
+		func(ctx context.Context) (bool, error) {
+			vfAddrs, err := s.dputilsLib.GetVFList(pciAddr)
+			if err != nil {
+				log.Log.V(2).Info("waitForVFLinks(): GetVFList failed, retrying", "err", err)
+				return false, nil
+			}
 
-	for time.Since(start) < maxTimeout {
-		vfAddrs, err := s.dputilsLib.GetVFList(pciAddr)
-		if err != nil {
-			log.Log.V(2).Info("waitForVFLinks(): GetVFList failed, retrying", "err", err)
-			time.Sleep(sleepDuration)
-			continue
-		}
+			if len(vfAddrs) < expectedNum {
+				return false, nil
+			}
 
-		current := len(vfAddrs)
-		if current >= expectedNum {
 			// Check all have physfn symlink
-			allReady := true
 			for _, vfAddr := range vfAddrs {
-				linkPath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, vfAddr, "physfn")
+				linkPath := filepath.Join(
+					vars.FilesystemRoot,
+					consts.SysBusPciDevices,
+					vfAddr,
+					"physfn",
+				)
+
 				if _, err := os.Lstat(linkPath); err != nil {
-					log.Log.V(2).Info("waitForVFLinks(): physfn symlink missing", "vf", vfAddr, "err", err)
-					allReady = false
-					break
+					log.Log.V(2).Info(
+						"waitForVFLinks(): physfn symlink missing",
+						"vf", vfAddr,
+						"err", err,
+					)
+					return false, nil
 				}
 			}
-			if allReady {
-				log.Log.V(2).Info("waitForVFLinks(): all expected VF symlinks ready")
-				return nil
-			}
-		}
 
-		time.Sleep(sleepDuration)
+			log.Log.V(2).Info("waitForVFLinks(): all expected VF symlinks ready")
+			return true, nil
+		},
+	)
 
-		sleepDuration = time.Duration(float64(sleepDuration) * 1.5)
-		if sleepDuration > 5*time.Second {
-			sleepDuration = 5 * time.Second
-		}
+	if err != nil {
+		return fmt.Errorf(
+			"timeout waiting for %d VF symlinks on %s (max %v): %w",
+			expectedNum,
+			pciAddr,
+			maxTimeout,
+			err,
+		)
 	}
 
-	return fmt.Errorf("timeout waiting for %d VF symlinks on %s (max %v)", expectedNum, pciAddr, maxTimeout)
+	return nil
 }
 
 // setEswitchModeAndNumVFsMlx configures PF eSwitch and sriov_numvfs in the following order:

@@ -96,7 +96,7 @@ var _ = Describe("SRIOV", func() {
 			netlinkLibMock.EXPECT().DevLinkGetDeviceByName("pci", "0000:d8:00.0").Return(
 				&netlink.DevlinkDevice{Attrs: netlink.DevlinkDevAttrs{Eswitch: netlink.DevlinkDevEswitchAttr{Mode: "switchdev"}}}, nil)
 			dputilsLibMock.EXPECT().SriovConfigured("0000:d8:00.0").Return(true)
-			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2"}, nil)
+			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2"}, nil).AnyTimes()
 			dputilsLibMock.EXPECT().GetDriverName("0000:d8:00.2").Return("mlx5_core", nil)
 			dputilsLibMock.EXPECT().GetVFID("0000:d8:00.2").Return(0, nil)
 			hostMock.EXPECT().DiscoverVDPAType("0000:d8:00.2").Return("")
@@ -210,8 +210,13 @@ var _ = Describe("SRIOV", func() {
 	Context("ConfigSriovInterfaces", func() {
 		It("should configure", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
+				Dirs: []string{"/sys/bus/pci/devices/0000:d8:00.0",
+					"/sys/bus/pci/devices/0000:d8:00.2",
+					"/sys/bus/pci/devices/0000:d8:00.3"},
 				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Symlinks: map[string]string{
+					"/sys/bus/pci/devices/0000:d8:00.2/physfn": "../../0000:d8:00.0",
+					"/sys/bus/pci/devices/0000:d8:00.3/physfn": "../../0000:d8:00.0"},
 			})
 
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(2)
@@ -223,7 +228,7 @@ var _ = Describe("SRIOV", func() {
 			hostMock.EXPECT().RemovePersistPFNameUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().RemoveVfRepresentorUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().AddDisableNMUdevRule("0000:d8:00.0").Return(nil)
-			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2", "0000:d8:00.3"}, nil)
+			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2", "0000:d8:00.3"}, nil).AnyTimes()
 			pfLinkMock := netlinkMockPkg.NewMockLink(testCtrl)
 			netlinkLibMock.EXPECT().LinkByName("enp216s0f0np0").Return(pfLinkMock, nil).Times(3)
 			pfLinkMock.EXPECT().Attrs().Return(&netlink.LinkAttrs{Flags: 0, EncapType: "ether"})
@@ -289,9 +294,20 @@ var _ = Describe("SRIOV", func() {
 				vars.ParallelNicConfig = false
 			}()
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-				Dirs: []string{"/sys/bus/pci/devices/0000:d8:00.0", "/sys/bus/pci/devices/0000:d8:00.1"},
+				Dirs: []string{"/sys/bus/pci/devices/0000:d8:00.0",
+					"/sys/bus/pci/devices/0000:d8:00.1",
+					"/sys/bus/pci/devices/0000:d8:00.2", // VF0 of PF0
+					"/sys/bus/pci/devices/0000:d8:00.3", // VF1 of PF0
+					"/sys/bus/pci/devices/0000:d8:00.4", // VF0 of PF1
+					"/sys/bus/pci/devices/0000:d8:00.5"},
 				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {},
 					"/sys/bus/pci/devices/0000:d8:00.1/sriov_numvfs": {}},
+				Symlinks: map[string]string{
+					"/sys/bus/pci/devices/0000:d8:00.2/physfn": "../../0000:d8:00.0",
+					"/sys/bus/pci/devices/0000:d8:00.3/physfn": "../../0000:d8:00.0",
+					"/sys/bus/pci/devices/0000:d8:00.4/physfn": "../../0000:d8:00.1",
+					"/sys/bus/pci/devices/0000:d8:00.5/physfn": "../../0000:d8:00.1",
+				},
 			})
 
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(2)
@@ -303,7 +319,7 @@ var _ = Describe("SRIOV", func() {
 			hostMock.EXPECT().RemovePersistPFNameUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().RemoveVfRepresentorUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().AddDisableNMUdevRule("0000:d8:00.0").Return(nil)
-			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2", "0000:d8:00.3"}, nil)
+			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2", "0000:d8:00.3"}, nil).AnyTimes()
 			pfLinkMock := netlinkMockPkg.NewMockLink(testCtrl)
 			netlinkLibMock.EXPECT().LinkByName("enp216s0f0np0").Return(pfLinkMock, nil).Times(3)
 			pfLinkMock.EXPECT().Attrs().Return(&netlink.LinkAttrs{Flags: 0, EncapType: "ether"})
@@ -338,7 +354,7 @@ var _ = Describe("SRIOV", func() {
 			hostMock.EXPECT().RemovePersistPFNameUdevRule("0000:d8:00.1").Return(nil)
 			hostMock.EXPECT().RemoveVfRepresentorUdevRule("0000:d8:00.1").Return(nil)
 			hostMock.EXPECT().AddDisableNMUdevRule("0000:d8:00.1").Return(nil)
-			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.1").Return([]string{"0000:d8:00.4", "0000:d8:00.5"}, nil)
+			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.1").Return([]string{"0000:d8:00.4", "0000:d8:00.5"}, nil).AnyTimes()
 			pf1LinkMock := netlinkMockPkg.NewMockLink(testCtrl)
 			netlinkLibMock.EXPECT().LinkByName("enp216s0f0np1").Return(pf1LinkMock, nil).Times(3)
 			pf1LinkMock.EXPECT().Attrs().Return(&netlink.LinkAttrs{Flags: 0, EncapType: "ether"})
@@ -418,8 +434,9 @@ var _ = Describe("SRIOV", func() {
 
 		It("should configure IB", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
-				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Dirs:     []string{"/sys/bus/pci/devices/0000:d8:00.0", "/sys/bus/pci/devices/0000:d8:00.2"},
+				Files:    map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Symlinks: map[string]string{"/sys/bus/pci/devices/0000:d8:00.2/physfn": "../../0000:d8:00.0"},
 			})
 
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(1)
@@ -431,7 +448,7 @@ var _ = Describe("SRIOV", func() {
 			hostMock.EXPECT().RemovePersistPFNameUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().RemoveVfRepresentorUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().AddDisableNMUdevRule("0000:d8:00.0").Return(nil)
-			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2"}, nil)
+			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2"}, nil).AnyTimes()
 			pfLinkMock := netlinkMockPkg.NewMockLink(testCtrl)
 			netlinkLibMock.EXPECT().LinkByName("enp216s0f0np0").Return(pfLinkMock, nil).Times(2)
 			netlinkLibMock.EXPECT().IsLinkAdminStateUp(pfLinkMock).Return(false)
@@ -470,8 +487,9 @@ var _ = Describe("SRIOV", func() {
 
 		It("should configure switchdev", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
-				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Dirs:     []string{"/sys/bus/pci/devices/0000:d8:00.0", "/sys/bus/pci/devices/0000:d8:00.2"},
+				Files:    map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Symlinks: map[string]string{"/sys/bus/pci/devices/0000:d8:00.2/physfn": "../../0000:d8:00.0"},
 			})
 
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(1)
@@ -539,8 +557,9 @@ var _ = Describe("SRIOV", func() {
 
 		It("should configure switchdev even if steering mode is not detected", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
-				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Dirs:     []string{"/sys/bus/pci/devices/0000:d8:00.0", "/sys/bus/pci/devices/0000:d8:00.2"},
+				Files:    map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Symlinks: map[string]string{"/sys/bus/pci/devices/0000:d8:00.2/physfn": "../../0000:d8:00.0"},
 			})
 
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(1)
@@ -608,8 +627,9 @@ var _ = Describe("SRIOV", func() {
 
 		It("should configure switchdev even if steering mode is already smfs", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
-				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Dirs:     []string{"/sys/bus/pci/devices/0000:d8:00.0", "/sys/bus/pci/devices/0000:d8:00.2"},
+				Files:    map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Symlinks: map[string]string{"/sys/bus/pci/devices/0000:d8:00.2/physfn": "../../0000:d8:00.0"},
 			})
 
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(1)
@@ -677,8 +697,9 @@ var _ = Describe("SRIOV", func() {
 
 		It("should configure configure swtichdev by switching back to legacy mode and configure smfs", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
-				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Dirs:     []string{"/sys/bus/pci/devices/0000:d8:00.0", "/sys/bus/pci/devices/0000:d8:00.2"},
+				Files:    map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Symlinks: map[string]string{"/sys/bus/pci/devices/0000:d8:00.2/physfn": "../../0000:d8:00.0"},
 			})
 
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(1)
@@ -978,8 +999,11 @@ var _ = Describe("SRIOV", func() {
 
 		It("should configure - skipVFConfiguration is true", func() {
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
-				Dirs:  []string{"/sys/bus/pci/devices/0000:d8:00.0"},
+				Dirs: []string{"/sys/bus/pci/devices/0000:d8:00.0",
+					"/sys/bus/pci/devices/0000:d8:00.2", "/sys/bus/pci/devices/0000:d8:00.3"},
 				Files: map[string][]byte{"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": {}},
+				Symlinks: map[string]string{"/sys/bus/pci/devices/0000:d8:00.2/physfn": "../../0000:d8:00.0",
+					"/sys/bus/pci/devices/0000:d8:00.3/physfn": "../../0000:d8:00.0"},
 			})
 
 			dputilsLibMock.EXPECT().GetSriovVFcapacity("0000:d8:00.0").Return(2)
@@ -992,7 +1016,7 @@ var _ = Describe("SRIOV", func() {
 			hostMock.EXPECT().RemovePersistPFNameUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().RemoveVfRepresentorUdevRule("0000:d8:00.0").Return(nil)
 			hostMock.EXPECT().AddDisableNMUdevRule("0000:d8:00.0").Return(nil)
-			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2", "0000:d8:00.3"}, nil)
+			dputilsLibMock.EXPECT().GetVFList("0000:d8:00.0").Return([]string{"0000:d8:00.2", "0000:d8:00.3"}, nil).AnyTimes()
 			hostMock.EXPECT().Unbind("0000:d8:00.2").Return(nil)
 			hostMock.EXPECT().Unbind("0000:d8:00.3").Return(nil)
 
