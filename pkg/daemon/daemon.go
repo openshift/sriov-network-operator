@@ -285,7 +285,7 @@ func (dn *NodeReconciler) checkOnNodeStateChange(desiredNodeState *sriovnetworkv
 	// Check the main plugin for changes
 	reqDrain, reqReboot, err := dn.mainPlugin.OnNodeStateChange(desiredNodeState)
 	if err != nil {
-		funcLog.Error(err, "OnNodeStateChange plugin error", "mainPluginName", dn.mainPlugin.Name)
+		funcLog.Error(err, "OnNodeStateChange plugin error", "mainPluginName", dn.mainPlugin.Name())
 		return false, false, err
 	}
 	funcLog.V(0).Info("OnNodeStateChange result",
