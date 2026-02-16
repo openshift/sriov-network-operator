@@ -28,6 +28,12 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
+const (
+	// sysfsWriteTimeout is the timeout for writing to sysfs files (e.g. sriov_numvfs).
+	// Kernel drivers can block indefinitely on these writes if the device is in a bad state.
+	sysfsWriteTimeout = 2 * time.Minute
+)
+
 type interfaceToConfigure struct {
 	Iface       sriovnetworkv1.Interface
 	IfaceStatus sriovnetworkv1.InterfaceExt
@@ -76,7 +82,7 @@ func (s *sriov) SetSriovNumVfs(pciAddr string, numVfs int) error {
 	log.Log.V(2).Info("SetSriovNumVfs(): set NumVfs", "device", pciAddr, "numVfs", numVfs)
 	numVfsFilePath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, consts.NumVfsFile)
 	bs := []byte(strconv.Itoa(numVfs))
-	err := os.WriteFile(numVfsFilePath, []byte("0"), os.ModeAppend)
+	err := utils.WriteFileWithTimeout(numVfsFilePath, []byte("0"), os.ModeAppend, sysfsWriteTimeout)
 	if err != nil {
 		log.Log.Error(err, "SetSriovNumVfs(): fail to reset NumVfs file", "path", numVfsFilePath)
 		return err
@@ -84,7 +90,7 @@ func (s *sriov) SetSriovNumVfs(pciAddr string, numVfs int) error {
 	if numVfs == 0 {
 		return nil
 	}
-	err = os.WriteFile(numVfsFilePath, bs, os.ModeAppend)
+	err = utils.WriteFileWithTimeout(numVfsFilePath, bs, os.ModeAppend, sysfsWriteTimeout)
 	if err != nil {
 		log.Log.Error(err, "SetSriovNumVfs(): fail to set NumVfs file", "path", numVfsFilePath)
 		return err
