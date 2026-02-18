@@ -216,7 +216,8 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			}
 			// periodically ensure device plugin is unblocked,
 			// this is required to ensure that device plugin can start in case if it is restarted for some reason
-			if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) {
+			if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) &&
+				len(desiredNodeState.Spec.Interfaces) > 0 {
 				devicePluginPods, err := dn.getDevicePluginPodsForNode(ctx)
 				if err != nil {
 					reqLogger.Error(err, "failed to get device plugin pods")
@@ -410,9 +411,13 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 	}
 
 	if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) {
-		if err := dn.waitForDevicePluginPodAndTryUnblock(ctx, desiredNodeState); err != nil {
-			reqLogger.Error(err, "failed to wait for device plugin pod to start and try to unblock it")
-			return ctrl.Result{}, err
+		if len(desiredNodeState.Spec.Interfaces) == 0 {
+			reqLogger.Info("no interfaces in desired state, skipping device plugin wait as device plugin won't be deployed")
+		} else {
+			if err := dn.waitForDevicePluginPodAndTryUnblock(ctx, desiredNodeState); err != nil {
+				reqLogger.Error(err, "failed to wait for device plugin pod to start and try to unblock it")
+				return ctrl.Result{}, err
+			}
 		}
 	} else {
 		// if the feature gate is not enabled we preserver the old behavior

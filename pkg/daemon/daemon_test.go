@@ -590,6 +590,39 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 			}, waitTime, retryTime).Should(Succeed())
 		})
 
+		It("Should not wait for device plugin pod when there are no interfaces and blockDevicePluginUntilConfigured is enabled", func(ctx context.Context) {
+			DeferCleanup(func(x bool) { vars.DisableDrain = x }, vars.DisableDrain)
+			vars.DisableDrain = true
+
+			By("waiting for drain idle states")
+			EventuallyWithOffset(1, func(g Gomega) {
+				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+					ToNot(HaveOccurred())
+
+				g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotation]).To(Equal(constants.DrainIdle))
+				g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotationCurrent]).To(Equal(constants.DrainIdle))
+			}, waitTime, retryTime).Should(Succeed())
+
+			By("setting an empty interfaces spec (no policies)")
+			EventuallyWithOffset(1, func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+
+				nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{}
+				err = k8sClient.Update(ctx, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, waitTime, retryTime).Should(Succeed())
+
+			By("verifying sync status reaches Succeeded without stalling on device plugin wait")
+			eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
+
+			By("verifying the device plugin pod still has the wait-for-config annotation (was not unblocked)")
+			devicePluginPod := &corev1.Pod{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: devicePluginPodName, Namespace: testNamespace},
+				devicePluginPod)).ToNot(HaveOccurred())
+			Expect(devicePluginPod.Annotations).To(HaveKey(constants.DevicePluginWaitConfigAnnotation))
+		})
+
 		It("Should unblock the device plugin pod when configuration is finished", func(ctx context.Context) {
 			DeferCleanup(func(x bool) { vars.DisableDrain = x }, vars.DisableDrain)
 			vars.DisableDrain = true
