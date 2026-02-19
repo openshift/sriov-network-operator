@@ -272,8 +272,9 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 
 		altNames, err := s.netlinkLib.GetAltNames(pfNetName)
 		if err != nil {
-			log.Log.Error(err, "DiscoverSriovDevices(): unable to get alternative names for device, skipping", "device", device)
-			continue
+			log.Log.V(2).Info("DiscoverSriovDevices(): unable to get alternative names for device, continuing with empty altnames",
+				"device", device.Address, "reason", err.Error())
+			altNames = []string{}
 		}
 
 		link, err := s.netlinkLib.LinkByName(pfNetName)
