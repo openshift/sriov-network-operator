@@ -46,6 +46,12 @@ spec:
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           resources:
             requests:
               cpu: 100m
@@ -81,6 +87,10 @@ spec:
               value: {{ .Values.operator.metricsExporter.certificates.secretName }}
             - name: METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE
               value: {{ .Values.images.metricsExporterKubeRbacProxy }}
+            {{- if .Values.operator.externalDrainer.enabled }}
+            - name: USE_EXTERNAL_DRAINER
+              value: {{ .Values.operator.externalDrainer.enabled | quote }}
+            {{- end }}
             {{- if .Values.operator.metricsExporter.prometheusOperator.enabled }}
             - name: METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED
               value: {{ .Values.operator.metricsExporter.prometheusOperator.enabled | quote}}
@@ -115,6 +125,10 @@ spec:
               value: {{ .Values.operator.clusterType }}
             - name: STALE_NODE_STATE_CLEANUP_DELAY_MINUTES
               value: "{{ .Values.operator.staleNodeStateCleanupDelayMinutes }}"
+            {{- range $k, $v := .Values.operator.extraEnv }}
+            - name: {{ $k }}
+              value: {{ $v | toString | quote }}
+            {{- end }}
         {{- if .Values.operator.admissionControllers.enabled }}
             - name: OPERATOR_WEBHOOK_NETWORK_POLICY_PORT
               value: "{{ .Values.operator.admissionControllers.networkPolicy.operator.port }}"

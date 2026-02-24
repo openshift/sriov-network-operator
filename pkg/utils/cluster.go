@@ -8,6 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
 
 // ObjectHasAnnotationKey checks if a kubernetes object already contains annotation
@@ -32,7 +34,7 @@ func AnnotateObject(ctx context.Context, obj client.Object, key, value string, c
 	}
 
 	if obj.GetAnnotations()[key] != value {
-		logger, ok := ctx.Value("logger").(logr.Logger)
+		logger, ok := ctx.Value(constants.LoggerContextKey).(logr.Logger)
 		if !ok {
 			log.Log.Info("Annotate object",
 				"name", obj.GetName(),
@@ -139,4 +141,30 @@ func RemoveLabelFromNode(ctx context.Context, nodeName string, key string, c cli
 	}
 
 	return removeLabelObject(ctx, node, key, c)
+}
+
+// RemoveAnnotationFromObject removes an annotation from a kubernetes object
+func RemoveAnnotationFromObject(ctx context.Context, obj client.Object, key string, c client.Client) error {
+	newObj := obj.DeepCopyObject().(client.Object)
+	if newObj.GetAnnotations() == nil {
+		return nil
+	}
+
+	_, exist := newObj.GetAnnotations()[key]
+	if exist {
+		log.Log.V(2).Info("RemoveAnnotationFromObject(): remove annotation from object",
+			"objectName", obj.GetName(),
+			"objectKind", obj.GetObjectKind(),
+			"annotationKey", key)
+		delete(newObj.GetAnnotations(), key)
+		patch := client.MergeFrom(obj)
+		err := c.Patch(ctx,
+			newObj, patch)
+		if err != nil {
+			log.Log.Error(err, "RemoveAnnotationFromObject(): Failed to patch object")
+			return err
+		}
+	}
+
+	return nil
 }

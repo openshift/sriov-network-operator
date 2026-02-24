@@ -65,6 +65,9 @@ type SriovOperatorConfigSpec struct {
 	DisablePlugins PluginNameSlice `json:"disablePlugins,omitempty"`
 	// FeatureGates to enable experimental features
 	FeatureGates map[string]bool `json:"featureGates,omitempty"`
+	// ConfigDaemonEnvVars allows to specify custom environment variables
+	// for the sriov-network-config-daemon
+	ConfigDaemonEnvVars map[string]string `json:"configDaemonEnvVars,omitempty"`
 }
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig

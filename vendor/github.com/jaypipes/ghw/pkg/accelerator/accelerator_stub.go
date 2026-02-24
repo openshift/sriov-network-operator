@@ -1,5 +1,5 @@
-//go:build !linux
-// +build !linux
+//go:build !linux && !windows
+// +build !linux,!windows
 
 // Use and distribution licensed under the Apache license version 2.
 //
@@ -9,11 +9,12 @@
 package accelerator
 
 import (
+	"context"
 	"runtime"
 
 	"github.com/pkg/errors"
 )
 
-func (i *Info) load() error {
+func (i *Info) load(ctx context.Context) error {
 	return errors.New("accelerator.Info.load not implemented on " + runtime.GOOS)
 }

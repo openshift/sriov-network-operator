@@ -31,6 +31,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -207,34 +208,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// we need a client that doesn't use the local cache for the objects
-	drainKClient, err := client.New(restConfig, client.Options{
-		Scheme: scheme,
-		Cache: &client.CacheOptions{
-			DisableFor: []client.Object{
-				&sriovnetworkv1.SriovNetworkNodeState{},
-				&corev1.Node{},
-				&mcfgv1.MachineConfigPool{},
-			},
-		},
-	})
-	if err != nil {
-		setupLog.Error(err, "unable to create drain kubernetes client")
-		os.Exit(1)
-	}
-
-	drainController, err := controllers.NewDrainReconcileController(
-		drainKClient,
-		mgr.GetScheme(),
-		mgr.GetEventRecorderFor("SR-IOV operator"),
-		orch)
-	if err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "DrainReconcile")
-		os.Exit(1)
-	}
-
-	if err = drainController.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to setup controller with manager", "controller", "DrainReconcile")
+	if err := setupDrainController(mgr, restConfig, orch, mgr.GetScheme()); err != nil {
+		setupLog.Error(err, "unable to setup drain controller")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
@@ -294,6 +269,49 @@ func main() {
 
 		os.Exit(1)
 	}
+}
+
+func setupDrainController(mgr ctrl.Manager, restConfig *rest.Config,
+	orch orchestrator.Interface, scheme *runtime.Scheme) error {
+	if vars.UseExternalDrainer {
+		// even though UseExternalDrainer is set, we are keeping internal drain controller for handling
+		// use-cases when there are existing nodes under drain_required state, which won't be handled
+		// externally, since UseExternalDrainer was set only after they were scheduled for draining.
+		setupLog.Info("'UseExternalDrainer' is set, draining will be done externally")
+	}
+
+	// we need a client that doesn't use the local cache for the objects
+	drainKClient, err := client.New(restConfig, client.Options{
+		Scheme: scheme,
+		Cache: &client.CacheOptions{
+			DisableFor: []client.Object{
+				&sriovnetworkv1.SriovNetworkNodeState{},
+				&corev1.Node{},
+				&mcfgv1.MachineConfigPool{},
+			},
+		},
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create drain kubernetes client")
+		return err
+	}
+
+	drainController, err := controllers.NewDrainReconcileController(
+		drainKClient,
+		mgr.GetScheme(),
+		mgr.GetEventRecorder("SR-IOV operator"),
+		orch)
+	if err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DrainReconcile")
+		return err
+	}
+
+	if err = drainController.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to setup controller with manager", "controller", "DrainReconcile")
+		return err
+	}
+
+	return nil
 }
 
 func initNicIDMap() error {

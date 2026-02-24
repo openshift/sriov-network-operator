@@ -60,7 +60,7 @@ func (k *kernel) IsKernelModuleLoaded(kernelModuleName string) (bool, error) {
 	log.Log.V(2).Info("IsKernelModuleLoaded():", "stdout", stdout)
 	if len(stderr) != 0 {
 		log.Log.Error(err, "IsKernelModuleLoaded(): failed to check if kernel module is loaded", "name", kernelModuleName, "stderr", stderr)
-		return false, fmt.Errorf(stderr)
+		return false, errors.New(stderr)
 	}
 
 	if len(stdout) != 0 {
@@ -266,7 +266,7 @@ func (k *kernel) CheckRDMAEnabled() (bool, error) {
 	_, stderr, mlx5Err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("%s lsmod | grep --quiet 'mlx5_core'", chrootDefinition))
 	if mlx5Err != nil && len(stderr) != 0 {
 		log.Log.Error(mlx5Err, "CheckRDMAEnabled(): failed to check for kernel module 'mlx5_core'", "stderr", stderr)
-		return false, fmt.Errorf(stderr)
+		return false, errors.New(stderr)
 	}
 
 	if mlx5Err != nil {
@@ -284,7 +284,7 @@ func (k *kernel) rdmaModulesAreLoaded() (bool, error) {
 	_, stderr, err := k.utilsHelper.RunCommand("/bin/sh", "-c", fmt.Sprintf("%s lsmod | grep --quiet '\\(^ib\\|^rdma\\)'", chrootDefinition))
 	if err != nil && len(stderr) != 0 {
 		log.Log.Error(err, "rdmaModulesAreLoaded(): fail to check if ib and rdma kernel modules are loaded", "stderr", stderr)
-		return false, fmt.Errorf(stderr)
+		return false, errors.New(stderr)
 	}
 
 	if err != nil {

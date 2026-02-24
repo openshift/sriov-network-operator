@@ -9,11 +9,12 @@
 package product
 
 import (
+	"context"
 	"runtime"
 
 	"github.com/pkg/errors"
 )
 
-func (i *Info) load() error {
+func (i *Info) load(ctx context.Context) error {
 	return errors.New("productFillInfo not implemented on " + runtime.GOOS)
 }

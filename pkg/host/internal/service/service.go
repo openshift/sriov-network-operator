@@ -85,7 +85,7 @@ func (s *service) ReadService(servicePath string) (*types.Service, error) {
 // EnableService creates service file and enables it with systemctl enable
 func (s *service) EnableService(service *types.Service) error {
 	// Write service file
-	err := os.WriteFile(path.Join(consts.Chroot, service.Path), []byte(service.Content), 0644)
+	err := os.WriteFile(path.Join(consts.Chroot, service.Path), []byte(service.Content), 0o644)
 	if err != nil {
 		return err
 	}
@@ -107,11 +107,11 @@ func (s *service) EnableService(service *types.Service) error {
 
 // CompareServices returns true if serviceA needs update(doesn't contain all fields from service B)
 func (s *service) CompareServices(serviceA, serviceB *types.Service) (bool, error) {
-	optsA, err := unit.Deserialize(strings.NewReader(serviceA.Content))
+	optsA, err := unit.DeserializeOptions(strings.NewReader(serviceA.Content))
 	if err != nil {
 		return false, err
 	}
-	optsB, err := unit.Deserialize(strings.NewReader(serviceB.Content))
+	optsB, err := unit.DeserializeOptions(strings.NewReader(serviceB.Content))
 	if err != nil {
 		return false, err
 	}
@@ -177,7 +177,7 @@ func (s *service) UpdateSystemService(serviceObj *types.Service) error {
 		// Invalid case to reach here
 		return fmt.Errorf("can't update non-existing service %q", serviceObj.Name)
 	}
-	serviceOptions, err := unit.Deserialize(strings.NewReader(serviceObj.Content))
+	serviceOptions, err := unit.DeserializeOptions(strings.NewReader(serviceObj.Content))
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func (s *service) UpdateSystemService(serviceObj *types.Service) error {
 
 // appendToService appends given fields to service
 func appendToService(service *types.Service, options ...*unit.UnitOption) (*types.Service, error) {
-	serviceOptions, err := unit.Deserialize(strings.NewReader(service.Content))
+	serviceOptions, err := unit.DeserializeOptions(strings.NewReader(service.Content))
 	if err != nil {
 		return nil, err
 	}

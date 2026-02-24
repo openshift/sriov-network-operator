@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -48,13 +48,13 @@ import (
 type DrainReconcile struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	recorder record.EventRecorder
+	recorder events.EventRecorder
 	drainer  drain.DrainInterface
 
 	drainCheckMutex sync.Mutex
 }
 
-func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, recorder record.EventRecorder, orchestrator orchestrator.Interface) (*DrainReconcile, error) {
+func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, recorder events.EventRecorder, orchestrator orchestrator.Interface) (*DrainReconcile, error) {
 	drainer, err := drain.NewDrainer(orchestrator)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, r
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	ctx = context.WithValue(ctx, "logger", log.FromContext(ctx))
+	ctx = context.WithValue(ctx, constants.LoggerContextKey, log.FromContext(ctx))
 	reqLogger := log.FromContext(ctx).WithName("Drain Reconcile")
 
 	req.Namespace = vars.Namespace
@@ -103,6 +103,13 @@ func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 	if !found {
 		reqLogger.Info("sriovNetworkNodeState not found, don't requeue the request")
+		return ctrl.Result{}, nil
+	}
+
+	// check if use-external-drainer is set for a specific node state
+	if utils.ObjectHasAnnotation(nodeNetworkState, constants.NodeStateExternalDrainerAnnotation, "true") {
+		reqLogger.Info(`nodestate is set with external drainer annotation, don't requeue the request. 
+		Draining will be done externally`, "nodeState", req.Name)
 		return ctrl.Result{}, nil
 	}
 

@@ -6,9 +6,9 @@
 package accelerator
 
 import (
-	"github.com/samber/lo"
+	"context"
 
-	"github.com/jaypipes/ghw/pkg/context"
+	"github.com/jaypipes/ghw/internal/log"
 	"github.com/jaypipes/ghw/pkg/pci"
 )
 
@@ -33,13 +33,13 @@ var (
 	}
 )
 
-func (i *Info) load() error {
+func (i *Info) load(ctx context.Context) error {
 	accelDevices := make([]*AcceleratorDevice, 0)
 
 	// get PCI devices
-	pciInfo, err := pci.New(context.WithContext(i.ctx))
+	pciInfo, err := pci.New(ctx)
 	if err != nil {
-		i.ctx.Warn("error loading PCI information: %s", err)
+		log.Warn(ctx, "error loading PCI information: %s", err)
 		return nil
 	}
 
@@ -48,7 +48,7 @@ func (i *Info) load() error {
 		class := dev.Class.ID
 		subclass := dev.Subclass.ID
 		if subclasses, ok := acceleratorPCIClasses[class]; ok {
-			if lo.Contains(subclasses, subclass) {
+			if slicesContains(subclasses, subclass) {
 				return true
 			}
 		}
@@ -69,4 +69,14 @@ func (i *Info) load() error {
 
 	i.Devices = accelDevices
 	return nil
+}
+
+// TODO: delete and just use slices.Contains when the minimal golang version we support is 1.21
+func slicesContains(s []string, v string) bool {
+	for i := range s {
+		if v == s[i] {
+			return true
+		}
+	}
+	return false
 }

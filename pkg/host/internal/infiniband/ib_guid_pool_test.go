@@ -17,7 +17,7 @@ var _ = Describe("ibGUIDPool", Ordered, func() {
 		netlinkLibMock *netlinkMockPkg.MockNetlinkLib
 		testCtrl       *gomock.Controller
 
-		createJsonConfig func(string) string
+		createJSONConfig func(string) string
 
 		guidPool ibGUIDPool
 	)
@@ -25,7 +25,7 @@ var _ = Describe("ibGUIDPool", Ordered, func() {
 	BeforeAll(func() {
 		var err error
 
-		createJsonConfig = func(content string) string {
+		createJSONConfig = func(content string) string {
 			configPath := "/config.json"
 			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
 				Dirs:  []string{"/host"},
@@ -39,7 +39,7 @@ var _ = Describe("ibGUIDPool", Ordered, func() {
 		netlinkLibMock = netlinkMockPkg.NewMockNetlinkLib(testCtrl)
 		netlinkLibMock.EXPECT().LinkList().Return([]netlinkLibPkg.Link{}, nil).Times(1)
 
-		configPath := createJsonConfig(
+		configPath := createJSONConfig(
 			`[{"pciAddress":"0000:3b:00.0","guids":["00:00:00:00:00:00:00:00", "00:00:00:00:00:00:00:01"]},
 			{"pciAddress":"0000:3b:00.1","guidsRange":{"start":"00:00:00:00:00:00:01:00","end":"00:00:00:00:00:00:01:02"}}]`)
 

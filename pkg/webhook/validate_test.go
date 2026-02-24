@@ -1216,15 +1216,15 @@ func TestValidatePolicyForNodeStateWithValidVFAndNetFilter(t *testing.T) {
 				{
 					VFs: []VirtualFunction{
 						{
-							DeviceID:   "154c",
+							DeviceID:   "158b",
 							Driver:     "iavf",
 							PciAddress: "0000:86:00.1",
 							Mtu:        1500,
 							VfID:       0,
 						},
 					},
-					DeviceID:   "154c",
-					Driver:     "iavf",
+					DeviceID:   "158b",
+					Driver:     "i40e",
 					Mtu:        1500,
 					Name:       "ens803f0",
 					PciAddress: "0000:86:00.0",

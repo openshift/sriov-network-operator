@@ -55,13 +55,7 @@ var NicIDMap = []string{}
 
 var InitialState SriovNetworkNodeState
 
-// NetFilterType Represents the NetFilter tags to be used
-type NetFilterType int
-
 const (
-	// OpenstackNetworkID network UUID
-	OpenstackNetworkID NetFilterType = iota
-
 	SupportedNicIDConfigmap = "supported-nic-ids"
 )
 
@@ -71,15 +65,6 @@ const (
 	DaemonConfigurationMode  ConfigurationModeType = "daemon"
 	SystemdConfigurationMode ConfigurationModeType = "systemd"
 )
-
-func (e NetFilterType) String() string {
-	switch e {
-	case OpenstackNetworkID:
-		return "openstack/NetworkID"
-	default:
-		return fmt.Sprintf("%d", int(e))
-	}
-}
 
 func InitNicIDMapFromConfigMap(client kubernetes.Interface, namespace string) error {
 	cm, err := client.CoreV1().ConfigMaps(namespace).Get(

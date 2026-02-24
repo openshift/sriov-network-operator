@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"golang.org/x/net/context"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +30,10 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 	var resourceName = "testrdma"
 
 	BeforeAll(func() {
+		if platformType != consts.Baremetal {
+			Skip("NetworkPool is not supported on non-baremetal platforms")
+		}
+
 		WaitForSRIOVStable()
 
 		err := namespaces.Create(namespaces.Test, clients)

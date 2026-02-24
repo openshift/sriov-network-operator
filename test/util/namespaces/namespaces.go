@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -30,7 +30,7 @@ var inhibitSecurityAdmissionLabels = map[string]string{
 
 // WaitForDeletion waits until the namespace will be removed from the cluster
 func WaitForDeletion(cs *testclient.ClientSet, nsName string, timeout time.Duration) error {
-	return wait.PollImmediate(time.Second, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		_, err := cs.Namespaces().Get(context.Background(), nsName, metav1.GetOptions{})
 		if k8serrors.IsNotFound(err) {
 			return true, nil
@@ -80,7 +80,7 @@ func CleanPods(namespace string, cs *testclient.ClientSet) error {
 		return nil
 	}
 	err := cs.Pods(namespace).DeleteCollection(context.Background(), metav1.DeleteOptions{
-		GracePeriodSeconds: pointer.Int64Ptr(0),
+		GracePeriodSeconds: ptr.To[int64](0),
 	}, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to delete pods %v", err)
@@ -149,7 +149,7 @@ func CleanPools(operatorNamespace string, cs *testclient.ClientSet) error {
 }
 
 func waitForSriovNetworkDeletion(operatorNamespace string, cs *testclient.ClientSet, timeout time.Duration) error {
-	return wait.PollImmediate(time.Second, timeout, func() (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		networks := sriovv1.SriovNetworkList{}
 		err := cs.List(context.Background(),
 			&networks,

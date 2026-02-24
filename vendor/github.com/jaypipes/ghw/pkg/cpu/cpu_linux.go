@@ -7,6 +7,7 @@ package cpu
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -16,7 +17,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jaypipes/ghw/pkg/context"
+	"github.com/jaypipes/ghw/internal/log"
 	"github.com/jaypipes/ghw/pkg/linuxpath"
 	"github.com/jaypipes/ghw/pkg/util"
 )
@@ -26,8 +27,8 @@ var (
 	onlineFile       = "online"
 )
 
-func (i *Info) load() error {
-	i.Processors = processorsGet(i.ctx)
+func (i *Info) load(ctx context.Context) error {
+	i.Processors = processorsGet(ctx)
 	var totCores uint32
 	var totThreads uint32
 	for _, p := range i.Processors {
@@ -41,7 +42,7 @@ func (i *Info) load() error {
 	return nil
 }
 
-func processorsGet(ctx *context.Context) []*Processor {
+func processorsGet(ctx context.Context) []*Processor {
 	paths := linuxpath.New(ctx)
 
 	lps := logicalProcessorsFromProcCPUInfo(ctx)
@@ -53,7 +54,7 @@ func processorsGet(ctx *context.Context) []*Processor {
 	// processor pseudodirs are of the pattern /sys/devices/system/cpu/cpu{N}
 	fnames, err := os.ReadDir(paths.SysDevicesSystemCPU)
 	if err != nil {
-		ctx.Warn("failed to read /sys/devices/system/cpu: %s", err)
+		log.Warn(ctx, "failed to read /sys/devices/system/cpu: %s", err)
 		return []*Processor{}
 	}
 	for _, fname := range fnames {
@@ -64,7 +65,7 @@ func processorsGet(ctx *context.Context) []*Processor {
 
 		lpID, err := strconv.Atoi(matches[1])
 		if err != nil {
-			ctx.Warn("failed to find numeric logical processor ID: %s", err)
+			log.Warn(ctx, "failed to find numeric logical processor ID: %s", err)
 			continue
 		}
 
@@ -83,7 +84,7 @@ func processorsGet(ctx *context.Context) []*Processor {
 			proc = &Processor{ID: procID}
 			lp, ok := lps[lpID]
 			if !ok {
-				ctx.Warn(
+				log.Warn(ctx,
 					"failed to find attributes for logical processor %d",
 					lpID,
 				)
@@ -101,6 +102,12 @@ func processorsGet(ctx *context.Context) []*Processor {
 			}
 			if len(lp.Attrs["model name"]) != 0 {
 				proc.Model = lp.Attrs["model name"]
+			} else if len(lp.Attrs["Processor"]) != 0 { // ARM
+				proc.Model = lp.Attrs["Processor"]
+			} else if len(lp.Attrs["cpu model"]) != 0 { // MIPS, ARM
+				proc.Model = lp.Attrs["cpu model"]
+			} else if len(lp.Attrs["Model Name"]) != 0 { // LoongArch
+				proc.Model = lp.Attrs["Model Name"]
 			} else if len(lp.Attrs["uarch"]) != 0 { // SiFive
 				proc.Model = lp.Attrs["uarch"]
 			}
@@ -149,7 +156,7 @@ func processorsGet(ctx *context.Context) []*Processor {
 
 // processorIDFromLogicalProcessorID returns the processor physical package ID
 // for the supplied logical processor ID
-func processorIDFromLogicalProcessorID(ctx *context.Context, lpID int) int {
+func processorIDFromLogicalProcessorID(ctx context.Context, lpID int) int {
 	paths := linuxpath.New(ctx)
 	// Fetch CPU ID
 	path := filepath.Join(
@@ -162,7 +169,7 @@ func processorIDFromLogicalProcessorID(ctx *context.Context, lpID int) int {
 
 // coreIDFromLogicalProcessorID returns the core ID for the supplied logical
 // processor ID
-func coreIDFromLogicalProcessorID(ctx *context.Context, lpID int) int {
+func coreIDFromLogicalProcessorID(ctx context.Context, lpID int) int {
 	paths := linuxpath.New(ctx)
 	// Fetch CPU ID
 	path := filepath.Join(
@@ -173,7 +180,7 @@ func coreIDFromLogicalProcessorID(ctx *context.Context, lpID int) int {
 	return util.SafeIntFromFile(ctx, path)
 }
 
-func CoresForNode(ctx *context.Context, nodeID int) ([]*ProcessorCore, error) {
+func CoresForNode(ctx context.Context, nodeID int) ([]*ProcessorCore, error) {
 	// The /sys/devices/system/node/nodeX directory contains a subdirectory
 	// called 'cpuX' for each logical processor assigned to the node. Each of
 	// those subdirectories contains a topology subdirectory which has a
@@ -221,7 +228,7 @@ func CoresForNode(ctx *context.Context, nodeID int) ([]*ProcessorCore, error) {
 		cpuPath := filepath.Join(path, filename)
 		procID, err := strconv.Atoi(filename[3:])
 		if err != nil {
-			ctx.Warn(
+			log.Warn(ctx,
 				"failed to determine procID from %s. Expected integer after 3rd char.",
 				filename,
 			)
@@ -333,7 +340,7 @@ type logicalProcessor struct {
 // with blank line-separated blocks of colon-delimited attribute name/value
 // pairs for a specific logical processor on the host.
 func logicalProcessorsFromProcCPUInfo(
-	ctx *context.Context,
+	ctx context.Context,
 ) map[int]*logicalProcessor {
 	paths := linuxpath.New(ctx)
 	r, err := os.Open(paths.ProcCpuinfo)
@@ -356,7 +363,7 @@ func logicalProcessorsFromProcCPUInfo(
 			// collected for this logical processor block
 			lpIDstr, ok := lpAttrs["processor"]
 			if !ok {
-				ctx.Warn("expected to find 'processor' key in /proc/cpuinfo attributes")
+				log.Warn(ctx, "expected to find 'processor' key in /proc/cpuinfo attributes")
 				continue
 			}
 			lpID, _ := strconv.Atoi(lpIDstr)
@@ -369,10 +376,12 @@ func logicalProcessorsFromProcCPUInfo(
 			lpAttrs = map[string]string{}
 			continue
 		}
-		parts := strings.Split(line, ":")
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-		lpAttrs[key] = value
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) >= 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			lpAttrs[key] = value
+		}
 	}
 	return lps
 }

@@ -1,6 +1,30 @@
+internalreleaseimages.machineconfiguration.openshift.io:
+  Annotations: {}
+  ApprovedPRNumber: https://github.com/openshift/api/pull/2510
+  CRDName: internalreleaseimages.machineconfiguration.openshift.io
+  Capability: ""
+  Category: ""
+  FeatureGates:
+  - NoRegistryClusterInstall
+  FilenameOperatorName: machine-config
+  FilenameOperatorOrdering: "01"
+  FilenameRunLevel: "0000_80"
+  GroupName: machineconfiguration.openshift.io
+  HasStatus: true
+  KindName: InternalReleaseImage
+  Labels:
+    openshift.io/operator-managed: ""
+  PluralName: internalreleaseimages
+  PrinterColumns: []
+  Scope: Cluster
+  ShortNames: null
+  TopLevelFeatureGates:
+  - NoRegistryClusterInstall
+  Version: v1alpha1
+
 machineconfignodes.machineconfiguration.openshift.io:
   Annotations: {}
-  ApprovedPRNumber: https://github.com/openshift/api/pull/1596
+  ApprovedPRNumber: https://github.com/openshift/api/pull/2256
   CRDName: machineconfignodes.machineconfiguration.openshift.io
   Capability: ""
   Category: ""
@@ -48,10 +72,6 @@ machineconfignodes.machineconfiguration.openshift.io:
     name: Resumed
     priority: 1
     type: string
-  - jsonPath: .status.conditions[?(@.type=="UpdateCompatible")].status
-    name: UpdateCompatible
-    priority: 1
-    type: string
   - jsonPath: .status.conditions[?(@.type=="AppliedFilesAndOS")].status
     name: UpdatedFilesAndOS
     priority: 1
@@ -68,10 +88,6 @@ machineconfignodes.machineconfiguration.openshift.io:
     name: RebootedNode
     priority: 1
     type: string
-  - jsonPath: .status.conditions[?(@.type=="ReloadedCRIO")].status
-    name: ReloadedCRIO
-    priority: 1
-    type: string
   - jsonPath: .status.conditions[?(@.type=="Uncordoned")].status
     name: UncordonedNode
     priority: 1
@@ -82,67 +98,28 @@ machineconfignodes.machineconfiguration.openshift.io:
   - MachineConfigNodes
   Version: v1alpha1
 
-machineosbuilds.machineconfiguration.openshift.io:
+osimagestreams.machineconfiguration.openshift.io:
   Annotations: {}
-  ApprovedPRNumber: https://github.com/openshift/api/pull/1773
-  CRDName: machineosbuilds.machineconfiguration.openshift.io
+  ApprovedPRNumber: https://github.com/openshift/api/pull/2555
+  CRDName: osimagestreams.machineconfiguration.openshift.io
   Capability: ""
   Category: ""
   FeatureGates:
-  - OnClusterBuild
+  - OSStreams
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_80"
   GroupName: machineconfiguration.openshift.io
   HasStatus: true
-  KindName: MachineOSBuild
+  KindName: OSImageStream
   Labels:
     openshift.io/operator-managed: ""
-  PluralName: machineosbuilds
-  PrinterColumns:
-  - jsonPath: .status.conditions[?(@.type=="Prepared")].status
-    name: Prepared
-    type: string
-  - jsonPath: .status.conditions[?(@.type=="Building")].status
-    name: Building
-    type: string
-  - jsonPath: .status.conditions[?(@.type=="Succeeded")].status
-    name: Succeeded
-    type: string
-  - jsonPath: .status.conditions[?(@.type=="Interrupted")].status
-    name: Interrupted
-    type: string
-  - jsonPath: .status.conditions[?(@.type=="Failed")].status
-    name: Failed
-    type: string
-  Scope: Cluster
-  ShortNames: null
-  TopLevelFeatureGates:
-  - OnClusterBuild
-  Version: v1alpha1
-
-machineosconfigs.machineconfiguration.openshift.io:
-  Annotations: {}
-  ApprovedPRNumber: https://github.com/openshift/api/pull/1773
-  CRDName: machineosconfigs.machineconfiguration.openshift.io
-  Capability: ""
-  Category: ""
-  FeatureGates:
-  - OnClusterBuild
-  FilenameOperatorName: machine-config
-  FilenameOperatorOrdering: "01"
-  FilenameRunLevel: "0000_80"
-  GroupName: machineconfiguration.openshift.io
-  HasStatus: true
-  KindName: MachineOSConfig
-  Labels:
-    openshift.io/operator-managed: ""
-  PluralName: machineosconfigs
+  PluralName: osimagestreams
   PrinterColumns: []
   Scope: Cluster
   ShortNames: null
   TopLevelFeatureGates:
-  - OnClusterBuild
+  - OSStreams
   Version: v1alpha1
 
 pinnedimagesets.machineconfiguration.openshift.io:

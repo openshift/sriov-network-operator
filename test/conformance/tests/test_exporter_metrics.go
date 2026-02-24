@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
@@ -31,6 +32,10 @@ var _ = Describe("[sriov] Metrics Exporter", Ordered, ContinueOnFailure, func() 
 	var nic *sriovv1.InterfaceExt
 
 	BeforeAll(func() {
+		if platformType != consts.Baremetal {
+			Skip("Metrics exporter is not supported on non-baremetal platforms")
+		}
+
 		err := namespaces.Create(namespaces.Test, clients)
 		Expect(err).ToNot(HaveOccurred())
 

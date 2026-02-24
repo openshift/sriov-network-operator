@@ -17,6 +17,7 @@ package main
 
 import (
 	"flag"
+	"os"
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -44,5 +45,6 @@ func init() {
 func main() {
 	if err := rootCmd.Execute(); err != nil {
 		log.Log.Error(err, "error executing sriov-network-config-daemon")
+		os.Exit(1)
 	}
 }

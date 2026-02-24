@@ -76,7 +76,10 @@ type SriovNetworkNicSelector struct {
 	RootDevices []string `json:"rootDevices,omitempty"`
 	// Name of SR-IoV PF.
 	PfNames []string `json:"pfNames,omitempty"`
-	// Infrastructure Networking selection filter. Allowed value "openstack/NetworkID:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+	// Infrastructure Networking selection filter.
+	// Allowed values:
+	// - "openstack/NetworkID:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+	// - "aws/NetworkID:xxxxxxxx"
 	NetFilter string `json:"netFilter,omitempty"`
 }
 

@@ -138,7 +138,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		return reconcile.Result{}, err
 	}
 
-	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultConfig); err != nil {
+	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultConfig, r.FeatureGate); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -196,6 +196,7 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ClusterType"] = vars.ClusterType
 	data.Data["DevMode"] = os.Getenv("DEV_MODE")
+	data.Data["UseExternalDrainer"] = vars.UseExternalDrainer
 	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
 	if dc.Spec.ConfigurationMode == sriovnetworkv1.SystemdConfigurationMode {
 		data.Data["UsedSystemdMode"] = true
@@ -217,6 +218,8 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 		logger.V(1).Info("DisablePlugins provided", "DisablePlugins", dc.Spec.DisablePlugins)
 		data.Data["DisablePlugins"] = strings.Join(dc.Spec.DisablePlugins.ToStringSlice(), ",")
 	}
+
+	data.Data["ConfigDaemonEnvVars"] = dc.Spec.ConfigDaemonEnvVars
 
 	objs, err := render.RenderDir(consts.ConfigDaemonPath, &data)
 	if err != nil {

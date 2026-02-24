@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -557,7 +556,7 @@ var _ = Describe("SriovNetworkNodePolicyReconciler", Ordered, func() {
 			intelNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "intelNode", Labels: map[string]string{"node-role.kubernetes.io/worker": ""}}}
 			mlxNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "mlxNode", Labels: map[string]string{"node-role.kubernetes.io/worker": ""}}}
 
-			objs := []client.Object{
+			objs := []k8sclient.Object{
 				intelNode,
 				&sriovnetworkv1.SriovNetworkNodeState{ObjectMeta: metav1.ObjectMeta{Name: "intelNode", Namespace: testNamespace}, Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
 					Interfaces: sriovnetworkv1.InterfaceExts{
@@ -621,7 +620,7 @@ var _ = Describe("SriovNetworkNodePolicyReconciler", Ordered, func() {
 
 		It("should render device plugin config data when policies configure vfio-pci and netdevice", func() {
 			node1 := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1", Labels: map[string]string{"node-role.kubernetes.io/worker": ""}}}
-			objs := []client.Object{
+			objs := []k8sclient.Object{
 				node1,
 				&sriovnetworkv1.SriovNetworkNodeState{ObjectMeta: metav1.ObjectMeta{Name: "node1", Namespace: testNamespace}, Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
 					Interfaces: sriovnetworkv1.InterfaceExts{

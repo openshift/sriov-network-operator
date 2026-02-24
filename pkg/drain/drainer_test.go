@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -60,7 +60,7 @@ var _ = Describe("Drainer", Ordered, func() {
 
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
-		ctx = context.WithValue(ctx, "logger", log.FromContext(ctx))
+		ctx = context.WithValue(ctx, constants.LoggerContextKey, log.FromContext(ctx))
 
 		t = GinkgoT()
 		mockCtrl = gomock.NewController(t)
@@ -81,8 +81,8 @@ var _ = Describe("Drainer", Ordered, func() {
 
 	AfterEach(func() {
 		Expect(k8sClient.DeleteAllOf(context.Background(), &sriovnetworkv1.SriovNetworkNodeState{}, client.InNamespace(testNamespace))).ToNot(HaveOccurred())
-		Expect(k8sClient.DeleteAllOf(context.Background(), &corev1.Pod{}, client.InNamespace(testNamespace), &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)}})).ToNot(HaveOccurred())
-		Expect(k8sClient.DeleteAllOf(context.Background(), &corev1.Node{}, &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)}})).ToNot(HaveOccurred())
+		Expect(k8sClient.DeleteAllOf(context.Background(), &corev1.Pod{}, client.InNamespace(testNamespace), &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)}})).ToNot(HaveOccurred())
+		Expect(k8sClient.DeleteAllOf(context.Background(), &corev1.Node{}, &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)}})).ToNot(HaveOccurred())
 
 		By("Shutdown controller manager")
 		cancel()
@@ -158,7 +158,7 @@ var _ = Describe("Drainer", Ordered, func() {
 					err = k8sClient.Get(ctx, client.ObjectKey{Name: "sriov-pod", Namespace: testNamespace}, podObj)
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(podObj.DeletionTimestamp).ToNot(BeNil())
-					err = k8sClient.Delete(ctx, podObj, &client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)})
+					err = k8sClient.Delete(ctx, podObj, &client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)})
 					g.Expect(err).ToNot(HaveOccurred())
 				}, 2*time.Minute, time.Second).Should(Succeed())
 			}()
@@ -244,14 +244,14 @@ func createNode(nodeName string) (*corev1.Node, *sriovnetworkv1.SriovNetworkNode
 func createPodOnNode(ctx context.Context, podName, nodeName string) {
 	pod := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: testNamespace},
 		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Image: "test", Command: []string{"test"}}},
-			NodeName: nodeName, TerminationGracePeriodSeconds: pointer.Int64(1)}}
+			NodeName: nodeName, TerminationGracePeriodSeconds: ptr.To[int64](1)}}
 	Expect(k8sClient.Create(ctx, &pod)).ToNot(HaveOccurred())
 }
 
 func createPodWithFinalizerOnNode(ctx context.Context, podName, nodeName string) {
 	pod := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: testNamespace, Finalizers: []string{"sriov-operator.io/test"}},
 		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Image: "test", Command: []string{"test"}}},
-			NodeName: nodeName, TerminationGracePeriodSeconds: pointer.Int64(1)}}
+			NodeName: nodeName, TerminationGracePeriodSeconds: ptr.To[int64](1)}}
 	Expect(k8sClient.Create(ctx, &pod)).ToNot(HaveOccurred())
 }
 
@@ -260,6 +260,6 @@ func createPodWithSriovDeviceOnNode(ctx context.Context, podName, nodeName strin
 	pod := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: testNamespace},
 		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Image: "test", Command: []string{"test"},
 			Resources: corev1.ResourceRequirements{Requests: resources, Limits: resources}}},
-			NodeName: nodeName, TerminationGracePeriodSeconds: pointer.Int64(1)}}
+			NodeName: nodeName, TerminationGracePeriodSeconds: ptr.To[int64](1)}}
 	Expect(k8sClient.Create(ctx, &pod)).ToNot(HaveOccurred())
 }

@@ -60,11 +60,11 @@ func (u *udev) PrepareVFRepUdevRule() error {
 		log.Log.Error(err, "PrepareVFRepUdevRule(): failed to read source for representor name UDEV script")
 		return err
 	}
-	if err := os.WriteFile(targetPath, data, 0755); err != nil {
+	if err := os.WriteFile(targetPath, data, 0o755); err != nil {
 		log.Log.Error(err, "PrepareVFRepUdevRule(): failed to write representor name UDEV script")
 		return err
 	}
-	if err := os.Chmod(targetPath, 0755); err != nil {
+	if err := os.Chmod(targetPath, 0o755); err != nil {
 		log.Log.Error(err, "PrepareVFRepUdevRule(): failed to set permissions on representor name UDEV script")
 		return err
 	}

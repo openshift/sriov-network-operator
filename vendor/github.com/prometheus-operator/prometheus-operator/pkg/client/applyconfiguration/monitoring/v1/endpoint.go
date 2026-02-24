@@ -17,38 +17,32 @@
 package v1
 
 import (
-	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// EndpointApplyConfiguration represents an declarative configuration of the Endpoint type for use
+// EndpointApplyConfiguration represents a declarative configuration of the Endpoint type for use
 // with apply.
 type EndpointApplyConfiguration struct {
-	Port                 *string                              `json:"port,omitempty"`
-	TargetPort           *intstr.IntOrString                  `json:"targetPort,omitempty"`
-	Path                 *string                              `json:"path,omitempty"`
-	Scheme               *string                              `json:"scheme,omitempty"`
-	Params               map[string][]string                  `json:"params,omitempty"`
-	Interval             *v1.Duration                         `json:"interval,omitempty"`
-	ScrapeTimeout        *v1.Duration                         `json:"scrapeTimeout,omitempty"`
-	TLSConfig            *TLSConfigApplyConfiguration         `json:"tlsConfig,omitempty"`
-	BearerTokenFile      *string                              `json:"bearerTokenFile,omitempty"`
-	BearerTokenSecret    *corev1.SecretKeySelector            `json:"bearerTokenSecret,omitempty"`
-	Authorization        *SafeAuthorizationApplyConfiguration `json:"authorization,omitempty"`
-	HonorLabels          *bool                                `json:"honorLabels,omitempty"`
-	HonorTimestamps      *bool                                `json:"honorTimestamps,omitempty"`
-	BasicAuth            *BasicAuthApplyConfiguration         `json:"basicAuth,omitempty"`
-	OAuth2               *OAuth2ApplyConfiguration            `json:"oauth2,omitempty"`
-	MetricRelabelConfigs []*v1.RelabelConfig                  `json:"metricRelabelings,omitempty"`
-	RelabelConfigs       []*v1.RelabelConfig                  `json:"relabelings,omitempty"`
-	ProxyURL             *string                              `json:"proxyUrl,omitempty"`
-	FollowRedirects      *bool                                `json:"followRedirects,omitempty"`
-	EnableHttp2          *bool                                `json:"enableHttp2,omitempty"`
-	FilterRunning        *bool                                `json:"filterRunning,omitempty"`
+	Port                                             *string                           `json:"port,omitempty"`
+	TargetPort                                       *intstr.IntOrString               `json:"targetPort,omitempty"`
+	Path                                             *string                           `json:"path,omitempty"`
+	Scheme                                           *monitoringv1.Scheme              `json:"scheme,omitempty"`
+	Params                                           map[string][]string               `json:"params,omitempty"`
+	Interval                                         *monitoringv1.Duration            `json:"interval,omitempty"`
+	ScrapeTimeout                                    *monitoringv1.Duration            `json:"scrapeTimeout,omitempty"`
+	HonorLabels                                      *bool                             `json:"honorLabels,omitempty"`
+	HonorTimestamps                                  *bool                             `json:"honorTimestamps,omitempty"`
+	TrackTimestampsStaleness                         *bool                             `json:"trackTimestampsStaleness,omitempty"`
+	MetricRelabelConfigs                             []RelabelConfigApplyConfiguration `json:"metricRelabelings,omitempty"`
+	RelabelConfigs                                   []RelabelConfigApplyConfiguration `json:"relabelings,omitempty"`
+	FilterRunning                                    *bool                             `json:"filterRunning,omitempty"`
+	BearerTokenFile                                  *string                           `json:"bearerTokenFile,omitempty"`
+	HTTPConfigWithProxyAndTLSFilesApplyConfiguration `json:",inline"`
 }
 
-// EndpointApplyConfiguration constructs an declarative configuration of the Endpoint type for use with
+// EndpointApplyConfiguration constructs a declarative configuration of the Endpoint type for use with
 // apply.
 func Endpoint() *EndpointApplyConfiguration {
 	return &EndpointApplyConfiguration{}
@@ -81,7 +75,7 @@ func (b *EndpointApplyConfiguration) WithPath(value string) *EndpointApplyConfig
 // WithScheme sets the Scheme field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Scheme field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithScheme(value string) *EndpointApplyConfiguration {
+func (b *EndpointApplyConfiguration) WithScheme(value monitoringv1.Scheme) *EndpointApplyConfiguration {
 	b.Scheme = &value
 	return b
 }
@@ -103,7 +97,7 @@ func (b *EndpointApplyConfiguration) WithParams(entries map[string][]string) *En
 // WithInterval sets the Interval field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Interval field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithInterval(value v1.Duration) *EndpointApplyConfiguration {
+func (b *EndpointApplyConfiguration) WithInterval(value monitoringv1.Duration) *EndpointApplyConfiguration {
 	b.Interval = &value
 	return b
 }
@@ -111,40 +105,8 @@ func (b *EndpointApplyConfiguration) WithInterval(value v1.Duration) *EndpointAp
 // WithScrapeTimeout sets the ScrapeTimeout field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the ScrapeTimeout field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithScrapeTimeout(value v1.Duration) *EndpointApplyConfiguration {
+func (b *EndpointApplyConfiguration) WithScrapeTimeout(value monitoringv1.Duration) *EndpointApplyConfiguration {
 	b.ScrapeTimeout = &value
-	return b
-}
-
-// WithTLSConfig sets the TLSConfig field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the TLSConfig field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithTLSConfig(value *TLSConfigApplyConfiguration) *EndpointApplyConfiguration {
-	b.TLSConfig = value
-	return b
-}
-
-// WithBearerTokenFile sets the BearerTokenFile field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the BearerTokenFile field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithBearerTokenFile(value string) *EndpointApplyConfiguration {
-	b.BearerTokenFile = &value
-	return b
-}
-
-// WithBearerTokenSecret sets the BearerTokenSecret field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the BearerTokenSecret field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithBearerTokenSecret(value corev1.SecretKeySelector) *EndpointApplyConfiguration {
-	b.BearerTokenSecret = &value
-	return b
-}
-
-// WithAuthorization sets the Authorization field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Authorization field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithAuthorization(value *SafeAuthorizationApplyConfiguration) *EndpointApplyConfiguration {
-	b.Authorization = value
 	return b
 }
 
@@ -164,26 +126,18 @@ func (b *EndpointApplyConfiguration) WithHonorTimestamps(value bool) *EndpointAp
 	return b
 }
 
-// WithBasicAuth sets the BasicAuth field in the declarative configuration to the given value
+// WithTrackTimestampsStaleness sets the TrackTimestampsStaleness field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the BasicAuth field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithBasicAuth(value *BasicAuthApplyConfiguration) *EndpointApplyConfiguration {
-	b.BasicAuth = value
-	return b
-}
-
-// WithOAuth2 sets the OAuth2 field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the OAuth2 field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithOAuth2(value *OAuth2ApplyConfiguration) *EndpointApplyConfiguration {
-	b.OAuth2 = value
+// If called multiple times, the TrackTimestampsStaleness field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithTrackTimestampsStaleness(value bool) *EndpointApplyConfiguration {
+	b.TrackTimestampsStaleness = &value
 	return b
 }
 
 // WithMetricRelabelConfigs adds the given value to the MetricRelabelConfigs field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the MetricRelabelConfigs field.
-func (b *EndpointApplyConfiguration) WithMetricRelabelConfigs(values ...**v1.RelabelConfig) *EndpointApplyConfiguration {
+func (b *EndpointApplyConfiguration) WithMetricRelabelConfigs(values ...*RelabelConfigApplyConfiguration) *EndpointApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithMetricRelabelConfigs")
@@ -196,7 +150,7 @@ func (b *EndpointApplyConfiguration) WithMetricRelabelConfigs(values ...**v1.Rel
 // WithRelabelConfigs adds the given value to the RelabelConfigs field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the RelabelConfigs field.
-func (b *EndpointApplyConfiguration) WithRelabelConfigs(values ...**v1.RelabelConfig) *EndpointApplyConfiguration {
+func (b *EndpointApplyConfiguration) WithRelabelConfigs(values ...*RelabelConfigApplyConfiguration) *EndpointApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithRelabelConfigs")
@@ -206,11 +160,51 @@ func (b *EndpointApplyConfiguration) WithRelabelConfigs(values ...**v1.RelabelCo
 	return b
 }
 
-// WithProxyURL sets the ProxyURL field in the declarative configuration to the given value
+// WithFilterRunning sets the FilterRunning field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the ProxyURL field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithProxyURL(value string) *EndpointApplyConfiguration {
-	b.ProxyURL = &value
+// If called multiple times, the FilterRunning field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithFilterRunning(value bool) *EndpointApplyConfiguration {
+	b.FilterRunning = &value
+	return b
+}
+
+// WithBearerTokenFile sets the BearerTokenFile field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BearerTokenFile field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithBearerTokenFile(value string) *EndpointApplyConfiguration {
+	b.BearerTokenFile = &value
+	return b
+}
+
+// WithAuthorization sets the Authorization field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Authorization field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithAuthorization(value *SafeAuthorizationApplyConfiguration) *EndpointApplyConfiguration {
+	b.HTTPConfigWithoutTLSApplyConfiguration.Authorization = value
+	return b
+}
+
+// WithBasicAuth sets the BasicAuth field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BasicAuth field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithBasicAuth(value *BasicAuthApplyConfiguration) *EndpointApplyConfiguration {
+	b.HTTPConfigWithoutTLSApplyConfiguration.BasicAuth = value
+	return b
+}
+
+// WithOAuth2 sets the OAuth2 field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the OAuth2 field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithOAuth2(value *OAuth2ApplyConfiguration) *EndpointApplyConfiguration {
+	b.HTTPConfigWithoutTLSApplyConfiguration.OAuth2 = value
+	return b
+}
+
+// WithBearerTokenSecret sets the BearerTokenSecret field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BearerTokenSecret field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithBearerTokenSecret(value corev1.SecretKeySelector) *EndpointApplyConfiguration {
+	b.HTTPConfigWithoutTLSApplyConfiguration.BearerTokenSecret = &value
 	return b
 }
 
@@ -218,22 +212,60 @@ func (b *EndpointApplyConfiguration) WithProxyURL(value string) *EndpointApplyCo
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the FollowRedirects field is set to the value of the last call.
 func (b *EndpointApplyConfiguration) WithFollowRedirects(value bool) *EndpointApplyConfiguration {
-	b.FollowRedirects = &value
+	b.HTTPConfigWithoutTLSApplyConfiguration.FollowRedirects = &value
 	return b
 }
 
-// WithEnableHttp2 sets the EnableHttp2 field in the declarative configuration to the given value
+// WithEnableHTTP2 sets the EnableHTTP2 field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the EnableHttp2 field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithEnableHttp2(value bool) *EndpointApplyConfiguration {
-	b.EnableHttp2 = &value
+// If called multiple times, the EnableHTTP2 field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithEnableHTTP2(value bool) *EndpointApplyConfiguration {
+	b.HTTPConfigWithoutTLSApplyConfiguration.EnableHTTP2 = &value
 	return b
 }
 
-// WithFilterRunning sets the FilterRunning field in the declarative configuration to the given value
+// WithTLSConfig sets the TLSConfig field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the FilterRunning field is set to the value of the last call.
-func (b *EndpointApplyConfiguration) WithFilterRunning(value bool) *EndpointApplyConfiguration {
-	b.FilterRunning = &value
+// If called multiple times, the TLSConfig field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithTLSConfig(value *TLSConfigApplyConfiguration) *EndpointApplyConfiguration {
+	b.HTTPConfigWithTLSFilesApplyConfiguration.TLSConfig = value
+	return b
+}
+
+// WithProxyURL sets the ProxyURL field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ProxyURL field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithProxyURL(value string) *EndpointApplyConfiguration {
+	b.ProxyConfigApplyConfiguration.ProxyURL = &value
+	return b
+}
+
+// WithNoProxy sets the NoProxy field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NoProxy field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithNoProxy(value string) *EndpointApplyConfiguration {
+	b.ProxyConfigApplyConfiguration.NoProxy = &value
+	return b
+}
+
+// WithProxyFromEnvironment sets the ProxyFromEnvironment field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ProxyFromEnvironment field is set to the value of the last call.
+func (b *EndpointApplyConfiguration) WithProxyFromEnvironment(value bool) *EndpointApplyConfiguration {
+	b.ProxyConfigApplyConfiguration.ProxyFromEnvironment = &value
+	return b
+}
+
+// WithProxyConnectHeader puts the entries into the ProxyConnectHeader field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, the entries provided by each call will be put on the ProxyConnectHeader field,
+// overwriting an existing map entries in ProxyConnectHeader field with the same key.
+func (b *EndpointApplyConfiguration) WithProxyConnectHeader(entries map[string][]corev1.SecretKeySelector) *EndpointApplyConfiguration {
+	if b.ProxyConfigApplyConfiguration.ProxyConnectHeader == nil && len(entries) > 0 {
+		b.ProxyConfigApplyConfiguration.ProxyConnectHeader = make(map[string][]corev1.SecretKeySelector, len(entries))
+	}
+	for k, v := range entries {
+		b.ProxyConfigApplyConfiguration.ProxyConnectHeader[k] = v
+	}
 	return b
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -77,7 +76,7 @@ func (u *utilsHelper) HTTPGetFetchData(url string) (string, error) {
 	// Check if the HTTP status code is OK (200).
 	if resp.StatusCode != http.StatusOK {
 		// Attempt to read the body for more detailed error information if available.
-		errorBodyBytes, _ := ioutil.ReadAll(resp.Body) // ReadAll might return its own error, but we prioritize the status code error.
+		errorBodyBytes, _ := io.ReadAll(resp.Body) // ReadAll might return its own error, but we prioritize the status code error.
 		return "", fmt.Errorf("request to %s returned status %s: %s", url, resp.Status, string(errorBodyBytes))
 	}
 

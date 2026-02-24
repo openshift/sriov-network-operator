@@ -69,7 +69,7 @@ func New(reportPath string) (*kniK8sReporter.KubernetesReporter, error) {
 		{Cr: &rbacv1.RoleBindingList{}, Namespace: &operatorNamespace},
 	}
 
-	err := os.Mkdir(reportPath, 0755)
+	err := os.Mkdir(reportPath, 0o755)
 	if err != nil && !errors.Is(err, os.ErrExist) {
 		return nil, err
 	}

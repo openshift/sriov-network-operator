@@ -337,7 +337,7 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 					return nil, fmt.Errorf("MTU(%d) in CR %s is higher than the MTU for the PF externally value(%d)", policy.Spec.Mtu, policy.GetName(), iface.Mtu)
 				}
 
-				if policy.Spec.LinkType != "" && strings.ToLower(policy.Spec.LinkType) != strings.ToLower(iface.LinkType) {
+				if policy.Spec.LinkType != "" && !strings.EqualFold(policy.Spec.LinkType, iface.LinkType) {
 					return nil, fmt.Errorf("LinkType(%s) in CR %s is not equal to the LinkType for the PF externally value(%s)", policy.Spec.LinkType, policy.GetName(), iface.LinkType)
 				}
 			}

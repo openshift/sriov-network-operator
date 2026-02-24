@@ -88,6 +88,15 @@ func CreateSriovPolicy(clientSet *testclient.ClientSet, generatedName string, op
 	return nodePolicy, err
 }
 
+func CreateSriovPolicyWithNetfilter(clientSet *testclient.ClientSet, generatedName string, operatorNamespace string, netfilter string, testNode string, numVfs int, resourceName string, deviceType string, options ...func(*sriovv1.SriovNetworkNodePolicy)) (*sriovv1.SriovNetworkNodePolicy, error) {
+	nodePolicy := defineSriovPolicy(generatedName, operatorNamespace, "", testNode, numVfs, resourceName, deviceType, options...)
+	nodePolicy.Spec.NicSelector = sriovv1.SriovNetworkNicSelector{
+		NetFilter: netfilter,
+	}
+	err := clientSet.Create(context.Background(), nodePolicy)
+	return nodePolicy, err
+}
+
 // GetNicsByPrefix returns a list of pod nic names, filtered by the given
 // nic name prefix ifcPrefix
 func GetNicsByPrefix(pod *k8sv1.Pod, ifcPrefix string) ([]string, error) {

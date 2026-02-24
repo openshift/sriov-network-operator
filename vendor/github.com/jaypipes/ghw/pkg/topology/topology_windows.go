@@ -6,6 +6,7 @@
 package topology
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"syscall"
@@ -24,7 +25,7 @@ const (
 	relationGroup            = 4
 )
 
-func (i *Info) load() error {
+func (i *Info) load(ctx context.Context) error {
 	nodes, err := topologyNodes()
 	if err != nil {
 		return err

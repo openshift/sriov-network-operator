@@ -88,10 +88,10 @@ var _ = Describe("infiniband interface implementation", func() {
 			})
 		netlinkLibMock.EXPECT().LinkSetVfPortGUID(pfLinkMock, 0, gomock.Any()).Return(nil)
 
-		mockJsonConfig := `[{"pciAddress":"0000:d8:00.0","guids":["00:01:02:03:04:05:06:07"]}]`
+		mockJSONConfig := `[{"pciAddress":"0000:d8:00.0","guids":["00:01:02:03:04:05:06:07"]}]`
 		helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
 			Dirs:  []string{"/host" + consts.SriovConfBasePath + "/infiniband"},
-			Files: map[string][]byte{"/host" + consts.InfinibandGUIDConfigFilePath: []byte(mockJsonConfig)},
+			Files: map[string][]byte{"/host" + consts.InfinibandGUIDConfigFilePath: []byte(mockJSONConfig)},
 		})
 
 		ib, err := New(netlinkLibMock, hostMock, hostMock)

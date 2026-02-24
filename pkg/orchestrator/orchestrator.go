@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator/kubernetes"
@@ -52,6 +53,7 @@ type Interface interface {
 // The cluster type is detected at operator startup based on the presence of OpenShift-specific APIs.
 // Returns the orchestrator interface for the specified cluster type, or an error if the cluster type is unsupported.
 func New(clusterType consts.ClusterType) (Interface, error) {
+	log.Log.WithName("orchestrator").Info("Creating orchestrator", "clusterType", clusterType)
 	switch clusterType {
 	case consts.ClusterTypeOpenshift:
 		return openshift.New()

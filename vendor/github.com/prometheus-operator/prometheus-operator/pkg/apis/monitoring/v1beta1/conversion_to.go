@@ -141,8 +141,10 @@ func convertHTTPConfigTo(in *HTTPConfig) *v1alpha1.HTTPConfig {
 		OAuth2:            in.OAuth2,
 		BearerTokenSecret: convertSecretKeySelectorTo(in.BearerTokenSecret),
 		TLSConfig:         in.TLSConfig,
-		ProxyURL:          in.ProxyURL,
+		ProxyURLOriginal:  in.ProxyURLOriginal,
+		ProxyConfig:       in.ProxyConfig,
 		FollowRedirects:   in.FollowRedirects,
+		EnableHTTP2:       in.EnableHTTP2,
 	}
 }
 
@@ -192,7 +194,7 @@ func convertOpsGenieConfigTo(in OpsGenieConfig) v1alpha1.OpsGenieConfig {
 	return v1alpha1.OpsGenieConfig{
 		SendResolved: in.SendResolved,
 		APIKey:       convertSecretKeySelectorTo(in.APIKey),
-		APIURL:       in.APIURL,
+		APIURL:       (*v1alpha1.URL)(in.APIURL),
 		Message:      in.Message,
 		Description:  in.Description,
 		Source:       in.Source,
@@ -239,7 +241,7 @@ func convertPagerDutyConfigTo(in PagerDutyConfig) v1alpha1.PagerDutyConfig {
 		SendResolved:          in.SendResolved,
 		RoutingKey:            convertSecretKeySelectorTo(in.RoutingKey),
 		ServiceKey:            convertSecretKeySelectorTo(in.ServiceKey),
-		URL:                   in.URL,
+		URL:                   (*v1alpha1.URL)(in.URL),
 		Client:                in.Client,
 		ClientURL:             in.ClientURL,
 		Description:           in.Description,
@@ -251,6 +253,8 @@ func convertPagerDutyConfigTo(in PagerDutyConfig) v1alpha1.PagerDutyConfig {
 		PagerDutyImageConfigs: convertPagerDutyImageConfigsTo(in.PagerDutyImageConfigs),
 		PagerDutyLinkConfigs:  convertPagerDutyLinkConfigsTo(in.PagerDutyLinkConfigs),
 		HTTPConfig:            convertHTTPConfigTo(in.HTTPConfig),
+		Source:                in.Source,
+		Timeout:               in.Timeout,
 	}
 }
 
@@ -261,6 +265,62 @@ func convertDiscordConfigTo(in DiscordConfig) v1alpha1.DiscordConfig {
 		Title:        in.Title,
 		Message:      in.Message,
 		SendResolved: in.SendResolved,
+		Content:      in.Content,
+		Username:     in.Username,
+		AvatarURL:    (*v1alpha1.URL)(in.AvatarURL),
+	}
+}
+
+func convertRocketChatFieldConfigsTo(in []RocketChatFieldConfig) []v1alpha1.RocketChatFieldConfig {
+	if in == nil {
+		return nil
+	}
+	out := make([]v1alpha1.RocketChatFieldConfig, len(in))
+	for i, field := range in {
+		out[i] = v1alpha1.RocketChatFieldConfig{
+			Title: field.Title,
+			Value: field.Value,
+			Short: field.Short,
+		}
+	}
+	return out
+}
+
+func convertRocketChatActionConfigsTo(in []RocketChatActionConfig) []v1alpha1.RocketChatActionConfig {
+	if in == nil {
+		return nil
+	}
+	out := make([]v1alpha1.RocketChatActionConfig, len(in))
+	for i, action := range in {
+		out[i] = v1alpha1.RocketChatActionConfig{
+			Text: action.Text,
+			URL:  action.URL,
+			Msg:  action.Msg,
+		}
+	}
+	return out
+}
+
+func convertRocketchatConfigTo(in RocketChatConfig) v1alpha1.RocketChatConfig {
+	return v1alpha1.RocketChatConfig{
+		SendResolved: in.SendResolved,
+		APIURL:       (*v1alpha1.URL)(in.APIURL),
+		Channel:      in.Channel,
+		Token:        in.Token,
+		TokenID:      in.TokenID,
+		Color:        in.Color,
+		Emoji:        in.Emoji,
+		IconURL:      in.IconURL,
+		Text:         in.Text,
+		Title:        in.Title,
+		TitleLink:    in.TitleLink,
+		Fields:       convertRocketChatFieldConfigsTo(in.Fields),
+		ShortFields:  in.ShortFields,
+		ImageURL:     in.ImageURL,
+		ThumbURL:     in.ThumbURL,
+		LinkNames:    in.LinkNames,
+		Actions:      convertRocketChatActionConfigsTo(in.Actions),
+		HTTPConfig:   convertHTTPConfigTo(in.HTTPConfig),
 	}
 }
 
@@ -327,6 +387,7 @@ func convertSlackConfigTo(in SlackConfig) v1alpha1.SlackConfig {
 		MrkdwnIn:     in.MrkdwnIn,
 		Actions:      convertSlackActionsTo(in.Actions),
 		HTTPConfig:   convertHTTPConfigTo(in.HTTPConfig),
+		Timeout:      in.Timeout,
 	}
 }
 
@@ -347,6 +408,7 @@ func convertWebhookConfigTo(in WebhookConfig) v1alpha1.WebhookConfig {
 		URLSecret:    convertSecretKeySelectorTo(in.URLSecret),
 		HTTPConfig:   convertHTTPConfigTo(in.HTTPConfig),
 		MaxAlerts:    in.MaxAlerts,
+		Timeout:      in.Timeout,
 	}
 }
 
@@ -354,7 +416,7 @@ func convertWeChatConfigTo(in WeChatConfig) v1alpha1.WeChatConfig {
 	return v1alpha1.WeChatConfig{
 		SendResolved: in.SendResolved,
 		APISecret:    convertSecretKeySelectorTo(in.APISecret),
-		APIURL:       in.APIURL,
+		APIURL:       (*v1alpha1.URL)(in.APIURL),
 		CorpID:       in.CorpID,
 		AgentID:      in.AgentID,
 		ToUser:       in.ToUser,
@@ -389,7 +451,7 @@ func convertVictorOpsConfigTo(in VictorOpsConfig) v1alpha1.VictorOpsConfig {
 	return v1alpha1.VictorOpsConfig{
 		SendResolved:      in.SendResolved,
 		APIKey:            convertSecretKeySelectorTo(in.APIKey),
-		APIURL:            in.APIURL,
+		APIURL:            (*v1alpha1.URL)(in.APIURL),
 		RoutingKey:        in.RoutingKey,
 		MessageType:       in.MessageType,
 		EntityDisplayName: in.EntityDisplayName,
@@ -417,6 +479,7 @@ func convertPushoverConfigTo(in PushoverConfig) v1alpha1.PushoverConfig {
 		Retry:        in.Retry,
 		Expire:       in.Expire,
 		HTML:         in.HTML,
+		Monospace:    in.Monospace,
 		HTTPConfig:   convertHTTPConfigTo(in.HTTPConfig),
 	}
 }
@@ -439,10 +502,11 @@ func convertSNSConfigTo(in SNSConfig) v1alpha1.SNSConfig {
 func convertTelegramConfigTo(in TelegramConfig) v1alpha1.TelegramConfig {
 	return v1alpha1.TelegramConfig{
 		SendResolved:         in.SendResolved,
-		APIURL:               in.APIURL,
+		APIURL:               (*v1alpha1.URL)(in.APIURL),
 		BotToken:             convertSecretKeySelectorTo(in.BotToken),
 		BotTokenFile:         in.BotTokenFile,
 		ChatID:               in.ChatID,
+		MessageThreadID:      in.MessageThreadID,
 		Message:              in.Message,
 		DisableNotifications: in.DisableNotifications,
 		ParseMode:            in.ParseMode,
@@ -461,11 +525,22 @@ func convertMSTeamsConfigTo(in MSTeamsConfig) v1alpha1.MSTeamsConfig {
 	}
 }
 
+func convertMSTeamsV2ConfigTo(in MSTeamsV2Config) v1alpha1.MSTeamsV2Config {
+	return v1alpha1.MSTeamsV2Config{
+		SendResolved: in.SendResolved,
+		WebhookURL:   in.WebhookURL,
+		Title:        in.Title,
+		Text:         in.Text,
+		HTTPConfig:   convertHTTPConfigTo(in.HTTPConfig),
+	}
+}
+
 // ConvertTo converts from this version (v1beta1) to the Hub version (v1alpha1).
 func (src *AlertmanagerConfig) ConvertTo(dstRaw conversion.Hub) error {
 	dst := dstRaw.(*v1alpha1.AlertmanagerConfig)
 
 	dst.ObjectMeta = src.ObjectMeta
+	dst.Status = src.Status
 
 	for _, in := range src.Spec.Receivers {
 		out := v1alpha1.Receiver{
@@ -560,6 +635,20 @@ func (src *AlertmanagerConfig) ConvertTo(dstRaw conversion.Hub) error {
 			out.MSTeamsConfigs = append(
 				out.MSTeamsConfigs,
 				convertMSTeamsConfigTo(in),
+			)
+		}
+
+		for _, in := range in.MSTeamsV2Configs {
+			out.MSTeamsV2Configs = append(
+				out.MSTeamsV2Configs,
+				convertMSTeamsV2ConfigTo(in),
+			)
+		}
+
+		for _, in := range in.RocketChatConfigs {
+			out.RocketChatConfigs = append(
+				out.RocketChatConfigs,
+				convertRocketchatConfigTo(in),
 			)
 		}
 

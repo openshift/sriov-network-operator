@@ -104,6 +104,294 @@ var _ = Describe("SRIOV", Ordered, func() {
 			Expect(needReboot).To(BeFalse())
 			Expect(v.LoadVfioDriver).To(Equal(uint(loading)))
 		})
+
+		It("should return needDrain when interface is removed and was created by operator", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+				},
+			}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{}
+
+			h.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(&sriovnetworkv1.Interface{
+				PciAddress:        "0000:d8:00.0",
+				NumVfs:            1,
+				ExternallyManaged: false,
+			}, true, nil)
+
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeTrue())
+			Expect(needReboot).To(BeFalse())
+		})
+
+		It("should not return needDrain when interface is removed but doesn't exist in store", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+				},
+			}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{}
+
+			h.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(nil, false, nil)
+
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeFalse())
+			Expect(needReboot).To(BeFalse())
+		})
+
+		It("should not return needDrain when interface is removed but was externally managed", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+				},
+			}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{}
+
+			h.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(&sriovnetworkv1.Interface{
+				PciAddress:        "0000:d8:00.0",
+				NumVfs:            1,
+				ExternallyManaged: true,
+			}, true, nil)
+
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeFalse())
+			Expect(needReboot).To(BeFalse())
+		})
+
+		It("should not return needDrain when all current interfaces are in desired spec", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+				},
+			}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+					VfGroups: []sriovnetworkv1.VfGroup{{
+						ResourceName: "test",
+						PolicyName:   "test",
+						VfRange:      "0-0",
+						DeviceType:   consts.DeviceTypeVfioPci,
+					}},
+				},
+			}
+
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeFalse())
+			Expect(needReboot).To(BeFalse())
+		})
+
+		It("should continue checking other interfaces when LoadPfsStatus fails", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+				},
+				{
+					Name:       "eno2",
+					PciAddress: "0000:d8:00.1",
+					NumVfs:     1,
+				},
+			}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{}
+
+			h.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(nil, false, fmt.Errorf("failed to load"))
+			h.EXPECT().LoadPfsStatus("0000:d8:00.1").Return(&sriovnetworkv1.Interface{
+				PciAddress:        "0000:d8:00.1",
+				NumVfs:            1,
+				ExternallyManaged: false,
+			}, true, nil)
+
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeTrue())
+			Expect(needReboot).To(BeFalse())
+		})
+
+		It("should return needDrain for first interface that needs reset in multiple interfaces", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+				},
+				{
+					Name:       "eno2",
+					PciAddress: "0000:d8:00.1",
+					NumVfs:     1,
+				},
+				{
+					Name:       "eno3",
+					PciAddress: "0000:d8:00.2",
+					NumVfs:     1,
+				},
+			}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{
+				{
+					Name:       "eno2",
+					PciAddress: "0000:d8:00.1",
+					NumVfs:     1,
+					VfGroups: []sriovnetworkv1.VfGroup{{
+						ResourceName: "test",
+						PolicyName:   "test",
+						VfRange:      "0-0",
+					}},
+				},
+			}
+
+			h.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(&sriovnetworkv1.Interface{
+				PciAddress:        "0000:d8:00.0",
+				NumVfs:            1,
+				ExternallyManaged: false,
+			}, true, nil)
+
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeTrue())
+			Expect(needReboot).To(BeFalse())
+		})
+
+		It("should not return needDrain when multiple interfaces are removed but none were created by operator", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+				},
+				{
+					Name:       "eno2",
+					PciAddress: "0000:d8:00.1",
+					NumVfs:     1,
+				},
+			}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{}
+
+			h.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(nil, false, nil)
+			h.EXPECT().LoadPfsStatus("0000:d8:00.1").Return(nil, false, nil)
+
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeFalse())
+			Expect(needReboot).To(BeFalse())
+		})
+
+		It("should not return needDrain when no interfaces in status", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+					VfGroups: []sriovnetworkv1.VfGroup{{
+						ResourceName: "test",
+						PolicyName:   "test",
+						VfRange:      "0-0",
+					}},
+				},
+			}
+
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeFalse())
+			Expect(needReboot).To(BeFalse())
+		})
+
+		It("should handle mixed scenario with some interfaces needing drain and some not", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+				},
+				{
+					Name:       "eno2",
+					PciAddress: "0000:d8:00.1",
+					NumVfs:     1,
+				},
+				{
+					Name:       "eno3",
+					PciAddress: "0000:d8:00.2",
+					NumVfs:     1,
+				},
+			}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+					VfGroups: []sriovnetworkv1.VfGroup{{
+						ResourceName: "test",
+						PolicyName:   "test",
+						VfRange:      "0-0",
+					}},
+				},
+			}
+
+			// eno2 - not created by operator (doesn't exist)
+			h.EXPECT().LoadPfsStatus("0000:d8:00.1").Return(nil, false, nil)
+			// eno3 - externally managed
+			h.EXPECT().LoadPfsStatus("0000:d8:00.2").Return(&sriovnetworkv1.Interface{
+				PciAddress:        "0000:d8:00.2",
+				NumVfs:            1,
+				ExternallyManaged: true,
+			}, true, nil)
+
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeFalse())
+			Expect(needReboot).To(BeFalse())
+		})
+
+		It("should combine vfio driver loading and drain node checks", func() {
+			sriovNetworkNodeState.Status.Interfaces = sriovnetworkv1.InterfaceExts{
+				{
+					Name:       "eno1",
+					PciAddress: "0000:d8:00.0",
+					NumVfs:     1,
+				},
+			}
+			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{
+				{
+					Name:       "eno2",
+					PciAddress: "0000:d8:00.1",
+					NumVfs:     1,
+					VfGroups: []sriovnetworkv1.VfGroup{{
+						ResourceName: "test",
+						PolicyName:   "test",
+						VfRange:      "0-0",
+						DeviceType:   consts.DeviceTypeVfioPci,
+					}},
+				},
+			}
+
+			h.EXPECT().LoadPfsStatus("0000:d8:00.0").Return(&sriovnetworkv1.Interface{
+				PciAddress:        "0000:d8:00.0",
+				NumVfs:            1,
+				ExternallyManaged: false,
+			}, true, nil)
+
+			Expect(v.LoadVfioDriver).To(Equal(uint(unloaded)))
+			needDrain, needReboot, err := v.OnNodeStateChange(sriovNetworkNodeState)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(needDrain).To(BeTrue())
+			Expect(needReboot).To(BeFalse())
+			Expect(v.LoadVfioDriver).To(Equal(uint(loading)))
+		})
 	})
 
 	Context("Apply", func() {
@@ -201,7 +489,7 @@ var _ = Describe("SRIOV", Ordered, func() {
 		It("should configure the device", func() {
 			v.LoadVfioDriver = loaded
 			h.EXPECT().Chroot(gomock.Any()).Return(func() error { return nil }, nil)
-			h.EXPECT().ConfigSriovDeviceVirtual(gomock.Any()).Return(nil)
+			h.EXPECT().ConfigSriovDevicesVirtual(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			sriovNetworkNodeState.Spec.Interfaces = sriovnetworkv1.Interfaces{
 				{Name: "eno1",
 					NumVfs:     1,

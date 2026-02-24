@@ -95,7 +95,7 @@ var _ = Describe("All Network Controllers", Ordered, func() {
 			netAttachDef := netattdefv1.NetworkAttachmentDefinition{
 				ObjectMeta: metav1.ObjectMeta{Name: "netuser", Namespace: "default"},
 				Spec: netattdefv1.NetworkAttachmentDefinitionSpec{
-					Config: "user created configration, to be overridden",
+					Config: "user created configuration, to be overridden",
 				},
 			}
 			err := k8sClient.Create(ctx, &netAttachDef)

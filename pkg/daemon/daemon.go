@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	stdErrors "errors"
 	"fmt"
 	"time"
 
@@ -149,6 +150,17 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	// add/remove external drainer annotation in case external drainer
+	changed, err := dn.addRemoveExternalDrainerAnnotation(ctx, desiredNodeState)
+	if err != nil {
+		reqLogger.Error(err, "failed to add/remove external drainer annotation")
+		return ctrl.Result{}, err
+	}
+	if changed {
+		reqLogger.Info("external drainer annotation changed, requeue to tigger reconcile")
+		return ctrl.Result{}, nil
+	}
+
 	// Check the object as the drain controller annotations
 	// if not just wait for the drain controller to add them before we start taking care of the nodeState
 	if !utils.ObjectHasAnnotationKey(desiredNodeState, consts.NodeStateDrainAnnotationCurrent) ||
@@ -199,6 +211,20 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 				err = dn.updateSyncState(ctx, desiredNodeState, desiredNodeState.Status.SyncStatus, desiredNodeState.Status.LastSyncError)
 				if err != nil {
 					reqLogger.Error(err, "failed to update nodeState new host status")
+					return ctrl.Result{}, err
+				}
+			}
+			// periodically ensure device plugin is unblocked,
+			// this is required to ensure that device plugin can start in case if it is restarted for some reason
+			if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) &&
+				len(desiredNodeState.Spec.Interfaces) > 0 {
+				devicePluginPods, err := dn.getDevicePluginPodsForNode(ctx)
+				if err != nil {
+					reqLogger.Error(err, "failed to get device plugin pods")
+					return ctrl.Result{}, err
+				}
+				if err := dn.tryUnblockDevicePlugin(ctx, desiredNodeState, devicePluginPods); err != nil {
+					reqLogger.Error(err, "failed to unblock device plugin")
 					return ctrl.Result{}, err
 				}
 			}
@@ -270,7 +296,7 @@ func (dn *NodeReconciler) checkOnNodeStateChange(desiredNodeState *sriovnetworkv
 	// Check the main plugin for changes
 	reqDrain, reqReboot, err := dn.mainPlugin.OnNodeStateChange(desiredNodeState)
 	if err != nil {
-		funcLog.Error(err, "OnNodeStateChange plugin error", "mainPluginName", dn.mainPlugin.Name)
+		funcLog.Error(err, "OnNodeStateChange plugin error", "mainPluginName", dn.mainPlugin.Name())
 		return false, false, err
 	}
 	funcLog.V(0).Info("OnNodeStateChange result",
@@ -345,6 +371,20 @@ func (dn *NodeReconciler) checkSystemdStatus() (*hosttypes.SriovResult, bool, er
 // 7. Updating the lastAppliedGeneration to the current generation.
 func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *hosttypes.SriovResult) (ctrl.Result, error) {
 	reqLogger := log.FromContext(ctx).WithName("Apply")
+
+	// Restart the device plugin *before* applying configuration if the
+	// BlockDevicePluginUntilConfiguredFeatureGate feature is enabled.
+	// With this gate enabled, the device plugin will remain blocked until it is
+	// explicitly unblocked after configuration (see waitForDevicePluginPodAndTryUnblock).
+	// If the feature gate is not enabled, preserve legacy behavior by
+	// restarting the device plugin *after* configuration is applied.
+	if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) {
+		if err := dn.restartDevicePluginPod(ctx); err != nil {
+			reqLogger.Error(err, "failed to restart device plugin on the node")
+			return ctrl.Result{}, err
+		}
+	}
+
 	// apply the additional plugins after we are done with drain if needed
 	for _, p := range dn.additionalPlugins {
 		err := p.Apply()
@@ -370,9 +410,22 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 		return ctrl.Result{}, dn.rebootNode()
 	}
 
-	if err := dn.restartDevicePluginPod(ctx); err != nil {
-		reqLogger.Error(err, "failed to restart device plugin on the node")
-		return ctrl.Result{}, err
+	if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) {
+		if len(desiredNodeState.Spec.Interfaces) == 0 {
+			reqLogger.Info("no interfaces in desired state, skipping device plugin wait as device plugin won't be deployed")
+		} else {
+			if err := dn.waitForDevicePluginPodAndTryUnblock(ctx, desiredNodeState); err != nil {
+				reqLogger.Error(err, "failed to wait for device plugin pod to start and try to unblock it")
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		// if the feature gate is not enabled we preserver the old behavior
+		// and restart device plugin after configuration is applied
+		if err := dn.restartDevicePluginPod(ctx); err != nil {
+			reqLogger.Error(err, "failed to restart device plugin on the node")
+			return ctrl.Result{}, err
+		}
 	}
 
 	err := dn.annotate(ctx, desiredNodeState, consts.DrainIdle)
@@ -404,14 +457,33 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 
 	// update the lastAppliedGeneration
 	dn.lastAppliedGeneration = desiredNodeState.Generation
+
 	return ctrl.Result{RequeueAfter: consts.DaemonRequeueTime}, nil
+}
+
+// tryUnblockDevicePlugin checks if the device plugin can be unblocked
+func (dn *NodeReconciler) tryUnblockDevicePlugin(ctx context.Context,
+	desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, devicePluginPods []corev1.Pod) error {
+	funcLog := log.Log.WithName("tryUnblockDevicePlugin")
+	funcLog.Info("check if we need to remove the wait-for-config annotation")
+	// we want to unblock the device plugin only if the desired state contains configuration for the interfaces
+	if len(desiredNodeState.Spec.Interfaces) == 0 {
+		funcLog.Info("desired node state has no interfaces, keep the wait-for-config annotation")
+		return nil
+	}
+	for _, pod := range devicePluginPods {
+		if err := utils.RemoveAnnotationFromObject(ctx, &pod,
+			consts.DevicePluginWaitConfigAnnotation, dn.client); err != nil {
+			return fmt.Errorf("failed to remove %s annotation from pod: %w", consts.DevicePluginWaitConfigAnnotation, err)
+		}
+	}
+	return nil
 }
 
 // checkHostStateDrift returns true if the node state drifted from the nodeState policy
 // Check if there is a change in the host network interfaces that require a reconfiguration by the daemon
 func (dn *NodeReconciler) checkHostStateDrift(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
 	funcLog := log.Log.WithName("checkHostStateDrift()")
-
 	// Skip when SriovNetworkNodeState object has just been created.
 	if desiredNodeState.GetGeneration() == 1 && len(desiredNodeState.Spec.Interfaces) == 0 {
 		err := dn.hostHelpers.ClearPCIAddressFolder()
@@ -525,64 +597,127 @@ func (dn *NodeReconciler) handleDrain(ctx context.Context, desiredNodeState *sri
 	return true, dn.annotate(ctx, desiredNodeState, annotation)
 }
 
+// getDevicePluginPods returns the device plugin pods running on this node
+func (dn *NodeReconciler) getDevicePluginPodsForNode(ctx context.Context) ([]corev1.Pod, error) {
+	funcLog := log.Log.WithName("getDevicePluginPodsForNode")
+	pods := &corev1.PodList{}
+	err := dn.client.List(ctx, pods, &client.ListOptions{
+		Namespace: vars.Namespace, Raw: &metav1.ListOptions{
+			LabelSelector: "app=sriov-device-plugin",
+			FieldSelector: "spec.nodeName=" + vars.NodeName,
+		}})
+	if err != nil {
+		funcLog.Error(err, "failed to list device plugin pods")
+		return []corev1.Pod{}, err
+	}
+	if len(pods.Items) == 0 {
+		return []corev1.Pod{}, nil
+	}
+	return pods.Items, nil
+}
+
 // restartDevicePluginPod restarts the device plugin pod on the specified node.
 //
 // The function checks if the pod exists, deletes it if found, and waits for it to be deleted successfully.
 func (dn *NodeReconciler) restartDevicePluginPod(ctx context.Context) error {
-	log.Log.V(2).Info("restartDevicePluginPod(): try to restart device plugin pod")
-	pods := &corev1.PodList{}
-	err := dn.client.List(ctx, pods, &client.ListOptions{
-		Namespace: vars.Namespace, Raw: &metav1.ListOptions{
-			LabelSelector:   "app=sriov-device-plugin",
-			FieldSelector:   "spec.nodeName=" + vars.NodeName,
-			ResourceVersion: "0",
-		}})
+	funcLog := log.Log.WithName("restartDevicePluginPod")
+	funcLog.V(2).Info("try to restart device plugin pod")
+	devicePluginPods, err := dn.getDevicePluginPodsForNode(ctx)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			log.Log.Info("restartDevicePluginPod(): device plugin pod exited")
-			return nil
-		}
-		log.Log.Error(err, "restartDevicePluginPod(): Failed to list device plugin pod, retrying")
 		return err
 	}
-
-	if len(pods.Items) == 0 {
-		log.Log.Info("restartDevicePluginPod(): device plugin pod exited")
+	if len(devicePluginPods) == 0 {
+		funcLog.V(2).Info("no device plugin pods found during restart attempt")
 		return nil
 	}
-
-	for _, pod := range pods.Items {
-		log.Log.V(2).Info("restartDevicePluginPod(): Found device plugin pod, deleting it", "pod-name", pod.Name)
+	for _, pod := range devicePluginPods {
+		podUID := pod.UID
+		funcLog.V(2).Info("Found device plugin pod, deleting it",
+			"pod-name", pod.Name, "pod-uid", podUID)
 		err = dn.client.Delete(ctx, &pod)
 		if errors.IsNotFound(err) {
-			log.Log.Info("restartDevicePluginPod(): pod to delete not found")
+			funcLog.Info("pod to delete not found")
 			continue
 		}
 		if err != nil {
-			log.Log.Error(err, "restartDevicePluginPod(): Failed to delete device plugin pod, retrying")
+			funcLog.Error(err, "Failed to delete device plugin pod")
 			return err
 		}
-
-		tmpPod := &corev1.Pod{}
-		if err := wait.PollUntilContextCancel(ctx, 3*time.Second, true, func(ctx context.Context) (bool, error) {
-			err := dn.client.Get(ctx, client.ObjectKeyFromObject(&pod), tmpPod)
+		newPod := &corev1.Pod{}
+		if err := wait.PollUntilContextCancel(ctx, time.Second, true, func(ctx context.Context) (bool, error) {
+			err := dn.client.Get(ctx, client.ObjectKeyFromObject(&pod), newPod)
 			if errors.IsNotFound(err) {
-				log.Log.Info("restartDevicePluginPod(): device plugin pod exited")
+				funcLog.Info("device plugin pod exited")
 				return true, nil
 			}
-
 			if err != nil {
-				log.Log.Error(err, "restartDevicePluginPod(): Failed to check for device plugin exit, retrying")
-			} else {
-				log.Log.Info("restartDevicePluginPod(): waiting for device plugin pod to exit", "pod-name", pod.Name)
+				return false, fmt.Errorf("failed to get device plugin pod: %w", err)
 			}
+			// Check if the pod was recreated (different UID means it's a new pod)
+			if newPod.UID != podUID {
+				funcLog.Info("device plugin pod was recreated",
+					"old-uid", podUID, "new-uid", newPod.UID)
+				return true, nil
+			}
+			funcLog.Info("waiting for device plugin pod to exit",
+				"pod-name", pod.Name, "pod-uid", newPod.UID)
 			return false, nil
 		}); err != nil {
-			log.Log.Error(err, "restartDevicePluginPod(): failed to wait for checking pod deletion")
+			funcLog.Error(err, "failed to wait device plugin pod to exit")
 			return err
 		}
 	}
+	return nil
+}
 
+// waitForDevicePluginPodAndTryUnblock waits for the new device plugin pod to start and set the wait-for-config annotation. This allows us to unblock
+// the new device plugin instance within the same reconciliation loop without needing to wait
+// for the periodic check. We expect to have at least one device plugin pod for the node.
+func (dn *NodeReconciler) waitForDevicePluginPodAndTryUnblock(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState) error {
+	funcLog := log.Log.WithName("waitForDevicePluginPodAndTryUnblock")
+	funcLog.Info("waiting for device plugin to set wait-for-config annotation", "annotation", consts.DevicePluginWaitConfigAnnotation)
+	var devicePluginPods []corev1.Pod
+	err := wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true,
+		func(ctx context.Context) (bool, error) {
+			var err error
+			devicePluginPods, err = dn.getDevicePluginPodsForNode(ctx)
+			if err != nil {
+				funcLog.Error(err, "failed to get device plugin pod while waiting for a new pod to start")
+				return false, err
+			}
+			if len(devicePluginPods) == 0 {
+				funcLog.V(2).Info("no device plugin pods found while waiting for a new pod to start")
+				return false, nil
+			}
+			for _, pod := range devicePluginPods {
+				// Wait for at least one device plugin pod to have the wait-for-config annotation.
+				// Usually there's only one device plugin pod per node, but unmanaged (by the operator) pods
+				// may also match our selector. Since unmanaged pods won't have this annotation,
+				// we only require one pod (the managed one) to have it.
+				if utils.ObjectHasAnnotationKey(&pod, consts.DevicePluginWaitConfigAnnotation) {
+					funcLog.Info("wait-for-config annotation found on pod",
+						"pod", pod.Name)
+					return true, nil
+				}
+			}
+			funcLog.V(2).Info("waiting for new device plugin pod to have wait-for-config annotation")
+			return false, nil
+		})
+	if err != nil {
+		if !stdErrors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		// If annotation is not found within the timeout, log a warning and proceed.
+		// The device plugin pod will be unblocked by the periodic check logic in tryUnblockDevicePlugin.
+		funcLog.Info("WARNING: device plugin pod with wait-for-config annotation not found within timeout")
+		return nil
+	}
+	if len(devicePluginPods) > 0 {
+		// try to unblock all device plugin pods we retrieved with the latest loop iteration
+		if err := dn.tryUnblockDevicePlugin(ctx, desiredNodeState, devicePluginPods); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -659,6 +794,56 @@ func (dn *NodeReconciler) annotate(
 
 	// the node was annotated we need to wait for the operator to finish the drain
 	return nil
+}
+
+// manages addition/removal of external drainer annotation upon node state objects
+func (dn *NodeReconciler) addRemoveExternalDrainerAnnotation(ctx context.Context,
+	desiredNodeState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+	funcLog := log.FromContext(ctx).WithName("addRemoveExternalDrainerAnnotation")
+
+	var changedAnnotation bool
+	// external drainer annotation will be added/removed only when both desired/current node state are in 'Idle' state
+	// or while neither current nor desired node state annotations exist, indicating that drain-controller has
+	// yet to add them on nodeState object
+	neitherExists := !utils.ObjectHasAnnotationKey(desiredNodeState, consts.NodeStateDrainAnnotationCurrent) &&
+		!utils.ObjectHasAnnotationKey(desiredNodeState, consts.NodeStateDrainAnnotation)
+	bothIdle := utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainIdle) &&
+		utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.DrainIdle)
+
+	if !bothIdle && !neitherExists {
+		return false, nil
+	}
+
+	annotations := desiredNodeState.GetAnnotations()
+	if !vars.UseExternalDrainer {
+		// remove external drainer nodestate annotation if exists
+		if _, ok := annotations[consts.NodeStateExternalDrainerAnnotation]; ok {
+			funcLog.Info("remove external drainer nodestate annotation", "annotation", consts.NodeStateExternalDrainerAnnotation)
+			original := desiredNodeState.DeepCopy()
+			delete(annotations, consts.NodeStateExternalDrainerAnnotation)
+			// Patch only the annotations
+			if err := dn.client.Patch(ctx, desiredNodeState, client.MergeFrom(original)); err != nil {
+				funcLog.Error(err, "failed to patch nodestate after removing external drainer annotation")
+				return false, err
+			}
+			changedAnnotation = true
+		}
+		return changedAnnotation, nil
+	}
+
+	if _, ok := annotations[consts.NodeStateExternalDrainerAnnotation]; !ok {
+		// add external drainer nodestate annotation
+		funcLog.Info("add external drainer nodestate annotation", "annotation", consts.NodeStateExternalDrainerAnnotation)
+		err := utils.AnnotateObject(ctx, desiredNodeState,
+			consts.NodeStateExternalDrainerAnnotation, "true", dn.client)
+		if err != nil {
+			funcLog.Error(err, "failed to add node external drainer annotation")
+			return false, err
+		}
+		changedAnnotation = true
+	}
+
+	return changedAnnotation, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

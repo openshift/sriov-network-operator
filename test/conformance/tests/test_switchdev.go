@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
@@ -21,6 +22,9 @@ import (
 var _ = Describe("[sriov] Switchdev", Ordered, func() {
 
 	BeforeAll(func() {
+		if platformType != consts.Baremetal {
+			Skip("Switchdev is not supported on non-baremetal platforms")
+		}
 		if cluster.VirtualCluster() {
 			Skip("IGB driver does not support switchdev driver model")
 		}

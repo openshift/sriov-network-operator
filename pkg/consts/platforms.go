@@ -28,4 +28,6 @@ const (
 	Baremetal PlatformTypes = "Baremetal"
 	// VirtualOpenStack represents a virtual OpenStack platform
 	VirtualOpenStack PlatformTypes = "Virtual/Openstack"
+	// AWS represents an AWS platform
+	AWS PlatformTypes = "AWS"
 )

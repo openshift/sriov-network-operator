@@ -9,11 +9,12 @@
 package baseboard
 
 import (
+	"context"
 	"runtime"
 
 	"github.com/pkg/errors"
 )
 
-func (i *Info) load() error {
+func (i *Info) load(ctx context.Context) error {
 	return errors.New("baseboardFillInfo not implemented on " + runtime.GOOS)
 }

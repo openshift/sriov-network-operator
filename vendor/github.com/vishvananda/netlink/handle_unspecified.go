@@ -1,3 +1,4 @@
+//go:build !linux
 // +build !linux
 
 package netlink
@@ -183,6 +184,10 @@ func (h *Handle) LinkSetGROIPv4MaxSize(link Link, maxSize int) error {
 	return ErrNotImplemented
 }
 
+func (h *Handle) LinkSetIP6AddrGenMode(link Link, mode int) error {
+	return ErrNotImplemented
+}
+
 func (h *Handle) setProtinfoAttr(link Link, mode bool, attr int) error {
 	return ErrNotImplemented
 }
@@ -260,6 +265,10 @@ func (h *Handle) RouteAdd(route *Route) error {
 }
 
 func (h *Handle) RouteAppend(route *Route) error {
+	return ErrNotImplemented
+}
+
+func (h *Handle) RouteChange(route *Route) error {
 	return ErrNotImplemented
 }
 

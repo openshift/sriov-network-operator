@@ -4,6 +4,14 @@ import (
 	"time"
 )
 
+// ContextKey is a custom type for context keys to avoid collisions
+type ContextKey string
+
+const (
+	// LoggerContextKey is the key used to store/retrieve logger from context
+	LoggerContextKey ContextKey = "logger"
+)
+
 type DrainState string
 
 const (
@@ -69,14 +77,16 @@ const (
 	SriovDevicePluginLabelEnabled  = "Enabled"
 	SriovDevicePluginLabelDisabled = "Disabled"
 
-	NodeDrainAnnotation             = "sriovnetwork.openshift.io/state"
-	NodeStateDrainAnnotation        = "sriovnetwork.openshift.io/desired-state"
-	NodeStateDrainAnnotationCurrent = "sriovnetwork.openshift.io/current-state"
-	DrainIdle                       = "Idle"
-	DrainRequired                   = "Drain_Required"
-	RebootRequired                  = "Reboot_Required"
-	Draining                        = "Draining"
-	DrainComplete                   = "DrainComplete"
+	NodeDrainAnnotation                = "sriovnetwork.openshift.io/state"
+	NodeStateDrainAnnotation           = "sriovnetwork.openshift.io/desired-state"
+	NodeStateDrainAnnotationCurrent    = "sriovnetwork.openshift.io/current-state"
+	NodeStateExternalDrainerAnnotation = "sriovnetwork.openshift.io/use-external-drainer"
+	DesiredMachineConfigAnnotation     = "machineconfiguration.openshift.io/desiredConfig"
+	DrainIdle                          = "Idle"
+	DrainRequired                      = "Drain_Required"
+	RebootRequired                     = "Reboot_Required"
+	Draining                           = "Draining"
+	DrainComplete                      = "DrainComplete"
 
 	SyncStatusSucceeded  = "Succeeded"
 	SyncStatusFailed     = "Failed"
@@ -94,6 +104,8 @@ const (
 	MCPPauseAnnotationTime  = "sriovnetwork.openshift.io/time"
 
 	OwnerRefAnnotation = "sriovnetwork.openshift.io/owner-ref"
+
+	DevicePluginWaitConfigAnnotation = "sriovnetwork.openshift.io/device-plugin-wait-config"
 
 	// NodeStateKeepUntilAnnotation contains name of the "keep until time" annotation for SriovNetworkNodeState object.
 	// The "keep until time" specifies the earliest time at which the state object can be removed
@@ -167,6 +179,9 @@ const (
 
 	// ManageSoftwareBridgesFeatureGate: enables management of software bridges by the operator
 	ManageSoftwareBridgesFeatureGate = "manageSoftwareBridges"
+
+	// BlockDevicePluginUntilConfiguredFeatureGate: blocks the device plugin until the configuration is applied
+	BlockDevicePluginUntilConfiguredFeatureGate = "blockDevicePluginUntilConfigured"
 
 	// MellanoxFirmwareResetFeatureGate: enables the firmware reset via mstfwreset before a reboot
 	MellanoxFirmwareResetFeatureGate = "mellanoxFirmwareReset"

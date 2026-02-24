@@ -9,11 +9,10 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	mcv1 "github.com/openshift/api/machineconfiguration/v1"
-	mcoconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -60,7 +59,7 @@ var _ = Describe("Openshift Package", Ordered, func() {
 		}
 
 		ctx, cancel = context.WithCancel(context.Background())
-		ctx = context.WithValue(ctx, "logger", log.FromContext(ctx))
+		ctx = context.WithValue(ctx, constants.LoggerContextKey, log.FromContext(ctx))
 
 		op, err = openshift.New()
 		Expect(err).ToNot(HaveOccurred())
@@ -68,10 +67,10 @@ var _ = Describe("Openshift Package", Ordered, func() {
 
 	AfterEach(func() {
 		Expect(k8sClient.DeleteAllOf(context.Background(), &sriovnetworkv1.SriovNetworkNodeState{}, client.InNamespace(testNamespace))).ToNot(HaveOccurred())
-		Expect(k8sClient.DeleteAllOf(context.Background(), &corev1.Pod{}, client.InNamespace(testNamespace), &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)}})).ToNot(HaveOccurred())
-		Expect(k8sClient.DeleteAllOf(context.Background(), &corev1.Node{}, &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)}})).ToNot(HaveOccurred())
-		Expect(k8sClient.DeleteAllOf(context.Background(), &mcv1.MachineConfigPool{}, &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)}})).ToNot(HaveOccurred())
-		Expect(k8sClient.DeleteAllOf(context.Background(), &mcv1.MachineConfig{}, &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: pointer.Int64(0)}})).ToNot(HaveOccurred())
+		Expect(k8sClient.DeleteAllOf(context.Background(), &corev1.Pod{}, client.InNamespace(testNamespace), &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)}})).ToNot(HaveOccurred())
+		Expect(k8sClient.DeleteAllOf(context.Background(), &corev1.Node{}, &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)}})).ToNot(HaveOccurred())
+		Expect(k8sClient.DeleteAllOf(context.Background(), &mcv1.MachineConfigPool{}, &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)}})).ToNot(HaveOccurred())
+		Expect(k8sClient.DeleteAllOf(context.Background(), &mcv1.MachineConfig{}, &client.DeleteAllOfOptions{DeleteOptions: client.DeleteOptions{GracePeriodSeconds: ptr.To[int64](0)}})).ToNot(HaveOccurred())
 
 		By("Shutdown controller manager")
 		cancel()
@@ -309,7 +308,7 @@ var _ = Describe("Openshift Package", Ordered, func() {
 
 		It("should return error if the node doesn't have the MCO annotation", func() {
 			n := createNode("worker-0")
-			delete(n.Annotations, mcoconsts.DesiredMachineConfigAnnotationKey)
+			delete(n.Annotations, constants.DesiredMachineConfigAnnotation)
 			err = k8sClient.Update(ctx, n)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -366,8 +365,8 @@ func createNode(nodeName string) *corev1.Node {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: nodeName,
 			Annotations: map[string]string{
-				constants.NodeDrainAnnotation:               constants.DrainIdle,
-				mcoconsts.DesiredMachineConfigAnnotationKey: "worker",
+				constants.NodeDrainAnnotation:            constants.DrainIdle,
+				constants.DesiredMachineConfigAnnotation: "worker",
 			},
 			Labels: map[string]string{
 				"test": "",
@@ -386,8 +385,8 @@ func createNodeWithMCName(nodeName, mcName string) *corev1.Node {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: nodeName,
 			Annotations: map[string]string{
-				constants.NodeDrainAnnotation:               constants.DrainIdle,
-				mcoconsts.DesiredMachineConfigAnnotationKey: mcName,
+				constants.NodeDrainAnnotation:            constants.DrainIdle,
+				constants.DesiredMachineConfigAnnotation: mcName,
 			},
 			Labels: map[string]string{
 				"test": "",

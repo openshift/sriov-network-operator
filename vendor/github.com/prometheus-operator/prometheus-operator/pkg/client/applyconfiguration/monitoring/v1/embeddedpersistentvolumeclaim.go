@@ -18,19 +18,19 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
+	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// EmbeddedPersistentVolumeClaimApplyConfiguration represents an declarative configuration of the EmbeddedPersistentVolumeClaim type for use
+// EmbeddedPersistentVolumeClaimApplyConfiguration represents a declarative configuration of the EmbeddedPersistentVolumeClaim type for use
 // with apply.
 type EmbeddedPersistentVolumeClaimApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration             `json:",inline"`
+	metav1.TypeMetaApplyConfiguration         `json:",inline"`
 	*EmbeddedObjectMetadataApplyConfiguration `json:"metadata,omitempty"`
 	Spec                                      *corev1.PersistentVolumeClaimSpec   `json:"spec,omitempty"`
 	Status                                    *corev1.PersistentVolumeClaimStatus `json:"status,omitempty"`
 }
 
-// EmbeddedPersistentVolumeClaimApplyConfiguration constructs an declarative configuration of the EmbeddedPersistentVolumeClaim type for use with
+// EmbeddedPersistentVolumeClaimApplyConfiguration constructs a declarative configuration of the EmbeddedPersistentVolumeClaim type for use with
 // apply.
 func EmbeddedPersistentVolumeClaim() *EmbeddedPersistentVolumeClaimApplyConfiguration {
 	b := &EmbeddedPersistentVolumeClaimApplyConfiguration{}
@@ -38,12 +38,13 @@ func EmbeddedPersistentVolumeClaim() *EmbeddedPersistentVolumeClaimApplyConfigur
 	b.WithAPIVersion("monitoring.coreos.com/v1")
 	return b
 }
+func (b EmbeddedPersistentVolumeClaimApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Kind field is set to the value of the last call.
 func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithKind(value string) *EmbeddedPersistentVolumeClaimApplyConfiguration {
-	b.Kind = &value
+	b.TypeMetaApplyConfiguration.Kind = &value
 	return b
 }
 
@@ -51,7 +52,7 @@ func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithKind(value string)
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the APIVersion field is set to the value of the last call.
 func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithAPIVersion(value string) *EmbeddedPersistentVolumeClaimApplyConfiguration {
-	b.APIVersion = &value
+	b.TypeMetaApplyConfiguration.APIVersion = &value
 	return b
 }
 
@@ -60,7 +61,7 @@ func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithAPIVersion(value s
 // If called multiple times, the Name field is set to the value of the last call.
 func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithName(value string) *EmbeddedPersistentVolumeClaimApplyConfiguration {
 	b.ensureEmbeddedObjectMetadataApplyConfigurationExists()
-	b.Name = &value
+	b.EmbeddedObjectMetadataApplyConfiguration.Name = &value
 	return b
 }
 
@@ -70,11 +71,11 @@ func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithName(value string)
 // overwriting an existing map entries in Labels field with the same key.
 func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithLabels(entries map[string]string) *EmbeddedPersistentVolumeClaimApplyConfiguration {
 	b.ensureEmbeddedObjectMetadataApplyConfigurationExists()
-	if b.Labels == nil && len(entries) > 0 {
-		b.Labels = make(map[string]string, len(entries))
+	if b.EmbeddedObjectMetadataApplyConfiguration.Labels == nil && len(entries) > 0 {
+		b.EmbeddedObjectMetadataApplyConfiguration.Labels = make(map[string]string, len(entries))
 	}
 	for k, v := range entries {
-		b.Labels[k] = v
+		b.EmbeddedObjectMetadataApplyConfiguration.Labels[k] = v
 	}
 	return b
 }
@@ -85,11 +86,11 @@ func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithLabels(entries map
 // overwriting an existing map entries in Annotations field with the same key.
 func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithAnnotations(entries map[string]string) *EmbeddedPersistentVolumeClaimApplyConfiguration {
 	b.ensureEmbeddedObjectMetadataApplyConfigurationExists()
-	if b.Annotations == nil && len(entries) > 0 {
-		b.Annotations = make(map[string]string, len(entries))
+	if b.EmbeddedObjectMetadataApplyConfiguration.Annotations == nil && len(entries) > 0 {
+		b.EmbeddedObjectMetadataApplyConfiguration.Annotations = make(map[string]string, len(entries))
 	}
 	for k, v := range entries {
-		b.Annotations[k] = v
+		b.EmbeddedObjectMetadataApplyConfiguration.Annotations[k] = v
 	}
 	return b
 }
@@ -114,4 +115,14 @@ func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithSpec(value corev1.
 func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) WithStatus(value corev1.PersistentVolumeClaimStatus) *EmbeddedPersistentVolumeClaimApplyConfiguration {
 	b.Status = &value
 	return b
+}
+
+// GetKind retrieves the value of the Kind field in the declarative configuration.
+func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) GetKind() *string {
+	return b.TypeMetaApplyConfiguration.Kind
+}
+
+// GetAPIVersion retrieves the value of the APIVersion field in the declarative configuration.
+func (b *EmbeddedPersistentVolumeClaimApplyConfiguration) GetAPIVersion() *string {
+	return b.TypeMetaApplyConfiguration.APIVersion
 }

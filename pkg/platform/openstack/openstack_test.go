@@ -6,11 +6,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/jaypipes/ghw"
 	"github.com/jaypipes/ghw/pkg/net"
-	"github.com/jaypipes/ghw/pkg/option"
 )
 
 func TestUtilsVirtual(t *testing.T) {
@@ -29,14 +28,14 @@ var _ = Describe("Virtual", func() {
 				ospMetaDataFile = ospMetaDataDir + "/meta_data.json"
 			})
 
-			ghw.Network = func(opts ...*option.Option) (*net.Info, error) {
+			ghw.Network = func(args ...any) (*net.Info, error) {
 				return &net.Info{
 					NICs: []*net.NIC{{
 						MacAddress: "fa:16:3e:00:00:00",
-						PCIAddress: pointer.String("0000:04:00.0"),
+						PCIAddress: ptr.To("0000:04:00.0"),
 					}, {
 						MacAddress: "fa:16:3e:11:11:11",
-						PCIAddress: pointer.String("0000:99:99.9"),
+						PCIAddress: ptr.To("0000:99:99.9"),
 					}},
 				}, nil
 			}

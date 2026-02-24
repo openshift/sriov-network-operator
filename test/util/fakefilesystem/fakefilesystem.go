@@ -29,14 +29,14 @@ func (f *FS) Use() (string, func(), error) {
 	}
 
 	for _, dir := range f.Dirs {
-		err := os.MkdirAll(path.Join(rootDir, dir), 0755)
+		err := os.MkdirAll(path.Join(rootDir, dir), 0o755)
 		if err != nil {
 			return "", nil, fmt.Errorf("error creating fake directory: %w", err)
 		}
 	}
 
 	for filename, body := range f.Files {
-		err := os.WriteFile(path.Join(rootDir, filename), body, 0600)
+		err := os.WriteFile(path.Join(rootDir, filename), body, 0o600)
 		if err != nil {
 			return "", nil, fmt.Errorf("error creating fake file: %w", err)
 		}

@@ -68,7 +68,7 @@ func (s *systemd) WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) 
 		if os.IsNotExist(err) {
 			// Create the sriov-operator folder on the host if it doesn't exist
 			if _, err := os.Stat(utils.GetHostExtensionPath(consts.SriovConfBasePath)); os.IsNotExist(err) {
-				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), 0777)
+				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), 0o777)
 				if err != nil {
 					log.Log.Error(err, "WriteConfFile(): fail to create sriov-operator folder",
 						"path", utils.GetHostExtensionPath(consts.SriovConfBasePath))
@@ -118,7 +118,7 @@ func (s *systemd) WriteConfFile(newState *sriovnetworkv1.SriovNetworkNodeState) 
 
 	log.Log.V(2).Info("WriteConfFile(): write content to file",
 		"content", newContent, "path", utils.GetHostExtensionPath(consts.SriovSystemdConfigPath))
-	err = os.WriteFile(utils.GetHostExtensionPath(consts.SriovSystemdConfigPath), newContent, 0644)
+	err = os.WriteFile(utils.GetHostExtensionPath(consts.SriovSystemdConfigPath), newContent, 0o644)
 	if err != nil {
 		log.Log.Error(err, "WriteConfFile(): fail to write file")
 		return false, err
@@ -142,7 +142,7 @@ func (s *systemd) WriteSriovResult(result *types.SriovResult) error {
 		if os.IsNotExist(err) {
 			// Create the sriov-operator folder on the host if it doesn't exist
 			if _, err := os.Stat(utils.GetHostExtensionPath(consts.SriovConfBasePath)); os.IsNotExist(err) {
-				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), 0777)
+				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), 0o777)
 				if err != nil {
 					log.Log.Error(err, "WriteConfFile(): fail to create sriov-operator folder",
 						"path", utils.GetHostExtensionPath(consts.SriovConfBasePath))
@@ -170,7 +170,7 @@ func (s *systemd) WriteSriovResult(result *types.SriovResult) error {
 
 	log.Log.V(2).Info("WriteSriovResult(): write results",
 		"content", string(out), "path", utils.GetHostExtensionPath(consts.SriovSystemdResultPath))
-	err = os.WriteFile(utils.GetHostExtensionPath(consts.SriovSystemdResultPath), out, 0644)
+	err = os.WriteFile(utils.GetHostExtensionPath(consts.SriovSystemdResultPath), out, 0o644)
 	if err != nil {
 		log.Log.Error(err, "WriteSriovResult(): failed to write sriov result file", "path", utils.GetHostExtensionPath(consts.SriovSystemdResultPath))
 		return err
@@ -233,7 +233,7 @@ func (s *systemd) WriteSriovSupportedNics() error {
 		if os.IsNotExist(err) {
 			// Create the sriov-operator folder on the host if it doesn't exist
 			if _, err := os.Stat(utils.GetHostExtensionPath(consts.SriovConfBasePath)); os.IsNotExist(err) {
-				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), 0777)
+				err = os.Mkdir(utils.GetHostExtensionPath(consts.SriovConfBasePath), 0o777)
 				if err != nil {
 					log.Log.Error(err, "WriteConfFile(): fail to create sriov-operator folder",
 						"path", utils.GetHostExtensionPath(consts.SriovConfBasePath))
@@ -259,7 +259,7 @@ func (s *systemd) WriteSriovSupportedNics() error {
 		rawNicList = append(rawNicList, []byte(fmt.Sprintf("%s\n", line))...)
 	}
 
-	err = os.WriteFile(utils.GetHostExtensionPath(consts.SriovSystemdSupportedNicPath), rawNicList, 0644)
+	err = os.WriteFile(utils.GetHostExtensionPath(consts.SriovSystemdSupportedNicPath), rawNicList, 0o644)
 	if err != nil {
 		log.Log.Error(err, "WriteSriovSupportedNics(): failed to write sriov supported nics ids file",
 			"path", utils.GetHostExtensionPath(consts.SriovSystemdSupportedNicPath))

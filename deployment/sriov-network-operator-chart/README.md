@@ -77,7 +77,8 @@ We have introduced the following Chart parameters.
 | Name | Type | Default | description |
 | ---- | ---- | ------- | ----------- |
 | `operator.tolerations` | list | `[{"key":"node-role.kubernetes.io/master","operator":"Exists","effect":"NoSchedule"},{"key":"node-role.kubernetes.io/control-plane","operator":"Exists","effect":"NoSchedule"}]` | Operator's tolerations |
-| `operator.nodeSelector` | object | {} | Operator's node selector |
+| `operator.nodeSelector` | object | `{}` | Operator's node selector |
+| `operator.extraEnv` | map[string]string | `{}` | Custom extra environment variables for the operator container |
 | `operator.affinity` | object | `{"nodeAffinity":{"preferredDuringSchedulingIgnoredDuringExecution":[{"weight":1,"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/master","operator":"In","values":[""]}]}},{"weight":1,"preference":{"matchExpressions":[{"key":"node-role.kubernetes.io/control-plane","operator":"In","values":[""]}]}}]}}` | Operator's afffinity configuration |
 | `operator.nameOverride` | string | `` | Operator's resource name override |
 | `operator.fullnameOverride` | string | `` | Operator's resource full name override |
@@ -135,6 +136,7 @@ This section contains general parameters that apply to both the operator and dae
 | `sriovOperatorConfig.configurationMode` | string | `daemon` | sriov-network-config-daemon configuration mode. either `daemon` or `systemd` |
 | `sriovOperatorConfig.disablePlugins` | list | `[]` | list of sriov-network-config-daemon plugins to disable (e.g., `["mellanox"]`) |
 | `sriovOperatorConfig.featureGates` | map[string]bool | `{}` | feature gates to enable/disable |
+| `sriovOperatorConfig.configDaemonEnvVars` | map[string]string | `{}` | custom environment variables for sriov-network-config-daemon |
 
 **Note** 
 

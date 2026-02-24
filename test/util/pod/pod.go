@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/images"
@@ -26,7 +26,7 @@ func GetDefinition() *corev1.Pod {
 			GenerateName: "testpod-",
 			Namespace:    namespaces.Test},
 		Spec: corev1.PodSpec{
-			TerminationGracePeriodSeconds: pointer.Int64Ptr(0),
+			TerminationGracePeriodSeconds: ptr.To[int64](0),
 			Containers: []corev1.Container{{Name: "test",
 				Image: images.Test(),
 				SecurityContext: &corev1.SecurityContext{

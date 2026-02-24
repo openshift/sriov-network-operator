@@ -53,7 +53,7 @@ GOLANGCI_LINT = $(BIN_DIR)/golangci-lint
 # golangci-lint version should be updated periodically
 # we keep it fixed to avoid it from unexpectedly failing on the project
 # in case of a version bump
-GOLANGCI_LINT_VER = v1.64.7
+GOLANGCI_LINT_VER = v2.7.2
 
 .PHONY: all build clean gendeepcopy test test-e2e test-e2e-k8s run image fmt sync-manifests test-e2e-conformance manifests update-codegen
 
@@ -85,21 +85,12 @@ run: skopeo install
 	hack/run-locally.sh
 
 # Install CRDs into a cluster
-install: manifests kustomize
+install: manifests
 	kubectl apply -f $(CRD_BASES)
 
 # Uninstall CRDs from a cluster
-uninstall: manifests kustomize
+uninstall: manifests
 	kubectl delete --ignore-not-found -f $(CRD_BASES)
-
-# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-# deploy: manifests kustomize
-# 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-# 	$(KUSTOMIZE) build config/default | kubectl apply -f -
-
-# UnDeploy controller from the configured Kubernetes cluster in ~/.kube/config
-# undeploy:
-# 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
@@ -109,7 +100,7 @@ manifests: controller-gen
 check-manifests: manifests
 	@set +e; git diff --quiet config; \
 	if [ $$? -eq 1 ]; \
-	then echo -e "\n`config` folder is out of date. Please run `make manifests` and commit your changes"; \
+	then echo -e "'config' folder is out of date. Please run 'make manifests' and commit your changes"; \
 	exit 1; fi
 
 sync-manifests-%: manifests
@@ -145,19 +136,15 @@ mock-generate: gomock
 
 CONTROLLER_GEN = $(BIN_DIR)/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.14.0)
-
-KUSTOMIZE = $(BIN_DIR)/kustomize
-kustomize: ## Download kustomize locally if necessary.
-	$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.5)
+	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.20.0)
 
 ENVTEST = $(BIN_DIR)/setup-envtest
 envtest: ## Download envtest-setup locally if necessary.
-	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.16)
+	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.20)
 
 GOMOCK = $(shell pwd)/bin/mockgen
 gomock:
-	$(call go-install-tool,$(GOMOCK),go.uber.org/mock/mockgen@v0.5.0)
+	$(call go-install-tool,$(GOMOCK),go.uber.org/mock/mockgen@v0.6.0)
 
 GINKGO = $(BIN_DIR)/ginkgo
 ginkgo:
@@ -259,7 +246,7 @@ check-deps: deps-update
 	exit 1; fi
 
 $(GOLANGCI_LINT): ; $(info installing golangci-lint...)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER))
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VER))
 
 .PHONY: lint
 lint: | $(GOLANGCI_LINT) ; $(info  running golangci-lint...) @ ## Run golangci-lint
@@ -269,7 +256,7 @@ $(BIN_DIR):
 	@mkdir -p $(BIN_DIR)
 
 YQ=$(BIN_DIR)/yq
-YQ_VERSION=v4.44.1
+YQ_VERSION=v4.50.1
 $(YQ): | $(BIN_DIR); $(info installing yq)
 	@curl -fsSL -o $(YQ) https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq_linux_amd64 && chmod +x $(YQ)
 

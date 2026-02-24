@@ -58,7 +58,7 @@ func NewDrainer(orchestrator orchestrator.Interface) (DrainInterface, error) {
 // if fullNodeDrain true all the pods on the system will get drained
 // for openshift system we also pause the machine config pool this machine is part of it
 func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrain, singleNode bool) (bool, error) {
-	reqLogger := ctx.Value("logger").(logr.Logger).WithName("drainNode")
+	reqLogger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("drainNode")
 	reqLogger.Info("Node drain requested")
 
 	completed, err := d.orchestrator.BeforeDrainNode(ctx, node)
@@ -117,7 +117,7 @@ func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrai
 // for openshift system we also remove the pause from the machine config pool this node is part of
 // only if we are the last draining node on that pool
 func (d *Drainer) CompleteDrainNode(ctx context.Context, node *corev1.Node) (bool, error) {
-	logger := ctx.Value("logger").(logr.Logger).WithName("CompleteDrainNode")
+	logger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("CompleteDrainNode")
 
 	// Create drain helper object
 	// full drain is not important here
@@ -145,7 +145,7 @@ func (d *Drainer) CompleteDrainNode(ctx context.Context, node *corev1.Node) (boo
 // if fullDrain is false we only remove pods that have the resourcePrefix
 // if not we remove all the pods in the node
 func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, fullDrain bool) *drain.Helper {
-	logger := ctx.Value("logger").(logr.Logger).WithName("createDrainHelper")
+	logger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("createDrainHelper")
 
 	drainer := &drain.Helper{
 		Client:              kubeClient,

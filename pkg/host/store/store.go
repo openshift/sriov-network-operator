@@ -47,7 +47,7 @@ func createOperatorConfigFolderIfNeeded() error {
 	_, err := os.Stat(SriovConfBasePathUse)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = os.MkdirAll(SriovConfBasePathUse, 0777)
+			err = os.MkdirAll(SriovConfBasePathUse, 0o777)
 			if err != nil {
 				return fmt.Errorf("failed to create the sriov config folder on host in path %s: %v", SriovConfBasePathUse, err)
 			}
@@ -60,7 +60,7 @@ func createOperatorConfigFolderIfNeeded() error {
 	_, err = os.Stat(PfAppliedConfigUse)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = os.MkdirAll(PfAppliedConfigUse, 0777)
+			err = os.MkdirAll(PfAppliedConfigUse, 0o777)
 			if err != nil {
 				return fmt.Errorf("failed to create the pci folder on host in path %s: %v", PfAppliedConfigUse, err)
 			}
@@ -89,7 +89,7 @@ func (s *manager) ClearPCIAddressFolder() error {
 		return fmt.Errorf("failed to remove the PCI address folder on path %s: %v", PfAppliedConfigUse, err)
 	}
 
-	err = os.Mkdir(PfAppliedConfigUse, 0777)
+	err = os.Mkdir(PfAppliedConfigUse, 0o777)
 	if err != nil {
 		return fmt.Errorf("failed to create the pci folder on host in path %s: %v", PfAppliedConfigUse, err)
 	}
@@ -108,7 +108,7 @@ func (s *manager) SaveLastPfAppliedStatus(PfInfo *sriovnetworkv1.Interface) erro
 
 	hostExtension := utils.GetHostExtension()
 	pathFile := filepath.Join(hostExtension, consts.PfAppliedConfig, PfInfo.PciAddress)
-	err = os.WriteFile(pathFile, data, 0644)
+	err = os.WriteFile(pathFile, data, 0o644)
 	return err
 }
 
@@ -150,7 +150,7 @@ func (s *manager) LoadPfsStatus(pciAddress string) (*sriovnetworkv1.Interface, b
 func (s *manager) GetCheckPointNodeState() (*sriovnetworkv1.SriovNetworkNodeState, error) {
 	log.Log.Info("getCheckPointNodeState()")
 	configdir := filepath.Join(vars.Destdir, consts.CheckpointFileName)
-	file, err := os.OpenFile(configdir, os.O_RDONLY, 0644)
+	file, err := os.OpenFile(configdir, os.O_RDONLY, 0o644)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -167,7 +167,7 @@ func (s *manager) GetCheckPointNodeState() (*sriovnetworkv1.SriovNetworkNodeStat
 
 func (s *manager) WriteCheckpointFile(ns *sriovnetworkv1.SriovNetworkNodeState) error {
 	configdir := filepath.Join(vars.Destdir, consts.CheckpointFileName)
-	file, err := os.OpenFile(configdir, os.O_RDWR|os.O_CREATE, 0644)
+	file, err := os.OpenFile(configdir, os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
 		return err
 	}

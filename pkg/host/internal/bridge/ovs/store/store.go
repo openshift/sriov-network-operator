@@ -168,7 +168,7 @@ func (s *ovsStore) ensureStoreDirExist() error {
 	_, err := os.Stat(storeDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			err = os.MkdirAll(storeDir, 0755)
+			err = os.MkdirAll(storeDir, 0o755)
 			if err != nil {
 				return fmt.Errorf("failed to create directory for store %s: %v", storeDir, err)
 			}
@@ -207,7 +207,7 @@ func (s *ovsStore) writeStoreFile() error {
 		funcLog.Error(err, "writeStoreFile(): can't serialize cached info about managed OVS bridges")
 		return err
 	}
-	if err := renameio.WriteFile(storeFilePath, data, 0644); err != nil {
+	if err := renameio.WriteFile(storeFilePath, data, 0o644); err != nil {
 		funcLog.Error(err, "writeStoreFile(): can't write info about managed OVS bridge to disk")
 		return err
 	}

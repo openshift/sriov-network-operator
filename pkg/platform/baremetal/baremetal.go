@@ -48,7 +48,7 @@ func (bm *Baremetal) Init() error {
 
 // Name returns the name of the baremetal platform.
 func (bm *Baremetal) Name() string {
-	return "Baremetal"
+	return string(consts.Baremetal)
 }
 
 // DiscoverSriovDevices discovers all SR-IOV capable devices on the baremetal host.

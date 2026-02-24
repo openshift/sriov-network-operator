@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/runtime"
 	appsv1client "k8s.io/client-go/kubernetes/typed/apps/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -30,10 +29,10 @@ func newClient(kubeconfig string, crScheme *runtime.Scheme) (*clientSet, error) 
 	}
 
 	if kubeconfig != "" {
-		glog.V(4).Infof("Loading kube client config from path %q", kubeconfig)
+		fmt.Println("Loading kube client config from path %q", kubeconfig)
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	} else {
-		glog.V(4).Infof("Using in-cluster kube client config")
+		fmt.Println("Using in-cluster kube client config")
 		config, err = rest.InClusterConfig()
 	}
 	if err != nil {

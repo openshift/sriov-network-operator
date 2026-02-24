@@ -6,7 +6,7 @@ reviewers:
   - adrianchiris
   - e0ne
 creation-date: 18-07-2023
-last-updated: 18-07-2023
+last-updated: 07-12-2025
 ---
 
 # Parallel SR-IOV configuration
@@ -59,6 +59,8 @@ Config Daemon will read SriovNetworkNodeState annotation `sriovnetwork.openshift
 Node annotation, `sriovnetwork.openshift.io/state` and SriovNetworkNodeState annotation `sriovnetwork.openshift.io/desired-state`.
 
 *NOTE:* In the future we are going to drop the node annotation and only use the SriovNetworkNodeState
+
+*NOTE:* Node draining can be delegated to an external drain-controller by setting `USE_EXTERNAL_DRAINER=true` (e.g. using [NVIDIA maintenance-operator](https://github.com/Mellanox/maintenance-operator)) (PR #952). In addition, `SriovNetworkPoolConfig` will not take any effect during drain procedure, since the maintenance operator will be in charge of parallel node operations.
 
 Draining procedure:
 

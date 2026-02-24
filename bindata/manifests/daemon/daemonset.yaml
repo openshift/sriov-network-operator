@@ -171,6 +171,14 @@ spec:
             value: "{{.ClusterType}}"
           - name: DEV_MODE
             value: "{{.DevMode}}"
+          {{- if .UseExternalDrainer }}
+          - name: USE_EXTERNAL_DRAINER
+            value: "{{.UseExternalDrainer}}"
+          {{- end }}
+          {{- range $key, $value := .ConfigDaemonEnvVars }}
+          - name: {{ $key }}
+            value: "{{ $value }}"
+          {{- end }}
         resources:
           requests:
             cpu: 100m
@@ -178,6 +186,8 @@ spec:
         volumeMounts:
           - name: host
             mountPath: /host
+          - name: tmp
+            mountPath: /tmp
         lifecycle:
           preStop:
             exec:
@@ -193,3 +203,5 @@ spec:
         hostPath:
           path: /etc/os-release
           type: File
+      - name: tmp
+        emptyDir: {}

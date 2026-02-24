@@ -8,6 +8,7 @@ package memory
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -17,21 +18,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jaypipes/ghw/pkg/context"
+	"github.com/jaypipes/ghw/internal/log"
 	"github.com/jaypipes/ghw/pkg/linuxpath"
 	"github.com/jaypipes/ghw/pkg/unitutil"
 	"github.com/jaypipes/ghw/pkg/util"
 )
 
 const (
-	warnCannotDeterminePhysicalMemory = `
-Could not determine total physical bytes of memory. This may
-be due to the host being a virtual machine or container with no
-/var/log/syslog file or /sys/devices/system/memory directory, or
-the current user may not have necessary privileges to read the syslog.
-We are falling back to setting the total physical amount of memory to
-the total usable amount of memory
-`
+	warnCannotDeterminePhysicalMemory = `Could not determine total physical bytes of memory. This may be due to the host being a virtual machine or container with no /var/log/syslog file or /sys/devices/system/memory directory, or the current user may not have necessary privileges to read the syslog. We are falling back to setting the total physical amount of memory to the total usable amount of memory`
 )
 
 var (
@@ -44,8 +38,8 @@ var (
 	regexMemoryBlockDirname = regexp.MustCompile(`memory\d+$`)
 )
 
-func (i *Info) load() error {
-	paths := linuxpath.New(i.ctx)
+func (i *Info) load(ctx context.Context) error {
+	paths := linuxpath.New(ctx)
 	tub := memTotalUsableBytes(paths)
 	if tub < 1 {
 		return fmt.Errorf("Could not determine total usable bytes of memory")
@@ -54,7 +48,7 @@ func (i *Info) load() error {
 	tpb := memTotalPhysicalBytes(paths)
 	i.TotalPhysicalBytes = tpb
 	if tpb < 1 {
-		i.ctx.Warn(warnCannotDeterminePhysicalMemory)
+		log.Warn(ctx, warnCannotDeterminePhysicalMemory)
 		i.TotalPhysicalBytes = tub
 	}
 	i.SupportedPageSizes, _ = memorySupportedPageSizes(paths.SysKernelMMHugepages)
@@ -72,8 +66,7 @@ func (i *Info) load() error {
 	return nil
 }
 
-func AreaForNode(ctx *context.Context, nodeID int) (*Area, error) {
-	paths := linuxpath.New(ctx)
+func AreaForNode(paths *linuxpath.Paths, nodeID int) (*Area, error) {
 	path := filepath.Join(
 		paths.SysDevicesSystemNode,
 		fmt.Sprintf("node%d", nodeID),
@@ -242,7 +235,7 @@ func memTotalPhysicalBytesFromSyslog(paths *linuxpath.Paths) int64 {
 	for _, file := range logFiles {
 		if strings.HasPrefix(file.Name(), "syslog") {
 			fullPath := filepath.Join(logDir, file.Name())
-			unzip := strings.HasSuffix(file.Name(), ".gz")
+			unzip := filepath.Ext(file.Name()) == ".gz"
 			var r io.ReadCloser
 			r, err = os.Open(fullPath)
 			if err != nil {

@@ -17,27 +17,35 @@
 package v1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	resource "k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
 )
 
-// PodMonitorSpecApplyConfiguration represents an declarative configuration of the PodMonitorSpec type for use
+// PodMonitorSpecApplyConfiguration represents a declarative configuration of the PodMonitorSpec type for use
 // with apply.
 type PodMonitorSpecApplyConfiguration struct {
-	JobLabel              *string                                `json:"jobLabel,omitempty"`
-	PodTargetLabels       []string                               `json:"podTargetLabels,omitempty"`
-	PodMetricsEndpoints   []PodMetricsEndpointApplyConfiguration `json:"podMetricsEndpoints,omitempty"`
-	Selector              *metav1.LabelSelector                  `json:"selector,omitempty"`
-	NamespaceSelector     *NamespaceSelectorApplyConfiguration   `json:"namespaceSelector,omitempty"`
-	SampleLimit           *uint64                                `json:"sampleLimit,omitempty"`
-	TargetLimit           *uint64                                `json:"targetLimit,omitempty"`
-	LabelLimit            *uint64                                `json:"labelLimit,omitempty"`
-	LabelNameLengthLimit  *uint64                                `json:"labelNameLengthLimit,omitempty"`
-	LabelValueLengthLimit *uint64                                `json:"labelValueLengthLimit,omitempty"`
-	KeepDroppedTargets    *uint64                                `json:"keepDroppedTargets,omitempty"`
-	AttachMetadata        *AttachMetadataApplyConfiguration      `json:"attachMetadata,omitempty"`
+	JobLabel                                *string                                 `json:"jobLabel,omitempty"`
+	PodTargetLabels                         []string                                `json:"podTargetLabels,omitempty"`
+	PodMetricsEndpoints                     []PodMetricsEndpointApplyConfiguration  `json:"podMetricsEndpoints,omitempty"`
+	Selector                                *metav1.LabelSelectorApplyConfiguration `json:"selector,omitempty"`
+	SelectorMechanism                       *monitoringv1.SelectorMechanism         `json:"selectorMechanism,omitempty"`
+	NamespaceSelector                       *NamespaceSelectorApplyConfiguration    `json:"namespaceSelector,omitempty"`
+	SampleLimit                             *uint64                                 `json:"sampleLimit,omitempty"`
+	TargetLimit                             *uint64                                 `json:"targetLimit,omitempty"`
+	ScrapeProtocols                         []monitoringv1.ScrapeProtocol           `json:"scrapeProtocols,omitempty"`
+	FallbackScrapeProtocol                  *monitoringv1.ScrapeProtocol            `json:"fallbackScrapeProtocol,omitempty"`
+	LabelLimit                              *uint64                                 `json:"labelLimit,omitempty"`
+	LabelNameLengthLimit                    *uint64                                 `json:"labelNameLengthLimit,omitempty"`
+	LabelValueLengthLimit                   *uint64                                 `json:"labelValueLengthLimit,omitempty"`
+	NativeHistogramConfigApplyConfiguration `json:",inline"`
+	KeepDroppedTargets                      *uint64                           `json:"keepDroppedTargets,omitempty"`
+	AttachMetadata                          *AttachMetadataApplyConfiguration `json:"attachMetadata,omitempty"`
+	ScrapeClassName                         *string                           `json:"scrapeClass,omitempty"`
+	BodySizeLimit                           *monitoringv1.ByteSize            `json:"bodySizeLimit,omitempty"`
 }
 
-// PodMonitorSpecApplyConfiguration constructs an declarative configuration of the PodMonitorSpec type for use with
+// PodMonitorSpecApplyConfiguration constructs a declarative configuration of the PodMonitorSpec type for use with
 // apply.
 func PodMonitorSpec() *PodMonitorSpecApplyConfiguration {
 	return &PodMonitorSpecApplyConfiguration{}
@@ -77,8 +85,16 @@ func (b *PodMonitorSpecApplyConfiguration) WithPodMetricsEndpoints(values ...*Po
 // WithSelector sets the Selector field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Selector field is set to the value of the last call.
-func (b *PodMonitorSpecApplyConfiguration) WithSelector(value metav1.LabelSelector) *PodMonitorSpecApplyConfiguration {
-	b.Selector = &value
+func (b *PodMonitorSpecApplyConfiguration) WithSelector(value *metav1.LabelSelectorApplyConfiguration) *PodMonitorSpecApplyConfiguration {
+	b.Selector = value
+	return b
+}
+
+// WithSelectorMechanism sets the SelectorMechanism field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SelectorMechanism field is set to the value of the last call.
+func (b *PodMonitorSpecApplyConfiguration) WithSelectorMechanism(value monitoringv1.SelectorMechanism) *PodMonitorSpecApplyConfiguration {
+	b.SelectorMechanism = &value
 	return b
 }
 
@@ -106,6 +122,24 @@ func (b *PodMonitorSpecApplyConfiguration) WithTargetLimit(value uint64) *PodMon
 	return b
 }
 
+// WithScrapeProtocols adds the given value to the ScrapeProtocols field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the ScrapeProtocols field.
+func (b *PodMonitorSpecApplyConfiguration) WithScrapeProtocols(values ...monitoringv1.ScrapeProtocol) *PodMonitorSpecApplyConfiguration {
+	for i := range values {
+		b.ScrapeProtocols = append(b.ScrapeProtocols, values[i])
+	}
+	return b
+}
+
+// WithFallbackScrapeProtocol sets the FallbackScrapeProtocol field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the FallbackScrapeProtocol field is set to the value of the last call.
+func (b *PodMonitorSpecApplyConfiguration) WithFallbackScrapeProtocol(value monitoringv1.ScrapeProtocol) *PodMonitorSpecApplyConfiguration {
+	b.FallbackScrapeProtocol = &value
+	return b
+}
+
 // WithLabelLimit sets the LabelLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the LabelLimit field is set to the value of the last call.
@@ -130,6 +164,46 @@ func (b *PodMonitorSpecApplyConfiguration) WithLabelValueLengthLimit(value uint6
 	return b
 }
 
+// WithScrapeNativeHistograms sets the ScrapeNativeHistograms field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ScrapeNativeHistograms field is set to the value of the last call.
+func (b *PodMonitorSpecApplyConfiguration) WithScrapeNativeHistograms(value bool) *PodMonitorSpecApplyConfiguration {
+	b.NativeHistogramConfigApplyConfiguration.ScrapeNativeHistograms = &value
+	return b
+}
+
+// WithScrapeClassicHistograms sets the ScrapeClassicHistograms field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ScrapeClassicHistograms field is set to the value of the last call.
+func (b *PodMonitorSpecApplyConfiguration) WithScrapeClassicHistograms(value bool) *PodMonitorSpecApplyConfiguration {
+	b.NativeHistogramConfigApplyConfiguration.ScrapeClassicHistograms = &value
+	return b
+}
+
+// WithNativeHistogramBucketLimit sets the NativeHistogramBucketLimit field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NativeHistogramBucketLimit field is set to the value of the last call.
+func (b *PodMonitorSpecApplyConfiguration) WithNativeHistogramBucketLimit(value uint64) *PodMonitorSpecApplyConfiguration {
+	b.NativeHistogramConfigApplyConfiguration.NativeHistogramBucketLimit = &value
+	return b
+}
+
+// WithNativeHistogramMinBucketFactor sets the NativeHistogramMinBucketFactor field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NativeHistogramMinBucketFactor field is set to the value of the last call.
+func (b *PodMonitorSpecApplyConfiguration) WithNativeHistogramMinBucketFactor(value resource.Quantity) *PodMonitorSpecApplyConfiguration {
+	b.NativeHistogramConfigApplyConfiguration.NativeHistogramMinBucketFactor = &value
+	return b
+}
+
+// WithConvertClassicHistogramsToNHCB sets the ConvertClassicHistogramsToNHCB field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ConvertClassicHistogramsToNHCB field is set to the value of the last call.
+func (b *PodMonitorSpecApplyConfiguration) WithConvertClassicHistogramsToNHCB(value bool) *PodMonitorSpecApplyConfiguration {
+	b.NativeHistogramConfigApplyConfiguration.ConvertClassicHistogramsToNHCB = &value
+	return b
+}
+
 // WithKeepDroppedTargets sets the KeepDroppedTargets field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the KeepDroppedTargets field is set to the value of the last call.
@@ -143,5 +217,21 @@ func (b *PodMonitorSpecApplyConfiguration) WithKeepDroppedTargets(value uint64) 
 // If called multiple times, the AttachMetadata field is set to the value of the last call.
 func (b *PodMonitorSpecApplyConfiguration) WithAttachMetadata(value *AttachMetadataApplyConfiguration) *PodMonitorSpecApplyConfiguration {
 	b.AttachMetadata = value
+	return b
+}
+
+// WithScrapeClassName sets the ScrapeClassName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ScrapeClassName field is set to the value of the last call.
+func (b *PodMonitorSpecApplyConfiguration) WithScrapeClassName(value string) *PodMonitorSpecApplyConfiguration {
+	b.ScrapeClassName = &value
+	return b
+}
+
+// WithBodySizeLimit sets the BodySizeLimit field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BodySizeLimit field is set to the value of the last call.
+func (b *PodMonitorSpecApplyConfiguration) WithBodySizeLimit(value monitoringv1.ByteSize) *PodMonitorSpecApplyConfiguration {
+	b.BodySizeLimit = &value
 	return b
 }

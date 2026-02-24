@@ -15,6 +15,7 @@ import (
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
@@ -23,6 +24,12 @@ import (
 )
 
 var _ = Describe("[sriov] operator", Ordered, func() {
+	BeforeEach(func() {
+		if platformType != consts.Baremetal {
+			Skip("Policy configuration is not supported on non-baremetal platforms")
+		}
+	})
+
 	Describe("Custom SriovNetworkNodePolicy", func() {
 		BeforeEach(func() {
 			err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
@@ -456,7 +463,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 			})
 			Context("PF shutdown", func() {
 				// 29398
-				It("Should be able to create pods successfully if PF is down.Pods are able to communicate with each other on the same node", func() {
+				It("Should be able to create pods successfully on a NIC with NO_CARRIER. Pods are able to communicate with each other on the same node", func() {
 					if cluster.VirtualCluster() {
 						// https://bugzilla.redhat.com/show_bug.cgi?id=2214976
 						Skip("Bug in IGB driver")
@@ -464,7 +471,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 					resourceName := testResourceName
 					var testNode string
-					var unusedSriovDevice *sriovv1.InterfaceExt
+					var noCarrierSriovDevice *sriovv1.InterfaceExt
 
 					if discovery.Enabled() {
 						Skip("PF Shutdown test not enabled in discovery mode")
@@ -473,17 +480,15 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					testNode = sriovInfos.Nodes[0]
 					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
 					Expect(err).ToNot(HaveOccurred())
-					unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
+					noCarrierSriovDevices, err := findNoCarrierSriovDevices(testNode, sriovDeviceList)
 					if err != nil {
 						Skip(err.Error())
 					}
-					unusedSriovDevice = unusedSriovDevices[0]
+					noCarrierSriovDevice = noCarrierSriovDevices[0]
 
-					By("Using device " + unusedSriovDevice.Name + " on node " + testNode)
+					By("Using device " + noCarrierSriovDevice.Name + " on node " + testNode)
 
-					defer changeNodeInterfaceState(testNode, unusedSriovDevices[0].Name, true)
-					Expect(err).ToNot(HaveOccurred())
-					createSriovPolicy(unusedSriovDevice.Name, testNode, 2, resourceName)
+					createSriovPolicy(noCarrierSriovDevice.Name, testNode, 2, resourceName)
 
 					ipam := `{
 						"type":"host-local",
@@ -492,10 +497,10 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						"rangeEnd":"10.10.10.181"
 						}`
 
-					err = network.CreateSriovNetwork(clients, unusedSriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
+					err = network.CreateSriovNetwork(clients, noCarrierSriovDevice, sriovNetworkName, namespaces.Test, operatorNamespace, resourceName, ipam)
 					Expect(err).ToNot(HaveOccurred())
 					waitForNetAttachDef(sriovNetworkName, namespaces.Test)
-					changeNodeInterfaceState(testNode, unusedSriovDevice.Name, false)
+
 					pod := createTestPod(testNode, []string{sriovNetworkName})
 					ips, err := network.GetSriovNicIPs(pod, "net1")
 					Expect(err).ToNot(HaveOccurred())

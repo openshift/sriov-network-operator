@@ -24,4 +24,8 @@ spec:
   featureGates:
     {{- range $k, $v := .}}{{printf "%s: %t" $k $v | nindent 4 }}{{ end }}
   {{- end }}
+  {{- with .Values.sriovOperatorConfig.configDaemonEnvVars }}
+  configDaemonEnvVars:
+    {{- range $k, $v := .}}{{ printf "%s: %s" $k ($v | toString | quote) | nindent 4 }}{{ end }}
+  {{- end }}
 {{ end }}

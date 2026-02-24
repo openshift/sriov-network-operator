@@ -9,9 +9,8 @@ package net
 import (
 	"fmt"
 
-	"github.com/jaypipes/ghw/pkg/context"
+	"github.com/jaypipes/ghw/internal/config"
 	"github.com/jaypipes/ghw/pkg/marshal"
-	"github.com/jaypipes/ghw/pkg/option"
 )
 
 // NICCapability is a feature/capability of a Network Interface Controller
@@ -95,7 +94,6 @@ func (n *NIC) String() string {
 
 // Info describes all network interface controllers (NICs) in the host system.
 type Info struct {
-	ctx *context.Context
 	// NICs is a slice of pointers to `NIC` structs describing the network
 	// interface controllers (NICs) on the host system.
 	NICs []*NIC `json:"nics"`
@@ -103,10 +101,10 @@ type Info struct {
 
 // New returns a pointer to an Info struct that contains information about the
 // network interface controllers (NICs) on the host system
-func New(opts ...*option.Option) (*Info, error) {
-	ctx := context.New(opts...)
-	info := &Info{ctx: ctx}
-	if err := ctx.Do(info.load); err != nil {
+func New(args ...any) (*Info, error) {
+	ctx := config.ContextFromArgs(args...)
+	info := &Info{}
+	if err := info.load(ctx); err != nil {
 		return nil, err
 	}
 	return info, nil
@@ -130,11 +128,11 @@ type netPrinter struct {
 // YAMLString returns a string with the net information formatted as YAML
 // under a top-level "net:" key
 func (i *Info) YAMLString() string {
-	return marshal.SafeYAML(i.ctx, netPrinter{i})
+	return marshal.SafeYAML(netPrinter{i})
 }
 
 // JSONString returns a string with the net information formatted as JSON
 // under a top-level "net:" key
 func (i *Info) JSONString(indent bool) string {
-	return marshal.SafeJSON(i.ctx, netPrinter{i}, indent)
+	return marshal.SafeJSON(netPrinter{i}, indent)
 }

@@ -3,9 +3,12 @@ package platform
 import (
 	"fmt"
 
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform/aws"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform/baremetal"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform/openstack"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
@@ -54,11 +57,14 @@ type Interface interface {
 // New creates a new platform interface based on the provided platform type.
 // Returns the platform interface for the detected platform, or an error if the platform is unsupported.
 func New(platformType consts.PlatformTypes, hostHelpers helper.HostHelpersInterface) (Interface, error) {
+	log.Log.WithName("platform").Info("Creating platform", "platformType", platformType)
 	switch platformType {
 	case consts.Baremetal:
 		return baremetal.New(hostHelpers)
 	case consts.VirtualOpenStack:
 		return openstack.New(hostHelpers)
+	case consts.AWS:
+		return aws.New(hostHelpers)
 	default:
 		return nil, fmt.Errorf("unknown platform type %s", platformType)
 	}

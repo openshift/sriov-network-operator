@@ -12,6 +12,7 @@ import (
 )
 
 var sriovInfos *cluster.EnabledNodes
+var platformType consts.PlatformTypes
 
 var _ = BeforeSuite(func() {
 	err := clean.All()
@@ -39,13 +40,27 @@ var _ = BeforeSuite(func() {
 		setFeatureFlag(consts.ResourceInjectorMatchConditionFeatureGate, true)
 	}
 
+	platformType, err = cluster.GetPlatformType(clients, operatorNamespace)
+	Expect(err).ToNot(HaveOccurred())
+
 	err = namespaces.Create(namespaces.Test, clients)
 	Expect(err).ToNot(HaveOccurred())
 	err = namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 	Expect(err).ToNot(HaveOccurred())
 	WaitForSRIOVStable()
-	sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
-	Expect(err).ToNot(HaveOccurred())
+
+	switch platformType {
+	case consts.Baremetal:
+		sriovInfos, err = cluster.DiscoverSriov(clients, operatorNamespace)
+		Expect(err).ToNot(HaveOccurred())
+	case consts.AWS:
+		sriovInfos, err = cluster.DiscoverSriovForAws(clients, operatorNamespace)
+		Expect(err).ToNot(HaveOccurred())
+	case consts.VirtualOpenStack:
+		Fail("VirtualOpenStack platform is not supported on e2e tests")
+	default:
+		Fail("Unknown platform type")
+	}
 })
 
 var _ = AfterSuite(func() {

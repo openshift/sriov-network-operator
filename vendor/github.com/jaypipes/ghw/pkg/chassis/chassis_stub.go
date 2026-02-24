@@ -9,11 +9,12 @@
 package chassis
 
 import (
+	"context"
 	"runtime"
 
 	"github.com/pkg/errors"
 )
 
-func (i *Info) load() error {
+func (i *Info) load(ctx context.Context) error {
 	return errors.New("chassisFillInfo not implemented on " + runtime.GOOS)
 }

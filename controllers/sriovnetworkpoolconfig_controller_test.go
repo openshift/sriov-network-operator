@@ -15,7 +15,6 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	orchestratorMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator/mock"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
@@ -29,7 +28,7 @@ var _ = Describe("SriovNetworkPoolConfig controller", Ordered, func() {
 		By("Create default SriovNetworkPoolConfig k8s objs")
 		poolConfig := &sriovnetworkv1.SriovNetworkPoolConfig{}
 		poolConfig.SetNamespace(testNamespace)
-		poolConfig.SetName(constants.DefaultConfigName)
+		poolConfig.SetName(consts.DefaultConfigName)
 		poolConfig.Spec = sriovnetworkv1.SriovNetworkPoolConfigSpec{}
 		Expect(k8sClient.Create(context.Background(), poolConfig)).Should(Succeed())
 		DeferCleanup(func() {
@@ -92,7 +91,7 @@ var _ = Describe("SriovNetworkPoolConfig controller", Ordered, func() {
 			config.SetName("ovs-hw-offload-config")
 			mcpName := "worker-hwoffload"
 			mc := &mcfgv1.MachineConfig{}
-			mcName := "00-" + mcpName + "-" + constants.OVSHWOLMachineConfigNameSuffix
+			mcName := "00-" + mcpName + "-" + consts.OVSHWOLMachineConfigNameSuffix
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: mcName, Namespace: testNamespace}, mc)
 			Expect(errors.IsNotFound(err)).Should(BeTrue())
 

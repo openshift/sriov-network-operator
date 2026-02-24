@@ -1,11 +1,13 @@
 package cpu
 
 import (
+	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -13,7 +15,7 @@ var (
 	sysctlOutput       = make(map[string]string) // store all the sysctl output
 )
 
-func (i *Info) load() error {
+func (i *Info) load(ctx context.Context) error {
 	err := populateSysctlOutput()
 	if err != nil {
 		return errors.Wrap(err, "unable to populate sysctl map")
@@ -84,6 +86,9 @@ func populateSysctlOutput() error {
 	for _, l := range oS {
 		if l != "" {
 			s := strings.SplitN(l, ":", 2)
+			if len(s) < 2 {
+				continue
+			}
 			k, v := strings.TrimSpace(s[0]), strings.TrimSpace(s[1])
 			sysctlOutput[k] = v
 

@@ -9,11 +9,12 @@
 package bios
 
 import (
+	"context"
 	"runtime"
 
 	"github.com/pkg/errors"
 )
 
-func (i *Info) load() error {
+func (i *Info) load(ctx context.Context) error {
 	return errors.New("biosFillInfo not implemented on " + runtime.GOOS)
 }

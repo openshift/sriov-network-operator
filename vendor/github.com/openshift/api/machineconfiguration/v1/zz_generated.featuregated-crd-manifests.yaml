@@ -28,16 +28,19 @@ controllerconfigs.machineconfiguration.openshift.io:
   Capability: ""
   Category: ""
   FeatureGates:
-  - AWSClusterHostedDNS
-  - BareMetalLoadBalancer
-  - GCPClusterHostedDNS
-  - GCPCustomAPIEndpoints
-  - GCPLabelsTags
+  - AWSClusterHostedDNSInstall
+  - AWSDualStackInstall
+  - AzureClusterHostedDNSInstall
+  - AzureDualStackInstall
+  - DualReplica
+  - DyanmicServiceEndpointIBMCloud
+  - GCPClusterHostedDNSInstall
   - HighlyAvailableArbiter
+  - HighlyAvailableArbiter+DualReplica
   - NutanixMultiSubnets
-  - VSphereControlPlaneMachineSet
+  - OnPremDNSRecords
+  - VSphereHostVMGroupZonal
   - VSphereMultiNetworks
-  - VSphereMultiVCenters
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_80"
@@ -110,6 +113,88 @@ machineconfigs.machineconfiguration.openshift.io:
   TopLevelFeatureGates: []
   Version: v1
 
+machineconfignodes.machineconfiguration.openshift.io:
+  Annotations: {}
+  ApprovedPRNumber: https://github.com/openshift/api/pull/2255
+  CRDName: machineconfignodes.machineconfiguration.openshift.io
+  Capability: ""
+  Category: ""
+  FeatureGates:
+  - ImageModeStatusReporting
+  - IrreconcilableMachineConfig
+  - MachineConfigNodes
+  - NoRegistryClusterInstall
+  FilenameOperatorName: machine-config
+  FilenameOperatorOrdering: "01"
+  FilenameRunLevel: "0000_80"
+  GroupName: machineconfiguration.openshift.io
+  HasStatus: true
+  KindName: MachineConfigNode
+  Labels:
+    openshift.io/operator-managed: ""
+  PluralName: machineconfignodes
+  PrinterColumns:
+  - jsonPath: .spec.pool.name
+    name: PoolName
+    type: string
+  - jsonPath: .spec.configVersion.desired
+    name: DesiredConfig
+    type: string
+  - jsonPath: .status.configVersion.current
+    name: CurrentConfig
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="Updated")].status
+    name: Updated
+    type: string
+  - jsonPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  - jsonPath: .status.conditions[?(@.type=="UpdatePrepared")].status
+    name: UpdatePrepared
+    priority: 1
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="UpdateExecuted")].status
+    name: UpdateExecuted
+    priority: 1
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="UpdatePostActionComplete")].status
+    name: UpdatePostActionComplete
+    priority: 1
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="UpdateComplete")].status
+    name: UpdateComplete
+    priority: 1
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="Resumed")].status
+    name: Resumed
+    priority: 1
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="AppliedFilesAndOS")].status
+    name: UpdatedFilesAndOS
+    priority: 1
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="Cordoned")].status
+    name: CordonedNode
+    priority: 1
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="Drained")].status
+    name: DrainedNode
+    priority: 1
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="RebootedNode")].status
+    name: RebootedNode
+    priority: 1
+    type: string
+  - jsonPath: .status.conditions[?(@.type=="Uncordoned")].status
+    name: UncordonedNode
+    priority: 1
+    type: string
+  Scope: Cluster
+  ShortNames: null
+  TopLevelFeatureGates:
+  - MachineConfigNodes
+  Version: v1
+
 machineconfigpools.machineconfiguration.openshift.io:
   Annotations: {}
   ApprovedPRNumber: https://github.com/openshift/api/pull/1453
@@ -117,6 +202,7 @@ machineconfigpools.machineconfiguration.openshift.io:
   Capability: ""
   Category: ""
   FeatureGates:
+  - OSStreams
   - PinnedImages
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
@@ -178,8 +264,7 @@ machineosbuilds.machineconfiguration.openshift.io:
   CRDName: machineosbuilds.machineconfiguration.openshift.io
   Capability: ""
   Category: ""
-  FeatureGates:
-  - OnClusterBuild
+  FeatureGates: []
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_80"
@@ -210,8 +295,7 @@ machineosbuilds.machineconfiguration.openshift.io:
     type: date
   Scope: Cluster
   ShortNames: null
-  TopLevelFeatureGates:
-  - OnClusterBuild
+  TopLevelFeatureGates: []
   Version: v1
 
 machineosconfigs.machineconfiguration.openshift.io:
@@ -220,8 +304,7 @@ machineosconfigs.machineconfiguration.openshift.io:
   CRDName: machineosconfigs.machineconfiguration.openshift.io
   Capability: ""
   Category: ""
-  FeatureGates:
-  - OnClusterBuild
+  FeatureGates: []
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_80"
@@ -234,7 +317,30 @@ machineosconfigs.machineconfiguration.openshift.io:
   PrinterColumns: []
   Scope: Cluster
   ShortNames: null
+  TopLevelFeatureGates: []
+  Version: v1
+
+pinnedimagesets.machineconfiguration.openshift.io:
+  Annotations: {}
+  ApprovedPRNumber: https://github.com/openshift/api/pull/2198
+  CRDName: pinnedimagesets.machineconfiguration.openshift.io
+  Capability: ""
+  Category: ""
+  FeatureGates:
+  - PinnedImages
+  FilenameOperatorName: machine-config
+  FilenameOperatorOrdering: "01"
+  FilenameRunLevel: "0000_80"
+  GroupName: machineconfiguration.openshift.io
+  HasStatus: false
+  KindName: PinnedImageSet
+  Labels:
+    openshift.io/operator-managed: ""
+  PluralName: pinnedimagesets
+  PrinterColumns: []
+  Scope: Cluster
+  ShortNames: null
   TopLevelFeatureGates:
-  - OnClusterBuild
+  - PinnedImages
   Version: v1
 

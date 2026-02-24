@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +26,7 @@ import (
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/cluster"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/execute"
@@ -36,7 +36,6 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
 )
 
-var waitingTime = 20 * time.Minute
 var sriovNetworkName = "test-sriovnetwork"
 var snoTimeoutMultiplier time.Duration = 0
 
@@ -52,15 +51,13 @@ const (
 	ipamIpv4                    = `{"type": "host-local","ranges": [[{"subnet": "1.1.1.0/24"}]],"dataDir": "/run/my-orchestrator/container-ipam-state"}`
 )
 
-func init() {
-	waitingEnv := os.Getenv("SRIOV_WAITING_TIME")
-	newTime, err := strconv.Atoi(waitingEnv)
-	if err == nil && newTime != 0 {
-		waitingTime = time.Duration(newTime) * time.Minute
-	}
-}
-
 var _ = Describe("[sriov] operator", Ordered, func() {
+	BeforeAll(func() {
+		if platformType != consts.Baremetal {
+			Skip("Operator is not supported on non-baremetal platforms")
+		}
+	})
+
 	AfterAll(func() {
 		err := namespaces.Clean(operatorNamespace, namespaces.Test, clients, discovery.Enabled())
 		Expect(err).ToNot(HaveOccurred())
@@ -1543,29 +1540,6 @@ func getDriver(ethtoolstdout string) string {
 	return ""
 }
 
-func changeNodeInterfaceState(testNode string, ifcName string, enable bool) {
-	state := "up"
-	if !enable {
-		state = "down"
-	}
-	podDefinition := pod.RedefineAsPrivileged(
-		pod.RedefineWithRestartPolicy(
-			pod.RedefineWithCommand(
-				pod.DefineWithHostNetwork(testNode),
-				[]string{"ip", "link", "set", "dev", ifcName, state}, []string{},
-			),
-			corev1.RestartPolicyNever,
-		),
-	)
-	createdPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
-	Expect(err).ToNot(HaveOccurred())
-	Eventually(func() corev1.PodPhase {
-		runningPod, err := clients.Pods(namespaces.Test).Get(context.Background(), createdPod.Name, metav1.GetOptions{})
-		Expect(err).ToNot(HaveOccurred())
-		return runningPod.Status.Phase
-	}, 3*time.Minute, 1*time.Second).Should(Equal(corev1.PodSucceeded))
-}
-
 func discoverResourceForMainSriov(nodes *cluster.EnabledNodes) (*sriovv1.InterfaceExt, string, string, bool) {
 	for _, node := range nodes.Nodes {
 		nodeDevices, err := nodes.FindSriovDevices(node)
@@ -1688,6 +1662,33 @@ func isDefaultRouteInterface(intfName string, routes []string) bool {
 		}
 	}
 	return false
+}
+
+func findNoCarrierSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceExt) ([]*sriovv1.InterfaceExt, error) {
+	filteredDevices := []*sriovv1.InterfaceExt{}
+
+	for _, device := range sriovDevices {
+		stdout, stderr, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", fmt.Sprintf("ip link show %s", device.Name))
+		if err != nil {
+			fmt.Printf("Can't query link state for device [%s]: %s", device.Name, err.Error())
+			continue
+		}
+
+		if len(stdout) == 0 {
+			fmt.Printf("Can't query link state for device [%s]: stderr:[%s]", device.Name, stderr)
+			continue
+		}
+
+		// Check for NO-CARRIER state
+		if strings.Contains(stdout, "NO-CARRIER") {
+			filteredDevices = append(filteredDevices, device)
+		}
+	}
+	if len(filteredDevices) == 0 {
+		return nil, fmt.Errorf("no carrier sriov devices not found")
+	}
+
+	return filteredDevices, nil
 }
 
 // podVFIndexInHost retrieves the vf index on the host network namespace related to the given

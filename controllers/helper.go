@@ -45,6 +45,7 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
@@ -119,8 +120,8 @@ func (DrainStateAnnotationPredicate) Update(e event.UpdateEvent) bool {
 		return false
 	}
 
-	oldAnno, hasOldAnno := e.ObjectOld.GetLabels()[constants.NodeStateDrainAnnotationCurrent]
-	newAnno, hasNewAnno := e.ObjectNew.GetLabels()[constants.NodeStateDrainAnnotationCurrent]
+	oldAnno, hasOldAnno := e.ObjectOld.GetAnnotations()[constants.NodeStateDrainAnnotationCurrent]
+	newAnno, hasNewAnno := e.ObjectNew.GetAnnotations()[constants.NodeStateDrainAnnotationCurrent]
 
 	if !hasOldAnno || !hasNewAnno {
 		return true
@@ -172,7 +173,8 @@ func GetNodeSelectorForDevicePlugin(dc *sriovnetworkv1.SriovOperatorConfig) map[
 func syncPluginDaemonObjs(ctx context.Context,
 	client k8sclient.Client,
 	scheme *runtime.Scheme,
-	dc *sriovnetworkv1.SriovOperatorConfig) error {
+	dc *sriovnetworkv1.SriovOperatorConfig,
+	featureGate featuregate.FeatureGate) error {
 	logger := log.Log.WithName("syncPluginDaemonObjs")
 	logger.V(1).Info("Start to sync sriov daemons objects")
 
@@ -180,11 +182,13 @@ func syncPluginDaemonObjs(ctx context.Context,
 	data := render.MakeRenderData()
 	data.Data["Namespace"] = vars.Namespace
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
+	data.Data["SRIOVNetworkConfigDaemonImage"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
 	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
 	data.Data["ResourcePrefix"] = vars.ResourcePrefix
 	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
 	data.Data["NodeSelectorField"] = GetNodeSelectorForDevicePlugin(dc)
 	data.Data["UseCDI"] = dc.Spec.UseCDI
+	data.Data["BlockDevicePluginUntilConfigured"] = featureGate.IsEnabled(constants.BlockDevicePluginUntilConfiguredFeatureGate)
 	objs, err := renderDsForCR(constants.PluginPath, &data)
 	if err != nil {
 		logger.Error(err, "Fail to render SR-IoV manifests")

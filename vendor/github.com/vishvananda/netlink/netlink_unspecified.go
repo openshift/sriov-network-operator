@@ -1,3 +1,4 @@
+//go:build !linux
 // +build !linux
 
 package netlink
@@ -144,6 +145,10 @@ func LinkSetGROIPv4MaxSize(link Link, maxSize int) error {
 	return ErrNotImplemented
 }
 
+func LinkSetIP6AddrGenMode(link Link, mode int) error {
+	return ErrNotImplemented
+}
+
 func LinkAdd(link Link) error {
 	return ErrNotImplemented
 }
@@ -201,6 +206,10 @@ func RouteAdd(route *Route) error {
 }
 
 func RouteAppend(route *Route) error {
+	return ErrNotImplemented
+}
+
+func RouteChange(route *Route) error {
 	return ErrNotImplemented
 }
 
@@ -277,5 +286,9 @@ func NeighDeserialize(m []byte) (*Neigh, error) {
 }
 
 func SocketGet(local, remote net.Addr) (*Socket, error) {
+	return nil, ErrNotImplemented
+}
+
+func SocketDestroy(local, remote net.Addr) (*Socket, error) {
 	return nil, ErrNotImplemented
 }

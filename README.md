@@ -419,6 +419,10 @@ Feature gates are used to enable or disable specific features in the operator.
   - **Description:** Enables the firmware reset via `mstfwreset` before a system reboot. This feature is specific to Mellanox network devices and is used to ensure that the firmware is properly reset during system maintenance.
   - **Default:** Disabled
 
+6. **Block Device Plugin Until Configured** (`blockDevicePluginUntilConfigured`)
+  - **Description:** Prevents the SR-IOV device plugin from starting until the sriov-config-daemon has applied the SR-IOV configuration for the node. When enabled, the device plugin daemonset runs an init container that sets a wait-for-config annotation on its pod and waits until the sriov-config-daemon removes this annotation after applying the configuration. This addresses the race condition where the device plugin starts and reports available resources before the configuration is actually applied, which can lead to pods being scheduled prematurely.
+  - **Default:** Enabled
+
 ### Enabling Feature Gates
 
 To enable a feature gate, add it to your configuration file or command line with the desired state. For example, to enable the `resourceInjectorMatchCondition` feature gate, you would specify:
@@ -464,6 +468,7 @@ nodes in parallel from the pool the operator can drain in parallel. maxUnavailab
 
 > **NOTE**: If a node is not part of any pool it will have a default configuration of maxUnavailable 1
 
+> **NOTE**: Node draining can be delegated to an external drain-controller by setting `USE_EXTERNAL_DRAINER=true` (e.g. using [NVIDIA maintenance-operator](https://github.com/Mellanox/maintenance-operator)) (PR #952). This means that internal drain-controller continues to work on nodeState objects which were not annotated with `sriovnetwork.openshift.io/use-external-drainer`. In addition, `SriovNetworkPoolConfig` will not take any effect during drain procedure, since the maintenance operator will be in charge of [parallel node operations](https://github.com/Mellanox/maintenance-operator/blob/main/api/v1alpha1/maintenanceoperatorconfig_types.go#L38-L46).
 
 #### RDMA Mode Configuration
 

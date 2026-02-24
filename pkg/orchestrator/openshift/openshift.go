@@ -14,7 +14,6 @@ import (
 
 	configv1 "github.com/openshift/api/config/v1"
 	mcv1 "github.com/openshift/api/machineconfiguration/v1"
-	mcoconsts "github.com/openshift/machine-config-operator/pkg/daemon/constants"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
@@ -267,9 +266,9 @@ func (c *OpenshiftOrchestrator) GetNodeMachinePoolName(ctx context.Context, node
 		return "", fmt.Errorf("hypershift doesn't have machineConfig")
 	}
 
-	desiredConfig, ok := node.Annotations[mcoconsts.DesiredMachineConfigAnnotationKey]
+	desiredConfig, ok := node.Annotations[consts.DesiredMachineConfigAnnotation]
 	if !ok {
-		return "", fmt.Errorf("failed to find the the annotation [%s] on node [%s]", mcoconsts.DesiredMachineConfigAnnotationKey, node.Name)
+		return "", fmt.Errorf("failed to find the the annotation [%s] on node [%s]", consts.DesiredMachineConfigAnnotation, node.Name)
 	}
 
 	mc := &mcv1.MachineConfig{}
@@ -287,7 +286,7 @@ func (c *OpenshiftOrchestrator) GetNodeMachinePoolName(ctx context.Context, node
 }
 
 func (c *OpenshiftOrchestrator) ChangeMachineConfigPoolPause(ctx context.Context, mcp *mcv1.MachineConfigPool, pause bool) error {
-	logger := ctx.Value("logger").(logr.Logger).WithName("ChangeMachineConfigPoolPause")
+	logger := ctx.Value(consts.LoggerContextKey).(logr.Logger).WithName("ChangeMachineConfigPoolPause")
 	logger.Info("change machine config pool state", "pause", pause, "mcp", mcp.Name)
 
 	patchString := []byte(fmt.Sprintf(`{"spec":{"paused":%t}}`, pause))

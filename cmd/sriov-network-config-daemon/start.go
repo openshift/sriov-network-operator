@@ -185,7 +185,7 @@ func initFeatureGates(defaultConfig *sriovnetworkv1.SriovOperatorConfig) (featur
 	featureGates := featuregate.New()
 	featureGates.Init(defaultConfig.Spec.FeatureGates)
 	fnLogger.Info("Enabled featureGates", "featureGates", featureGates.String())
-
+	vars.FeatureGate = featureGates
 	return featureGates, nil
 }
 
@@ -244,12 +244,8 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		setupLog.Error(err, "failed to fetch node state, exiting", "node-name", startOpts.nodeName)
 		return err
 	}
-	// check for a platform
-	for key, pType := range vars.PlatformsMap {
-		if strings.Contains(strings.ToLower(nodeInfo.Spec.ProviderID), strings.ToLower(key)) {
-			vars.PlatformType = pType
-		}
-	}
+	// set the platform type
+	vars.PlatformType = vars.GetPlatformType(nodeInfo.Spec.ProviderID)
 	setupLog.Info("Running on", "platform", vars.PlatformType)
 
 	// create helpers

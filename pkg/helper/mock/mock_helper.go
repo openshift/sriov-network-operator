@@ -201,18 +201,18 @@ func (mr *MockHostHelpersInterfaceMockRecorder) CompareServices(serviceA, servic
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompareServices", reflect.TypeOf((*MockHostHelpersInterface)(nil).CompareServices), serviceA, serviceB)
 }
 
-// ConfigSriovDeviceVirtual mocks base method.
-func (m *MockHostHelpersInterface) ConfigSriovDeviceVirtual(iface *v1.Interface) error {
+// ConfigSriovDevicesVirtual mocks base method.
+func (m *MockHostHelpersInterface) ConfigSriovDevicesVirtual(storeManager store.ManagerInterface, interfaces []v1.Interface, ifaceStatuses []v1.InterfaceExt) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfigSriovDeviceVirtual", iface)
+	ret := m.ctrl.Call(m, "ConfigSriovDevicesVirtual", storeManager, interfaces, ifaceStatuses)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ConfigSriovDeviceVirtual indicates an expected call of ConfigSriovDeviceVirtual.
-func (mr *MockHostHelpersInterfaceMockRecorder) ConfigSriovDeviceVirtual(iface any) *gomock.Call {
+// ConfigSriovDevicesVirtual indicates an expected call of ConfigSriovDevicesVirtual.
+func (mr *MockHostHelpersInterfaceMockRecorder) ConfigSriovDevicesVirtual(storeManager, interfaces, ifaceStatuses any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovDeviceVirtual", reflect.TypeOf((*MockHostHelpersInterface)(nil).ConfigSriovDeviceVirtual), iface)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigSriovDevicesVirtual", reflect.TypeOf((*MockHostHelpersInterface)(nil).ConfigSriovDevicesVirtual), storeManager, interfaces, ifaceStatuses)
 }
 
 // ConfigSriovInterfaces mocks base method.
@@ -342,6 +342,21 @@ func (m *MockHostHelpersInterface) DiscoverSriovDevices(storeManager store.Manag
 func (mr *MockHostHelpersInterfaceMockRecorder) DiscoverSriovDevices(storeManager any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverSriovDevices", reflect.TypeOf((*MockHostHelpersInterface)(nil).DiscoverSriovDevices), storeManager)
+}
+
+// DiscoverSriovVirtualDevices mocks base method.
+func (m *MockHostHelpersInterface) DiscoverSriovVirtualDevices() ([]v1.InterfaceExt, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DiscoverSriovVirtualDevices")
+	ret0, _ := ret[0].([]v1.InterfaceExt)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DiscoverSriovVirtualDevices indicates an expected call of DiscoverSriovVirtualDevices.
+func (mr *MockHostHelpersInterfaceMockRecorder) DiscoverSriovVirtualDevices() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscoverSriovVirtualDevices", reflect.TypeOf((*MockHostHelpersInterface)(nil).DiscoverSriovVirtualDevices))
 }
 
 // DiscoverVDPAType mocks base method.

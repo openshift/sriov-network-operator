@@ -17,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
-	"github.com/openshift/machine-config-operator/pkg/controller/common"
 )
 
 type RenderData struct {
@@ -188,11 +187,11 @@ func GenerateMachineConfig(path, name, mcRole string, ovsOffload bool, d *Render
 		return vs
 	}
 
-	ignCfg, err := common.TranspileCoreOSConfigToIgn(nil, keySortVals(units))
+	ignCfg, err := TranspileCoreOSConfigToIgn(nil, keySortVals(units))
 	if err != nil {
 		return nil, errors.Wrap(err, "error transpiling CoreOS config to Ignition config")
 	}
-	mcfg, err := common.MachineConfigFromIgnConfig(mcRole, name, ignCfg)
+	mcfg, err := MachineConfigFromIgnConfig(mcRole, name, ignCfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating MachineConfig from Ignition config")
 	}

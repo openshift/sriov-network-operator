@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"regexp"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -35,6 +36,7 @@ var (
 	// PlatformsMap contains supported platforms for virtual VF
 	PlatformsMap = map[string]consts.PlatformTypes{
 		"openstack": consts.VirtualOpenStack,
+		"aws":       consts.AWS,
 	}
 
 	// SupportedVfIds list of supported virtual functions IDs
@@ -83,6 +85,10 @@ var (
 
 	// ErrOperationNotSupportedByPlatform is returned when a platform operation is not supported by the platform implementation.
 	ErrOperationNotSupportedByPlatform = errors.New("operation not supported by the platform")
+
+	// UseExternalDrainer controls if SRIOV operator will use an external drainer
+	// for draining nodes or its internal drain controller (default)
+	UseExternalDrainer bool
 )
 
 func init() {
@@ -105,4 +111,15 @@ func init() {
 	ResourcePrefix = os.Getenv("RESOURCE_PREFIX")
 
 	FeatureGate = featuregate.New()
+
+	UseExternalDrainer = os.Getenv("USE_EXTERNAL_DRAINER") == "true"
+}
+
+func GetPlatformType(providerID string) consts.PlatformTypes {
+	for key, pType := range PlatformsMap {
+		if strings.Contains(strings.ToLower(providerID), strings.ToLower(key)) {
+			return pType
+		}
+	}
+	return consts.Baremetal
 }

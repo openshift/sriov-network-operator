@@ -13,11 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jaypipes/ghw/pkg/context"
+	"github.com/jaypipes/ghw/internal/config"
 	"github.com/jaypipes/ghw/pkg/cpu"
 	"github.com/jaypipes/ghw/pkg/marshal"
 	"github.com/jaypipes/ghw/pkg/memory"
-	"github.com/jaypipes/ghw/pkg/option"
 )
 
 // Architecture describes the overall hardware architecture. It can be either
@@ -107,24 +106,16 @@ func (n *Node) String() string {
 
 // Info describes the system topology for the host hardware
 type Info struct {
-	ctx          *context.Context
 	Architecture Architecture `json:"architecture"`
 	Nodes        []*Node      `json:"nodes"`
 }
 
 // New returns a pointer to an Info struct that contains information about the
 // NUMA topology on the host system
-func New(opts ...*option.Option) (*Info, error) {
-	merged := option.Merge(opts...)
-	ctx := context.New(merged)
-	info := &Info{ctx: ctx}
-	var err error
-	if context.Exists(merged) {
-		err = info.load()
-	} else {
-		err = ctx.Do(info.load)
-	}
-	if err != nil {
+func New(args ...any) (*Info, error) {
+	ctx := config.ContextFromArgs(args...)
+	info := &Info{}
+	if err := info.load(ctx); err != nil {
 		return nil, err
 	}
 	for _, node := range info.Nodes {
@@ -155,11 +146,11 @@ type topologyPrinter struct {
 // YAMLString returns a string with the topology information formatted as YAML
 // under a top-level "topology:" key
 func (i *Info) YAMLString() string {
-	return marshal.SafeYAML(i.ctx, topologyPrinter{i})
+	return marshal.SafeYAML(topologyPrinter{i})
 }
 
 // JSONString returns a string with the topology information formatted as JSON
 // under a top-level "topology:" key
 func (i *Info) JSONString(indent bool) string {
-	return marshal.SafeJSON(i.ctx, topologyPrinter{i}, indent)
+	return marshal.SafeJSON(topologyPrinter{i}, indent)
 }

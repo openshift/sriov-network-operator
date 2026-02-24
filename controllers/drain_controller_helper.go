@@ -22,13 +22,14 @@ import (
 func (dr *DrainReconcile) handleNodeIdleNodeStateDrainingOrCompleted(ctx context.Context,
 	node *corev1.Node,
 	nodeNetworkState *sriovnetworkv1.SriovNetworkNodeState) (ctrl.Result, error) {
-	reqLogger := ctx.Value("logger").(logr.Logger).WithName("handleNodeIdleNodeStateDrainingOrCompleted")
+	reqLogger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("handleNodeIdleNodeStateDrainingOrCompleted")
 	completed, err := dr.drainer.CompleteDrainNode(ctx, node)
 	if err != nil {
 		reqLogger.Error(err, "failed to complete drain on node")
-		dr.recorder.Event(nodeNetworkState,
+		dr.recorder.Eventf(nodeNetworkState, nil,
 			corev1.EventTypeWarning,
 			"DrainController",
+			"CompleteDrain",
 			"failed to drain node")
 		return ctrl.Result{}, err
 	}
@@ -36,9 +37,10 @@ func (dr *DrainReconcile) handleNodeIdleNodeStateDrainingOrCompleted(ctx context
 	// if we didn't manage to complete the un drain of the node we retry
 	if !completed {
 		reqLogger.Info("complete drain was not completed re queueing the request")
-		dr.recorder.Event(nodeNetworkState,
+		dr.recorder.Eventf(nodeNetworkState, nil,
 			corev1.EventTypeWarning,
 			"DrainController",
+			"CompleteDrain",
 			"node complete drain was not completed")
 		// TODO: make this time configurable
 		return reconcile.Result{RequeueAfter: constants.DrainControllerRequeueTime}, nil
@@ -52,9 +54,10 @@ func (dr *DrainReconcile) handleNodeIdleNodeStateDrainingOrCompleted(ctx context
 	}
 
 	reqLogger.Info("completed the un drain for node")
-	dr.recorder.Event(nodeNetworkState,
+	dr.recorder.Eventf(nodeNetworkState, nil,
 		corev1.EventTypeWarning,
 		"DrainController",
+		"CompleteDrain",
 		"node un drain completed")
 	return ctrl.Result{}, nil
 }
@@ -64,7 +67,7 @@ func (dr *DrainReconcile) handleNodeDrainOrReboot(ctx context.Context,
 	nodeNetworkState *sriovnetworkv1.SriovNetworkNodeState,
 	nodeDrainAnnotation,
 	nodeStateDrainAnnotationCurrent string) (ctrl.Result, error) {
-	reqLogger := ctx.Value("logger").(logr.Logger).WithName("handleNodeDrainOrReboot")
+	reqLogger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("handleNodeDrainOrReboot")
 	// nothing to do here we need to wait for the node to move back to idle
 	if nodeStateDrainAnnotationCurrent == constants.DrainComplete {
 		reqLogger.Info("node requested a drain and nodeState is on drain completed nothing todo")
@@ -105,9 +108,10 @@ func (dr *DrainReconcile) handleNodeDrainOrReboot(ctx context.Context,
 	drained, err := dr.drainer.DrainNode(ctx, node, fullNodeDrain, singleNode)
 	if err != nil {
 		reqLogger.Error(err, "error trying to drain the node")
-		dr.recorder.Event(nodeNetworkState,
+		dr.recorder.Eventf(nodeNetworkState, nil,
 			corev1.EventTypeWarning,
 			"DrainController",
+			"DrainNode",
 			"failed to drain node")
 		return reconcile.Result{}, err
 	}
@@ -115,9 +119,10 @@ func (dr *DrainReconcile) handleNodeDrainOrReboot(ctx context.Context,
 	// if we didn't manage to complete the drain of the node we retry
 	if !drained {
 		reqLogger.Info("the nodes was not drained re queueing the request")
-		dr.recorder.Event(nodeNetworkState,
+		dr.recorder.Eventf(nodeNetworkState, nil,
 			corev1.EventTypeWarning,
 			"DrainController",
+			"DrainNode",
 			"node drain operation was not completed")
 		return reconcile.Result{RequeueAfter: constants.DrainControllerRequeueTime}, nil
 	}
@@ -130,15 +135,16 @@ func (dr *DrainReconcile) handleNodeDrainOrReboot(ctx context.Context,
 	}
 
 	reqLogger.Info("node drained successfully")
-	dr.recorder.Event(nodeNetworkState,
+	dr.recorder.Eventf(nodeNetworkState, nil,
 		corev1.EventTypeWarning,
 		"DrainController",
+		"DrainNode",
 		"node drain completed")
 	return ctrl.Result{}, nil
 }
 
 func (dr *DrainReconcile) tryDrainNode(ctx context.Context, node *corev1.Node) (*reconcile.Result, error) {
-	reqLogger := ctx.Value("logger").(logr.Logger).WithName("tryDrainNode")
+	reqLogger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("tryDrainNode")
 
 	//critical section we need to check if we can start the draining
 	dr.drainCheckMutex.Lock()
@@ -208,7 +214,7 @@ func (dr *DrainReconcile) tryDrainNode(ctx context.Context, node *corev1.Node) (
 }
 
 func (dr *DrainReconcile) findNodePoolConfig(ctx context.Context, node *corev1.Node) (*sriovnetworkv1.SriovNetworkPoolConfig, []corev1.Node, error) {
-	logger := ctx.Value("logger").(logr.Logger).WithName("findNodePoolConfig")
+	logger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("findNodePoolConfig")
 	// get all the sriov network pool configs
 	npcl := &sriovnetworkv1.SriovNetworkPoolConfigList{}
 	err := dr.List(ctx, npcl)

@@ -17,7 +17,7 @@ import (
 var _ = Describe("Systemd", func() {
 	var (
 		tempDir              = "/tmp/sriov-systemd-test/"
-		validTestContentJson = []byte(`{
+		validTestContentJSON = []byte(`{
   "spec": {
     "interfaces": [
       {
@@ -116,7 +116,7 @@ lastSyncError: ""`)
 
 	Context("ReadConfFile", func() {
 		It("should read the content of the file as a json", func() {
-			err := os.WriteFile(path.Join(tempDir, consts.SriovSystemdConfigPath), validTestContentJson, 0644)
+			err := os.WriteFile(path.Join(tempDir, consts.SriovSystemdConfigPath), validTestContentJSON, 0644)
 			Expect(err).ToNot(HaveOccurred())
 
 			sr, err := s.ReadConfFile()
