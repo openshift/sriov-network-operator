@@ -198,7 +198,7 @@ func getMetricsForNode(nodeName string) map[string]*dto.MetricFamily {
 	// Clean the scraped output from carriage returns
 	stdout = strings.ReplaceAll(stdout, "\r", "")
 
-	var parser expfmt.TextParser
+	parser := expfmt.NewTextParser(model.UTF8Validation)
 	mf, err := parser.TextToMetricFamilies(strings.NewReader(stdout))
 	Expect(err).ToNot(HaveOccurred())
 
