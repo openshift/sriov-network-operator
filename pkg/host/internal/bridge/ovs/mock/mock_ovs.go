@@ -55,6 +55,20 @@ func (mr *MockInterfaceMockRecorder) CreateOVSBridge(ctx, conf any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateOVSBridge", reflect.TypeOf((*MockInterface)(nil).CreateOVSBridge), ctx, conf)
 }
 
+// DetachUplinkAndVFRepresentorsFromOVSBridge mocks base method.
+func (m *MockInterface) DetachUplinkAndVFRepresentorsFromOVSBridge(ctx context.Context, pciAddress string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DetachUplinkAndVFRepresentorsFromOVSBridge", ctx, pciAddress)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DetachUplinkAndVFRepresentorsFromOVSBridge indicates an expected call of DetachUplinkAndVFRepresentorsFromOVSBridge.
+func (mr *MockInterfaceMockRecorder) DetachUplinkAndVFRepresentorsFromOVSBridge(ctx, pciAddress any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachUplinkAndVFRepresentorsFromOVSBridge", reflect.TypeOf((*MockInterface)(nil).DetachUplinkAndVFRepresentorsFromOVSBridge), ctx, pciAddress)
+}
+
 // GetOVSBridges mocks base method.
 func (m *MockInterface) GetOVSBridges(ctx context.Context) ([]v1.OVSConfigExt, error) {
 	m.ctrl.T.Helper()
@@ -68,20 +82,6 @@ func (m *MockInterface) GetOVSBridges(ctx context.Context) ([]v1.OVSConfigExt, e
 func (mr *MockInterfaceMockRecorder) GetOVSBridges(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOVSBridges", reflect.TypeOf((*MockInterface)(nil).GetOVSBridges), ctx)
-}
-
-// RemoveInterfaceFromOVSBridge mocks base method.
-func (m *MockInterface) RemoveInterfaceFromOVSBridge(ctx context.Context, ifaceAddr string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveInterfaceFromOVSBridge", ctx, ifaceAddr)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// RemoveInterfaceFromOVSBridge indicates an expected call of RemoveInterfaceFromOVSBridge.
-func (mr *MockInterfaceMockRecorder) RemoveInterfaceFromOVSBridge(ctx, ifaceAddr any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveInterfaceFromOVSBridge", reflect.TypeOf((*MockInterface)(nil).RemoveInterfaceFromOVSBridge), ctx, ifaceAddr)
 }
 
 // RemoveOVSBridge mocks base method.
