@@ -715,13 +715,26 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					pod.DefineWithNetworks([]string{sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName}),
 					node,
 				)
+
 				runningPodA, err := clients.Pods(testPodA.Namespace).Create(context.Background(), testPodA, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodA.Name))
 				By("Checking that first Pod is in Running state")
 				runningPodA = waitForPodRunning(runningPodA)
 
-				By("Create second Pod which consumes one more VF")
+				By("Checking the sriov resource has the right number of devices has been injected to resource request and limit spec")
+				Expect(len(runningPodA.Spec.Containers)).To(Equal(1))
+				resource, exist := runningPodA.Spec.Containers[0].Resources.Requests[corev1.ResourceName(fmt.Sprintf("openshift.io/%s", resourceName))]
+				Expect(exist).To(BeTrue())
+				amount, valid := resource.AsInt64()
+				Expect(valid).To(BeTrue())
+				Expect(amount).To(Equal(int64(5)))
+				resource, exist = runningPodA.Spec.Containers[0].Resources.Limits[corev1.ResourceName(fmt.Sprintf("openshift.io/%s", resourceName))]
+				Expect(exist).To(BeTrue())
+				amount, valid = resource.AsInt64()
+				Expect(valid).To(BeTrue())
+				Expect(amount).To(Equal(int64(5)))
 
+				By("Create second Pod which consumes one more VF")
 				testPodB := pod.RedefineWithNodeSelector(
 					pod.DefineWithNetworks([]string{sriovNetworkName}),
 					node,

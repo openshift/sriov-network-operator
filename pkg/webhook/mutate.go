@@ -30,19 +30,25 @@ func mutateSriovNetworkNodePolicy(cr map[string]interface{}) (*v1.AdmissionRespo
 	}
 
 	patchs := []map[string]interface{}{}
-	spec := cr["spec"]
-	if _, ok := spec.(map[string]interface{})["priority"]; !ok {
+	specMap, ok := cr["spec"].(map[string]interface{})
+	if !ok {
+		return &reviewResponse, nil
+	}
+	if _, ok := specMap["priority"]; !ok {
 		log.Log.V(2).Info("mutateSriovNetworkNodePolicy(): set default priority to lowest for", "policy-name", name)
 		patchs = append(patchs, defaultPriorityPatch)
 	}
-	if _, ok := spec.(map[string]interface{})["isRdma"]; !ok {
+	if _, ok := specMap["isRdma"]; !ok {
 		log.Log.V(2).Info("mutateSriovNetworkNodePolicy(): set default isRdma to false for policy", "policy-name", name)
 		patchs = append(patchs, defaultIsRdmaPatch)
 	}
-	// Device with InfiniBand link type requires isRdma to be true
-	if str, ok := spec.(map[string]interface{})["linkType"].(string); ok && strings.EqualFold(str, constants.LinkTypeIB) {
-		log.Log.V(2).Info("mutateSriovNetworkNodePolicy(): set isRdma to true for policy since ib link type is detected", "policy-name", name)
-		patchs = append(patchs, InfiniBandIsRdmaPatch)
+	// Device with InfiniBand link type requires isRdma to be true, except for vfio-pci device type
+	if str, ok := specMap["linkType"].(string); ok && strings.EqualFold(str, constants.LinkTypeIB) {
+		devType, _ := specMap["deviceType"].(string)
+		if !strings.EqualFold(devType, constants.DeviceTypeVfioPci) {
+			log.Log.V(2).Info("mutateSriovNetworkNodePolicy(): set isRdma to true for policy since ib link type is detected", "policy-name", name)
+			patchs = append(patchs, InfiniBandIsRdmaPatch)
+		}
 	}
 	var err error
 	reviewResponse.Patch, err = json.Marshal(patchs)

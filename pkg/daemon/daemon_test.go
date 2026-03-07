@@ -2,6 +2,7 @@ package daemon_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -685,6 +686,90 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 					devicePluginPod)).ToNot(HaveOccurred())
 				g.Expect(devicePluginPod.Annotations).ToNot(HaveKey(constants.DevicePluginWaitConfigAnnotation))
 			}, waitTime, retryTime).Should(Succeed())
+		})
+	})
+})
+
+var _ = Describe("Daemon CheckSystemdStatus", func() {
+	var (
+		myMockCtrl   *gomock.Controller
+		myHostHelper *mock_helper.MockHostHelpersInterface
+		reconciler   *daemon.NodeReconciler
+	)
+
+	BeforeEach(func() {
+		myMockCtrl = gomock.NewController(GinkgoT())
+		myHostHelper = mock_helper.NewMockHostHelpersInterface(myMockCtrl)
+		reconciler = daemon.New(nil, myHostHelper, nil, nil, nil)
+
+		originalUsingSystemdMode := vars.UsingSystemdMode
+		vars.UsingSystemdMode = true
+		DeferCleanup(func() {
+			vars.UsingSystemdMode = originalUsingSystemdMode
+		})
+	})
+
+	Context("when systemd services are enabled", func() {
+		BeforeEach(func() {
+			myHostHelper.EXPECT().IsServiceEnabled(constants.SriovServicePath).Return(true, nil)
+			myHostHelper.EXPECT().IsServiceEnabled(constants.SriovPostNetworkServicePath).Return(true, nil)
+		})
+
+		It("should return exist=true if sriov result file exists", func() {
+			myHostHelper.EXPECT().ReadSriovResult().Return(&hostTypes.SriovResult{}, nil)
+			result, exist, err := reconciler.CheckSystemdStatus()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exist).To(BeTrue())
+			Expect(result).ToNot(BeNil())
+		})
+
+		It("should return exist=false if sriov result file does not exist", func() {
+			myHostHelper.EXPECT().ReadSriovResult().Return(nil, nil)
+			result, exist, err := reconciler.CheckSystemdStatus()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exist).To(BeFalse())
+			Expect(result).To(BeNil())
+		})
+
+		It("should return error if ReadSriovResult fails", func() {
+			myHostHelper.EXPECT().ReadSriovResult().Return(nil, fmt.Errorf("read error"))
+			result, exist, err := reconciler.CheckSystemdStatus()
+			Expect(err).To(HaveOccurred())
+			Expect(exist).To(BeFalse())
+			Expect(result).To(BeNil())
+		})
+	})
+
+	Context("when systemd services are NOT enabled", func() {
+		It("should return exist=false if first service is disabled", func() {
+			myHostHelper.EXPECT().IsServiceEnabled(constants.SriovServicePath).Return(false, nil)
+			myHostHelper.EXPECT().IsServiceEnabled(constants.SriovPostNetworkServicePath).Return(true, nil)
+			result, exist, err := reconciler.CheckSystemdStatus()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exist).To(BeFalse())
+			Expect(result.SyncStatus).To(Equal(constants.SyncStatusFailed))
+		})
+
+		It("should return exist=false if second service is disabled", func() {
+			myHostHelper.EXPECT().IsServiceEnabled(constants.SriovServicePath).Return(true, nil)
+			myHostHelper.EXPECT().IsServiceEnabled(constants.SriovPostNetworkServicePath).Return(false, nil)
+			result, exist, err := reconciler.CheckSystemdStatus()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exist).To(BeFalse())
+			Expect(result.SyncStatus).To(Equal(constants.SyncStatusFailed))
+		})
+	})
+
+	Context("when not in systemd mode", func() {
+		BeforeEach(func() {
+			vars.UsingSystemdMode = false
+		})
+
+		It("should return exist=false and no error", func() {
+			result, exist, err := reconciler.CheckSystemdStatus()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exist).To(BeFalse())
+			Expect(result).To(BeNil())
 		})
 	})
 })
