@@ -288,6 +288,30 @@ status:
 
 From this example, in status field, the user can find out there are 2 SRIOV capable NICs on node 'work-node-1'; in spec field, user can learn what the expected configure is generated from the combination of SriovNetworkNodePolicy CRs.  In the virtual deployment case, a single VF will be associated with each device.
 
+### Discovering Alternative Names for Network interfaces
+
+Alternative names are automatically discovered by the operator and stored in the `SriovNetworkNodeState` CR. You can view them using:
+
+```bash
+$ kubectl get sriovnetworknodestate -n sriov-network-operator <node-name> -o yaml
+```
+
+Look for the `altNames` field under each interface in the `status.interfaces` section:
+
+```yaml
+status:
+  interfaces:
+  - name: ens803f1
+    altNames:
+    - eth0
+    - net1
+    - sriov1
+    pciAddress: 0000:86:00.1
+    vendor: "8086"
+    deviceID: "1583"
+    # ... other fields
+```
+
 ### SriovNetworkNodePolicy
 
 This CRD is the key of SR-IOV network operator. This custom resource should be managed by cluster admin, to instruct the operator to:
@@ -390,6 +414,60 @@ spec:
 ```
 
 > **NOTE**: Currently only `mellanox` plugin can be disabled.
+
+### Alternative Interface Names Support
+
+The SR-IOV Network Operator supports using network interface alternative names (altnames) when selecting interfaces in policies. This feature provides additional flexibility when configuring SR-IOV devices, especially in environments where interfaces may have multiple naming conventions.
+
+When defining a `SriovNetworkNodePolicy`, you can use alternative names in the `nicSelector.pfNames` field. The operator will automatically match interfaces based on either their primary name or any of their alternative names.
+
+**Example:**
+
+Consider a network interface with the following properties:
+- Primary name: `ens803f1`
+- Alternative names: `eth0`, `net1`, `sriov1`
+
+You can reference this interface using any of these names:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: policy-using-altname
+  namespace: sriov-network-operator
+spec:
+  deviceType: netdevice
+  nicSelector:
+    pfNames: ["sriov1"]  # Using alternative name instead of ens803f1
+    vendor: "8086"
+  nodeSelector:
+    feature.node.kubernetes.io/network-sriov.capable: "true"
+  numVfs: 4
+  priority: 99
+  resourceName: intelnics
+```
+
+#### Alternative Names with VF Range Notation
+
+Alternative names work seamlessly with the VF range notation (#-notation):
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: policy-with-vf-range
+  namespace: sriov-network-operator
+spec:
+  deviceType: netdevice
+  nicSelector:
+    pfNames: ["eth0#0-3"]  # Using alternative name with VF range
+    vendor: "8086"
+  nodeSelector:
+    feature.node.kubernetes.io/network-sriov.capable: "true"
+  numVfs: 8
+  priority: 99
+  resourceName: intelnics
+```
 
 ## Feature Gates
 
