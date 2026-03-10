@@ -8,13 +8,11 @@ rules:
   resources:
   - pods
   verbs:
-  - '*'
-- apiGroups:
-  - apps
-  resources:
-  - daemonsets
-  verbs:
-  - '*'
+    - "get"
+    - "list"
+    - "watch"
+    - "delete"
+    - "patch"
 - apiGroups:
   - sriovnetwork.openshift.io
   resources:
@@ -38,15 +36,15 @@ rules:
   - get
   - update
 - apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-- apiGroups:
   - 'coordination.k8s.io'
   resources:
   - 'leases'
   verbs:
   - '*'
+- apiGroups:
+    - ""
+  resources:
+    - events
+  verbs:
+    - create
+    - patch
