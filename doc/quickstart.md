@@ -2,100 +2,102 @@
 
 ## Prerequisites
 
-1. A supported SRIOV hardware on the cluster nodes. Supported models can be found [here](https://github.com/k8snetworkplumbingwg/sriov-network-operator/blob/master/doc/supported-hardware.md).
+1. A supported SRIOV hardware on the cluster nodes. Supported models can be found [here](supported-hardware.md).
 2. Kubernetes or Openshift cluster running on bare metal nodes.
-3. Multus-cni is deployed as default CNI plugin, and there is a default CNI plugin (flannel, openshift-sdn etc.) available for Multus-cni.
+3. Multus-cni is deployed as default CNI plugin, and there is a default CNI plugin (flannel, ovn-kubernetes etc.) available for Multus-cni.
 4. On RedHat Enterprise Linux and Ubuntu operating systems, the `rdma-core` package must be installed to support RDMA resource provisioning. On RedHat CoreOS the package installation is not required.
 
 ## Installation
 
-Make sure to have installed the Operator-SDK, as shown in its [install documentation](https://sdk.operatorframework.io/docs/installation/), and that the binaries are available in your \$PATH.
+### OpenShift
 
-Clone this GitHub repository.
+For OpenShift clusters, you can use the Operator Lifecycle Manager (OLM) or deploy manually:
 
+**Option 1: Using OLM (Recommended)**
 ```bash
-go get github.com/k8snetworkplumbingwg/sriov-network-operator
+# The operator is available in OperatorHub
+# Install through the OpenShift Console or using CLI
 ```
 
-Deploy the operator.
-
-If you are running an Openshift cluster:
-
+**Option 2: Manual Deployment**
 ```bash
+# Clone the repository (for development/testing)
+git clone https://github.com/k8snetworkplumbingwg/sriov-network-operator.git
+cd sriov-network-operator
+
+# Deploy the operator
 make deploy-setup
 ```
 
-If you are running a Kubernetes cluster:
+### Kubernetes
+
+For Kubernetes clusters, use Helm for easier deployment and management:
+
+#### Prerequisites
+- Helm v3 installed
+- Kubernetes v1.17+
+
+#### Install Helm (if not already installed)
 ```bash
-make deploy-setup-k8s
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+chmod 500 get_helm.sh
+./get_helm.sh
 ```
 
-Webhooks are disabled when deploying on a Kubernetes cluster as per the instructions above. To enable webhooks on Kubernetes cluster, there are two options:
+#### Deploy with Helm
 
-1. Create certificates for each of the two webhooks using a single CA whose cert you provide through an environment variable.
+**Using OCI Registry (Recommended)**
+```bash
+helm install -n sriov-network-operator --create-namespace \
+  --set sriovOperatorConfig.deploy=true \
+  sriov-network-operator \
+  oci://ghcr.io/k8snetworkplumbingwg/sriov-network-operator-chart
+```
 
-   For example, given `cacert.pem`, `key.pem` and `cert.pem`:
-   ```bash
-   kubectl create ns sriov-network-operator
-   kubectl -n sriov-network-operator create secret tls operator-webhook-cert --cert=cert.pem --key=key.pem
-   kubectl -n sriov-network-operator create secret tls network-resources-injector-cert --cert=cert.pem --key=key.pem
-   export ADMISSION_CONTROLLERS_ENABLED=true
-   export ADMISSION_CONTROLLERS_CERTIFICATES_OPERATOR_CA_CRT=$(base64 -w 0 < cacert.pem)
-   export ADMISSION_CONTROLLERS_CERTIFICATES_INJECTOR_CA_CRT=$(base64 -w 0 < cacert.pem)
-   make deploy-setup-k8s
-   ```
+**Note:** The Helm chart is available as a container image at [ghcr.io/k8snetworkplumbingwg/sriov-network-operator-chart](https://github.com/k8snetworkplumbingwg/sriov-network-operator/pkgs/container/sriov-network-operator-chart)
 
-2. Using https://cert-manager.io/, deploy it as:
-   ```bash
-   kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.3.0/cert-manager.yaml
-   ```
+#### Enable Webhooks (Optional)
 
-   Define the appropriate Issuer and Certificates, as an example:
-   ```bash
-   kubectl create ns sriov-network-operator
-   cat <<EOF | kubectl apply -f -
-   apiVersion: cert-manager.io/v1
-   kind: Issuer
-   metadata:
-     name: sriov-network-operator-selfsigned-issuer
-     namespace: sriov-network-operator
-   spec:
-     selfSigned: {}
-   ---
-   apiVersion: cert-manager.io/v1
-   kind: Certificate
-   metadata:
-     name: operator-webhook-cert
-     namespace: sriov-network-operator
-   spec:
-     secretName: operator-webhook-cert
-     dnsNames:
-     - operator-webhook-service.sriov-network-operator.svc
-     issuerRef:
-       name: sriov-network-operator-selfsigned-issuer
-   ---
-   apiVersion: cert-manager.io/v1
-   kind: Certificate
-   metadata:
-     name: network-resources-injector-cert
-     namespace: sriov-network-operator
-   spec:
-     secretName: network-resources-injector-cert
-     dnsNames:
-     - network-resources-injector-service.sriov-network-operator.svc
-     issuerRef:
-       name: sriov-network-operator-selfsigned-issuer
-   EOF
-   ```
+By default, the Helm chart disables webhooks. To enable them:
 
-    And then deploy the operator:
-    ```bash
-    export ADMISSION_CONTROLLERS_ENABLED=true
-    export ADMISSION_CONTROLLERS_CERTIFICATES_CERT_MANAGER_ENABLED=true
-    make deploy-setup-k8s
-    ```
+**Option 1: Using cert-manager (Recommended)**
+```bash
+# Install cert-manager if not already installed
+kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.12.0/cert-manager.yaml
 
-By default, the operator will be deployed in namespace 'sriov-network-operator' for Kubernetes cluster, you can check if the deployment is finished successfully.
+# Deploy with cert-manager certificate generation
+helm install -n sriov-network-operator --create-namespace \
+  --set sriovOperatorConfig.deploy=true \
+  --set operator.admissionControllers.enabled=true \
+  --set operator.admissionControllers.certificates.certManager.enabled=true \
+  --set operator.admissionControllers.certificates.certManager.generateSelfSigned=true \
+  sriov-network-operator \
+  oci://ghcr.io/k8snetworkplumbingwg/sriov-network-operator-chart
+```
+
+**Option 2: Using Pre-created Certificates**
+```bash
+# Create certificates manually
+kubectl create namespace sriov-network-operator
+kubectl -n sriov-network-operator create secret tls operator-webhook-cert --cert=cert.pem --key=key.pem
+kubectl -n sriov-network-operator create secret tls network-resources-injector-cert --cert=cert.pem --key=key.pem
+
+# Deploy with admission controllers enabled
+helm install -n sriov-network-operator \
+  --set sriovOperatorConfig.deploy=true \
+  --set operator.admissionControllers.enabled=true \
+  sriov-network-operator \
+  oci://ghcr.io/k8snetworkplumbingwg/sriov-network-operator-chart
+```
+
+#### Pod Security Standards
+
+For clusters with Pod Security Admission enabled, label the namespace:
+```bash
+kubectl label ns sriov-network-operator pod-security.kubernetes.io/enforce=privileged
+```
+
+By default, the operator will be deployed in namespace 'sriov-network-operator' for Kubernetes cluster and on 'openshift-sriov-network-operator' for openshift, you can check if the deployment is finished successfully.
 
 ```bash
 $ kubectl get -n sriov-network-operator all
@@ -117,8 +119,6 @@ replicaset.apps/sriov-network-operator-54d7545f65   1         1         1       
 ```
 
 You may need to label SR-IOV worker nodes using `node-role.kubernetes.io/worker` label, if not already.
-
-**Note:** By default, SR-IOV Operator will be deployed in namespace 'openshift-sriov-network-operator' for OpenShift cluster.
 
 ## Configuration
 
@@ -212,9 +212,8 @@ $ kubectl get no -o json | jq -r '[.items[] | {name:.metadata.name, allocable:.s
       "ephemeral-storage": "965895780801",
       "hugepages-1Gi": "0",
       "hugepages-2Mi": "0",
-      "intel.com/intel-nics": "3",
+      "openshift.io/intel-nics": "3",
       "memory": "196706684Ki",
-      "openshift.io/sriov": "0",
       "pods": "110"
     }
   }
@@ -247,16 +246,22 @@ spec:
   resourceName: intelnics
 ```
 
-To remove the operator related resources.
+## Uninstallation
 
-If you are running an Openshift cluster:
+### OpenShift
 
 ```bash
 make undeploy
 ```
 
-If you are running a Kubernetes cluster:
+### Kubernetes
 
+**Using Helm:**
 ```bash
-make undeploy-k8s
+helm uninstall -n sriov-network-operator sriov-network-operator
+```
+
+**Clean up namespace (optional):**
+```bash
+kubectl delete namespace sriov-network-operator
 ```
