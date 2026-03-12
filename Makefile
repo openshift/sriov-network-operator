@@ -73,7 +73,7 @@ image: ; $(info Building image...)
 
 # Run tests
 test: generate vet manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./... -coverprofile cover.out -v
+	KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS_DIR)" HOME="$(shell pwd)" go test ./... -coverprofile cover.out -v
 
 # Build manager binary
 manager: generate vet _build-manager
@@ -129,9 +129,17 @@ KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
 	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.5)
 
-ENVTEST = $(shell pwd)/bin/setup-envtest
-envtest: ## Download envtest-setup locally if necessary.
-	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.16)
+ENVTEST_K8S_VERSION ?= 1.28.0
+ENVTEST_ASSETS_DIR ?= /tmp/controller-tools/envtest
+envtest: ## Download envtest binaries (kube-apiserver, etcd, kubectl) locally if necessary.
+	@[ -f $(ENVTEST_ASSETS_DIR)/kube-apiserver ] || { \
+	set -e ;\
+	ARCH=$$(go env GOARCH) ;\
+	OS=$$(go env GOOS) ;\
+	echo "Downloading envtest binaries for k8s $(ENVTEST_K8S_VERSION) ($${OS}/$${ARCH})..." ;\
+	curl -fSL "https://github.com/kubernetes-sigs/controller-tools/releases/download/envtest-v$(ENVTEST_K8S_VERSION)/envtest-v$(ENVTEST_K8S_VERSION)-$${OS}-$${ARCH}.tar.gz" -o /tmp/envtest.tar.gz ;\
+	tar -xzf /tmp/envtest.tar.gz -C /tmp/ ;\
+	}
 
 # go-get-tool will 'go install' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
@@ -188,7 +196,7 @@ test-e2e-validation-only:
 	SUITE=./test/validation ./hack/run-e2e-conformance.sh	
 
 test-e2e: generate vet manifests skopeo envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
+	KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS_DIR)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
 
 test-e2e-k8s: export NAMESPACE=sriov-network-operator
 test-e2e-k8s: test-e2e
@@ -197,7 +205,7 @@ test-bindata-scripts: fakechroot
 	fakechroot ./test/scripts/enable-kargs_test.sh
 
 test-%: generate vet manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./$*/... -coverprofile cover-$*.out -coverpkg ./... -v
+	KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS_DIR)" HOME="$(shell pwd)" go test ./$*/... -coverprofile cover-$*.out -coverpkg ./... -v
 
 # deploy-setup-k8s: export NAMESPACE=sriov-network-operator
 # deploy-setup-k8s: export ENABLE_ADMISSION_CONTROLLER=false
