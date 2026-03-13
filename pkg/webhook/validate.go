@@ -283,8 +283,10 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 }
 
 func validatePolicyForNodeStateAndPolicy(nsList *sriovnetworkv1.SriovNetworkNodeStateList, npList *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node, cr *sriovnetworkv1.SriovNetworkNodePolicy, nodeInterfaceErrorList map[string][]string) error {
+	var currentNodeState *sriovnetworkv1.SriovNetworkNodeState
 	for _, ns := range nsList.Items {
 		if ns.GetName() == node.GetName() {
+			currentNodeState = &ns
 			interfaceAndErrorList, err := validatePolicyForNodeState(cr, &ns, node)
 			if err != nil {
 				return err
@@ -295,11 +297,9 @@ func validatePolicyForNodeStateAndPolicy(nsList *sriovnetworkv1.SriovNetworkNode
 			break
 		}
 	}
-
-	// validate current policy against policies in API (may not be converted to SriovNetworkNodeState yet)
 	for _, np := range npList.Items {
 		if np.GetName() != cr.GetName() && np.Selected(node) {
-			if err := validatePolicyForNodePolicy(cr, &np); err != nil {
+			if err := validatePolicyForNodePolicy(cr, &np, currentNodeState); err != nil {
 				return err
 			}
 		}
@@ -357,7 +357,7 @@ func validatePolicyForNodeState(policy *sriovnetworkv1.SriovNetworkNodePolicy, s
 	return nil, nil
 }
 
-func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
+func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	log.Log.V(2).Info("validateConflictPolicy(): validate policy against policy",
 		"source", current.GetName(), "target", previous.GetName())
 
@@ -365,7 +365,7 @@ func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy,
 		return nil
 	}
 
-	err := validatePfNames(current, previous)
+	err := validatePfNames(current, previous, nodeState)
 	if err != nil {
 		return err
 	}
@@ -383,16 +383,24 @@ func validatePolicyForNodePolicy(current *sriovnetworkv1.SriovNetworkNodePolicy,
 	return nil
 }
 
-func validatePfNames(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy) error {
+func validatePfNames(current *sriovnetworkv1.SriovNetworkNodePolicy, previous *sriovnetworkv1.SriovNetworkNodePolicy, nodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	for _, curPf := range current.Spec.NicSelector.PfNames {
 		curName, curRngSt, curRngEnd, err := sriovnetworkv1.ParseVfRange(curPf)
 		if err != nil {
 			return fmt.Errorf("invalid PF name: %s", curPf)
 		}
+		// Resolve altName to actual interface name if nodeState is available
+		if nodeState != nil {
+			curName = sriovnetworkv1.ResolveInterfaceName(curName, nodeState)
+		}
 		for _, prePf := range previous.Spec.NicSelector.PfNames {
 			// Not validate return err for previous PF
 			// since it should already be evaluated in previous run.
 			preName, preRngSt, preRngEnd, _ := sriovnetworkv1.ParseVfRange(prePf)
+			// Resolve altName to actual interface name if nodeState is available
+			if nodeState != nil {
+				preName = sriovnetworkv1.ResolveInterfaceName(preName, nodeState)
+			}
 			if curName == preName {
 				err = validateExternallyManage(current, previous)
 				if err != nil {
@@ -465,8 +473,8 @@ func validateNicModel(selector *sriovnetworkv1.SriovNetworkNicSelector, iface *s
 				pfNames = append(pfNames, p)
 			}
 		}
-		if !sriovnetworkv1.StringInArray(iface.Name, pfNames) {
-			return fmt.Errorf("interface name: %s not found in physical function names", iface.PciAddress)
+		if !sriovnetworkv1.NameOrAltNameMatchesPfNames(iface.Name, iface.AltNames, pfNames) {
+			return fmt.Errorf("interface name: %s (and alternative names) not found in physical function names", iface.Name)
 		}
 	}
 

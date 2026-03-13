@@ -181,7 +181,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// if we are running in systemd mode we want to get the sriov result from the config-daemon that runs in systemd
-	sriovResult, sriovResultExists, err := dn.checkSystemdStatus()
+	sriovResult, sriovResultExists, err := dn.CheckSystemdStatus()
 	//TODO: in the case we need to think what to do if we try to apply again or not
 	if err != nil {
 		reqLogger.Error(err, "failed to check systemd status unexpected error")
@@ -322,14 +322,14 @@ func (dn *NodeReconciler) checkOnNodeStateChange(desiredNodeState *sriovnetworkv
 	return reqReboot, reqDrain, nil
 }
 
-// checkSystemdStatus Checks the status of systemd services on the host node.
+// CheckSystemdStatus Checks the status of systemd services on the host node.
 // return the sriovResult struct a boolean if the result file exist on the node
-func (dn *NodeReconciler) checkSystemdStatus() (*hosttypes.SriovResult, bool, error) {
+func (dn *NodeReconciler) CheckSystemdStatus() (*hosttypes.SriovResult, bool, error) {
 	if !vars.UsingSystemdMode {
 		return nil, false, nil
 	}
 
-	funcLog := log.Log.WithName("checkSystemdStatus")
+	funcLog := log.Log.WithName("CheckSystemdStatus")
 	serviceEnabled, err := dn.hostHelpers.IsServiceEnabled(consts.SriovServicePath)
 	if err != nil {
 		funcLog.Error(err, "failed to check if sriov-config service exist on host")
@@ -351,12 +351,12 @@ func (dn *NodeReconciler) checkSystemdStatus() (*hosttypes.SriovResult, bool, er
 
 	// check if the service exist
 	if serviceEnabled && postNetworkServiceEnabled {
-		exist = true
 		sriovResult, err = dn.hostHelpers.ReadSriovResult()
 		if err != nil {
 			funcLog.Error(err, "failed to load sriov result file from host")
 			return nil, false, err
 		}
+		exist = sriovResult != nil
 	}
 	return sriovResult, exist, nil
 }

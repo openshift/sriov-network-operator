@@ -1532,3 +1532,116 @@ func TestNeedToUpdateBridges(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveInterfaceName(t *testing.T) {
+	testCases := []struct {
+		name           string
+		inputName      string
+		nodeState      *v1.SriovNetworkNodeState
+		expectedResult string
+	}{
+		{
+			name:           "nil nodeState returns name unchanged",
+			inputName:      "eth0",
+			nodeState:      nil,
+			expectedResult: "eth0",
+		},
+		{
+			name:      "name matches primary interface name",
+			inputName: "ens803f0",
+			nodeState: &v1.SriovNetworkNodeState{
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1", "alt2"}},
+						{Name: "ens803f1", AltNames: []string{"alt3"}},
+					},
+				},
+			},
+			expectedResult: "ens803f0",
+		},
+		{
+			name:      "name matches first alternative name",
+			inputName: "alt1",
+			nodeState: &v1.SriovNetworkNodeState{
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1", "alt2"}},
+						{Name: "ens803f1", AltNames: []string{"alt3"}},
+					},
+				},
+			},
+			expectedResult: "ens803f0",
+		},
+		{
+			name:      "name matches second alternative name",
+			inputName: "alt2",
+			nodeState: &v1.SriovNetworkNodeState{
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1", "alt2"}},
+						{Name: "ens803f1", AltNames: []string{"alt3"}},
+					},
+				},
+			},
+			expectedResult: "ens803f0",
+		},
+		{
+			name:      "name matches alternative name of different interface",
+			inputName: "alt3",
+			nodeState: &v1.SriovNetworkNodeState{
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1", "alt2"}},
+						{Name: "ens803f1", AltNames: []string{"alt3"}},
+					},
+				},
+			},
+			expectedResult: "ens803f1",
+		},
+		{
+			name:      "name not found returns unchanged",
+			inputName: "nonexistent",
+			nodeState: &v1.SriovNetworkNodeState{
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1", "alt2"}},
+						{Name: "ens803f1", AltNames: []string{"alt3"}},
+					},
+				},
+			},
+			expectedResult: "nonexistent",
+		},
+		{
+			name:      "interface with empty alt names",
+			inputName: "notfound",
+			nodeState: &v1.SriovNetworkNodeState{
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{}},
+						{Name: "ens803f1", AltNames: nil},
+					},
+				},
+			},
+			expectedResult: "notfound",
+		},
+		{
+			name:      "empty nodeState interfaces",
+			inputName: "eth0",
+			nodeState: &v1.SriovNetworkNodeState{
+				Status: v1.SriovNetworkNodeStateStatus{
+					Interfaces: []v1.InterfaceExt{},
+				},
+			},
+			expectedResult: "eth0",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := v1.ResolveInterfaceName(tc.inputName, tc.nodeState)
+			if result != tc.expectedResult {
+				t.Errorf("ResolveInterfaceName(%q, nodeState) = %q, want %q", tc.inputName, result, tc.expectedResult)
+			}
+		})
+	}
+}

@@ -46,6 +46,106 @@ func mustUnmarshallSelector(input *json.RawMessage) *dptypes.NetDeviceSelectors 
 	return &ret
 }
 
+func TestResolvePfNames(t *testing.T) {
+	testCases := []struct {
+		name           string
+		pfNames        []string
+		nodeState      *sriovnetworkv1.SriovNetworkNodeState
+		expectedResult []string
+	}{
+		{
+			name:           "empty pfNames returns empty slice",
+			pfNames:        []string{},
+			nodeState:      &sriovnetworkv1.SriovNetworkNodeState{},
+			expectedResult: []string{},
+		},
+		{
+			name:           "nil nodeState returns pfNames as-is",
+			pfNames:        []string{"eth0", "eth1"},
+			nodeState:      nil,
+			expectedResult: []string{"eth0", "eth1"},
+		},
+		{
+			name:    "pfNames with actual interface names",
+			pfNames: []string{"ens803f0", "ens803f1"},
+			nodeState: &sriovnetworkv1.SriovNetworkNodeState{
+				Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
+					Interfaces: []sriovnetworkv1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1", "alt2"}},
+						{Name: "ens803f1", AltNames: []string{"alt3"}},
+					},
+				},
+			},
+			expectedResult: []string{"ens803f0", "ens803f1"},
+		},
+		{
+			name:    "pfNames with alternative names resolve to actual names",
+			pfNames: []string{"alt1", "alt3"},
+			nodeState: &sriovnetworkv1.SriovNetworkNodeState{
+				Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
+					Interfaces: []sriovnetworkv1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1", "alt2"}},
+						{Name: "ens803f1", AltNames: []string{"alt3"}},
+					},
+				},
+			},
+			expectedResult: []string{"ens803f0", "ens803f1"},
+		},
+		{
+			name:    "mixed pfNames with actual and alternative names",
+			pfNames: []string{"ens803f0", "alt3", "alt2"},
+			nodeState: &sriovnetworkv1.SriovNetworkNodeState{
+				Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
+					Interfaces: []sriovnetworkv1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1", "alt2"}},
+						{Name: "ens803f1", AltNames: []string{"alt3"}},
+					},
+				},
+			},
+			expectedResult: []string{"ens803f0", "ens803f1", "ens803f0"},
+		},
+		{
+			name:    "pfName not found in nodeState returns unchanged",
+			pfNames: []string{"notfound", "ens803f0"},
+			nodeState: &sriovnetworkv1.SriovNetworkNodeState{
+				Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
+					Interfaces: []sriovnetworkv1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1"}},
+					},
+				},
+			},
+			expectedResult: []string{"notfound", "ens803f0"},
+		},
+		{
+			name:    "pfNames with ranges preserved",
+			pfNames: []string{"ens803f0#0-9", "alt1#10-19"},
+			nodeState: &sriovnetworkv1.SriovNetworkNodeState{
+				Status: sriovnetworkv1.SriovNetworkNodeStateStatus{
+					Interfaces: []sriovnetworkv1.InterfaceExt{
+						{Name: "ens803f0", AltNames: []string{"alt1"}},
+					},
+				},
+			},
+			expectedResult: []string{"ens803f0#0-9", "ens803f0#10-19"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := resolvePfNames(tc.pfNames, tc.nodeState)
+			if len(result) != len(tc.expectedResult) {
+				t.Errorf("resolvePfNames() returned slice of length %d, want %d", len(result), len(tc.expectedResult))
+				return
+			}
+			for i := range result {
+				if result[i] != tc.expectedResult[i] {
+					t.Errorf("resolvePfNames()[%d] = %q, want %q", i, result[i], tc.expectedResult[i])
+				}
+			}
+		})
+	}
+}
+
 func TestRenderDevicePluginConfigData(t *testing.T) {
 	table := []struct {
 		tname       string

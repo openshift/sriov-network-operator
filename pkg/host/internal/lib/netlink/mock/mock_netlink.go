@@ -152,6 +152,21 @@ func (mr *MockNetlinkLibMockRecorder) DevlinkSetDeviceParam(bus, device, param, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DevlinkSetDeviceParam", reflect.TypeOf((*MockNetlinkLib)(nil).DevlinkSetDeviceParam), bus, device, param, cmode, value)
 }
 
+// GetAltNames mocks base method.
+func (m *MockNetlinkLib) GetAltNames(name string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAltNames", name)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAltNames indicates an expected call of GetAltNames.
+func (mr *MockNetlinkLibMockRecorder) GetAltNames(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAltNames", reflect.TypeOf((*MockNetlinkLib)(nil).GetAltNames), name)
+}
+
 // IsLinkAdminStateUp mocks base method.
 func (m *MockNetlinkLib) IsLinkAdminStateUp(link netlink.Link) bool {
 	m.ctrl.T.Helper()

@@ -306,6 +306,20 @@ func StringInArray(val string, array []string) bool {
 	return false
 }
 
+// NameOrAltNameMatchesPfNames checks if the given name or any of the alternative names
+// match any entry in the pfNames list.
+func NameOrAltNameMatchesPfNames(name string, altNames []string, pfNames []string) bool {
+	if StringInArray(name, pfNames) {
+		return true
+	}
+	for _, altName := range altNames {
+		if StringInArray(altName, pfNames) {
+			return true
+		}
+	}
+	return false
+}
+
 func RemoveString(s string, slice []string) (result []string, found bool) {
 	if len(slice) != 0 {
 		for _, item := range slice {
@@ -594,7 +608,8 @@ func (selector *SriovNetworkNicSelector) Selected(iface *InterfaceExt) bool {
 				pfNames = append(pfNames, p)
 			}
 		}
-		if !StringInArray(iface.Name, pfNames) {
+
+		if !NameOrAltNameMatchesPfNames(iface.Name, iface.AltNames, pfNames) {
 			return false
 		}
 	}
@@ -993,4 +1008,25 @@ func OwnerRefToString(cr client.Object) string {
 	}
 
 	return cr.GetObjectKind().GroupVersionKind().GroupKind().String() + "/" + cr.GetNamespace() + "/" + cr.GetName()
+}
+
+// ResolveInterfaceName resolves an interface name that might be an alternative name
+// to the actual interface name using the nodeState. If the name is an alternative name,
+// it returns the actual interface name. Otherwise, it returns the name as-is.
+func ResolveInterfaceName(name string, nodeState *SriovNetworkNodeState) string {
+	if nodeState == nil {
+		return name
+	}
+	// Check all interfaces in the nodeState
+	for _, iface := range nodeState.Status.Interfaces {
+		// Check if the name matches the actual interface name
+		if iface.Name == name {
+			return name
+		}
+		if StringInArray(name, iface.AltNames) {
+			return iface.Name
+		}
+	}
+	// If not found in nodeState, return the name as-is
+	return name
 }
