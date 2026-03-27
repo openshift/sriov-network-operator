@@ -64,6 +64,7 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve note states %v", err)
 	}
+	fmt.Printf("nodeStates: %+v\n", nodeStates)
 
 	res := &EnabledNodes{}
 	res.States = make(map[string]sriovv1.SriovNetworkNodeState)
@@ -445,6 +446,7 @@ func DiscoverSriovForAws(clients *testclient.ClientSet, operatorNamespace string
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover sriov nodes: %w", err)
 	}
+	fmt.Printf("tmpEnabledNodes: %+v\n", tmpEnabledNodes)
 
 	res := &EnabledNodes{}
 	res.States = make(map[string]sriovv1.SriovNetworkNodeState)
@@ -458,10 +460,13 @@ func DiscoverSriovForAws(clients *testclient.ClientSet, operatorNamespace string
 			return nil, fmt.Errorf("failed to get ovs bridge connected nics on node %s: %w", node, err)
 		}
 
+		fmt.Printf("ovsBridgeConnectedNicsMap: %+v\n", ovsBridgeConnectedNicsMap)
+
 		ifaceList := sriovv1.InterfaceExts{}
 		for _, nic := range tmpEnabledNodes.States[node].Status.Interfaces {
 			// If the nic is not connected to the ovs bridge, add it to the list
 			if !ovsBridgeConnectedNicsMap[nic.Name] {
+				fmt.Printf("adding nic %s to the list for node %s\n", nic.Name, node)
 				ifaceList = append(ifaceList, nic)
 			}
 		}
