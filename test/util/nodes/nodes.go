@@ -24,6 +24,7 @@ func init() {
 // The NODES_SELECTOR must be in the form of label=value.
 // For example: NODES_SELECTOR="sctp=true"
 func MatchingOptionalSelectorState(clients *client.ClientSet, toFilter []sriovv1.SriovNetworkNodeState) ([]sriovv1.SriovNetworkNodeState, error) {
+	fmt.Printf("MatchingOptionalSelectorState: %+v\n", toFilter)
 	if NodesSelector == "" {
 		return toFilter, nil
 	}

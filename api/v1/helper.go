@@ -79,7 +79,7 @@ func InitNicIDMapFromConfigMap(client kubernetes.Interface, namespace string) er
 	for _, v := range cm.Data {
 		NicIDMap = append(NicIDMap, v)
 	}
-
+	fmt.Printf("NicIDMap: %+v\n", NicIDMap)
 	return nil
 }
 
