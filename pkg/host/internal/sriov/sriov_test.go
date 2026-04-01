@@ -158,6 +158,12 @@ var _ = Describe("SRIOV", func() {
 			Expect(s.SetSriovNumVfs("0000:d8:00.0", 5)).NotTo(HaveOccurred())
 			helpers.GinkgoAssertFileContentsEquals("/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs", strconv.Itoa(5))
 		})
+		It("set to 0 - succeed when numvfs file does not exist", func() {
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/sys/bus/pci/devices/0000:d8:00.0"},
+			})
+			Expect(s.SetSriovNumVfs("0000:d8:00.0", 0)).NotTo(HaveOccurred())
+		})
 		It("fail - no such device", func() {
 			Expect(s.SetSriovNumVfs("0000:d8:00.0", 5)).To(HaveOccurred())
 		})
