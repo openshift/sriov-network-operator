@@ -1967,11 +1967,17 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 func getConfigDaemonPod(nodeName string) (*corev1.Pod, error) {
 	pods := &corev1.PodList{}
 	label, err := labels.Parse("app=sriov-network-config-daemon")
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 	field, err := fields.ParseSelector(fmt.Sprintf("spec.nodeName=%s", nodeName))
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 	err = clients.List(context.Background(), pods, &runtimeclient.ListOptions{Namespace: operatorNamespace, LabelSelector: label, FieldSelector: field})
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 	if len(pods.Items) != 1 {
 		return nil, fmt.Errorf("expected 1 config daemon pod on node %s, got %d", nodeName, len(pods.Items))
 	}
@@ -1980,9 +1986,10 @@ func getConfigDaemonPod(nodeName string) (*corev1.Pod, error) {
 
 func runCommandOnConfigDaemon(nodeName string, command ...string) (string, string, error) {
 	daemonPod, err := getConfigDaemonPod(nodeName)
-	Expect(err).ToNot(HaveOccurred())
-	output, errOutput, err := pod.ExecCommand(clients, daemonPod, command...)
-	return output, errOutput, err
+	if err != nil {
+		return "", "", err
+	}
+	return pod.ExecCommand(clients, daemonPod, command...)
 }
 
 func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {
