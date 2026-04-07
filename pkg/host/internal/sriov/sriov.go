@@ -81,6 +81,15 @@ func New(utilsHelper utils.CmdInterface,
 func (s *sriov) SetSriovNumVfs(pciAddr string, numVfs int) error {
 	log.Log.V(2).Info("SetSriovNumVfs(): set NumVfs", "device", pciAddr, "numVfs", numVfs)
 	numVfsFilePath := filepath.Join(vars.FilesystemRoot, consts.SysBusPciDevices, pciAddr, consts.NumVfsFile)
+
+	// In case we want to reset the VFs number to 0 but the sriov_numvfs file does not exist, we just return without error
+	if numVfs == 0 {
+		if _, err := os.Stat(numVfsFilePath); os.IsNotExist(err) {
+			log.Log.V(2).Info("SetSriovNumVfs(): NumVfs file does not exist, nothing to reset", "path", numVfsFilePath)
+			return nil
+		}
+	}
+
 	bs := []byte(strconv.Itoa(numVfs))
 	err := utils.WriteFileWithTimeout(numVfsFilePath, []byte("0"), os.ModeAppend, sysfsWriteTimeout)
 	if err != nil {
