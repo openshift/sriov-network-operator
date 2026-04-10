@@ -1,6 +1,7 @@
 package sriov
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -160,6 +161,22 @@ var _ = Describe("SRIOV", func() {
 		})
 		It("fail - no such device", func() {
 			Expect(s.SetSriovNumVfs("0000:d8:00.0", 5)).To(HaveOccurred())
+		})
+		It("fail - ENOSPC returns descriptive MSI-X error", func() {
+			// Simulate kernel ENOSPC (-28) by symlinking sriov_numvfs to /dev/full,
+			// which always returns ENOSPC on write. This reproduces the Intel E810-xxVDA4
+			// failure mode where irdma exhausts MSI-X vectors on high-CPU-count servers.
+			helpers.GinkgoConfigureFakeFS(&fakefilesystem.FS{
+				Dirs: []string{"/sys/bus/pci/devices/0000:d8:00.0"},
+				Symlinks: map[string]string{
+					"/sys/bus/pci/devices/0000:d8:00.0/sriov_numvfs": "/dev/full",
+				},
+			})
+			err := s.SetSriovNumVfs("0000:d8:00.0", 5)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("insufficient MSI-X vectors"))
+			Expect(err.Error()).To(ContainSubstring("irdma"))
+			Expect(errors.Is(err, syscall.ENOSPC)).To(BeTrue())
 		})
 	})
 

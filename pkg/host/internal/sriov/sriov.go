@@ -84,6 +84,12 @@ func (s *sriov) SetSriovNumVfs(pciAddr string, numVfs int) error {
 	bs := []byte(strconv.Itoa(numVfs))
 	err := utils.WriteFileWithTimeout(numVfsFilePath, []byte("0"), os.ModeAppend, sysfsWriteTimeout)
 	if err != nil {
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) && errors.Is(pathErr.Err, syscall.ENOSPC) {
+			err = fmt.Errorf("insufficient MSI-X vectors available for SR-IOV VF creation on device %s: "+
+				"the system may have exhausted MSI-X interrupt resources (e.g. due to irdma/RDMA driver consuming the budget on high-CPU-count servers). "+
+				"Workaround: blacklist the irdma module (/etc/modprobe.d/) or reduce the number of requested VFs: %w", pciAddr, err)
+		}
 		log.Log.Error(err, "SetSriovNumVfs(): fail to reset NumVfs file", "path", numVfsFilePath)
 		return err
 	}
@@ -92,6 +98,12 @@ func (s *sriov) SetSriovNumVfs(pciAddr string, numVfs int) error {
 	}
 	err = utils.WriteFileWithTimeout(numVfsFilePath, bs, os.ModeAppend, sysfsWriteTimeout)
 	if err != nil {
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) && errors.Is(pathErr.Err, syscall.ENOSPC) {
+			err = fmt.Errorf("insufficient MSI-X vectors available for SR-IOV VF creation on device %s: "+
+				"the system may have exhausted MSI-X interrupt resources (e.g. due to irdma/RDMA driver consuming the budget on high-CPU-count servers). "+
+				"Workaround: blacklist the irdma module (/etc/modprobe.d/) or reduce the number of requested VFs: %w", pciAddr, err)
+		}
 		log.Log.Error(err, "SetSriovNumVfs(): fail to set NumVfs file", "path", numVfsFilePath)
 		return err
 	}
