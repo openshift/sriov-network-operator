@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -49,7 +48,6 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
@@ -65,7 +63,6 @@ type SriovOperatorConfigReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
 	Orchestrator      orchestrator.Interface
-	FeatureGate       featuregate.FeatureGate
 	StatusPatcher     status.Interface
 	UncachedAPIReader client.Reader
 	// Test-only hooks let direct reconciler tests inject manifest operations
@@ -217,8 +214,9 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		return reconcile.Result{}, err
 	}
 
-	r.FeatureGate.Init(defaultConfig.Spec.FeatureGates)
-	logger.Info("enabled featureGates", "featureGates", r.FeatureGate.String())
+	if vars.FeatureGate.Set(defaultConfig.Spec.FeatureGates) {
+		logger.Info("Updated featureGates", "featureGates", vars.FeatureGate.String())
+	}
 
 	if !defaultConfig.Spec.EnableInjector {
 		logger.Info("SR-IOV Network Resource Injector is disabled.")
@@ -227,19 +225,6 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 	if !defaultConfig.Spec.EnableOperatorWebhook {
 		logger.Info("SR-IOV Network Operator Webhook is disabled.")
 	}
-
-	// Fetch the SriovNetworkNodePolicyList
-	policyList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
-	err = r.List(ctx, policyList, &client.ListOptions{})
-	if err != nil {
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-	// Sort the policies with priority, higher priority ones is applied later
-	// We need to use the sort so we always get the policies in the same order
-	// That is needed so when we create the node Affinity for the sriov-device plugin
-	// it will remain in the same order and not trigger a pod recreation
-	sort.Sort(sriovnetworkv1.ByPriority(policyList.Items))
 
 	// Render and sync webhook objects
 	if err = r.syncWebhookObjs(ctx, defaultConfig); err != nil {
@@ -251,7 +236,7 @@ func (r *SriovOperatorConfigReconciler) Reconcile(ctx context.Context, req ctrl.
 		return reconcile.Result{}, err
 	}
 
-	if err = syncPluginDaemonObjs(ctx, r.Client, r.Scheme, defaultConfig, r.FeatureGate, r.renderManifests, r.applyManifest); err != nil {
+	if err = r.syncResourceProvider(ctx, defaultConfig); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -373,16 +358,10 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 	} else {
 		data.Data["UsedSystemdMode"] = false
 	}
-	data.Data["ParallelNicConfig"] = r.FeatureGate.IsEnabled(consts.ParallelNicConfigFeatureGate)
-	data.Data["ManageSoftwareBridges"] = r.FeatureGate.IsEnabled(consts.ManageSoftwareBridgesFeatureGate)
+	data.Data["ParallelNicConfig"] = vars.FeatureGate.IsEnabled(consts.ParallelNicConfigFeatureGate)
+	data.Data["ManageSoftwareBridges"] = vars.FeatureGate.IsEnabled(consts.ManageSoftwareBridgesFeatureGate)
 
-	envCniBinPath := os.Getenv("SRIOV_CNI_BIN_PATH")
-	if envCniBinPath == "" {
-		data.Data["CNIBinPath"] = "/var/lib/cni/bin"
-	} else {
-		logger.V(1).Info("New cni bin found", "CNIBinPath", envCniBinPath)
-		data.Data["CNIBinPath"] = envCniBinPath
-	}
+	data.Data["CNIBinPath"] = GetCNIBinPath()
 
 	if len(dc.Spec.DisablePlugins) > 0 {
 		logger.V(1).Info("DisablePlugins provided", "DisablePlugins", dc.Spec.DisablePlugins)
@@ -412,6 +391,22 @@ func (r *SriovOperatorConfigReconciler) syncConfigDaemonSet(ctx context.Context,
 		}
 	}
 	return nil
+}
+
+// syncResourceProvider deploys the selected provider, then removes the other one.
+// Users must wait for rollout and removal to finish before creating node policies.
+// The device-plugin ConfigMap is retained for reuse when returning to that mode.
+func (r *SriovOperatorConfigReconciler) syncResourceProvider(ctx context.Context, config *sriovnetworkv1.SriovOperatorConfig) error {
+	if vars.FeatureGate.IsEnabled(consts.DynamicResourceAllocationFeatureGate) {
+		if err := syncDRADriverObjs(ctx, r.Client, r.Scheme, config, r.renderManifests, r.applyManifest); err != nil {
+			return fmt.Errorf("failed to sync DRA driver: %w", err)
+		}
+		return cleanupDevicePluginObjs(ctx, r.Client, config, vars.FeatureGate, r.renderManifests)
+	}
+	if err := syncPluginDaemonObjs(ctx, r.Client, r.Scheme, config, vars.FeatureGate, r.renderManifests, r.applyManifest); err != nil {
+		return fmt.Errorf("failed to sync device plugin: %w", err)
+	}
+	return cleanupDRADriverObjs(ctx, r.Client, config, r.renderManifests)
 }
 
 func (r *SriovOperatorConfigReconciler) syncMetricsExporter(ctx context.Context, dc *sriovnetworkv1.SriovOperatorConfig) error {
@@ -451,7 +446,7 @@ func (r *SriovOperatorConfigReconciler) syncMetricsExporter(ctx context.Context,
 		return err
 	}
 
-	if r.FeatureGate.IsEnabled(consts.MetricsExporterFeatureGate) {
+	if vars.FeatureGate.IsEnabled(consts.MetricsExporterFeatureGate) {
 		for _, obj := range objs {
 			err = r.syncK8sResource(ctx, dc, obj)
 			if err != nil {
@@ -517,7 +512,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 		}
 
 		// check for ResourceInjectorMatchConditionFeatureGate feature gate
-		data.Data[consts.ResourceInjectorMatchConditionFeatureGate] = r.FeatureGate.IsEnabled(consts.ResourceInjectorMatchConditionFeatureGate)
+		data.Data[consts.ResourceInjectorMatchConditionFeatureGate] = vars.FeatureGate.IsEnabled(consts.ResourceInjectorMatchConditionFeatureGate)
 
 		// TLS configuration data
 		data.Data["TLSCipherSuites"] = tlsData["TLSCipherSuites"]
@@ -681,6 +676,16 @@ func (r *SriovOperatorConfigReconciler) handleSriovOperatorConfigDeletion(ctx co
 		// make sure webhooks objects are deleted prior of removing finalizer
 		err = r.deleteAllWebhooks(ctx)
 		if err != nil {
+			return reconcile.Result{}, err
+		}
+		// Clean up cluster-scoped DRA objects (DeviceClass, ClusterRole/Binding) that
+		// are not garbage-collected when this namespaced config is removed.
+		if err = cleanupExtendedResourceDeviceClasses(ctx, r.Client); err != nil {
+			logger.Error(err, "Failed to cleanup extended resource DeviceClasses")
+			return reconcile.Result{}, err
+		}
+		if err = cleanupDRADriverObjs(ctx, r.Client, defaultConfig, r.renderManifests); err != nil {
+			logger.Error(err, "Failed to cleanup DRA driver objects")
 			return reconcile.Result{}, err
 		}
 		// remove our finalizer from the list and update it.

@@ -17,6 +17,7 @@ var DefaultFeatureStates = map[string]bool{
 	consts.ManageSoftwareBridgesFeatureGate:            false,
 	consts.BlockDevicePluginUntilConfiguredFeatureGate: true,
 	consts.MellanoxFirmwareResetFeatureGate:            true,
+	consts.DynamicResourceAllocationFeatureGate:        false, // Default: use device plugin
 }
 
 // FeatureGate provides methods to check state of the feature
@@ -24,9 +25,9 @@ type FeatureGate interface {
 	// IsEnabled returns state of the feature,
 	// if feature name is unknown will always return false
 	IsEnabled(feature string) bool
-	// Init set state for the features from the provided map.
-	// The provided map is merged with the default features state.
-	Init(features map[string]bool)
+	// Set applies the provided overrides to the default feature states.
+	// It returns true only when the resulting state changes.
+	Set(features map[string]bool) bool
 	// String returns string representation of the feature state
 	String() string
 }
@@ -63,17 +64,46 @@ func (fg *featureGate) IsEnabled(feature string) bool {
 	return fg.state[feature]
 }
 
-// Init set state for the features from the provided map.
-// The provided features override the default values.
-func (fg *featureGate) Init(features map[string]bool) {
+// Set applies overrides only when they change the effective feature state.
+func (fg *featureGate) Set(features map[string]bool) bool {
 	fg.lock.Lock()
 	defer fg.lock.Unlock()
+	if fg.matches(features) {
+		return false
+	}
 	state := maps.Clone(fg.defaultFeatures)
 	if state == nil {
 		state = map[string]bool{}
 	}
 	maps.Copy(state, features)
 	fg.state = state
+	return true
+}
+
+// matches compares the defaults plus overrides with the active state without
+// allocating another map. The caller must hold fg.lock.
+func (fg *featureGate) matches(features map[string]bool) bool {
+	featureCount := len(fg.defaultFeatures)
+	for feature, enabled := range features {
+		if current, exists := fg.state[feature]; !exists || current != enabled {
+			return false
+		}
+		if _, hasDefault := fg.defaultFeatures[feature]; !hasDefault {
+			featureCount++
+		}
+	}
+	if len(fg.state) != featureCount {
+		return false
+	}
+	for feature, enabled := range fg.defaultFeatures {
+		if _, overridden := features[feature]; overridden {
+			continue
+		}
+		if current, exists := fg.state[feature]; !exists || current != enabled {
+			return false
+		}
+	}
+	return true
 }
 
 // String returns string representation of the features state

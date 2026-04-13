@@ -1,4 +1,4 @@
-package drain_test
+package drain
 
 import (
 	"context"

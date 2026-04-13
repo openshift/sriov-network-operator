@@ -8,6 +8,7 @@ if [ -z $SKIP_VAR_SET ]; then
         # RDMA_CNI_IMAGE can be explicitly set to empty value, use default only if the var is not set
         export RDMA_CNI_IMAGE=${RDMA_CNI_IMAGE-ghcr.io/k8snetworkplumbingwg/rdma-cni}
         export SRIOV_DEVICE_PLUGIN_IMAGE=${SRIOV_DEVICE_PLUGIN_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-network-device-plugin}
+        export SRIOV_DRA_DRIVER_IMAGE=${SRIOV_DRA_DRIVER_IMAGE:-ghcr.io/k8snetworkplumbingwg/dra-driver-sriov}
         export NETWORK_RESOURCES_INJECTOR_IMAGE=${NETWORK_RESOURCES_INJECTOR_IMAGE:-ghcr.io/k8snetworkplumbingwg/network-resources-injector}
         export SRIOV_NETWORK_CONFIG_DAEMON_IMAGE=${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-network-operator-config-daemon}
         export SRIOV_NETWORK_WEBHOOK_IMAGE=${SRIOV_NETWORK_WEBHOOK_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-network-operator-webhook}
@@ -27,6 +28,7 @@ METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE=${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE:
 [ -z $SRIOV_CNI_IMAGE ] && echo "SRIOV_CNI_IMAGE $fail_msg_detect" && exit 1
 [ -z $SRIOV_INFINIBAND_CNI_IMAGE ] && echo "SRIOV_INFINIBAND_CNI_IMAGE $fail_msg_detect" && exit 1
 [ -z $SRIOV_DEVICE_PLUGIN_IMAGE ] && echo "SRIOV_DEVICE_PLUGIN_IMAGE $fail_msg_detect" && exit 1
+[ -z $SRIOV_DRA_DRIVER_IMAGE ] && echo "SRIOV_DRA_DRIVER_IMAGE $fail_msg_detect" && exit 1
 [ -z $NETWORK_RESOURCES_INJECTOR_IMAGE ] && echo "NETWORK_RESOURCES_INJECTOR_IMAGE $fail_msg_detect" && exit 1
 [ -z $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE ] && echo "SRIOV_NETWORK_CONFIG_DAEMON_IMAGE $fail_msg_detect" && exit 1
 [ -z $SRIOV_NETWORK_WEBHOOK_IMAGE ] && echo "SRIOV_NETWORK_WEBHOOK_IMAGE $fail_msg_detect" && exit 1

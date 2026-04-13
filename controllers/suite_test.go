@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	sriovdrav1alpha1 "github.com/k8snetworkplumbingwg/dra-driver-sriov/pkg/api/sriovdra/v1alpha1"
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	openshiftconfigv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
@@ -134,6 +135,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("SRIOV_DEVICE_PLUGIN_IMAGE", "mock-image")
 	Expect(err).NotTo(HaveOccurred())
+	err = os.Setenv("SRIOV_DRA_DRIVER_IMAGE", "mock-image")
+	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("NETWORK_RESOURCES_INJECTOR_IMAGE", "mock-image")
 	Expect(err).NotTo(HaveOccurred())
 	err = os.Setenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE", "mock-image")
@@ -171,6 +174,8 @@ var _ = BeforeSuite(func() {
 
 	By("registering schemes")
 	err = sriovnetworkv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = sriovdrav1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = netattdefv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())

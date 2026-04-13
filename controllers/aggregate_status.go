@@ -45,6 +45,11 @@ type aggregateIssue struct {
 	node   string
 }
 
+type aggregatePolicyResult struct {
+	policy *sriovnetworkv1.SriovNetworkNodePolicy
+	result aggregateResult
+}
+
 type poolMemberships struct {
 	nodes  map[string][]corev1.Node
 	counts map[string]int
@@ -68,12 +73,58 @@ func (r *AggregateStatusReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err := r.List(ctx, pools); err != nil {
 		return ctrl.Result{}, err
 	}
-	nodes, nodesErr := managedNodes(ctx, r.Client)
+	resourceIssues := map[string]error{}
+	config, found, configErr := sriovnetworkv1.GetOperatorConfig(ctx, r.Client)
+	var nodes []corev1.Node
+	var nodesErr error
+	if configErr != nil {
+		nodesErr = configErr
+	} else {
+		nodes, nodesErr = managedNodes(ctx, r.Client, config)
+	}
 	states, statesErr := nodeStatesByName(ctx, r.Client)
+	var resourceValidator *sriovnetworkv1.PolicyResourceValidator
+	if found && config.DeletionTimestamp.IsZero() {
+		resourceValidator = config.NewPolicyResourceValidator()
+	}
 
+	// Cache lists are unordered; validate by name to report a stable first blocker.
+	sort.Slice(policies.Items, func(i, j int) bool { return policies.Items[i].Name < policies.Items[j].Name })
+	policyResults := make([]aggregatePolicyResult, 0, len(policies.Items))
+	var globalBlock error
 	for i := range policies.Items {
 		policy := &policies.Items[i]
 		result := policyStatusFrom(policy, nodes, nodesErr, states, statesErr)
+		if policy.Namespace == vars.Namespace && policy.Name != constants.DefaultPolicyName && resourceIssues[policy.Name] == nil {
+			if resourceValidator != nil {
+				// We read the total set of issues after every policy has been added so shared conflicts
+				// are attributed to policies encountered earlier in the list.
+				if err := resourceValidator.Add(policy); err != nil {
+					resourceIssues[policy.Name] = err
+					if globalBlock == nil && config.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] {
+						globalBlock = err
+					}
+				}
+			}
+		}
+		policyResults = append(policyResults, aggregatePolicyResult{policy: policy, result: result})
+	}
+
+	for _, policyResult := range policyResults {
+		policy := policyResult.policy
+		result := policyResult.result
+		issue := resourceIssues[policy.Name]
+		if issue == nil && resourceValidator != nil {
+			issue = resourceValidator.Issue(policy.Name)
+		}
+		if policy.Namespace == vars.Namespace && issue != nil {
+			// Resource validation takes precedence because node readiness counts are not meaningful for an unsupported policy.
+			result = aggregateBlocked(policy.Generation, sriovnetworkv1.ReasonUnsupportedConfiguration, issue.Error())
+		} else if policy.Namespace == vars.Namespace && policy.Name != constants.DefaultPolicyName && globalBlock != nil {
+			// DRA validation failures freeze NodeState syncing for every policy.
+			result = aggregateBlocked(policy.Generation, sriovnetworkv1.ReasonConfigurationBlocked,
+				"configuration is blocked by a conflict between other policies: "+globalBlock.Error())
+		}
 		if err := applyAggregateStatus(ctx, r.StatusPatcher, policy, policy.Status.MatchedNodeCount, policy.Status.ReadyNodeCount, policy.Status.Conditions, result); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -109,9 +160,20 @@ func (r *AggregateStatusReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&sriovnetworkv1.SriovNetworkPoolConfig{}, syncRequests, generationChanged).
 		Watches(&corev1.Node{}, syncRequests, builder.WithPredicates(predicate.Funcs{UpdateFunc: aggregateNodeChanged})).
 		Watches(&sriovnetworkv1.SriovNetworkNodeState{}, syncRequests, builder.WithPredicates(predicate.Funcs{UpdateFunc: aggregateNodeStateChanged})).
-		Watches(&sriovnetworkv1.SriovOperatorConfig{}, syncRequests, generationChanged)
+		Watches(&sriovnetworkv1.SriovOperatorConfig{}, syncRequests, builder.WithPredicates(predicate.Funcs{UpdateFunc: aggregateOperatorConfigChanged}))
 
 	return controller.Complete(r)
+}
+
+// aggregateOperatorConfigChanged decides whether an OperatorConfig update should trigger recalculating policy and pool status.
+// It returns true when:
+// - Generation changes, usually because the config’s spec changed.
+// - Deletion starts, so DRA validation blockers can be cleared while finalizers are pending.
+// Other status-only updates, such as changes to Ready conditions, return false to avoid unnecessary reconciliations.
+func aggregateOperatorConfigChanged(e event.UpdateEvent) bool {
+	deletionStarted := e.ObjectOld != nil && e.ObjectNew != nil &&
+		e.ObjectOld.GetDeletionTimestamp().IsZero() && !e.ObjectNew.GetDeletionTimestamp().IsZero()
+	return predicate.GenerationChangedPredicate{}.Update(e) || deletionStarted
 }
 
 // aggregateKnown builds a Ready result with known node counts.

@@ -23,6 +23,7 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	sriovdrav1alpha1 "github.com/k8snetworkplumbingwg/dra-driver-sriov/pkg/api/sriovdra/v1alpha1"
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	openshiftconfigv1 "github.com/openshift/api/config/v1"
 	mcfgv1 "github.com/openshift/api/machineconfiguration/v1"
@@ -49,7 +50,6 @@ import (
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/controllers"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
@@ -67,6 +67,9 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(sriovnetworkv1.AddToScheme(scheme))
+
+	// Register DRA driver types for SriovResourcePolicy and DeviceAttributes CRs
+	utilruntime.Must(sriovdrav1alpha1.AddToScheme(scheme))
 	utilruntime.Must(netattdefv1.AddToScheme(scheme))
 	utilruntime.Must(mcfgv1.AddToScheme(scheme))
 	utilruntime.Must(openshiftconfigv1.AddToScheme(scheme))
@@ -160,8 +163,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	featureGate := featuregate.New()
-
 	// Create status patcher for network controllers using Server-Side Apply
 	globalStatusPatcher := status.NewPatcher(mgrGlobal.GetClient(), mgrGlobal.GetEventRecorder(consts.SriovNetworkOperatorIdentifier), mgrGlobal.GetScheme(), consts.SriovNetworkOperatorIdentifier)
 	namespacedStatusPatcher := status.NewPatcher(mgr.GetClient(), mgr.GetEventRecorder(consts.SriovNetworkOperatorIdentifier), mgr.GetScheme(), consts.SriovNetworkOperatorIdentifier)
@@ -191,9 +192,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.SriovNetworkNodePolicyReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		FeatureGate: featureGate,
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		UncachedAPIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovNetworkNodePolicy")
 		os.Exit(1)
@@ -209,7 +210,6 @@ func main() {
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
 		Orchestrator:      orch,
-		FeatureGate:       featureGate,
 		StatusPatcher:     namespacedStatusPatcher,
 		UncachedAPIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
