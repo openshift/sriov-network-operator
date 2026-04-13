@@ -14,6 +14,17 @@ const (
 
 type DrainState string
 
+// TLSConfig holds cluster-wide TLS configuration retrieved from the orchestrator or based one the environment variables.
+// Empty string values indicate that the component should use its default configuration.
+type TLSConfig struct {
+	// CipherSuites is a comma-separated list of TLS cipher suites.
+	// If empty, the component should use its default cipher suites.
+	CipherSuites string
+	// MinTLSVersion is the minimum TLS version (e.g., "VersionTLS12", "VersionTLS13").
+	// If empty, the component should use its default minimum version.
+	MinTLSVersion string
+}
+
 const (
 	Chroot = "/host"
 	Host   = "/host"

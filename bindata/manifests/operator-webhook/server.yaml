@@ -72,6 +72,12 @@ spec:
         - "--tls-private-key-file=/etc/tls/tls.key"
         - "--tls-cert-file=/etc/tls/tls.crt"
         - "--zap-log-level=3"
+        {{- if .TLSCipherSuites }}
+        - "--tls-cipher-suites={{.TLSCipherSuites}}"
+        {{- end }}
+        {{- if .TLSMinVersion }}
+        - "--tls-min-version={{.TLSMinVersion}}"
+        {{- end }}
         env:
         - name: NAMESPACE
           valueFrom:

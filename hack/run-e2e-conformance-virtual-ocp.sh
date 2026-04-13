@@ -232,6 +232,34 @@ if [ $retries -eq $MAX_RETRIES ]; then
   exit 1
 fi
 
+echo "## enabling TechPreviewNoUpgrade feature set"
+kubectl patch featuregate cluster --type merge -p '{"spec":{"featureSet":"TechPreviewNoUpgrade"}}'
+
+echo "## waiting for the cluster to stabilize after TechPreview enablement"
+MAX_RETRIES=40
+DELAY_SECONDS=30
+retries=0
+until [ $retries -ge $MAX_RETRIES ]; do
+  if kubectl get nodes >/dev/null 2>&1; then
+    not_available=$(kubectl get clusteroperator --no-headers 2>/dev/null | awk '{print $3}' | grep -v True | wc -l)
+    progressing=$(kubectl get clusteroperator --no-headers 2>/dev/null | awk '{print $4}' | grep True | wc -l)
+    if [ "$not_available" -eq 0 ] && [ "$progressing" -eq 0 ]; then
+      echo "Cluster is stable after TechPreview enablement"
+      break
+    fi
+    echo "Cluster not yet stable (unavailable=$not_available, progressing=$progressing). Retrying... (Attempt $retries/$MAX_RETRIES)"
+  else
+    echo "API not reachable. Retrying... (Attempt $retries/$MAX_RETRIES)"
+  fi
+  retries=$((retries+1))
+  sleep $DELAY_SECONDS
+done
+
+if [ $retries -eq $MAX_RETRIES ]; then
+  echo "Max retries reached waiting for cluster stability. Exiting..."
+  exit 1
+fi
+
 echo "## wait for registry to be available"
 kubectl wait configs.imageregistry.operator.openshift.io/cluster --for=condition=Available --timeout=120s
 

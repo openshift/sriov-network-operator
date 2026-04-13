@@ -35,6 +35,8 @@ import (
 var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 	var cancel context.CancelFunc
 	var ctx context.Context
+	var mockedTLSConfig *consts.TLSConfig
+	var mockedTLSError error
 
 	BeforeAll(func() {
 		By("Create SriovOperatorConfig controller k8s objs")
@@ -70,6 +72,12 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 		// TODO: Change this to add tests for hypershift
 		orchestrator.EXPECT().Flavor().Return(consts.ClusterFlavorDefault).AnyTimes()
+
+		// Mock GetTLSConfig to return dynamic values controlled by each test.
+		orchestrator.EXPECT().GetTLSConfig(gomock.Any()).DoAndReturn(
+			func(_ context.Context) (*consts.TLSConfig, error) {
+				return mockedTLSConfig, mockedTLSError
+			}).AnyTimes()
 
 		err = (&SriovOperatorConfigReconciler{
 			Client:            k8sManager.GetClient(),
@@ -122,6 +130,9 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		})
 
 		BeforeEach(func() {
+			mockedTLSConfig = nil
+			mockedTLSError = nil
+
 			var err error
 			config := &sriovnetworkv1.SriovOperatorConfig{}
 
@@ -151,6 +162,214 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			validateCfg := &admv1.ValidatingWebhookConfiguration{}
 			err = util.WaitForNamespacedObject(validateCfg, k8sClient, testNamespace, "sriov-operator-webhook-config", util.RetryInterval, util.APITimeout*3)
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should configure TLS profile flags for webhook operands", func() {
+			mockedTLSConfig = &consts.TLSConfig{
+				CipherSuites:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+				MinTLSVersion: "VersionTLS13",
+			}
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				operatorWebhookDS := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: "operator-webhook", Namespace: testNamespace}, operatorWebhookDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-min-version=VersionTLS13"))
+
+				injectorDS := &appsv1.DaemonSet{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector", Namespace: testNamespace}, injectorDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				injectorArgs := strings.Join(injectorDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-min-version=VersionTLS13"))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should remove TLS profile flags when no TLS config is provided", func() {
+			mockedTLSConfig = &consts.TLSConfig{
+				CipherSuites:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+				MinTLSVersion: "VersionTLS13",
+			}
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				operatorWebhookDS := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: "operator-webhook", Namespace: testNamespace}, operatorWebhookDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-min-version=VersionTLS13"))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+			mockedTLSConfig = nil
+			err = util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				operatorWebhookDS := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: "operator-webhook", Namespace: testNamespace}, operatorWebhookDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(operatorArgs).NotTo(ContainSubstring("--tls-cipher-suites="))
+				g.Expect(operatorArgs).NotTo(ContainSubstring("--tls-min-version="))
+
+				injectorDS := &appsv1.DaemonSet{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector", Namespace: testNamespace}, injectorDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				injectorArgs := strings.Join(injectorDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(injectorArgs).NotTo(ContainSubstring("-tls-cipher-suites="))
+				g.Expect(injectorArgs).NotTo(ContainSubstring("-tls-min-version="))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should fall back to webhook defaults when TLS config retrieval fails", func() {
+			mockedTLSError = errors.NewServiceUnavailable("unable to read TLS profile")
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				operatorWebhookDS := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: "operator-webhook", Namespace: testNamespace}, operatorWebhookDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(operatorArgs).NotTo(ContainSubstring("--tls-cipher-suites="))
+				g.Expect(operatorArgs).NotTo(ContainSubstring("--tls-min-version="))
+
+				injectorDS := &appsv1.DaemonSet{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector", Namespace: testNamespace}, injectorDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				injectorArgs := strings.Join(injectorDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(injectorArgs).NotTo(ContainSubstring("-tls-cipher-suites="))
+				g.Expect(injectorArgs).NotTo(ContainSubstring("-tls-min-version="))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should use TLS environment variables when orchestrator returns nil", func() {
+			DeferCleanup(os.Setenv, "TLS_CIPHER_SUITES", os.Getenv("TLS_CIPHER_SUITES"))
+			DeferCleanup(os.Setenv, "TLS_MIN_VERSION", os.Getenv("TLS_MIN_VERSION"))
+			os.Setenv("TLS_CIPHER_SUITES", "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384")
+			os.Setenv("TLS_MIN_VERSION", "VersionTLS12")
+
+			mockedTLSConfig = nil
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				operatorWebhookDS := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: "operator-webhook", Namespace: testNamespace}, operatorWebhookDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-cipher-suites=TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384"))
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-min-version=VersionTLS12"))
+
+				injectorDS := &appsv1.DaemonSet{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector", Namespace: testNamespace}, injectorDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				injectorArgs := strings.Join(injectorDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-cipher-suites=TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384"))
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-min-version=VersionTLS12"))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should override TLS environment variables when orchestrator returns non-nil config", func() {
+			DeferCleanup(os.Setenv, "TLS_CIPHER_SUITES", os.Getenv("TLS_CIPHER_SUITES"))
+			DeferCleanup(os.Setenv, "TLS_MIN_VERSION", os.Getenv("TLS_MIN_VERSION"))
+			os.Setenv("TLS_CIPHER_SUITES", "TLS_AES_128_GCM_SHA256")
+			os.Setenv("TLS_MIN_VERSION", "VersionTLS12")
+
+			mockedTLSConfig = &consts.TLSConfig{
+				CipherSuites:  "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+				MinTLSVersion: "VersionTLS13",
+			}
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				operatorWebhookDS := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: "operator-webhook", Namespace: testNamespace}, operatorWebhookDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"))
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-min-version=VersionTLS13"))
+				g.Expect(operatorArgs).NotTo(ContainSubstring("TLS_AES_128_GCM_SHA256"))
+				g.Expect(operatorArgs).NotTo(ContainSubstring("VersionTLS12"))
+
+				injectorDS := &appsv1.DaemonSet{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector", Namespace: testNamespace}, injectorDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				injectorArgs := strings.Join(injectorDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"))
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-min-version=VersionTLS13"))
+				g.Expect(injectorArgs).NotTo(ContainSubstring("TLS_AES_128_GCM_SHA256"))
+				g.Expect(injectorArgs).NotTo(ContainSubstring("VersionTLS12"))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should fail reconciliation when orchestrator returns error so it requeues", func() {
+			DeferCleanup(os.Setenv, "TLS_CIPHER_SUITES", os.Getenv("TLS_CIPHER_SUITES"))
+			DeferCleanup(os.Setenv, "TLS_MIN_VERSION", os.Getenv("TLS_MIN_VERSION"))
+			os.Setenv("TLS_CIPHER_SUITES", "TLS_AES_256_GCM_SHA384")
+			os.Setenv("TLS_MIN_VERSION", "VersionTLS13")
+
+			mockedTLSError = errors.NewServiceUnavailable("unable to read TLS profile")
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Consistently(func(g Gomega) {
+				config := &sriovnetworkv1.SriovOperatorConfig{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, "2s", "200ms").Should(Succeed())
+		})
+
+		It("should fail reconciliation when TLS environment variables are invalid", func() {
+			DeferCleanup(os.Setenv, "TLS_CIPHER_SUITES", os.Getenv("TLS_CIPHER_SUITES"))
+			DeferCleanup(os.Setenv, "TLS_MIN_VERSION", os.Getenv("TLS_MIN_VERSION"))
+			os.Setenv("TLS_CIPHER_SUITES", "COMPLETELY-INVALID-CIPHER")
+			os.Setenv("TLS_MIN_VERSION", "VersionTLS12")
+
+			mockedTLSConfig = nil
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Consistently(func(g Gomega) {
+				config := &sriovnetworkv1.SriovOperatorConfig{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: "default"}, config)
+				g.Expect(err).NotTo(HaveOccurred())
+			}, "2s", "200ms").Should(Succeed())
+		})
+
+		It("should convert OpenSSL env var cipher names to IANA format in rendered manifests", func() {
+			DeferCleanup(os.Setenv, "TLS_CIPHER_SUITES", os.Getenv("TLS_CIPHER_SUITES"))
+			DeferCleanup(os.Setenv, "TLS_MIN_VERSION", os.Getenv("TLS_MIN_VERSION"))
+			os.Setenv("TLS_CIPHER_SUITES", "ECDHE-RSA-AES128-GCM-SHA256")
+			os.Setenv("TLS_MIN_VERSION", "VersionTLS12")
+
+			mockedTLSConfig = nil
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				operatorWebhookDS := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: "operator-webhook", Namespace: testNamespace}, operatorWebhookDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-min-version=VersionTLS12"))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
 		})
 
 		DescribeTable("should have daemonset enabled by default",
@@ -522,6 +741,34 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 					config.Spec.FeatureGates = map[string]bool{consts.MetricsExporterFeatureGate: true}
 					err := k8sClient.Update(ctx, config)
 					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("should render tls profile flags for metrics exporter kube-rbac-proxy", func() {
+					mockedTLSConfig = &consts.TLSConfig{
+						CipherSuites:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+						MinTLSVersion: "VersionTLS13",
+					}
+
+					err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+					Expect(err).NotTo(HaveOccurred())
+
+					Eventually(func(g Gomega) {
+						daemonSet := &appsv1.DaemonSet{}
+						err := k8sClient.Get(ctx, types.NamespacedName{Name: "sriov-network-metrics-exporter", Namespace: testNamespace}, daemonSet)
+						g.Expect(err).NotTo(HaveOccurred())
+
+						proxyArgs := ""
+						for _, container := range daemonSet.Spec.Template.Spec.Containers {
+							if container.Name == "kube-rbac-proxy" {
+								proxyArgs = strings.Join(container.Args, " ")
+								break
+							}
+						}
+
+						g.Expect(proxyArgs).NotTo(BeEmpty())
+						g.Expect(proxyArgs).To(ContainSubstring("--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+						g.Expect(proxyArgs).To(ContainSubstring("--tls-min-version=VersionTLS13"))
+					}, util.APITimeout, util.RetryInterval).Should(Succeed())
 				})
 
 				It("should deploy the sriov-network-metrics-exporter DaemonSet", func() {

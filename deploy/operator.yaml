@@ -127,3 +127,7 @@ spec:
               value: $METRICS_EXPORTER_SECRET_NAME
             - name: METRICS_EXPORTER_PORT
               value: "$METRICS_EXPORTER_PORT"
+            - name: TLS_CIPHER_SUITES
+              value: "$TLS_CIPHER_SUITES"
+            - name: TLS_MIN_VERSION
+              value: "$TLS_MIN_VERSION"

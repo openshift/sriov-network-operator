@@ -149,6 +149,9 @@ func newConfigController() *configController {
 	// TODO: Change this to add tests for hypershift
 	orchestrator.EXPECT().Flavor().Return(consts.ClusterFlavorDefault).AnyTimes()
 
+	// Mock GetTLSConfig to return nil by default (no cluster-level TLS config)
+	orchestrator.EXPECT().GetTLSConfig(gomock.Any()).Return(nil, nil).AnyTimes()
+
 	err = (&controllers.SriovOperatorConfigReconciler{
 		Client:            k8sManager.GetClient(),
 		Scheme:            k8sManager.GetScheme(),

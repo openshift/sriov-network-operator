@@ -47,6 +47,12 @@ type Interface interface {
 	//   - bool: true if the post-drain operations completed successfully, false if more time is needed
 	//   - error: an error if the post-drain operations failed
 	AfterCompleteDrainNode(context.Context, *corev1.Node) (bool, error)
+
+	// GetTLSConfig retrieves the cluster-wide TLS configuration from the specific orchestrator.
+	// Returns:
+	//   - *consts.TLSConfig: the TLS configuration, or nil if no cluster-level configuration is set
+	//   - error: an error if the configuration could not be retrieved
+	GetTLSConfig(context.Context) (*consts.TLSConfig, error)
 }
 
 // New creates a new orchestrator interface based on the provided cluster type.

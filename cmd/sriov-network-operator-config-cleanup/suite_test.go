@@ -18,6 +18,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	//+kubebuilder:scaffold:imports
+	configv1 "github.com/openshift/api/config/v1"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
@@ -65,6 +67,8 @@ var _ = BeforeSuite(func() {
 
 	By("registering schemes")
 	err = sriovnetworkv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = configv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	vars.Config = cfg
 	vars.Scheme = scheme.Scheme

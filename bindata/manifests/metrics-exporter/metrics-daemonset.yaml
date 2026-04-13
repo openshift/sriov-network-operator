@@ -42,7 +42,7 @@ spec:
         securityContext:
           capabilities:
             drop:
-              - ALL      
+              - ALL
           readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
         volumeMounts:
@@ -66,7 +66,12 @@ spec:
         args:
           - --logtostderr
           - --secure-listen-address=[$(HOST_IP)]:{{.MetricsExporterPort}}
-          - --tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_RSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256
+          {{- if .TLSCipherSuites }}
+          - --tls-cipher-suites={{.TLSCipherSuites}}
+          {{- end }}
+          {{- if .TLSMinVersion }}
+          - --tls-min-version={{.TLSMinVersion}}
+          {{- end }}
           - --upstream=http://127.0.0.1:{{.MetricsExporterPort}}/
           - --tls-private-key-file=/etc/metrics/tls.key
           - --tls-cert-file=/etc/metrics/tls.crt

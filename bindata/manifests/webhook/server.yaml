@@ -77,6 +77,12 @@ spec:
         - -insecure=true
         - -logtostderr=true
         - -alsologtostderr=true
+        {{- if .TLSCipherSuites }}
+        - -tls-cipher-suites={{.TLSCipherSuites}}
+        {{- end }}
+        {{- if .TLSMinVersion }}
+        - -tls-min-version={{.TLSMinVersion}}
+        {{- end }}
         env:
         - name: NAMESPACE
           valueFrom:
