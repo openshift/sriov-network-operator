@@ -42,7 +42,6 @@ if [ -z $SKIP_VAR_SET ]; then
         _url_detect "METRICS_EXPORTER_IMAGE" "quay.io/openshift/origin-sriov-network-metrics-exporter"
         _url_detect "SRIOV_NETWORK_OPERATOR_IMAGE" "quay.io/openshift/origin-sriov-network-operator"
         EMPTY_IS_VALID=1 _url_detect "METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE" "quay.io/openshift/origin-kube-rbac-proxy"
-
         fail_msg_detect="is empty and failed to detect"
 else
         fail_msg_detect="is empty but SKIP_VAR_SET is set"
