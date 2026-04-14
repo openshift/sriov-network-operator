@@ -13,7 +13,7 @@ if [ -z $SKIP_VAR_SET ]; then
         export SRIOV_NETWORK_WEBHOOK_IMAGE=${SRIOV_NETWORK_WEBHOOK_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-network-operator-webhook}
         export METRICS_EXPORTER_IMAGE=${METRICS_EXPORTER_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-network-metrics-exporter}
         export SRIOV_NETWORK_OPERATOR_IMAGE=${SRIOV_NETWORK_OPERATOR_IMAGE:-ghcr.io/k8snetworkplumbingwg/sriov-network-operator}
-        export METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE=${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE:-quay.io/brancz/kube-rbac-proxy:v0.15.0}
+        export METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE=${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE:-quay.io/brancz/kube-rbac-proxy:v0.21.2}
         fail_msg_detect="is empty and failed to detect"
 else
         fail_msg_detect="is empty but SKIP_VAR_SET is set"
