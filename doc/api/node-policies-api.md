@@ -48,7 +48,7 @@ This example configures Intel XL710 NICs (vendor 8086, device 1583) on nodes lab
 |-------|------|-------------|
 | `nicSelector.vendor` | string | PCI vendor ID (e.g., "8086" for Intel) |
 | `nicSelector.deviceID` | string | PCI device ID |
-| `nicSelector.pfName` | []string | Physical function names (e.g., ["eno1", "eno2"]) |
+| `nicSelector.pfNames` | []string | Physical function names or alternative interface names (e.g., ["eno1", "sriov1", "eno1#0-3"]) |
 | `nicSelector.rootDevices` | []string | PCI addresses (e.g., ["0000:86:00.0"]) |
 | `nicSelector.netFilter` | string | Network interface name filter |
 
@@ -80,6 +80,69 @@ This example configures Intel XL710 NICs (vendor 8086, device 1583) on nodes lab
 | `linkState` | string | VF link state ("auto", "enable", "disable") |
 | `maxTxRate` | integer | Maximum transmit rate (Mbps) |
 | `minTxRate` | integer | Minimum transmit rate (Mbps) |
+
+## Alternative Interface Names
+
+The operator discovers alternative interface names automatically and stores them in `SriovNetworkNodeState.status.interfaces[].altNames`.
+
+Example `SriovNetworkNodeState` snippet:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodeState
+status:
+  interfaces:
+    - name: "ens803f1"
+      altNames:
+        - "eth0"
+        - "net1"
+        - "sriov1"
+```
+
+You can select a PF by using either:
+
+- the primary interface name (for example, `ens803f1`)
+- an alternative interface name (for example, `sriov1`, `eth0`, `net1`)
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: policy-using-altname
+  namespace: sriov-network-operator
+spec:
+  deviceType: netdevice
+  nicSelector:
+    pfNames: ["sriov1"]
+    vendor: "8086"
+  nodeSelector:
+    feature.node.kubernetes.io/network-sriov.capable: "true"
+  numVfs: 4
+  priority: 99
+  resourceName: intelnics
+```
+
+Alternative names also work with VF range notation:
+
+```yaml
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: policy-with-altname-vf-range
+  namespace: sriov-network-operator
+spec:
+  deviceType: netdevice
+  nicSelector:
+    pfNames: ["eth0#0-3"]
+    vendor: "8086"
+  nodeSelector:
+    feature.node.kubernetes.io/network-sriov.capable: "true"
+  numVfs: 8
+  priority: 99
+  resourceName: intelnics
+```
+
+To discover available alternative names on a node, see the [SriovNetworkNodeState API Reference](node-state-api.md#discovering-alternative-interface-names).
 
 ## Virtual Deployment Considerations
 
@@ -128,13 +191,13 @@ Use `#` notation to specify VF ranges:
 ```yaml
 spec:
   nicSelector:
-    pfName: ["eno1#0-3"]  # VFs 0, 1, 2, 3
+    pfNames: ["eno1#0-3"]  # VFs 0, 1, 2, 3
   numVfs: 8
   resourceName: group1
 ---
 spec:
   nicSelector:
-    pfName: ["eno1#4-7"]  # VFs 4, 5, 6, 7  
+    pfNames: ["eno1#4-7"]  # VFs 4, 5, 6, 7  
   numVfs: 8
   resourceName: group2
 ```
@@ -152,7 +215,7 @@ spec:
   externallyManaged: true
   deviceType: vfio-pci
   nicSelector:
-    pfName: ["eno1"]
+    pfNames: ["eno1"]
   nodeSelector:
     feature.node.kubernetes.io/network-sriov.capable: "true"
   numVfs: 4
@@ -201,7 +264,7 @@ spec:
   deviceType: netdevice
   isRdma: true
   nicSelector:
-    pfName: ["eno1"]
+    pfNames: ["eno1"]
   nodeSelector:
     feature.node.kubernetes.io/network-sriov.capable: "true"
   numVfs: 4
@@ -224,7 +287,7 @@ spec:
   deviceType: netdevice
   eSwitchMode: switchdev
   nicSelector:
-    pfName: ["eno1"]
+    pfNames: ["eno1"]
   nodeSelector:
     feature.node.kubernetes.io/network-sriov.capable: "true"
   numVfs: 4
