@@ -644,7 +644,7 @@ func (dn *NodeReconciler) restartDevicePluginPod(ctx context.Context) error {
 			return err
 		}
 		newPod := &corev1.Pod{}
-		if err := wait.PollUntilContextCancel(ctx, time.Second, true, func(ctx context.Context) (bool, error) {
+		if err := wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 			err := dn.client.Get(ctx, client.ObjectKeyFromObject(&pod), newPod)
 			if errors.IsNotFound(err) {
 				funcLog.Info("device plugin pod exited")
@@ -663,6 +663,9 @@ func (dn *NodeReconciler) restartDevicePluginPod(ctx context.Context) error {
 				"pod-name", pod.Name, "pod-uid", newPod.UID)
 			return false, nil
 		}); err != nil {
+			if stdErrors.Is(err, context.DeadlineExceeded) {
+				err = fmt.Errorf("timed out waiting for device plugin pod to restart: pod=%s uid=%s: %w", pod.Name, podUID, err)
+			}
 			funcLog.Error(err, "failed to wait device plugin pod to exit")
 			return err
 		}
