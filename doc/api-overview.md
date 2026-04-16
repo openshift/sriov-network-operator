@@ -45,6 +45,7 @@ graph TD
 - Use `SriovNetworkPoolConfig` for parallel node operations
 - Configure `SriovOperatorConfig` for global operator configuration and update feature gates
 - Monitor `SriovNetworkNodeState` for hardware status on a specific node
+- Use interface alternative names from `SriovNetworkNodeState.status.interfaces[].altNames` in `SriovNetworkNodePolicy.spec.nicSelector.pfNames`
 
 ## Detailed API Documentation
 

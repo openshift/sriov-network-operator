@@ -59,6 +59,9 @@ The status section shows the actual current state of SR-IOV hardware:
 status:
   interfaces:
     - name: "eno1"
+      altNames:
+        - "eth0"
+        - "sriov1"
       mac: "a4:bf:01:12:34:56"
       driver: "i40e"
       pciAddress: "0000:03:00.0"
@@ -94,6 +97,7 @@ status:
 | `numVfs` | int | Number of virtual functions to create |
 | `mtu` | int | Maximum transmission unit size |
 | `name` | string | Interface name (e.g., "eno1") |
+| `altNames` | []string | Alternative interface names discovered by the host OS (e.g., ["eth0", "sriov1"]) |
 | `linkType` | string | Link type: "eth", "ib" |
 | `eSwitchMode` | string | E-Switch mode: "legacy", "switchdev" |
 | `externallyManaged` | bool | Whether interface is managed externally |
@@ -155,6 +159,16 @@ kubectl describe sriovnetworknodestate <node-name> -n sriov-network-operator
 
 # View node state in YAML format
 kubectl get sriovnetworknodestate <node-name> -n sriov-network-operator -o yaml
+```
+
+### Discovering Alternative Interface Names
+
+Alternative interface names are available in `status.interfaces[].altNames`. You can use those names in `SriovNetworkNodePolicy.spec.nicSelector.pfNames`.
+
+```bash
+# Show interface names and alternative names for one node
+kubectl get sriovnetworknodestate <node-name> -n sriov-network-operator \
+  -o jsonpath='{range .status.interfaces[*]}{.name}{" => "}{.altNames}{"\n"}{end}'
 ```
 
 ### Monitoring Sync Status
