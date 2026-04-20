@@ -185,7 +185,7 @@ func initFeatureGates(defaultConfig *sriovnetworkv1.SriovOperatorConfig) (featur
 	featureGates := featuregate.New()
 	featureGates.Init(defaultConfig.Spec.FeatureGates)
 	fnLogger.Info("Enabled featureGates", "featureGates", featureGates.String())
-
+	vars.FeatureGate = featureGates
 	return featureGates, nil
 }
 

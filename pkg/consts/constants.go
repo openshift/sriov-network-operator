@@ -95,6 +95,8 @@ const (
 
 	OwnerRefAnnotation = "sriovnetwork.openshift.io/owner-ref"
 
+	DevicePluginWaitConfigAnnotation = "sriovnetwork.openshift.io/device-plugin-wait-config"
+
 	// NodeStateKeepUntilAnnotation contains name of the "keep until time" annotation for SriovNetworkNodeState object.
 	// The "keep until time" specifies the earliest time at which the state object can be removed
 	// if the daemon's pod is not found on the node.
@@ -167,6 +169,9 @@ const (
 
 	// ManageSoftwareBridgesFeatureGate: enables management of software bridges by the operator
 	ManageSoftwareBridgesFeatureGate = "manageSoftwareBridges"
+
+	// BlockDevicePluginUntilConfiguredFeatureGate: blocks the device plugin until the configuration is applied
+	BlockDevicePluginUntilConfiguredFeatureGate = "blockDevicePluginUntilConfigured"
 
 	// MellanoxFirmwareResetFeatureGate: enables the firmware reset via mstfwreset before a reboot
 	MellanoxFirmwareResetFeatureGate = "mellanoxFirmwareReset"
