@@ -367,6 +367,20 @@ func (dn *NodeReconciler) checkSystemdStatus() (*hosttypes.SriovResult, bool, er
 // 7. Updating the lastAppliedGeneration to the current generation.
 func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *hosttypes.SriovResult) (ctrl.Result, error) {
 	reqLogger := log.FromContext(ctx).WithName("Apply")
+
+	// Restart the device plugin *before* applying configuration if the
+	// BlockDevicePluginUntilConfiguredFeatureGate feature is enabled.
+	// With this gate enabled, the device plugin will remain blocked until it is
+	// explicitly unblocked after configuration (see waitForDevicePluginPodAndTryUnblock).
+	// If the feature gate is not enabled, preserve legacy behavior by
+	// restarting the device plugin *after* configuration is applied.
+	if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) {
+		if err := dn.restartDevicePluginPod(ctx); err != nil {
+			reqLogger.Error(err, "failed to restart device plugin on the node")
+			return ctrl.Result{}, err
+		}
+	}
+
 	// apply the vendor plugins after we are done with drain if needed
 	for k, p := range dn.loadedPlugins {
 		// Skip both the general and virtual plugin apply them last
@@ -468,7 +482,7 @@ func (dn *NodeReconciler) tryUnblockDevicePlugin(ctx context.Context,
 	for _, pod := range devicePluginPods {
 		if err := utils.RemoveAnnotationFromObject(ctx, &pod,
 			consts.DevicePluginWaitConfigAnnotation, dn.client); err != nil {
-			return fmt.Errorf("failed to remove wait-for-config annotation from pod: %w", err)
+			return fmt.Errorf("failed to remove %s annotation from pod: %w", consts.DevicePluginWaitConfigAnnotation, err)
 		}
 	}
 	return nil
@@ -653,18 +667,18 @@ func (dn *NodeReconciler) restartDevicePluginPod(ctx context.Context) error {
 // for the periodic check. We expect to have at least one device plugin pod for the node.
 func (dn *NodeReconciler) waitForDevicePluginPodAndTryUnblock(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState) error {
 	funcLog := log.Log.WithName("waitForDevicePluginPodAndTryUnblock")
-	funcLog.Info("waiting for device plugin to set wait-for-config annotation")
+	funcLog.Info("waiting for device plugin to set wait-for-config annotation", "annotation", consts.DevicePluginWaitConfigAnnotation)
 	var devicePluginPods []corev1.Pod
 	err := wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true,
 		func(ctx context.Context) (bool, error) {
 			var err error
 			devicePluginPods, err = dn.getDevicePluginPodsForNode(ctx)
 			if err != nil {
-				log.Log.Error(err, "waitForDevicePluginPodAndUnblock(): failed to get device plugin pod while waiting for a new pod to start")
+				funcLog.Error(err, "failed to get device plugin pod while waiting for a new pod to start")
 				return false, err
 			}
 			if len(devicePluginPods) == 0 {
-				log.Log.V(2).Info("waitForDevicePluginPodAndUnblock(): no device plugin pods found while waiting for a new pod to start")
+				funcLog.V(2).Info("no device plugin pods found while waiting for a new pod to start")
 				return false, nil
 			}
 			for _, pod := range devicePluginPods {
@@ -673,12 +687,12 @@ func (dn *NodeReconciler) waitForDevicePluginPodAndTryUnblock(ctx context.Contex
 				// may also match our selector. Since unmanaged pods won't have this annotation,
 				// we only require one pod (the managed one) to have it.
 				if utils.ObjectHasAnnotationKey(&pod, consts.DevicePluginWaitConfigAnnotation) {
-					log.Log.Info("waitForDevicePluginPodAndUnblock(): wait-for-config annotation found on pod",
+					funcLog.Info("wait-for-config annotation found on pod",
 						"pod", pod.Name)
 					return true, nil
 				}
 			}
-			log.Log.V(2).Info("waitForDevicePluginPodAndUnblock(): waiting for new device plugin pod to have wait-for-config annotation")
+			funcLog.V(2).Info("waiting for new device plugin pod to have wait-for-config annotation")
 			return false, nil
 		})
 	if err != nil {
@@ -687,8 +701,8 @@ func (dn *NodeReconciler) waitForDevicePluginPodAndTryUnblock(ctx context.Contex
 		}
 		// If annotation is not found within the timeout, log a warning and proceed.
 		// The device plugin pod will be unblocked by the periodic check logic in tryUnblockDevicePlugin.
-		log.Log.Info("waitForDevicePluginPodAndUnblock(): WARNING: device plugin pod with " +
-			"wait-for-config annotation not found within timeout")
+		funcLog.Info("WARNING: device plugin pod with wait-for-config annotation not found within timeout")
+		return nil
 	}
 	if len(devicePluginPods) > 0 {
 		// try to unblock all device plugin pods we retrieved with the latest loop iteration
