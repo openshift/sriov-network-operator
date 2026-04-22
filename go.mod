@@ -2,6 +2,8 @@ module github.com/k8snetworkplumbingwg/sriov-network-operator
 
 go 1.24.0
 
+toolchain go1.24.1
+
 require (
 	github.com/Masterminds/sprig/v3 v3.2.2
 	github.com/blang/semver v3.5.1+incompatible
