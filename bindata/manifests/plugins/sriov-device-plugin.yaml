@@ -25,6 +25,14 @@ spec:
         component: network
         type: infra
         openshift.io/component: network
+        # NOTE: The controller uses equality.Semantic.DeepDerivative(in.Spec, ds.Spec)
+        # to detect changes in the DaemonSet's spec and decide if an update is needed.
+        # To ensure the init container is properly managed when toggling the
+        # BlockDevicePluginUntilConfigured feature gate, we define an explicit field
+        # (init-container-enabled) that is always present in the DaemonSet labels.
+        # Its value reflects the state of the feature gate and guarantees spec changes
+        # are propagated, ensuring the init container is added or removed as required.
+        init-container-enabled: "{{ .BlockDevicePluginUntilConfigured }}"
     spec:
       hostNetwork: true
       nodeSelector:
@@ -40,6 +48,25 @@ spec:
       {{- range .ImagePullSecrets }}
         - name: {{ . }}
       {{- end }}
+      {{- end }}
+      {{- if .BlockDevicePluginUntilConfigured }}
+      initContainers:
+      - name: sriov-device-plugin-init
+        image: {{.SRIOVNetworkConfigDaemonImage}}
+        command:
+        - sriov-network-config-daemon
+        - wait-for-config
+        - --pod-name=$(POD_NAME)
+        - --pod-namespace=$(POD_NAMESPACE)
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
       {{- end }}
       containers:
       - name: sriov-device-plugin
