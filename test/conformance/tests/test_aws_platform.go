@@ -15,6 +15,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/utils/ptr"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -190,8 +192,17 @@ var _ = Describe("[sriov] aws platform", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			By("waiting for the new config daemon pod to be running")
-			Eventually(func() bool {
-				newPod := getConfigDaemonPod(node)
+			Eventually(func(g Gomega) bool {
+				pods := &corev1.PodList{}
+				label, err := labels.Parse("app=sriov-network-config-daemon")
+				g.Expect(err).ToNot(HaveOccurred())
+				field, err := fields.ParseSelector(fmt.Sprintf("spec.nodeName=%s", node))
+				g.Expect(err).ToNot(HaveOccurred())
+				err = clients.List(context.Background(), pods, &runtimeclient.ListOptions{Namespace: operatorNamespace, LabelSelector: label, FieldSelector: field})
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(len(pods.Items)).To(Equal(1))
+
+				newPod := pods.Items[0]
 				// Make sure we got a different pod (new one)
 				if newPod.Name == oldPodName {
 					return false
