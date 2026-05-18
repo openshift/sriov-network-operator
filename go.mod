@@ -8,10 +8,10 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/fsnotify/fsnotify v1.7.0
-	github.com/go-logr/logr v1.2.4
-	github.com/golang/mock v1.4.4
+	github.com/go-logr/logr v1.4.1
+	github.com/golang/mock v1.6.0
 	github.com/google/go-cmp v0.6.0
-	github.com/google/uuid v1.3.1
+	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/jaypipes/ghw v0.9.0
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.4.0
@@ -29,7 +29,7 @@ require (
 	github.com/vishvananda/netlink v1.2.1-beta.2.0.20240221172127-ec7bcb248e94
 	github.com/vishvananda/netns v0.0.4
 	go.uber.org/zap v1.25.0
-	golang.org/x/time v0.3.0
+	golang.org/x/time v0.5.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.28.3
 	k8s.io/apiextensions-apiserver v0.28.3
@@ -81,11 +81,11 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.2.4 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
+	github.com/google/pprof v0.0.0-20221118152302-e6195bd50e26 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -119,7 +119,7 @@ require (
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
-	github.com/spf13/afero v1.9.3 // indirect
+	github.com/spf13/afero v1.10.0 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
@@ -132,7 +132,7 @@ require (
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/oauth2 v0.13.0 // indirect
+	golang.org/x/oauth2 v0.18.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/term v0.27.0 // indirect
@@ -140,8 +140,8 @@ require (
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230525234030-28d5490b6b19 // indirect
-	google.golang.org/grpc v1.56.3 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect
+	google.golang.org/grpc v1.62.1 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -162,3 +162,5 @@ require (
 )
 
 replace github.com/emicklei/go-restful => github.com/emicklei/go-restful v2.16.0+incompatible
+
+replace google.golang.org/grpc => github.com/openshift-sustaining/grpc-go v1.64.1-sec.1
