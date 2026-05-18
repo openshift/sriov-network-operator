@@ -339,7 +339,7 @@ var _ = Describe("SRIOV", Ordered, func() {
 		})
 
 		It("should call mlx config fw without fwreset if feature flag is disabled", func() {
-			vars.FeatureGate.Init(nil)
+			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: false})
 			h.EXPECT().IsKernelLockdownMode().Return(false)
 			h.EXPECT().MlxConfigFW(gomock.Any()).Return(nil)
 			err := m.Apply()
