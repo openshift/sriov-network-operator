@@ -64,6 +64,38 @@ var _ = Describe("All Network Controllers", Ordered, func() {
 		})
 	})
 
+	Context("NAD cleanup with stale LASTNETWORKNAMESPACE annotation", func() {
+		AfterEach(func() {
+			cleanNetworksInNamespace(testNamespace)
+			cleanNetworksInNamespace("default")
+		})
+
+		It("should create NAD even when old namespace NAD does not exist", func() {
+			By("Creating a SriovNetwork with a stale LASTNETWORKNAMESPACE annotation")
+			cr := sriovnetworkv1.SriovNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "stale-ns-net",
+					Namespace: testNamespace,
+					Annotations: map[string]string{
+						sriovnetworkv1.LASTNETWORKNAMESPACE: "non-existent-namespace",
+					},
+				},
+				Spec: sriovnetworkv1.SriovNetworkSpec{
+					ResourceName:     "resource_1",
+					NetworkNamespace: "default",
+				},
+			}
+
+			err := k8sClient.Create(ctx, &cr)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying that the NAD is created despite the stale annotation")
+			netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+			err = util.WaitForNamespacedObject(netAttDef, k8sClient, "default", cr.GetName(), util.RetryInterval, util.Timeout)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	Context("owner-reference annotations", func() {
 		AfterEach(func() {
 			cleanNetworksInNamespace(testNamespace)
