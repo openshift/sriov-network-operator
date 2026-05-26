@@ -1190,6 +1190,177 @@ func TestValidatePolicyForNodeStateWithValidNetFilter(t *testing.T) {
 	g.Expect(interfaceSelected).To(Equal(true))
 }
 
+func TestStaticValidateSriovNetworkNodePolicyWithNetFilterAndOtherNicSelectors(t *testing.T) {
+	testCases := []struct {
+		name        string
+		nicSelector SriovNetworkNicSelector
+		expectError string
+	}{
+		{
+			name: "netFilter with vendor",
+			nicSelector: SriovNetworkNicSelector{
+				NetFilter: "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+				Vendor:    "8086",
+			},
+			expectError: "nicSelector fields vendor, deviceID, pfNames, and rootDevices are not allowed when netFilter is specified",
+		},
+		{
+			name: "netFilter with deviceID",
+			nicSelector: SriovNetworkNicSelector{
+				NetFilter: "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+				DeviceID:  "158b",
+			},
+			expectError: "nicSelector fields vendor, deviceID, pfNames, and rootDevices are not allowed when netFilter is specified",
+		},
+		{
+			name: "netFilter with pfNames",
+			nicSelector: SriovNetworkNicSelector{
+				NetFilter: "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+				PfNames:   []string{"ens803f0"},
+			},
+			expectError: "nicSelector fields vendor, deviceID, pfNames, and rootDevices are not allowed when netFilter is specified",
+		},
+		{
+			name: "netFilter with rootDevices",
+			nicSelector: SriovNetworkNicSelector{
+				NetFilter:   "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+				RootDevices: []string{"0000:86:00.0"},
+			},
+			expectError: "nicSelector fields vendor, deviceID, pfNames, and rootDevices are not allowed when netFilter is specified",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+			policy := &SriovNetworkNodePolicy{
+				Spec: SriovNetworkNodePolicySpec{
+					DeviceType:   "netdevice",
+					NicSelector:  tc.nicSelector,
+					NumVfs:       1,
+					ResourceName: "p0",
+				},
+			}
+			ok, err := staticValidateSriovNetworkNodePolicy(policy)
+			g.Expect(err).To(MatchError(ContainSubstring(tc.expectError)))
+			g.Expect(ok).To(Equal(false))
+		})
+	}
+}
+
+func TestStaticValidateSriovNetworkNodePolicyWithNetFilterAndEswitchMode(t *testing.T) {
+	g := NewGomegaWithT(t)
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				NetFilter: "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+			},
+			EswitchMode:  "switchdev",
+			NumVfs:       1,
+			ResourceName: "p0",
+		},
+	}
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(MatchError(ContainSubstring("eSwitchMode is not supported when netFilter is specified")))
+	g.Expect(ok).To(Equal(false))
+}
+
+func TestStaticValidateSriovNetworkNodePolicyWithNetFilterAndBridge(t *testing.T) {
+	g := NewGomegaWithT(t)
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				NetFilter: "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+			},
+			Bridge:       Bridge{OVS: &OVSConfig{}},
+			NumVfs:       1,
+			ResourceName: "p0",
+		},
+	}
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).To(MatchError(ContainSubstring("bridge configuration is not supported when netFilter is specified")))
+	g.Expect(ok).To(Equal(false))
+}
+
+func TestStaticValidateSriovNetworkNodePolicyWithNetFilterAndInvalidLinkType(t *testing.T) {
+	testCases := []struct {
+		name        string
+		linkType    string
+		expectError bool
+	}{
+		{
+			name:        "netFilter with linkType ib",
+			linkType:    "ib",
+			expectError: true,
+		},
+		{
+			name:        "netFilter with linkType IB",
+			linkType:    "IB",
+			expectError: true,
+		},
+		{
+			name:        "netFilter with linkType eth",
+			linkType:    "eth",
+			expectError: false,
+		},
+		{
+			name:        "netFilter with linkType ETH",
+			linkType:    "ETH",
+			expectError: false,
+		},
+		{
+			name:        "netFilter with empty linkType",
+			linkType:    "",
+			expectError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+			policy := &SriovNetworkNodePolicy{
+				Spec: SriovNetworkNodePolicySpec{
+					DeviceType: "netdevice",
+					NicSelector: SriovNetworkNicSelector{
+						NetFilter: "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+					},
+					LinkType:     tc.linkType,
+					NumVfs:       1,
+					ResourceName: "p0",
+				},
+			}
+			ok, err := staticValidateSriovNetworkNodePolicy(policy)
+			if tc.expectError {
+				g.Expect(err).To(MatchError(ContainSubstring("linkType")))
+				g.Expect(err).To(MatchError(ContainSubstring("is not allowed when netFilter is specified")))
+				g.Expect(ok).To(Equal(false))
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(ok).To(Equal(true))
+			}
+		})
+	}
+}
+
+func TestStaticValidateSriovNetworkNodePolicyWithNetFilterOnly(t *testing.T) {
+	g := NewGomegaWithT(t)
+	policy := &SriovNetworkNodePolicy{
+		Spec: SriovNetworkNodePolicySpec{
+			DeviceType: "netdevice",
+			NicSelector: SriovNetworkNicSelector{
+				NetFilter: "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+			},
+			NumVfs:       1,
+			ResourceName: "p0",
+		},
+	}
+	ok, err := staticValidateSriovNetworkNodePolicy(policy)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(ok).To(Equal(true))
+}
+
 func TestValidatePolicyForNodeStateWithValidVFAndNetFilter(t *testing.T) {
 	interfaceSelected = false
 	state := &SriovNetworkNodeState{
