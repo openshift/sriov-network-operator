@@ -47,12 +47,13 @@ type SriovIBNetworkSpec struct {
 
 // SriovIBNetworkStatus defines the observed state of SriovIBNetwork
 type SriovIBNetworkStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	NetworkStatus `json:",inline"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // SriovIBNetwork is the Schema for the sriovibnetworks API
 type SriovIBNetwork struct {
