@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
@@ -53,8 +54,9 @@ var _ = Describe("OVSNetwork Controller", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		err = (&OVSNetworkReconciler{
-			Client: k8sManager.GetClient(),
-			Scheme: k8sManager.GetScheme(),
+			Client:        k8sManager.GetClient(),
+			Scheme:        k8sManager.GetScheme(),
+			StatusPatcher: status.NewPatcher(k8sManager.GetClient(), k8sManager.GetEventRecorder("test"), k8sManager.GetScheme(), "test"),
 		}).SetupWithManager(k8sManager)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -183,6 +185,211 @@ var _ = Describe("OVSNetwork Controller", Ordered, func() {
 			Eventually(func(g Gomega) {
 				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "test", Namespace: newNSName},
 					&netattdefv1.NetworkAttachmentDefinition{})).NotTo(HaveOccurred())
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+	})
+
+	Context("conditions", func() {
+		It("should set Ready=True when network is successfully provisioned", func() {
+			netCR := &v1.OVSNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ovs-cond-ready",
+					Namespace: testNamespace,
+				},
+				Spec: v1.OVSNetworkSpec{
+					ResourceName: "ovs_resource_cond",
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, netCR)).NotTo(HaveOccurred())
+			DeferCleanup(func() { removeOVSNetwork(ctx, netCR) })
+
+			Eventually(func(g Gomega) {
+				network := &v1.OVSNetwork{}
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: netCR.Name, Namespace: testNamespace}, network)).To(Succeed())
+
+				// Verify Ready condition
+				readyCondition := findCondition(network.Status.Conditions, v1.ConditionReady)
+				g.Expect(readyCondition).ToNot(BeNil())
+				g.Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+				g.Expect(readyCondition.Reason).To(Equal(v1.ReasonNetworkReady))
+				g.Expect(readyCondition.Message).To(ContainSubstring("NetworkAttachmentDefinition is provisioned"))
+
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should set Ready=False when target namespace does not exist", func() {
+			netCR := &v1.OVSNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ovs-cond-degraded",
+					Namespace: testNamespace,
+				},
+				Spec: v1.OVSNetworkSpec{
+					NetworkNamespace: "ovs-non-existent-ns-degraded",
+					ResourceName:     "ovs_resource_cond_degraded",
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, netCR)).NotTo(HaveOccurred())
+			DeferCleanup(func() { removeOVSNetwork(ctx, netCR) })
+
+			// Wait for conditions to be set
+			time.Sleep(2 * time.Second)
+
+			Eventually(func(g Gomega) {
+				network := &v1.OVSNetwork{}
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: netCR.Name, Namespace: testNamespace}, network)).To(Succeed())
+
+				// Verify Ready condition is False (waiting for namespace)
+				readyCondition := findCondition(network.Status.Conditions, v1.ConditionReady)
+				g.Expect(readyCondition).ToNot(BeNil())
+				g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(readyCondition.Reason).To(Equal(v1.ReasonNamespaceNotFound))
+				g.Expect(readyCondition.Message).To(ContainSubstring("does not exist"))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should have consistent observedGeneration in conditions", func() {
+			netCR := &v1.OVSNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ovs-cond-gen",
+					Namespace: testNamespace,
+				},
+				Spec: v1.OVSNetworkSpec{
+					ResourceName: "ovs_resource_cond_gen",
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, netCR)).NotTo(HaveOccurred())
+			DeferCleanup(func() { removeOVSNetwork(ctx, netCR) })
+
+			Eventually(func(g Gomega) {
+				network := &v1.OVSNetwork{}
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: netCR.Name, Namespace: testNamespace}, network)).To(Succeed())
+
+				readyCondition := findCondition(network.Status.Conditions, v1.ConditionReady)
+				g.Expect(readyCondition).ToNot(BeNil())
+				// And it should match the current generation
+				g.Expect(readyCondition.ObservedGeneration).To(Equal(network.Generation))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should set Ready=False when app network sets NetworkNamespace from non-operator namespace", func() {
+			appNs := "ovs-app-ns-cross"
+			// Create application namespace
+			nsObj := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: appNs},
+			}
+			Expect(k8sClient.Create(ctx, nsObj)).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(k8sClient.Delete(ctx, nsObj)).NotTo(HaveOccurred())
+			})
+
+			// Network in application namespace with cross-namespace target - should not be Ready
+			netCR := &v1.OVSNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "ovs-app-cross",
+					Namespace: appNs,
+				},
+				Spec: v1.OVSNetworkSpec{
+					NetworkNamespace: "default", // Different from its own namespace
+					ResourceName:     "ovs_resource_cross",
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, netCR)).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(k8sClient.Delete(ctx, netCR)).To(Succeed())
+			})
+
+			Eventually(func(g Gomega) {
+				network := &v1.OVSNetwork{}
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: netCR.Name, Namespace: appNs}, network)).To(Succeed())
+
+				readyCondition := findCondition(network.Status.Conditions, v1.ConditionReady)
+				g.Expect(readyCondition).ToNot(BeNil())
+				g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(readyCondition.Message).To(ContainSubstring("networkNamespace cannot be set"))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should set Ready=False on app network when operator network already owns the NAD with same name", func() {
+			targetNs := "ovs-target-ns-conflict"
+			nadName := "ovs-test-nad-conflict"
+
+			// Create target namespace
+			nsObj := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: targetNs},
+			}
+			Expect(k8sClient.Create(ctx, nsObj)).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(k8sClient.Delete(ctx, nsObj)).NotTo(HaveOccurred())
+			})
+
+			// Network 1: In operator namespace, targeting target-ns
+			netCROperator := &v1.OVSNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      nadName,
+					Namespace: testNamespace,
+				},
+				Spec: v1.OVSNetworkSpec{
+					NetworkNamespace: targetNs,
+					ResourceName:     "ovs_resource_op",
+				},
+			}
+
+			// Network 2: In target namespace with SAME NAME
+			netCRApp := &v1.OVSNetwork{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      nadName,
+					Namespace: targetNs,
+				},
+				Spec: v1.OVSNetworkSpec{
+					ResourceName: "ovs_resource_app",
+				},
+			}
+
+			// Create operator network first
+			Expect(k8sClient.Create(ctx, netCROperator)).NotTo(HaveOccurred())
+			DeferCleanup(func() { removeOVSNetwork(ctx, netCROperator) })
+
+			// Wait for NAD to be created by operator network
+			Eventually(func(g Gomega) {
+				netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nadName, Namespace: targetNs}, netAttDef)).NotTo(HaveOccurred())
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+			// Network from operator namespace should be Ready
+			Eventually(func(g Gomega) {
+				network := &v1.OVSNetwork{}
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: netCROperator.Name, Namespace: testNamespace}, network)).To(Succeed())
+
+				readyCondition := findCondition(network.Status.Conditions, v1.ConditionReady)
+				g.Expect(readyCondition).ToNot(BeNil())
+				g.Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+			// Now create app network with same name - should not be Ready
+			Expect(k8sClient.Create(ctx, netCRApp)).NotTo(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(k8sClient.Delete(ctx, netCRApp)).To(Succeed())
+			})
+
+			// Network from app namespace should not be Ready (NAD already exists and is owned by another network)
+			Eventually(func(g Gomega) {
+				network := &v1.OVSNetwork{}
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: netCRApp.Name, Namespace: targetNs}, network)).To(Succeed())
+
+				readyCondition := findCondition(network.Status.Conditions, v1.ConditionReady)
+				g.Expect(readyCondition).ToNot(BeNil())
+				g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+			// Verify NAD still exists and is owned by operator network (not overwritten)
+			Eventually(func(g Gomega) {
+				netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nadName, Namespace: targetNs}, netAttDef)).NotTo(HaveOccurred())
+				g.Expect(netAttDef.GetAnnotations()["k8s.v1.cni.cncf.io/resourceName"]).To(ContainSubstring("ovs_resource_op"))
 			}, util.APITimeout, util.RetryInterval).Should(Succeed())
 		})
 	})

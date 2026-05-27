@@ -24,12 +24,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
 )
 
 // SriovNetworkReconciler reconciles a SriovNetwork object
 type SriovNetworkReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
+	StatusPatcher     status.Interface
 	genericReconciler *genericNetworkReconciler
 }
 
@@ -59,6 +61,6 @@ func (r *SriovNetworkReconciler) GetObjectList() client.ObjectList {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SriovNetworkReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.genericReconciler = newGenericNetworkReconciler(r.Client, r.Scheme, r)
+	r.genericReconciler = newGenericNetworkReconciler(r.Client, r.Scheme, r, r.StatusPatcher)
 	return r.genericReconciler.SetupWithManager(mgr)
 }
