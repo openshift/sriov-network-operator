@@ -75,6 +75,7 @@ spec:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `conditions` | []metav1.Condition | Kubernetes-standard status conditions. `Ready` is the primary health signal for `SriovOperatorConfig`. |
 | `injector` | string | Runtime status of network resource injector |
 | `operatorWebhook` | string | Runtime status of operator webhook |
 

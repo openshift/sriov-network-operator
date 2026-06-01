@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -22,12 +23,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	orchestratorMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator/mock"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
@@ -58,6 +62,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		By("Setup controller manager")
 		k8sManager, err := setupK8sManagerForTest()
 		Expect(err).ToNot(HaveOccurred())
+		statusPatcher := status.NewPatcher(k8sManager.GetClient(), k8sManager.GetEventRecorder("test"), k8sManager.GetScheme(), "test")
 
 		t := GinkgoT()
 		mockCtrl := gomock.NewController(t)
@@ -84,6 +89,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			Scheme:            k8sManager.GetScheme(),
 			Orchestrator:      orchestrator,
 			FeatureGate:       featuregate.New(),
+			StatusPatcher:     statusPatcher,
 			UncachedAPIReader: k8sManager.GetAPIReader(),
 		}).SetupWithManager(k8sManager)
 		Expect(err).ToNot(HaveOccurred())
@@ -399,7 +405,175 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
 				g.Expect(operatorArgs).To(ContainSubstring("--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
 				g.Expect(operatorArgs).To(ContainSubstring("--tls-min-version=VersionTLS12"))
+
+				injectorDS := &appsv1.DaemonSet{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector", Namespace: testNamespace}, injectorDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				injectorArgs := strings.Join(injectorDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-min-version=VersionTLS12"))
 			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should set Ready condition when reconcile succeeds", func() {
+			Eventually(func(g Gomega) {
+				config := &sriovnetworkv1.SriovOperatorConfig{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: consts.DefaultConfigName}, config)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				readyCondition := findCondition(config.Status.Conditions, sriovnetworkv1.ConditionReady)
+				g.Expect(readyCondition).NotTo(BeNil())
+				g.Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+				g.Expect(readyCondition.Reason).To(Equal(sriovnetworkv1.ReasonOperatorConfigReady))
+				g.Expect(readyCondition.ObservedGeneration).To(Equal(config.Generation))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should update Ready observedGeneration after spec changes", func() {
+			config := &sriovnetworkv1.SriovOperatorConfig{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: consts.DefaultConfigName}, config)).NotTo(HaveOccurred())
+
+			config.Spec.DisableDrain = !config.Spec.DisableDrain
+			Expect(k8sClient.Update(ctx, config)).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				updatedConfig := &sriovnetworkv1.SriovOperatorConfig{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: consts.DefaultConfigName}, updatedConfig)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				readyCondition := findCondition(updatedConfig.Status.Conditions, sriovnetworkv1.ConditionReady)
+				g.Expect(readyCondition).NotTo(BeNil())
+				g.Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+				g.Expect(readyCondition.ObservedGeneration).To(Equal(updatedConfig.Generation))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should map unsupported configuration errors to Ready=False", func() {
+			config := makeDefaultSriovOpConfig()
+			config.Generation = 7
+			patcher := &fakeStatusPatcher{}
+
+			reconciler := &SriovOperatorConfigReconciler{
+				StatusPatcher: patcher,
+			}
+
+			err := reconciler.applyReadyCondition(ctx, config, errSystemdModeOnHypershift)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(patcher.conditions).To(HaveLen(1))
+
+			readyCondition := patcher.conditions[0]
+			Expect(readyCondition.Type).To(Equal(sriovnetworkv1.ConditionReady))
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(readyCondition.Reason).To(Equal(sriovnetworkv1.ReasonUnsupportedConfiguration))
+			Expect(readyCondition.ObservedGeneration).To(Equal(config.Generation))
+		})
+
+		It("should set Ready=False for HyperShift systemd configuration when reconciled directly", func() {
+			config := makeDefaultSriovOpConfig()
+			config.SetName("hypershift-systemd-config")
+			config.Spec.ConfigurationMode = sriovnetworkv1.SystemdConfigurationMode
+			Expect(k8sClient.Create(ctx, config)).To(Succeed())
+			DeferCleanup(cleanupSriovOperatorConfig, config.Namespace, config.Name)
+
+			mockCtrl := gomock.NewController(GinkgoT())
+			orchestrator := orchestratorMock.NewMockInterface(mockCtrl)
+			orchestrator.EXPECT().ClusterType().Return(consts.ClusterTypeOpenshift).AnyTimes()
+			orchestrator.EXPECT().Flavor().Return(consts.ClusterFlavorHypershift).AnyTimes()
+			orchestrator.EXPECT().GetTLSConfig(gomock.Any()).Return(nil, nil).AnyTimes()
+
+			reconciler := newDirectSriovOperatorConfigReconciler(orchestrator)
+			reconciler.renderManifestFn = func(string, *render.RenderData) ([]*unstructured.Unstructured, error) {
+				return nil, nil
+			}
+			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{
+				Namespace: config.Namespace,
+				Name:      config.Name,
+			}})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal(errSystemdModeOnHypershift.Error()))
+
+			Eventually(func(g Gomega) {
+				updatedConfig := &sriovnetworkv1.SriovOperatorConfig{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: config.Namespace, Name: config.Name}, updatedConfig)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				readyCondition := findCondition(updatedConfig.Status.Conditions, sriovnetworkv1.ConditionReady)
+				g.Expect(readyCondition).NotTo(BeNil())
+				g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(readyCondition.Reason).To(Equal(sriovnetworkv1.ReasonUnsupportedConfiguration))
+				g.Expect(readyCondition.Message).To(Equal(errSystemdModeOnHypershift.Error()))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should set Ready=False when apply fails during direct reconcile", func() {
+			config := makeDefaultSriovOpConfig()
+			config.SetName("apply-failure-config")
+			Expect(k8sClient.Create(ctx, config)).To(Succeed())
+			DeferCleanup(cleanupSriovOperatorConfig, config.Namespace, config.Name)
+
+			mockCtrl := gomock.NewController(GinkgoT())
+			orchestrator := orchestratorMock.NewMockInterface(mockCtrl)
+			orchestrator.EXPECT().ClusterType().Return(consts.ClusterTypeKubernetes).AnyTimes()
+			orchestrator.EXPECT().GetTLSConfig(gomock.Any()).Return(nil, nil).AnyTimes()
+
+			reconciler := newDirectSriovOperatorConfigReconciler(orchestrator)
+			reconciler.renderManifestFn = func(string, *render.RenderData) ([]*unstructured.Unstructured, error) {
+				return []*unstructured.Unstructured{{
+					Object: map[string]interface{}{
+						"apiVersion": "v1",
+						"kind":       "ConfigMap",
+						"metadata": map[string]interface{}{
+							"name":      "forced-apply-failure",
+							"namespace": testNamespace,
+						},
+					},
+				}}, nil
+			}
+			reconciler.applyManifestFn = func(context.Context, client.Client, *unstructured.Unstructured) error {
+				return fmt.Errorf("forced apply failure")
+			}
+			_, err := reconciler.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{
+				Namespace: config.Namespace,
+				Name:      config.Name,
+			}})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("forced apply failure"))
+
+			Eventually(func(g Gomega) {
+				updatedConfig := &sriovnetworkv1.SriovOperatorConfig{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: config.Namespace, Name: config.Name}, updatedConfig)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				readyCondition := findCondition(updatedConfig.Status.Conditions, sriovnetworkv1.ConditionReady)
+				g.Expect(readyCondition).NotTo(BeNil())
+				g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(readyCondition.Reason).To(Equal(sriovnetworkv1.ReasonOperatorConfigSyncFailed))
+				g.Expect(readyCondition.Message).To(ContainSubstring("forced apply failure"))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should return a wrapped error when delete fails via the reconciler hook", func() {
+			reconciler := &SriovOperatorConfigReconciler{
+				Client: k8sClient,
+				deleteManifestFn: func(context.Context, client.Client, *unstructured.Unstructured) error {
+					return fmt.Errorf("forced delete failure")
+				},
+			}
+
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "forced-delete-failure",
+						"namespace": testNamespace,
+					},
+				},
+			}
+
+			err := reconciler.deleteK8sResource(ctx, obj)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("forced delete failure"))
 		})
 
 		DescribeTable("should have daemonset enabled by default",
@@ -955,6 +1129,53 @@ func assertResourceDoesNotExist(gvk schema.GroupVersionKind, key client.ObjectKe
 		WithPolling(100*time.Millisecond).
 		WithTimeout(2*time.Second).
 		Should(Succeed(), "Resource type[%s] name[%s] still present in the cluster", gvk.String(), key.String())
+}
+
+type fakeStatusPatcher struct {
+	conditions []metav1.Condition
+}
+
+// ApplyCondition records the conditions passed to the fake status patcher.
+func (f *fakeStatusPatcher) ApplyCondition(_ context.Context, _ client.Object, conditions ...metav1.Condition) error {
+	f.conditions = append([]metav1.Condition(nil), conditions...)
+	return nil
+}
+
+// newDirectSriovOperatorConfigReconciler returns a reconciler wired for direct
+// Reconcile invocations against the envtest API.
+func newDirectSriovOperatorConfigReconciler(orchestrator *orchestratorMock.MockInterface) *SriovOperatorConfigReconciler {
+	return &SriovOperatorConfigReconciler{
+		Client:            k8sClient,
+		Scheme:            vars.Scheme,
+		Orchestrator:      orchestrator,
+		FeatureGate:       featuregate.New(),
+		StatusPatcher:     status.NewPatcher(k8sClient, nil, vars.Scheme, "direct-test"),
+		UncachedAPIReader: k8sClient,
+	}
+}
+
+// cleanupSriovOperatorConfig removes finalizers from a test SriovOperatorConfig
+// before deleting it so direct-reconcile test fixtures do not leak.
+func cleanupSriovOperatorConfig(namespace, name string) {
+	config := &sriovnetworkv1.SriovOperatorConfig{}
+	err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: namespace, Name: name}, config)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	if len(config.Finalizers) > 0 {
+		config.Finalizers = nil
+		err = k8sClient.Update(context.Background(), config)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	err = k8sClient.Delete(context.Background(), config)
+	if err != nil && !errors.IsNotFound(err) {
+		Expect(err).NotTo(HaveOccurred())
+	}
 }
 
 func updateConfigDaemonNodeSelector(newValue map[string]string) func() {

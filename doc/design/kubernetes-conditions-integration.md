@@ -5,7 +5,7 @@ authors:
 reviewers:
   - TBD
 creation-date: 21-07-2025
-last-updated: 08-01-2026
+last-updated: 05-07-2026
 status: implemented
 ---
 
@@ -47,8 +47,8 @@ Adding Kubernetes conditions to the SR-IOV Network Operator's CRDs is crucial fo
 
 3. **Operator Configuration Status:**
    - An administrator modifies the `SriovOperatorConfig`
-   - Condition `Ready` indicates that the operator's components are running and healthy
-   - Condition `Degraded` if the operator itself encounters issues
+   - Condition `Ready=True` indicates that the operator configuration reconciled successfully
+   - Condition `Ready=False` carries the failure reason when reconciliation fails or the requested configuration is unsupported
 
 4. **Policy Configuration Management:**
    - An administrator creates or updates a `SriovNetworkNodePolicy`
@@ -118,11 +118,11 @@ The following reasons are used across conditions:
 ```go
 const (
     // Reasons for Ready condition
-    ReasonNetworkReady   = "NetworkReady"
-    ReasonNodeReady      = "NodeConfigurationReady"
-    ReasonNodeDrainReady = "NodeDrainReady"
-    ReasonOperatorReady  = "OperatorReady"
-    ReasonNotReady       = "NotReady"
+    ReasonNetworkReady         = "NetworkReady"
+    ReasonNodeReady            = "NodeConfigurationReady"
+    ReasonNodeDrainReady       = "NodeDrainReady"
+    ReasonOperatorConfigReady  = "OperatorConfigReady"
+    ReasonNotReady             = "NotReady"
 
     // Reasons for Degraded condition
     ReasonProvisioningFailed           = "ProvisioningFailed"
@@ -132,7 +132,8 @@ const (
     ReasonNamespaceNotFound            = "NamespaceNotFound"
     ReasonHardwareError                = "HardwareError"
     ReasonDriverError                  = "DriverError"
-    ReasonOperatorComponentsNotHealthy = "OperatorComponentsNotHealthy"
+    ReasonOperatorConfigSyncFailed     = "OperatorConfigSyncFailed"
+    ReasonUnsupportedConfiguration     = "UnsupportedConfiguration"
     ReasonNotDegraded                  = "NotDegraded"
 
     // Reasons for Progressing condition
@@ -164,12 +165,12 @@ const (
 
 ### API Extensions
 
-#### NetworkStatus (Shared by Network CRDs)
+#### ConditionStatus (Shared by CRDs)
 
 ```go
-// NetworkStatus defines the common observed state for network-type CRDs
-type NetworkStatus struct {
-    // Conditions represent the latest available observations of the network's state
+// ConditionStatus defines the common observed state for SR-IOV operator CRDs
+type ConditionStatus struct {
+    // Conditions represent the latest available observations of the resource's state
     // +patchMergeKey=type
     // +patchStrategy=merge
     // +listType=map
@@ -181,13 +182,16 @@ type NetworkStatus struct {
 
 #### SriovNetwork, SriovIBNetwork, OVSNetwork
 
-All network CRDs embed `NetworkStatus`:
+The network CRDs embed `ConditionStatus`:
 
 ```go
 type SriovNetworkStatus struct {
-    NetworkStatus `json:",inline"`
+    ConditionStatus `json:",inline"`
 }
 ```
+
+`SriovOperatorConfigStatus` also embeds `ConditionStatus` to reuse the shared
+conditions holder without network-specific naming.
 
 **Conditions:**
 - `Ready`: `True` when the NetworkAttachmentDefinition is created and the network is ready for use. `False` with the failure reason when provisioning fails, the target namespace does not exist, or the configuration is invalid.
@@ -244,10 +248,9 @@ type SriovOperatorConfigStatus struct {
 ```
 
 **Conditions:**
-- `Ready`: Operator components are running and healthy
-- `Degraded`: Operator components are failing or misconfigured
+- `Ready`: `True` when `SriovOperatorConfig` reconciles successfully. `False` when reconciliation fails, with reason `OperatorConfigSyncFailed`, or when the requested configuration is unsupported, with reason `UnsupportedConfiguration`.
 
-**kubectl output columns:** Ready, Progressing, Degraded, Age
+**kubectl output columns:** Ready, Age
 
 #### SriovNetworkNodePolicy
 
@@ -355,8 +358,9 @@ Each controller uses the status patcher to apply conditions:
 - No re-fetch of the object is needed before applying; SSA only requires the object identity
 
 **SriovOperatorConfig Controller:**
-- Set `Ready=True, Degraded=False` on successful reconciliation
-- Set `Ready=False, Degraded=True` on component failures
+- Set `Ready=True` with reason `OperatorConfigReady` on successful reconciliation
+- Set `Ready=False` with reason `OperatorConfigSyncFailed` on reconciliation or apply failures
+- Set `Ready=False` with reason `UnsupportedConfiguration` for unsupported settings such as HyperShift with `systemd` configuration mode
 
 **Config Daemon:**
 - Updates `SriovNetworkNodeState` conditions during sync operations
