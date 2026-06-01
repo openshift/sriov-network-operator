@@ -15,7 +15,6 @@ var DefaultFeatureStates = map[string]bool{
 	consts.ResourceInjectorMatchConditionFeatureGate:   false,
 	consts.MetricsExporterFeatureGate:                  false,
 	consts.ManageSoftwareBridgesFeatureGate:            false,
-	consts.BlockDevicePluginUntilConfiguredFeatureGate: true,
 	consts.MellanoxFirmwareResetFeatureGate:            true,
 }
 // FeatureGate provides methods to check state of the feature
