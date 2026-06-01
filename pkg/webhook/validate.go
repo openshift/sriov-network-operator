@@ -153,6 +153,27 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 		return false, fmt.Errorf("at least one of these parameters (vendor, deviceID, pfNames, rootDevices or netFilter) has to be defined in nicSelector in CR %s", cr.GetName())
 	}
 
+	// NetFilter specific validations - must be checked early before other validations
+	if cr.Spec.NicSelector.NetFilter != "" {
+		// 1. do not allow to use any other nicSelector fields when NetFilter is specified
+		if cr.Spec.NicSelector.Vendor != "" || cr.Spec.NicSelector.DeviceID != "" ||
+			len(cr.Spec.NicSelector.PfNames) > 0 || len(cr.Spec.NicSelector.RootDevices) > 0 {
+			return false, fmt.Errorf("nicSelector fields vendor, deviceID, pfNames, and rootDevices are not allowed when netFilter is specified")
+		}
+		// 2. do not support changing the EswitchMode when NetFilter is specified
+		if cr.Spec.EswitchMode != "" {
+			return false, fmt.Errorf("eSwitchMode is not supported when netFilter is specified")
+		}
+		// 3. do not allow Bridge when NetFilter is specified
+		if !cr.Spec.Bridge.IsEmpty() {
+			return false, fmt.Errorf("bridge configuration is not supported when netFilter is specified")
+		}
+		// 4. LinkType only "eth", "ETH" allowed when NetFilter is specified
+		if cr.Spec.LinkType != "" && !strings.EqualFold(cr.Spec.LinkType, consts.LinkTypeETH) {
+			return false, fmt.Errorf("linkType %q is not allowed when netFilter is specified, only 'eth' or 'ETH' are supported", cr.Spec.LinkType)
+		}
+	}
+
 	devMode := false
 	if os.Getenv("DEV_MODE") == "TRUE" {
 		devMode = true
@@ -233,6 +254,7 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	if !cr.Spec.Bridge.IsEmpty() && cr.Spec.ExternallyManaged {
 		return false, fmt.Errorf("software bridge management can't be used when the device externally managed")
 	}
+
 	return true, nil
 }
 
