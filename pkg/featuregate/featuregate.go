@@ -11,13 +11,13 @@ import (
 
 // DefaultFeatureStates contains the default states for the feature gates
 var DefaultFeatureStates = map[string]bool{
-	consts.ParallelNicConfigFeatureGate:                false,
-	consts.ResourceInjectorMatchConditionFeatureGate:   false,
-	consts.MetricsExporterFeatureGate:                  false,
-	consts.ManageSoftwareBridgesFeatureGate:            false,
-	consts.BlockDevicePluginUntilConfiguredFeatureGate: true,
-	consts.MellanoxFirmwareResetFeatureGate:            true,
+	consts.ParallelNicConfigFeatureGate:              false,
+	consts.ResourceInjectorMatchConditionFeatureGate: false,
+	consts.MetricsExporterFeatureGate:                false,
+	consts.ManageSoftwareBridgesFeatureGate:          false,
+	consts.MellanoxFirmwareResetFeatureGate:          true,
 }
+
 // FeatureGate provides methods to check state of the feature
 type FeatureGate interface {
 	// IsEnabled returns state of the feature,

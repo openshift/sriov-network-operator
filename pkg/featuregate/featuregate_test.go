@@ -39,13 +39,12 @@ var _ = Describe("FeatureGate", func() {
 			Expect(f.IsEnabled(consts.ResourceInjectorMatchConditionFeatureGate)).To(BeFalse())
 			Expect(f.IsEnabled(consts.MetricsExporterFeatureGate)).To(BeFalse())
 			Expect(f.IsEnabled(consts.ManageSoftwareBridgesFeatureGate)).To(BeFalse())
-			Expect(f.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate)).To(BeTrue())
 			Expect(f.IsEnabled(consts.MellanoxFirmwareResetFeatureGate)).To(BeTrue())
 		})
 		It("should override real default feature state", func() {
 			f := New()
-			f.Init(map[string]bool{consts.BlockDevicePluginUntilConfiguredFeatureGate: false})
-			Expect(f.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate)).To(BeFalse())
+			f.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: false})
+			Expect(f.IsEnabled(consts.MellanoxFirmwareResetFeatureGate)).To(BeFalse())
 		})
 	})
 	Context("String", func() {
