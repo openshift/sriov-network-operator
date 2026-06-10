@@ -86,8 +86,12 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					}, 10*time.Minute, time.Second).Should(Equal(int64(5)))
 
 					By("validate the pf info exist on host")
-					output, _, err := runCommandOnConfigDaemon(vfioNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
-					Expect(err).ToNot(HaveOccurred())
+					var output string
+					Eventually(func(g Gomega) {
+						var execErr error
+						output, _, execErr = runCommandOnConfigDaemon(vfioNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
+						g.Expect(execErr).ToNot(HaveOccurred())
+					}, 2*time.Minute, 5*time.Second).Should(Succeed())
 					Expect(output).ToNot(Equal("1"))
 
 					By("Creating sriov network to use the vfio device")
@@ -131,8 +135,11 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					}, 2*time.Minute, time.Second).Should(Equal(int64(0)))
 
 					By("validate the pf info doesn't exist on the host anymore")
-					output, _, err = runCommandOnConfigDaemon(vfioNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
-					Expect(err).ToNot(HaveOccurred())
+					Eventually(func(g Gomega) {
+						var execErr error
+						output, _, execErr = runCommandOnConfigDaemon(vfioNode, "/bin/bash", "-c", "ls /host/etc/sriov-operator/pci/ | wc -l")
+						g.Expect(execErr).ToNot(HaveOccurred())
+					}, 2*time.Minute, 5*time.Second).Should(Succeed())
 					Expect(output).ToNot(Equal("0"))
 				})
 			})
