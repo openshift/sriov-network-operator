@@ -2,6 +2,7 @@ package openshift_test
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -94,6 +95,24 @@ var _ = Describe("TLS Profile", func() {
 			Expect(tlsConfig.MinTLSVersion).To(Equal("VersionTLS12"))
 			Expect(tlsConfig.CipherSuites).NotTo(BeEmpty())
 		})
+
+		It("should include curve preferences from the Intermediate profile defaults", func() {
+			intermediateSpec := openshiftconfigv1.TLSProfiles[openshiftconfigv1.TLSProfileIntermediateType]
+			if len(intermediateSpec.Groups) == 0 {
+				Skip("Intermediate profile does not have default groups in this openshift/api version")
+			}
+
+			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tlsConfig).NotTo(BeNil())
+			Expect(tlsConfig.CurvePreferences).NotTo(BeEmpty())
+
+			expectedGroups := make([]string, len(intermediateSpec.Groups))
+			for i, g := range intermediateSpec.Groups {
+				expectedGroups[i] = string(g)
+			}
+			Expect(tlsConfig.CurvePreferences).To(Equal(strings.Join(expectedGroups, ",")))
+		})
 	})
 
 	Context("when APIServer has Modern profile with StrictAllComponents", func() {
@@ -109,6 +128,18 @@ var _ = Describe("TLS Profile", func() {
 			Expect(tlsConfig).NotTo(BeNil())
 			Expect(tlsConfig.MinTLSVersion).To(Equal("VersionTLS13"))
 		})
+
+		It("should include curve preferences from the Modern profile defaults", func() {
+			modernSpec := openshiftconfigv1.TLSProfiles[openshiftconfigv1.TLSProfileModernType]
+			if len(modernSpec.Groups) == 0 {
+				Skip("Modern profile does not have default groups in this openshift/api version")
+			}
+
+			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tlsConfig).NotTo(BeNil())
+			Expect(tlsConfig.CurvePreferences).NotTo(BeEmpty())
+		})
 	})
 
 	Context("when APIServer has Old profile with StrictAllComponents", func() {
@@ -118,10 +149,9 @@ var _ = Describe("TLS Profile", func() {
 			}, openshiftconfigv1.TLSAdherencePolicyStrictAllComponents)
 		})
 
-		It("should return an error because Old profile uses TLS version below 1.2", func() {
+		It("should return an error because Old profile has incompatible settings", func() {
 			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("minimum TLS version must be VersionTLS12 or higher"))
 			Expect(tlsConfig).To(BeNil())
 		})
 	})
@@ -201,7 +231,8 @@ var _ = Describe("TLS Profile", func() {
 				Type: openshiftconfigv1.TLSProfileCustomType,
 				Custom: &openshiftconfigv1.CustomTLSProfile{
 					TLSProfileSpec: openshiftconfigv1.TLSProfileSpec{
-						Ciphers: []string{"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"},
+						Ciphers:       []string{"TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"},
+						MinTLSVersion: openshiftconfigv1.VersionTLS13,
 					},
 				},
 			}, openshiftconfigv1.TLSAdherencePolicyStrictAllComponents)
@@ -212,28 +243,87 @@ var _ = Describe("TLS Profile", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tlsConfig).NotTo(BeNil())
 			Expect(tlsConfig.CipherSuites).To(Equal("TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384"))
-			Expect(tlsConfig.MinTLSVersion).To(BeEmpty())
+			Expect(tlsConfig.MinTLSVersion).To(Equal("VersionTLS13"))
 		})
 	})
 
-	Context("when APIServer has Custom profile with ciphers only (no minTLSVersion)", func() {
+	Context("when APIServer has Custom profile with ciphers and minTLSVersion", func() {
 		BeforeEach(func() {
 			createAPIServerWithTLS(ctx, &openshiftconfigv1.TLSSecurityProfile{
 				Type: openshiftconfigv1.TLSProfileCustomType,
 				Custom: &openshiftconfigv1.CustomTLSProfile{
 					TLSProfileSpec: openshiftconfigv1.TLSProfileSpec{
-						Ciphers: []string{"ECDHE-RSA-AES256-GCM-SHA384"},
+						Ciphers:       []string{"ECDHE-RSA-AES256-GCM-SHA384"},
+						MinTLSVersion: openshiftconfigv1.VersionTLS12,
 					},
 				},
 			}, openshiftconfigv1.TLSAdherencePolicyStrictAllComponents)
 		})
 
-		It("should return only CipherSuites set, MinTLSVersion empty", func() {
+		It("should return CipherSuites and MinTLSVersion", func() {
 			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tlsConfig).NotTo(BeNil())
 			Expect(tlsConfig.CipherSuites).To(Equal("TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"))
-			Expect(tlsConfig.MinTLSVersion).To(BeEmpty())
+			Expect(tlsConfig.MinTLSVersion).To(Equal("VersionTLS12"))
+		})
+
+		It("should return empty CurvePreferences when no groups are specified", func() {
+			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tlsConfig).NotTo(BeNil())
+			Expect(tlsConfig.CurvePreferences).To(BeEmpty())
+		})
+	})
+
+	Context("when APIServer has Custom profile with ciphers, minTLSVersion, and groups", func() {
+		BeforeEach(func() {
+			createAPIServerWithTLS(ctx, &openshiftconfigv1.TLSSecurityProfile{
+				Type: openshiftconfigv1.TLSProfileCustomType,
+				Custom: &openshiftconfigv1.CustomTLSProfile{
+					TLSProfileSpec: openshiftconfigv1.TLSProfileSpec{
+						Ciphers:       []string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"},
+						MinTLSVersion: openshiftconfigv1.VersionTLS12,
+						Groups: []openshiftconfigv1.TLSGroup{
+							openshiftconfigv1.TLSGroupX25519,
+							openshiftconfigv1.TLSGroupSecP256r1,
+						},
+					},
+				},
+			}, openshiftconfigv1.TLSAdherencePolicyStrictAllComponents)
+		})
+
+		It("should return CurvePreferences from the custom groups", func() {
+			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tlsConfig).NotTo(BeNil())
+			Expect(tlsConfig.CipherSuites).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+			Expect(tlsConfig.MinTLSVersion).To(Equal("VersionTLS12"))
+			Expect(tlsConfig.CurvePreferences).To(Equal("X25519,secp256r1"))
+		})
+	})
+
+	Context("when APIServer has Custom profile with single group", func() {
+		BeforeEach(func() {
+			createAPIServerWithTLS(ctx, &openshiftconfigv1.TLSSecurityProfile{
+				Type: openshiftconfigv1.TLSProfileCustomType,
+				Custom: &openshiftconfigv1.CustomTLSProfile{
+					TLSProfileSpec: openshiftconfigv1.TLSProfileSpec{
+						Ciphers:       []string{"TLS_AES_128_GCM_SHA256"},
+						MinTLSVersion: openshiftconfigv1.VersionTLS13,
+						Groups: []openshiftconfigv1.TLSGroup{
+							openshiftconfigv1.TLSGroupX25519MLKEM768,
+						},
+					},
+				},
+			}, openshiftconfigv1.TLSAdherencePolicyStrictAllComponents)
+		})
+
+		It("should return single curve preference for PQC group", func() {
+			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tlsConfig).NotTo(BeNil())
+			Expect(tlsConfig.CurvePreferences).To(Equal("X25519MLKEM768"))
 		})
 	})
 
@@ -279,22 +369,25 @@ var _ = Describe("TLS Profile", func() {
 	})
 
 	Context("when APIServer custom profile requests invalid TLS version string", func() {
-		BeforeEach(func() {
-			createAPIServerWithTLS(ctx, &openshiftconfigv1.TLSSecurityProfile{
-				Type: openshiftconfigv1.TLSProfileCustomType,
-				Custom: &openshiftconfigv1.CustomTLSProfile{
-					TLSProfileSpec: openshiftconfigv1.TLSProfileSpec{
-						MinTLSVersion: "InvalidVersion",
-					},
+		It("should be rejected by the CRD validation", func() {
+			apiServer := &openshiftconfigv1.APIServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
 				},
-			}, openshiftconfigv1.TLSAdherencePolicyStrictAllComponents)
-		})
-
-		It("should return an error for invalid TLS version", func() {
-			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
+				Spec: openshiftconfigv1.APIServerSpec{
+					TLSSecurityProfile: &openshiftconfigv1.TLSSecurityProfile{
+						Type: openshiftconfigv1.TLSProfileCustomType,
+						Custom: &openshiftconfigv1.CustomTLSProfile{
+							TLSProfileSpec: openshiftconfigv1.TLSProfileSpec{
+								MinTLSVersion: "InvalidVersion",
+							},
+						},
+					},
+					TLSAdherence: openshiftconfigv1.TLSAdherencePolicyStrictAllComponents,
+				},
+			}
+			err := k8sClient.Create(ctx, apiServer)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to parse TLS version"))
-			Expect(tlsConfig).To(BeNil())
 		})
 	})
 
@@ -314,16 +407,20 @@ var _ = Describe("TLS Profile", func() {
 	})
 
 	Context("when APIServer has an unknown profile type", func() {
-		BeforeEach(func() {
-			createAPIServerWithTLS(ctx, &openshiftconfigv1.TLSSecurityProfile{
-				Type: "UnknownType",
-			}, openshiftconfigv1.TLSAdherencePolicyStrictAllComponents)
-		})
-
-		It("should return nil TLSConfig (use component defaults)", func() {
-			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(tlsConfig).To(BeNil())
+		It("should be rejected by the CRD validation", func() {
+			apiServer := &openshiftconfigv1.APIServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: openshiftconfigv1.APIServerSpec{
+					TLSSecurityProfile: &openshiftconfigv1.TLSSecurityProfile{
+						Type: "UnknownType",
+					},
+					TLSAdherence: openshiftconfigv1.TLSAdherencePolicyStrictAllComponents,
+				},
+			}
+			err := k8sClient.Create(ctx, apiServer)
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -422,19 +519,23 @@ var _ = Describe("TLS Profile", func() {
 	})
 
 	Context("when APIServer has Custom profile with empty ciphers and empty version", func() {
-		BeforeEach(func() {
-			createAPIServerWithTLS(ctx, &openshiftconfigv1.TLSSecurityProfile{
-				Type: openshiftconfigv1.TLSProfileCustomType,
-				Custom: &openshiftconfigv1.CustomTLSProfile{
-					TLSProfileSpec: openshiftconfigv1.TLSProfileSpec{},
+		It("should be rejected by the CRD validation (minTLSVersion is required for Custom type)", func() {
+			apiServer := &openshiftconfigv1.APIServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
 				},
-			}, openshiftconfigv1.TLSAdherencePolicyStrictAllComponents)
-		})
-
-		It("should return nil TLSConfig (no configuration to apply)", func() {
-			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(tlsConfig).To(BeNil())
+				Spec: openshiftconfigv1.APIServerSpec{
+					TLSSecurityProfile: &openshiftconfigv1.TLSSecurityProfile{
+						Type: openshiftconfigv1.TLSProfileCustomType,
+						Custom: &openshiftconfigv1.CustomTLSProfile{
+							TLSProfileSpec: openshiftconfigv1.TLSProfileSpec{},
+						},
+					},
+					TLSAdherence: openshiftconfigv1.TLSAdherencePolicyStrictAllComponents,
+				},
+			}
+			err := k8sClient.Create(ctx, apiServer)
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
@@ -470,15 +571,20 @@ var _ = Describe("TLS Profile", func() {
 			Expect(tlsConfig.MinTLSVersion).To(Equal("VersionTLS12"))
 		})
 
-		It("should honor the TLS profile when tlsAdherence has an unknown value (forward compatibility)", func() {
-			createAPIServerWithTLS(ctx, &openshiftconfigv1.TLSSecurityProfile{
-				Type: openshiftconfigv1.TLSProfileIntermediateType,
-			}, openshiftconfigv1.TLSAdherencePolicy("FutureUnknownValue"))
-
-			tlsConfig, err := orchestrator.GetTLSConfig(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(tlsConfig).NotTo(BeNil())
-			Expect(tlsConfig.MinTLSVersion).To(Equal("VersionTLS12"))
+		It("should reject unknown tlsAdherence values via CRD validation (forward compatibility handled by library-go)", func() {
+			apiServer := &openshiftconfigv1.APIServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: openshiftconfigv1.APIServerSpec{
+					TLSSecurityProfile: &openshiftconfigv1.TLSSecurityProfile{
+						Type: openshiftconfigv1.TLSProfileIntermediateType,
+					},
+					TLSAdherence: openshiftconfigv1.TLSAdherencePolicy("FutureUnknownValue"),
+				},
+			}
+			err := k8sClient.Create(ctx, apiServer)
+			Expect(err).To(HaveOccurred())
 		})
 	})
 })

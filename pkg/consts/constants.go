@@ -14,7 +14,7 @@ const (
 
 type DrainState string
 
-// TLSConfig holds cluster-wide TLS configuration retrieved from the orchestrator or based one the environment variables.
+// TLSConfig holds cluster-wide TLS configuration retrieved from the orchestrator or based on the environment variables.
 // Empty string values indicate that the component should use its default configuration.
 type TLSConfig struct {
 	// CipherSuites is a comma-separated list of TLS cipher suites.
@@ -23,6 +23,11 @@ type TLSConfig struct {
 	// MinTLSVersion is the minimum TLS version (e.g., "VersionTLS12", "VersionTLS13").
 	// If empty, the component should use its default minimum version.
 	MinTLSVersion string
+	// CurvePreferences is a comma-separated list of TLS group/curve names
+	// (e.g., "X25519,secp256r1,secp384r1") used during the TLS handshake.
+	// Go treats this as a filter of allowed groups (internal ordering is used).
+	// If empty, the component should use its default curve preferences.
+	CurvePreferences string
 }
 
 const (

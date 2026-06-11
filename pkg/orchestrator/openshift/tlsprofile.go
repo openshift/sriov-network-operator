@@ -15,6 +15,15 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
+// tlsGroupsToStrings converts a slice of configv1.TLSGroup to a slice of strings.
+func tlsGroupsToStrings(groups []configv1.TLSGroup) []string {
+	result := make([]string, len(groups))
+	for i, g := range groups {
+		result[i] = string(g)
+	}
+	return result
+}
+
 // GetTLSConfig retrieves the cluster-wide TLS security profile from the OpenShift APIServer resource.
 // Returns nil if no TLSSecurityProfile is configured on the cluster, or if the tlsAdherence policy
 // does not require this operator to honor it.
@@ -68,5 +77,6 @@ func (c *OpenshiftOrchestrator) GetTLSConfig(ctx context.Context) (*consts.TLSCo
 	}
 
 	ciphers := strings.Join(spec.Ciphers, ",")
-	return utils.BuildTLSConfig(ciphers, string(spec.MinTLSVersion))
+	groups := tlsGroupsToStrings(spec.Groups)
+	return utils.BuildTLSConfig(ciphers, string(spec.MinTLSVersion), strings.Join(groups, ","))
 }

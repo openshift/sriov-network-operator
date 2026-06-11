@@ -166,8 +166,9 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 		It("should configure TLS profile flags for webhook operands", func() {
 			mockedTLSConfig = &consts.TLSConfig{
-				CipherSuites:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-				MinTLSVersion: "VersionTLS13",
+				CipherSuites:     "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+				MinTLSVersion:    "VersionTLS13",
+				CurvePreferences: "X25519,secp256r1,secp384r1",
 			}
 
 			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
@@ -180,6 +181,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
 				g.Expect(operatorArgs).To(ContainSubstring("--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
 				g.Expect(operatorArgs).To(ContainSubstring("--tls-min-version=VersionTLS13"))
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-curve-preferences=29,23,24"))
 
 				injectorDS := &appsv1.DaemonSet{}
 				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector", Namespace: testNamespace}, injectorDS)
@@ -187,13 +189,15 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				injectorArgs := strings.Join(injectorDS.Spec.Template.Spec.Containers[0].Args, " ")
 				g.Expect(injectorArgs).To(ContainSubstring("-tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
 				g.Expect(injectorArgs).To(ContainSubstring("-tls-min-version=VersionTLS13"))
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-curve-preferences=29,23,24"))
 			}, util.APITimeout, util.RetryInterval).Should(Succeed())
 		})
 
 		It("should remove TLS profile flags when no TLS config is provided", func() {
 			mockedTLSConfig = &consts.TLSConfig{
-				CipherSuites:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-				MinTLSVersion: "VersionTLS13",
+				CipherSuites:     "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+				MinTLSVersion:    "VersionTLS13",
+				CurvePreferences: "X25519,secp256r1",
 			}
 
 			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
@@ -219,6 +223,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
 				g.Expect(operatorArgs).NotTo(ContainSubstring("--tls-cipher-suites="))
 				g.Expect(operatorArgs).NotTo(ContainSubstring("--tls-min-version="))
+				g.Expect(operatorArgs).NotTo(ContainSubstring("--tls-curve-preferences="))
 
 				injectorDS := &appsv1.DaemonSet{}
 				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector", Namespace: testNamespace}, injectorDS)
@@ -226,6 +231,31 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				injectorArgs := strings.Join(injectorDS.Spec.Template.Spec.Containers[0].Args, " ")
 				g.Expect(injectorArgs).NotTo(ContainSubstring("-tls-cipher-suites="))
 				g.Expect(injectorArgs).NotTo(ContainSubstring("-tls-min-version="))
+				g.Expect(injectorArgs).NotTo(ContainSubstring("-tls-curve-preferences="))
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
+		})
+
+		It("should configure curve preferences flags via TLS_CURVE_PREFERENCES env var", func() {
+			DeferCleanup(os.Setenv, "TLS_CURVE_PREFERENCES", os.Getenv("TLS_CURVE_PREFERENCES"))
+			os.Setenv("TLS_CURVE_PREFERENCES", "X25519,secp256r1")
+
+			mockedTLSConfig = nil
+
+			err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				operatorWebhookDS := &appsv1.DaemonSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: "operator-webhook", Namespace: testNamespace}, operatorWebhookDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				operatorArgs := strings.Join(operatorWebhookDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(operatorArgs).To(ContainSubstring("--tls-curve-preferences=29,23"))
+
+				injectorDS := &appsv1.DaemonSet{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: "network-resources-injector", Namespace: testNamespace}, injectorDS)
+				g.Expect(err).NotTo(HaveOccurred())
+				injectorArgs := strings.Join(injectorDS.Spec.Template.Spec.Containers[0].Args, " ")
+				g.Expect(injectorArgs).To(ContainSubstring("-tls-curve-preferences=29,23"))
 			}, util.APITimeout, util.RetryInterval).Should(Succeed())
 		})
 
@@ -745,8 +775,9 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 
 				It("should render tls profile flags for metrics exporter kube-rbac-proxy", func() {
 					mockedTLSConfig = &consts.TLSConfig{
-						CipherSuites:  "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
-						MinTLSVersion: "VersionTLS13",
+						CipherSuites:     "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+						MinTLSVersion:    "VersionTLS13",
+						CurvePreferences: "X25519,secp256r1",
 					}
 
 					err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
@@ -768,6 +799,9 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 						g.Expect(proxyArgs).NotTo(BeEmpty())
 						g.Expect(proxyArgs).To(ContainSubstring("--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
 						g.Expect(proxyArgs).To(ContainSubstring("--tls-min-version=VersionTLS13"))
+						// TODO: Validate --tls-curve-preferences once kube-rbac-proxy supports it.
+						// Tracked by: https://github.com/kube-rbac-proxy/kube-rbac-proxy/issues/414
+						// g.Expect(proxyArgs).To(ContainSubstring("--tls-curve-preferences=X25519,secp256r1"))
 					}, util.APITimeout, util.RetryInterval).Should(Succeed())
 				})
 

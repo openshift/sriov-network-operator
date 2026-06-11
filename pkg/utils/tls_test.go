@@ -1,20 +1,22 @@
 package utils
 
 import (
+	"crypto/tls"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("TLS Utilities", func() {
 	Context("BuildTLSConfig", func() {
-		It("should return nil when both inputs are empty", func() {
-			config, err := BuildTLSConfig("", "")
+		It("should return nil when all inputs are empty", func() {
+			config, err := BuildTLSConfig("", "", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).To(BeNil())
 		})
 
 		It("should accept valid IANA cipher suites", func() {
-			config, err := BuildTLSConfig("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384", "")
+			config, err := BuildTLSConfig("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384", "", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"))
@@ -22,14 +24,14 @@ var _ = Describe("TLS Utilities", func() {
 		})
 
 		It("should accept valid OpenSSL cipher suites and convert to IANA", func() {
-			config, err := BuildTLSConfig("ECDHE-RSA-AES128-GCM-SHA256", "")
+			config, err := BuildTLSConfig("ECDHE-RSA-AES128-GCM-SHA256", "", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
 		})
 
 		It("should accept valid TLS version VersionTLS12", func() {
-			config, err := BuildTLSConfig("", "VersionTLS12")
+			config, err := BuildTLSConfig("", "VersionTLS12", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.MinTLSVersion).To(Equal("VersionTLS12"))
@@ -37,14 +39,14 @@ var _ = Describe("TLS Utilities", func() {
 		})
 
 		It("should accept valid TLS version VersionTLS13", func() {
-			config, err := BuildTLSConfig("", "VersionTLS13")
+			config, err := BuildTLSConfig("", "VersionTLS13", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.MinTLSVersion).To(Equal("VersionTLS13"))
 		})
 
 		It("should accept both ciphers and version together", func() {
-			config, err := BuildTLSConfig("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "VersionTLS13")
+			config, err := BuildTLSConfig("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "VersionTLS13", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
@@ -52,25 +54,25 @@ var _ = Describe("TLS Utilities", func() {
 		})
 
 		It("should return error for invalid cipher suite", func() {
-			_, err := BuildTLSConfig("COMPLETELY-INVALID-CIPHER", "")
+			_, err := BuildTLSConfig("COMPLETELY-INVALID-CIPHER", "", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to convert cipher suites to IANA"))
 		})
 
 		It("should return error for invalid TLS version string", func() {
-			_, err := BuildTLSConfig("", "InvalidVersion")
+			_, err := BuildTLSConfig("", "InvalidVersion", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse TLS version"))
 		})
 
 		It("should return error for TLS version below 1.2", func() {
-			_, err := BuildTLSConfig("", "VersionTLS11")
+			_, err := BuildTLSConfig("", "VersionTLS11", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("minimum TLS version must be VersionTLS12 or higher"))
 		})
 
 		It("should filter out insecure ciphers", func() {
-			config, err := BuildTLSConfig("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_RSA_WITH_RC4_128_SHA", "")
+			config, err := BuildTLSConfig("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_RSA_WITH_RC4_128_SHA", "", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
@@ -78,7 +80,7 @@ var _ = Describe("TLS Utilities", func() {
 		})
 
 		It("should return empty CipherSuites when all ciphers are insecure", func() {
-			config, err := BuildTLSConfig("TLS_RSA_WITH_RC4_128_SHA", "VersionTLS12")
+			config, err := BuildTLSConfig("TLS_RSA_WITH_RC4_128_SHA", "VersionTLS12", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(BeEmpty())
@@ -86,17 +88,39 @@ var _ = Describe("TLS Utilities", func() {
 		})
 
 		It("should handle mixed OpenSSL and IANA cipher formats", func() {
-			config, err := BuildTLSConfig("ECDHE-RSA-AES128-GCM-SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384", "")
+			config, err := BuildTLSConfig("ECDHE-RSA-AES128-GCM-SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384", "", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"))
 		})
 
 		It("should handle TLS 1.3 ciphers that have same name in both formats", func() {
-			config, err := BuildTLSConfig("TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384", "")
+			config, err := BuildTLSConfig("TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384", "", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(Equal("TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384"))
+		})
+
+		It("should accept valid curve preferences", func() {
+			config, err := BuildTLSConfig("", "", "X25519,secp256r1,secp384r1")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(config).NotTo(BeNil())
+			Expect(config.CurvePreferences).To(Equal("X25519,secp256r1,secp384r1"))
+		})
+
+		It("should accept all parameters together", func() {
+			config, err := BuildTLSConfig("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "VersionTLS13", "X25519,secp256r1")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(config).NotTo(BeNil())
+			Expect(config.CipherSuites).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
+			Expect(config.MinTLSVersion).To(Equal("VersionTLS13"))
+			Expect(config.CurvePreferences).To(Equal("X25519,secp256r1"))
+		})
+
+		It("should return error for invalid curve preference", func() {
+			_, err := BuildTLSConfig("", "", "INVALID-CURVE")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to parse curve preferences"))
 		})
 	})
 
@@ -173,7 +197,7 @@ var _ = Describe("TLS Utilities", func() {
 
 	Context("BuildTLSConfig edge cases", func() {
 		It("should return non-nil with empty CipherSuites when all ciphers are insecure and no minVersion", func() {
-			config, err := BuildTLSConfig("TLS_RSA_WITH_RC4_128_SHA", "")
+			config, err := BuildTLSConfig("TLS_RSA_WITH_RC4_128_SHA", "", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(BeEmpty())
@@ -181,7 +205,7 @@ var _ = Describe("TLS Utilities", func() {
 		})
 
 		It("should accept only cipher suites without minVersion", func() {
-			config, err := BuildTLSConfig("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "")
+			config, err := BuildTLSConfig("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(Equal("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
@@ -189,7 +213,7 @@ var _ = Describe("TLS Utilities", func() {
 		})
 
 		It("should accept only minVersion without cipher suites", func() {
-			config, err := BuildTLSConfig("", "VersionTLS13")
+			config, err := BuildTLSConfig("", "VersionTLS13", "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(config).NotTo(BeNil())
 			Expect(config.CipherSuites).To(BeEmpty())
@@ -197,9 +221,102 @@ var _ = Describe("TLS Utilities", func() {
 		})
 
 		It("should return error for VersionTLS10", func() {
-			_, err := BuildTLSConfig("", "VersionTLS10")
+			_, err := BuildTLSConfig("", "VersionTLS10", "")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("minimum TLS version must be VersionTLS12 or higher"))
 		})
+
+		It("should accept only curve preferences without other fields", func() {
+			config, err := BuildTLSConfig("", "", "X25519")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(config).NotTo(BeNil())
+			Expect(config.CipherSuites).To(BeEmpty())
+			Expect(config.MinTLSVersion).To(BeEmpty())
+			Expect(config.CurvePreferences).To(Equal("X25519"))
+		})
 	})
+
+	Context("ParseCurvePreferencesFromIDs", func() {
+		It("should return nil for empty input", func() {
+			result, err := ParseCurvePreferencesFromIDs("")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNil())
+		})
+
+		It("should parse single numeric ID 29 (X25519)", func() {
+			result, err := ParseCurvePreferencesFromIDs("29")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal([]tls.CurveID{tls.X25519}))
+		})
+
+		It("should parse multiple numeric IDs", func() {
+			result, err := ParseCurvePreferencesFromIDs("29,23,24")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal([]tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384}))
+		})
+
+		It("should parse all supported numeric IDs", func() {
+			result, err := ParseCurvePreferencesFromIDs("23,24,25,29,4588")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(HaveLen(5))
+			Expect(result).To(Equal([]tls.CurveID{tls.CurveP256, tls.CurveP384, tls.CurveP521, tls.X25519, tls.X25519MLKEM768}))
+		})
+
+		It("should handle whitespace around IDs", func() {
+			result, err := ParseCurvePreferencesFromIDs("29 , 23 , 24")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal([]tls.CurveID{tls.X25519, tls.CurveP256, tls.CurveP384}))
+		})
+
+		It("should accept any numeric CurveID without validation", func() {
+			result, err := ParseCurvePreferencesFromIDs("999")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal([]tls.CurveID{tls.CurveID(999)}))
+		})
+
+		It("should return error for non-numeric input", func() {
+			_, err := ParseCurvePreferencesFromIDs("X25519")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid numeric CurveID"))
+		})
+	})
+
+	Context("CurveNamesToIDs", func() {
+		It("should return empty string for empty input", func() {
+			result, err := CurveNamesToIDs("")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeEmpty())
+		})
+
+		It("should convert single name X25519 to 29", func() {
+			result, err := CurveNamesToIDs("X25519")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal("29"))
+		})
+
+		It("should convert multiple names to numeric IDs", func() {
+			result, err := CurveNamesToIDs("X25519,secp256r1,secp384r1")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal("29,23,24"))
+		})
+
+		It("should convert all supported names", func() {
+			result, err := CurveNamesToIDs("X25519,secp256r1,secp384r1,secp521r1,X25519MLKEM768")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal("29,23,24,25,4588"))
+		})
+
+		It("should return error for unrecognized name", func() {
+			_, err := CurveNamesToIDs("INVALID-CURVE")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unrecognized TLS group/curve name"))
+		})
+
+		It("should handle whitespace around names", func() {
+			result, err := CurveNamesToIDs("X25519 , secp256r1")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal("29,23"))
+		})
+	})
+
 })

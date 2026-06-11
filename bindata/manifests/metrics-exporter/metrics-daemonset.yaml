@@ -72,6 +72,8 @@ spec:
           {{- if .TLSMinVersion }}
           - --tls-min-version={{.TLSMinVersion}}
           {{- end }}
+          # TODO: Add --tls-curve-preferences flag once kube-rbac-proxy supports it.
+          # Tracked by: https://github.com/kube-rbac-proxy/kube-rbac-proxy/issues/414
           - --upstream=http://127.0.0.1:{{.MetricsExporterPort}}/
           - --tls-private-key-file=/etc/metrics/tls.key
           - --tls-cert-file=/etc/metrics/tls.crt

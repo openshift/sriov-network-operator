@@ -24,7 +24,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
 	github.com/openshift-kni/k8sreporter v1.0.7
-	github.com/openshift/api v0.0.0-20260317165824-54a3998d81eb
+	github.com/openshift/api v0.0.0-20260610192510-1b2a074e0bd6
 	github.com/openshift/client-go v0.0.0-20260317180604-743f664b82d1
 	github.com/openshift/library-go v0.0.0-20260413093329-d2db42c961e1
 	github.com/ovn-kubernetes/libovsdb v0.8.1

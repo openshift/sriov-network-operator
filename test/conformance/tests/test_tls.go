@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -19,6 +20,22 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/network"
 )
+
+// operandTLSTarget describes an operand whose TLS CLI flags should be validated.
+type operandTLSTarget struct {
+	labelSelector  string
+	containerName  string
+	curveSupported bool
+}
+
+// tlsOperands is the list of operands that receive TLS configuration flags.
+var tlsOperands = []operandTLSTarget{
+	{labelSelector: "app=operator-webhook", containerName: "webhook-server", curveSupported: true},
+	{labelSelector: "app=network-resources-injector", containerName: "webhook-server", curveSupported: true},
+	// TODO: set curveSupported to true once kube-rbac-proxy supports --tls-curve-preferences
+	// Tracked by: https://github.com/kube-rbac-proxy/kube-rbac-proxy/issues/414
+	{labelSelector: "app=sriov-network-metrics-exporter", containerName: "kube-rbac-proxy", curveSupported: false},
+}
 
 var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func() {
 	var node string
@@ -49,6 +66,12 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 
 		WaitForSRIOVStable()
 
+		By("Waiting for the operator pod to be ready")
+		waitForOperatorPodReady()
+
+		By("Waiting for operand pods to be ready")
+		waitForOperandPodsReady()
+
 		node = sriovInfos.Nodes[0]
 		By("Using node " + node)
 	})
@@ -66,37 +89,32 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 			}
 		})
 
-		It("should propagate TLS env vars to operand DaemonSets", func() {
+		It("should propagate all TLS env vars to operand DaemonSets", func() {
 			By("Getting the operator deployment")
 			deploy := getOperatorDeployment()
 
 			originalCiphers := getDeploymentEnvVar(deploy, "TLS_CIPHER_SUITES")
 			originalMinVersion := getDeploymentEnvVar(deploy, "TLS_MIN_VERSION")
+			originalCurves := getDeploymentEnvVar(deploy, "TLS_CURVE_PREFERENCES")
 			DeferCleanup(func() {
 				By("Restoring original TLS environment variables")
-				restoreOperatorTLSEnv(originalCiphers, originalMinVersion)
+				setOperatorTLSEnv(originalCiphers, originalMinVersion, originalCurves)
+				waitForOperatorPodReady()
+				WaitForSRIOVStable()
 			})
 
 			ciphers := "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
 			minVersion := "VersionTLS12"
+			curvePreferences := "X25519,secp256r1,secp384r1"
 
-			By("Setting TLS environment variables on the operator deployment")
-			setOperatorTLSEnv(ciphers, minVersion)
+			By("Setting all TLS environment variables on the operator deployment")
+			setOperatorTLSEnv(ciphers, minVersion, curvePreferences)
 
 			By("Waiting for operator pod to be running with new env")
 			waitForOperatorPodReady()
 
-			By("Validating operator-webhook DaemonSet pods have TLS args")
-			assertOperandHasTLSArgs("app=operator-webhook", "webhook-server",
-				"--tls-cipher-suites="+ciphers, "--tls-min-version="+minVersion)
-
-			By("Validating network-resources-injector DaemonSet pods have TLS args")
-			assertOperandHasTLSArgs("app=network-resources-injector", "webhook-server",
-				"-tls-cipher-suites="+ciphers, "-tls-min-version="+minVersion)
-
-			By("Validating metrics-exporter kube-rbac-proxy has TLS args")
-			assertOperandHasTLSArgs("app=sriov-network-metrics-exporter", "kube-rbac-proxy",
-				"--tls-cipher-suites="+ciphers, "--tls-min-version="+minVersion)
+			By("Validating all operands have the expected TLS args")
+			assertAllOperandsHaveTLSArgs(ciphers, minVersion, curveNamesToNumericIDs(curvePreferences))
 
 			By("Creating a policy, network and pod to validate operands still work")
 			validateOperandsWorkWithPolicy(node)
@@ -108,35 +126,29 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 
 			originalCiphers := getDeploymentEnvVar(deploy, "TLS_CIPHER_SUITES")
 			originalMinVersion := getDeploymentEnvVar(deploy, "TLS_MIN_VERSION")
+			originalCurves := getDeploymentEnvVar(deploy, "TLS_CURVE_PREFERENCES")
 			DeferCleanup(func() {
 				By("Restoring original TLS environment variables")
-				restoreOperatorTLSEnv(originalCiphers, originalMinVersion)
+				setOperatorTLSEnv(originalCiphers, originalMinVersion, originalCurves)
+				waitForOperatorPodReady()
+				WaitForSRIOVStable()
 			})
 
 			firstCiphers := "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
-			By("Setting initial TLS cipher suite")
-			setOperatorTLSEnv(firstCiphers, "VersionTLS12")
+			By("Setting initial TLS configuration")
+			setOperatorTLSEnv(firstCiphers, "VersionTLS12", "X25519")
 			waitForOperatorPodReady()
 
-			assertOperandHasTLSArgs("app=operator-webhook", "webhook-server",
-				"--tls-cipher-suites="+firstCiphers, "--tls-min-version=VersionTLS12")
+			By("Validating operands have initial TLS args")
+			assertAllOperandsHaveTLSArgs(firstCiphers, "VersionTLS12", curveNamesToNumericIDs("X25519"))
 
 			updatedCiphers := "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
-			By("Updating TLS cipher suites to a new value")
-			setOperatorTLSEnv(updatedCiphers, "VersionTLS13")
+			By("Updating TLS configuration to new values")
+			setOperatorTLSEnv(updatedCiphers, "VersionTLS13", "X25519,secp256r1")
 			waitForOperatorPodReady()
 
-			By("Validating operator-webhook has updated TLS args")
-			assertOperandHasTLSArgs("app=operator-webhook", "webhook-server",
-				"--tls-cipher-suites="+updatedCiphers, "--tls-min-version=VersionTLS13")
-
-			By("Validating network-resources-injector has updated TLS args")
-			assertOperandHasTLSArgs("app=network-resources-injector", "webhook-server",
-				"-tls-cipher-suites="+updatedCiphers, "-tls-min-version=VersionTLS13")
-
-			By("Validating metrics-exporter kube-rbac-proxy has updated TLS args")
-			assertOperandHasTLSArgs("app=sriov-network-metrics-exporter", "kube-rbac-proxy",
-				"--tls-cipher-suites="+updatedCiphers, "--tls-min-version=VersionTLS13")
+			By("Validating all operands have updated TLS args")
+			assertAllOperandsHaveTLSArgs(updatedCiphers, "VersionTLS13", curveNamesToNumericIDs("X25519,secp256r1"))
 		})
 	})
 
@@ -176,6 +188,9 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 				Skip("TLSAdherence feature gate is not enabled on this cluster")
 			}
 
+			By("Ensuring operator pod is ready before modifying APIServer")
+			waitForOperatorPodReady()
+
 			By("Saving the current APIServer state")
 			apiServer := getAPIServer()
 			originalProfile := apiServer.Spec.TLSSecurityProfile
@@ -192,28 +207,22 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 			}, configv1.TLSAdherencePolicyStrictAllComponents)
 
 			intermediateSpec := configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
-			expectedMinVersion := string(intermediateSpec.MinTLSVersion)
+			expectedGroups := curveNamesToNumericIDs(strings.Join(tlsGroupsToStrings(intermediateSpec.Groups), ","))
 
-			By("Validating operator-webhook has TLS args from the cluster profile")
-			assertOperandHasTLSArgs("app=operator-webhook", "webhook-server",
-				"--tls-min-version="+expectedMinVersion)
+			By("Validating all operands have TLS args from the cluster profile")
+			assertAllOperandsHaveTLSArgs("", string(intermediateSpec.MinTLSVersion), expectedGroups)
 
-			By("Validating network-resources-injector has TLS args")
-			assertOperandHasTLSArgs("app=network-resources-injector", "webhook-server",
-				"-tls-min-version="+expectedMinVersion)
-
-			By("Validating metrics-exporter kube-rbac-proxy has TLS args")
-			assertOperandHasTLSArgs("app=sriov-network-metrics-exporter", "kube-rbac-proxy",
-				"--tls-min-version="+expectedMinVersion)
-
-			By("Creating a policy, network and pod to validate operands still work")
-			validateOperandsWorkWithPolicy(node)
+			By("Waiting for operand pods to be fully ready after TLS profile change")
+			waitForOperandPodsReady()
 		})
 
 		It("should update operands when tlsAdherence changes from Legacy to Strict", func() {
 			if !isTLSAdherenceSupported() {
 				Skip("TLSAdherence feature gate is not enabled on this cluster")
 			}
+
+			By("Ensuring operator pod is ready before modifying APIServer")
+			waitForOperatorPodReady()
 
 			By("Saving the current APIServer state")
 			apiServer := getAPIServer()
@@ -241,22 +250,36 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 			}, configv1.TLSAdherencePolicyStrictAllComponents)
 
 			intermediateSpec := configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
-			expectedMinVersion := string(intermediateSpec.MinTLSVersion)
+			expectedGroups := curveNamesToNumericIDs(strings.Join(tlsGroupsToStrings(intermediateSpec.Groups), ","))
 
-			By("Validating operator-webhook now has TLS args")
-			assertOperandHasTLSArgs("app=operator-webhook", "webhook-server",
-				"--tls-min-version="+expectedMinVersion)
-
-			By("Validating network-resources-injector now has TLS args")
-			assertOperandHasTLSArgs("app=network-resources-injector", "webhook-server",
-				"-tls-min-version="+expectedMinVersion)
-
-			By("Validating metrics-exporter kube-rbac-proxy now has TLS args")
-			assertOperandHasTLSArgs("app=sriov-network-metrics-exporter", "kube-rbac-proxy",
-				"--tls-min-version="+expectedMinVersion)
+			By("Validating all operands now have TLS args")
+			assertAllOperandsHaveTLSArgs("", string(intermediateSpec.MinTLSVersion), expectedGroups)
 		})
 	})
 })
+
+// assertAllOperandsHaveTLSArgs validates that all TLS operands have the expected
+// cipher suites, min TLS version, and curve preferences flags.
+// Empty values are skipped (no validation for that field).
+func assertAllOperandsHaveTLSArgs(ciphers, minVersion, curvePreferences string) {
+	for _, op := range tlsOperands {
+		if ciphers != "" {
+			By(fmt.Sprintf("Validating %s has tls-cipher-suites", op.labelSelector))
+			assertOperandHasTLSArgs(op.labelSelector, op.containerName,
+				"--tls-cipher-suites="+ciphers)
+		}
+		if minVersion != "" {
+			By(fmt.Sprintf("Validating %s has tls-min-version", op.labelSelector))
+			assertOperandHasTLSArgs(op.labelSelector, op.containerName,
+				"--tls-min-version="+minVersion)
+		}
+		if curvePreferences != "" && op.curveSupported {
+			By(fmt.Sprintf("Validating %s has tls-curve-preferences", op.labelSelector))
+			assertOperandHasTLSArgs(op.labelSelector, op.containerName,
+				"--tls-curve-preferences="+curvePreferences)
+		}
+	}
+}
 
 // isOpenShiftCluster detects if the cluster is OpenShift by checking
 // for the availability of the config.openshift.io API group.
@@ -287,6 +310,70 @@ func isTLSAdherenceSupported() bool {
 	return supported
 }
 
+// tlsGroupsToStrings converts a slice of configv1.TLSGroup to a slice of strings.
+func tlsGroupsToStrings(groups []configv1.TLSGroup) []string {
+	result := make([]string, len(groups))
+	for i, g := range groups {
+		result[i] = string(g)
+	}
+	return result
+}
+
+// curveNameToNumericID maps TLS group names to their numeric CurveID values.
+// This mirrors the operator's conversion so tests can assert against the actual
+// webhook args (which receive numeric IDs after the controller converts them).
+var curveNameToNumericID = map[string]string{
+	"X25519":         "29",
+	"secp256r1":      "23",
+	"secp384r1":      "24",
+	"secp521r1":      "25",
+	"X25519MLKEM768": "4588",
+}
+
+// curveNamesToNumericIDs converts a comma-separated list of curve group names
+// to a comma-separated list of numeric CurveID values matching what the operator
+// controller produces for the webhook args.
+func curveNamesToNumericIDs(names string) string {
+	if names == "" {
+		return ""
+	}
+	parts := strings.Split(names, ",")
+	ids := make([]string, 0, len(parts))
+	for _, name := range parts {
+		name = strings.TrimSpace(name)
+		if id, ok := curveNameToNumericID[name]; ok {
+			ids = append(ids, id)
+		}
+	}
+	return strings.Join(ids, ",")
+}
+
+// waitForOperandPodsReady waits for all TLS operand pods to be running and ready.
+// This ensures that after a TLS profile change triggers a DaemonSet update,
+// the new pods are fully ready before the test proceeds.
+func waitForOperandPodsReady() {
+	for _, op := range tlsOperands {
+		Eventually(func(g Gomega) {
+			pods, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
+				LabelSelector: op.labelSelector,
+			})
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(pods.Items).ToNot(BeEmpty(), fmt.Sprintf("No pods found for %s", op.labelSelector))
+			for _, p := range pods.Items {
+				if p.DeletionTimestamp != nil {
+					continue
+				}
+				g.Expect(p.Status.Phase).To(Equal(corev1.PodRunning),
+					fmt.Sprintf("Pod %s not running (phase=%s)", p.Name, p.Status.Phase))
+				for _, cs := range p.Status.ContainerStatuses {
+					g.Expect(cs.Ready).To(BeTrue(),
+						fmt.Sprintf("Pod %s container %s not ready", p.Name, cs.Name))
+				}
+			}
+		}, 5*time.Minute, 5*time.Second).Should(Succeed())
+	}
+}
+
 // getOperatorDeployment retrieves the sriov-network-operator Deployment.
 func getOperatorDeployment() *appsv1.Deployment {
 	deploy, err := clients.AppsV1Interface.Deployments(operatorNamespace).Get(
@@ -310,9 +397,9 @@ func getDeploymentEnvVar(deploy *appsv1.Deployment, envName string) string {
 	return ""
 }
 
-// setOperatorTLSEnv updates the TLS_CIPHER_SUITES and TLS_MIN_VERSION env vars
-// on the operator deployment and waits for the new pod to be running.
-func setOperatorTLSEnv(ciphers, minVersion string) {
+// setOperatorTLSEnv updates the TLS_CIPHER_SUITES, TLS_MIN_VERSION, and
+// TLS_CURVE_PREFERENCES env vars on the operator deployment.
+func setOperatorTLSEnv(ciphers, minVersion, curvePreferences string) {
 	Eventually(func(g Gomega) {
 		deploy := getOperatorDeployment()
 		updated := false
@@ -322,6 +409,8 @@ func setOperatorTLSEnv(ciphers, minVersion string) {
 					deploy.Spec.Template.Spec.Containers[i].Env, "TLS_CIPHER_SUITES", ciphers)
 				deploy.Spec.Template.Spec.Containers[i].Env = setEnvVar(
 					deploy.Spec.Template.Spec.Containers[i].Env, "TLS_MIN_VERSION", minVersion)
+				deploy.Spec.Template.Spec.Containers[i].Env = setEnvVar(
+					deploy.Spec.Template.Spec.Containers[i].Env, "TLS_CURVE_PREFERENCES", curvePreferences)
 				updated = true
 				break
 			}
@@ -332,13 +421,6 @@ func setOperatorTLSEnv(ciphers, minVersion string) {
 			context.Background(), deploy, metav1.UpdateOptions{})
 		g.Expect(err).ToNot(HaveOccurred())
 	}, 1*time.Minute, 5*time.Second).Should(Succeed())
-}
-
-// restoreOperatorTLSEnv restores TLS env vars on the operator deployment.
-func restoreOperatorTLSEnv(ciphers, minVersion string) {
-	setOperatorTLSEnv(ciphers, minVersion)
-	waitForOperatorPodReady()
-	WaitForSRIOVStable()
 }
 
 // setEnvVar sets or updates an environment variable in a list of env vars.

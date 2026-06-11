@@ -75,21 +75,24 @@ func (r *SriovOperatorConfigReconciler) getTLSTemplateData(ctx context.Context) 
 	logger := log.Log.WithName("getTLSTemplateData")
 
 	result := map[string]string{
-		"TLSCipherSuites": "",
-		"TLSMinVersion":   "",
+		"TLSCipherSuites":     "",
+		"TLSMinVersion":       "",
+		"TLSCurvePreferences": "",
 	}
 
 	envCiphers := os.Getenv("TLS_CIPHER_SUITES")
 	envMinVersion := os.Getenv("TLS_MIN_VERSION")
+	envCurvePreferences := os.Getenv("TLS_CURVE_PREFERENCES")
 
-	if envCiphers != "" || envMinVersion != "" {
-		envTLSConfig, err := utils.BuildTLSConfig(envCiphers, envMinVersion)
+	if envCiphers != "" || envMinVersion != "" || envCurvePreferences != "" {
+		envTLSConfig, err := utils.BuildTLSConfig(envCiphers, envMinVersion, envCurvePreferences)
 		if err != nil {
 			return nil, fmt.Errorf("invalid TLS environment variables: %w", err)
 		}
 		if envTLSConfig != nil {
 			result["TLSCipherSuites"] = envTLSConfig.CipherSuites
 			result["TLSMinVersion"] = envTLSConfig.MinTLSVersion
+			result["TLSCurvePreferences"] = envTLSConfig.CurvePreferences
 		}
 	}
 
@@ -103,9 +106,21 @@ func (r *SriovOperatorConfigReconciler) getTLSTemplateData(ctx context.Context) 
 		logger.V(2).Info("Orchestrator returned TLS config, overriding environment variables")
 		result["TLSCipherSuites"] = tlsConfig.CipherSuites
 		result["TLSMinVersion"] = tlsConfig.MinTLSVersion
+		result["TLSCurvePreferences"] = tlsConfig.CurvePreferences
 	}
 
-	logger.V(2).Info("TLS config", "TLSCipherSuites", result["TLSCipherSuites"], "TLSMinVersion", result["TLSMinVersion"])
+	if result["TLSCurvePreferences"] != "" {
+		numericIDs, err := utils.CurveNamesToIDs(result["TLSCurvePreferences"])
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert curve preference names to IDs: %w", err)
+		}
+		result["TLSCurvePreferences"] = numericIDs
+	}
+
+	logger.V(2).Info("TLS config",
+		"TLSCipherSuites", result["TLSCipherSuites"],
+		"TLSMinVersion", result["TLSMinVersion"],
+		"TLSCurvePreferences", result["TLSCurvePreferences"])
 	return result, nil
 }
 
@@ -346,6 +361,7 @@ func (r *SriovOperatorConfigReconciler) syncMetricsExporter(ctx context.Context,
 	data.Data["PrometheusOperatorNamespace"] = os.Getenv("METRICS_EXPORTER_PROMETHEUS_OPERATOR_NAMESPACE")
 	data.Data["TLSCipherSuites"] = tlsData["TLSCipherSuites"]
 	data.Data["TLSMinVersion"] = tlsData["TLSMinVersion"]
+	data.Data["TLSCurvePreferences"] = tlsData["TLSCurvePreferences"]
 
 	data.Data["NodeSelectorField"] = GetDefaultNodeSelector()
 	if dc.Spec.ConfigDaemonNodeSelector != nil {
@@ -429,6 +445,7 @@ func (r *SriovOperatorConfigReconciler) syncWebhookObjs(ctx context.Context, dc 
 		// TLS configuration data
 		data.Data["TLSCipherSuites"] = tlsData["TLSCipherSuites"]
 		data.Data["TLSMinVersion"] = tlsData["TLSMinVersion"]
+		data.Data["TLSCurvePreferences"] = tlsData["TLSCurvePreferences"]
 
 		objs, err := render.RenderDir(path, &data)
 		if err != nil {

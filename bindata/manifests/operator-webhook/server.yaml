@@ -78,6 +78,9 @@ spec:
         {{- if .TLSMinVersion }}
         - "--tls-min-version={{.TLSMinVersion}}"
         {{- end }}
+        {{- if .TLSCurvePreferences }}
+        - "--tls-curve-preferences={{.TLSCurvePreferences}}"
+        {{- end }}
         env:
         - name: NAMESPACE
           valueFrom:
