@@ -6,41 +6,41 @@ spec:
   - name: sriov-network-operator
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-network-operator:4.22
+      name: quay.io/openshift/origin-sriov-network-operator:5.0
   - name: sriov-network-config-daemon
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-network-config-daemon:4.22
+      name: quay.io/openshift/origin-sriov-network-config-daemon:5.0
   - name: sriov-cni
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-cni:4.22
+      name: quay.io/openshift/origin-sriov-cni:5.0
   - name: sriov-network-device-plugin
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-network-device-plugin:4.22
+      name: quay.io/openshift/origin-sriov-network-device-plugin:5.0
   - name: sriov-dp-admission-controller
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-dp-admission-controller:4.22
+      name: quay.io/openshift/origin-sriov-dp-admission-controller:5.0
   - name: sriov-network-webhook
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-network-webhook:4.22
+      name: quay.io/openshift/origin-sriov-network-webhook:5.0
   - name: sriov-infiniband-cni
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-infiniband-cni:4.22
+      name: quay.io/openshift/origin-sriov-infiniband-cni:5.0
   - name: rdma-cni
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-rdma-cni:4.22
+      name: quay.io/openshift/origin-rdma-cni:5.0
   - name: sriov-network-metrics-exporter
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-sriov-network-metrics-exporter:4.22
+      name: quay.io/openshift/origin-sriov-network-metrics-exporter:5.0
   - name: kube-rbac-proxy
     from:
       kind: DockerImage
-      name: quay.io/openshift/origin-kube-rbac-proxy:4.22
+      name: quay.io/openshift/origin-kube-rbac-proxy:5.0
 
