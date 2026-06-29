@@ -571,14 +571,34 @@ func (dn *NodeReconciler) writeSystemdConfigFile(desiredNodeState *sriovnetworkv
 // returns true if we need to finish the reconcile loop and wait for a new object
 func (dn *NodeReconciler) handleDrain(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool) (bool, error) {
 	funcLog := log.Log.WithName("handleDrain")
-	// done with the drain we can continue with the configuration
+
 	if utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainComplete) {
+		// If we need a reboot but the desired-state was Drain_Required, the completed drain
+		// was only partial (SR-IOV pods only). We must reset to Idle, wait for the operator to
+		// uncordon, then re-request with Reboot_Required to get a full drain before rebooting.
+		if reqReboot && !utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.RebootRequired) {
+			if utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.DrainIdle) {
+				funcLog.Info("reboot is required, waiting for operator to rollback to Idle")
+				return true, nil
+			}
+			funcLog.Info("drain completed but reboot is now required, resetting to Idle to re-request full drain")
+			return true, dn.annotate(ctx, desiredNodeState, consts.DrainIdle)
+		}
 		funcLog.Info("the node complete the draining")
 		return false, nil
 	}
 
-	// the operator is still draining the node so we reconcile
 	if utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.Draining) {
+		// If we need a reboot but the desired-state is only Drain_Required, the operator is
+		// performing a partial drain. Move to Idle to abort and re-request with Reboot_Required.
+		if reqReboot && !utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.RebootRequired) {
+			if utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.DrainIdle) {
+				funcLog.Info("reboot is required, waiting for operator to abort and rollback to Idle")
+				return true, nil
+			}
+			funcLog.Info("drain in progress but reboot now required, resetting to Idle to re-request full drain")
+			return true, dn.annotate(ctx, desiredNodeState, consts.DrainIdle)
+		}
 		funcLog.Info("the node is still draining")
 		return true, nil
 	}
