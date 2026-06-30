@@ -4,6 +4,7 @@ import (
 	"os"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+	configv1 "github.com/openshift/api/config/v1"
 	clientmachineconfigv1 "github.com/openshift/client-go/machineconfiguration/clientset/versioned/typed/machineconfiguration/v1"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,6 +76,7 @@ func New(kubeconfig string) *ClientSet {
 	netattdefv1.SchemeBuilder.AddToScheme(crScheme)
 	sriovv1.AddToScheme(crScheme)
 	apiext.AddToScheme(crScheme)
+	configv1.Install(crScheme)
 
 	clientSet.Client, err = runtimeclient.New(config, runtimeclient.Options{
 		Scheme: crScheme,
