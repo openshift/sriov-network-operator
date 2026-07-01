@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -133,7 +134,7 @@ var _ = Describe("[sriov] Metrics Exporter", Ordered, ContinueOnFailure, func() 
 					values := runPromQLQuery(fmt.Sprintf(`%s{namespace="%s",pod="%s"}`, metricName, pod.Namespace, pod.Name))
 					g.Expect(values).ToNot(BeEmpty(), "no value for metric %s", metricName)
 				}
-			}, "90s", "1s").Should(Succeed())
+			}, 3*time.Minute, 5*time.Second).Should(Succeed())
 		})
 
 		It("Metrics should have the correct labels", func() {

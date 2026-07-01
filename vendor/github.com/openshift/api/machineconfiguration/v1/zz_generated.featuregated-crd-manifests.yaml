@@ -4,7 +4,8 @@ containerruntimeconfigs.machineconfiguration.openshift.io:
   CRDName: containerruntimeconfigs.machineconfiguration.openshift.io
   Capability: ""
   Category: ""
-  FeatureGates: []
+  FeatureGates:
+  - AdditionalStorageConfig
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_80"
@@ -30,17 +31,16 @@ controllerconfigs.machineconfiguration.openshift.io:
   FeatureGates:
   - AWSClusterHostedDNSInstall
   - AWSDualStackInstall
+  - AWSEuropeanSovereignCloudInstall
   - AzureClusterHostedDNSInstall
   - AzureDualStackInstall
   - DualReplica
   - DyanmicServiceEndpointIBMCloud
-  - GCPClusterHostedDNSInstall
-  - HighlyAvailableArbiter
-  - HighlyAvailableArbiter+DualReplica
   - NutanixMultiSubnets
   - OnPremDNSRecords
   - VSphereHostVMGroupZonal
   - VSphereMultiNetworks
+  - VSphereMultiVCenterDay2
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_80"
@@ -62,7 +62,8 @@ kubeletconfigs.machineconfiguration.openshift.io:
   CRDName: kubeletconfigs.machineconfiguration.openshift.io
   Capability: ""
   Category: ""
-  FeatureGates: []
+  FeatureGates:
+  - TLSGroupPreferences
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_80"
@@ -122,7 +123,6 @@ machineconfignodes.machineconfiguration.openshift.io:
   FeatureGates:
   - ImageModeStatusReporting
   - IrreconcilableMachineConfig
-  - MachineConfigNodes
   - NoRegistryClusterInstall
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
@@ -191,8 +191,7 @@ machineconfignodes.machineconfiguration.openshift.io:
     type: string
   Scope: Cluster
   ShortNames: null
-  TopLevelFeatureGates:
-  - MachineConfigNodes
+  TopLevelFeatureGates: []
   Version: v1
 
 machineconfigpools.machineconfiguration.openshift.io:
@@ -203,7 +202,6 @@ machineconfigpools.machineconfiguration.openshift.io:
   Category: ""
   FeatureGates:
   - OSStreams
-  - PinnedImages
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_80"
@@ -320,14 +318,37 @@ machineosconfigs.machineconfiguration.openshift.io:
   TopLevelFeatureGates: []
   Version: v1
 
+osimagestreams.machineconfiguration.openshift.io:
+  Annotations: {}
+  ApprovedPRNumber: https://github.com/openshift/api/pull/2555
+  CRDName: osimagestreams.machineconfiguration.openshift.io
+  Capability: ""
+  Category: ""
+  FeatureGates:
+  - OSStreams
+  FilenameOperatorName: machine-config
+  FilenameOperatorOrdering: "01"
+  FilenameRunLevel: "0000_80"
+  GroupName: machineconfiguration.openshift.io
+  HasStatus: true
+  KindName: OSImageStream
+  Labels:
+    openshift.io/operator-managed: ""
+  PluralName: osimagestreams
+  PrinterColumns: []
+  Scope: Cluster
+  ShortNames: null
+  TopLevelFeatureGates:
+  - OSStreams
+  Version: v1
+
 pinnedimagesets.machineconfiguration.openshift.io:
   Annotations: {}
   ApprovedPRNumber: https://github.com/openshift/api/pull/2198
   CRDName: pinnedimagesets.machineconfiguration.openshift.io
   Capability: ""
   Category: ""
-  FeatureGates:
-  - PinnedImages
+  FeatureGates: []
   FilenameOperatorName: machine-config
   FilenameOperatorOrdering: "01"
   FilenameRunLevel: "0000_80"
@@ -340,7 +361,6 @@ pinnedimagesets.machineconfiguration.openshift.io:
   PrinterColumns: []
   Scope: Cluster
   ShortNames: null
-  TopLevelFeatureGates:
-  - PinnedImages
+  TopLevelFeatureGates: []
   Version: v1
 
