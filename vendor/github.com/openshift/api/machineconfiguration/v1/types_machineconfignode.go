@@ -12,7 +12,6 @@ import (
 // +kubebuilder:subresource:status
 // +openshift:api-approved.openshift.io=https://github.com/openshift/api/pull/2255
 // +openshift:file-pattern=cvoRunLevel=0000_80,operatorName=machine-config,operatorOrdering=01
-// +openshift:enable:FeatureGate=MachineConfigNodes
 // +kubebuilder:printcolumn:name="PoolName",type="string",JSONPath=.spec.pool.name,priority=0
 // +kubebuilder:printcolumn:name="DesiredConfig",type="string",JSONPath=.spec.configVersion.desired,priority=0
 // +kubebuilder:printcolumn:name="CurrentConfig",type="string",JSONPath=.status.configVersion.current,priority=0
@@ -116,6 +115,7 @@ type MachineConfigNodeStatus struct {
 	// and PinnedImageSetsDegraded.
 	// The following types are only available when the ImageModeStatusReporting feature gate is enabled: ImagePulledFromRegistry,
 	// AppliedOSImage, AppliedFiles
+	// The following types are only available when the NoRegistryClusterInstall feature gate is enabled: InternalReleaseImageDegraded
 	// +listType=map
 	// +listMapKey=type
 	// +kubebuilder:validation:MaxItems=20
@@ -211,12 +211,14 @@ type MachineConfigNodeStatusInternalReleaseImageRef struct {
 	// image is an OCP release image referenced by digest.
 	// The format of the image pull spec is: host[:port][/namespace]/name@sha256:<digest>,
 	// where the digest must be 64 characters long, and consist only of lowercase hexadecimal characters, a-f and 0-9.
+	// The host must be either exactly "localhost" or a dot-qualified domain name.
+	// Single-label hosts other than "localhost" are not permitted.
 	// The length of the whole spec must be between 1 to 447 characters.
 	// The field is optional, and it will be provided after a release will be successfully installed.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=447
 	// +kubebuilder:validation:XValidation:rule=`(self.split('@').size() == 2 && self.split('@')[1].matches('^sha256:[a-f0-9]{64}$'))`,message="the OCI Image reference must end with a valid '@sha256:<digest>' suffix, where '<digest>' is 64 characters long"
-	// +kubebuilder:validation:XValidation:rule=`(self.split('@')[0].matches('^([a-zA-Z0-9-]+\\.)+[a-zA-Z0-9-]+(:[0-9]{2,5})?/([a-zA-Z0-9-_]{0,61}/)?[a-zA-Z0-9-_.]*?$'))`,message="the OCI Image name should follow the host[:port][/namespace]/name format, resembling a valid URL without the scheme"
+	// +kubebuilder:validation:XValidation:rule=`(self.split('@')[0].matches('^(localhost|([a-zA-Z0-9-]+\\.)+[a-zA-Z0-9-]+)(:[0-9]{2,5})?/([a-zA-Z0-9-_]{0,61}/)?[a-zA-Z0-9-_.]*?$'))`,message="the OCI Image name should follow the host[:port][/namespace]/name format, resembling a valid URL without the scheme; host must be either 'localhost' or a dot-qualified domain name"
 	// +optional
 	Image string `json:"image,omitempty"`
 }
@@ -418,4 +420,6 @@ const (
 	MachineConfigNodePinnedImageSetsProgressing StateProgress = "PinnedImageSetsProgressing"
 	// MachineConfigNodePinnedImageSetsDegraded describes a machine that has failed to progress to the desired pinned image sets
 	MachineConfigNodePinnedImageSetsDegraded StateProgress = "PinnedImageSetsDegraded"
+	// MachineConfigNodeInternalReleaseImageDegraded describes a machine where the local InternalReleaseImage registry is not properly working
+	MachineConfigNodeInternalReleaseImageDegraded StateProgress = "InternalReleaseImageDegraded"
 )
