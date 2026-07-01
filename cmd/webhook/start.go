@@ -15,14 +15,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/webhook"
 )
 
 var (
-	certFile    string
-	keyFile     string
-	port        int
-	enableHTTP2 bool
+	certFile            string
+	keyFile             string
+	port                int
+	enableHTTP2         bool
+	tlsCipherSuites     string
+	tlsMinVersion       string
+	tlsCurvePreferences string
 )
 
 var startCmd = &cobra.Command{
@@ -50,6 +54,16 @@ func init() {
 	startCmd.Flags().IntVar(&port, "port", 443,
 		"Secure port that the webhook listens on")
 	startCmd.Flags().BoolVar(&enableHTTP2, "enable-http2", false, "If HTTP/2 should be enabled for the metrics and webhook servers.")
+	startCmd.Flags().StringVar(&tlsCipherSuites, "tls-cipher-suites", "",
+		"Comma-separated list of TLS 1.2 and later cipher suites (IANA names only). If empty, uses Go defaults.")
+	startCmd.Flags().StringVar(&tlsMinVersion, "tls-min-version", "",
+		"Minimum TLS version (VersionTLS12, VersionTLS13). If empty, defaults to VersionTLS12.")
+	startCmd.Flags().StringVar(&tlsCurvePreferences, "tls-curve-preferences", "",
+		"Comma-separated list of numeric Go crypto/tls CurveID values, "+
+			"as the allowed key exchange mechanisms for the server. "+
+			"The supported values depend on the Go version used. "+
+			"See https://pkg.go.dev/crypto/tls#CurveID for values supported for each Go version. "+
+			"If empty, uses Go runtime defaults.")
 }
 
 // serve handles the http portion of a request prior to handing to an admit
@@ -154,6 +168,33 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		panic(err)
 	}
 
+	// Log TLS configuration
+	setupLog.Info("TLS configuration",
+		"cipherSuites", tlsCipherSuites,
+		"minVersion", tlsMinVersion,
+		"curvePreferences", tlsCurvePreferences)
+
+	// Parse TLS cipher suites
+	cipherSuites, err := utils.ParseCipherSuites(tlsCipherSuites)
+	if err != nil {
+		setupLog.Error(err, "failed to parse TLS cipher suites")
+		panic(err)
+	}
+
+	// Parse TLS minimum version
+	minVersion, err := utils.ParseTLSMinVersion(tlsMinVersion)
+	if err != nil {
+		setupLog.Error(err, "failed to parse TLS minimum version")
+		panic(err)
+	}
+
+	// Parse TLS curve preferences
+	curvePreferences, err := utils.ParseCurvePreferencesFromIDs(tlsCurvePreferences)
+	if err != nil {
+		setupLog.Error(err, "failed to parse TLS curve preferences")
+		panic(err)
+	}
+
 	http.HandleFunc("/mutating-custom-resource", serveMutateCustomResource)
 	http.HandleFunc("/validating-custom-resource", serveValidateCustomResource)
 	http.HandleFunc("/readyz", func(w http.ResponseWriter, req *http.Request) { w.Write([]byte("ok")) })
@@ -163,7 +204,10 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 		server := &http.Server{
 			Addr: fmt.Sprintf(":%d", port),
 			TLSConfig: &tls.Config{
-				GetCertificate: keyPair.GetCertificateFunc(),
+				GetCertificate:   keyPair.GetCertificateFunc(),
+				CipherSuites:     cipherSuites,
+				MinVersion:       minVersion,
+				CurvePreferences: curvePreferences,
 			},
 			// CVE-2023-39325 https://github.com/golang/go/issues/63417
 			TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
@@ -41,4 +42,12 @@ func (k *Kubernetes) BeforeDrainNode(_ context.Context, _ *corev1.Node) (bool, e
 // Always returns true to indicate completion.
 func (k *Kubernetes) AfterCompleteDrainNode(_ context.Context, _ *corev1.Node) (bool, error) {
 	return true, nil
+}
+
+// GetTLSConfig always returns nil for vanilla Kubernetes clusters.
+// On Kubernetes, TLS configuration is managed via environment variables
+// (TLS_CIPHER_SUITES, TLS_MIN_VERSION) which are read directly by the controller.
+func (k *Kubernetes) GetTLSConfig(_ context.Context) (*consts.TLSConfig, error) {
+	log.Log.WithName("Kubernetes").V(2).Info("TLS configuration on Kubernetes is managed via environment variables, returning nil")
+	return nil, nil
 }
