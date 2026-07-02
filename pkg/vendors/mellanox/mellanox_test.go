@@ -99,7 +99,6 @@ var _ = Describe("SRIOV", func() {
 				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
 			}
 
-			// VF reset fails on primary port
 			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(fmt.Errorf("failed to reset VFs"))
 
 			err := m.MlxResetFW([]string{"0000:d8:00.0"}, mellanoxNicsStatus)
@@ -113,7 +112,6 @@ var _ = Describe("SRIOV", func() {
 				"0000:d8:00.1": {PciAddress: "0000:d8:00.1", Vendor: "15b3"},
 			}
 
-			// Primary port succeeds, secondary port fails
 			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.0", 0).Return(nil)
 			mockHostHelper.EXPECT().SetSriovNumVfs("0000:d8:00.1", 0).Return(fmt.Errorf("failed to reset VFs on secondary port"))
 
