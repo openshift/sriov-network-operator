@@ -343,8 +343,8 @@ spec:
         - apiGroups:
           - config.openshift.io
           resources:
-          - apiservers
           - infrastructures
+          - apiservers
           verbs:
           - get
           - list

@@ -34,5 +34,5 @@ rules:
   resources: ["*"]
   verbs: ["*"]
 - apiGroups: ["config.openshift.io"]
-  resources: ["infrastructures"]
+  resources: ["infrastructures", "apiservers"]
   verbs: ["get", "list", "watch"]
