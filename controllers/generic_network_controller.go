@@ -39,6 +39,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
@@ -63,15 +64,21 @@ type networkController interface {
 	Name() string
 }
 
-func newGenericNetworkReconciler(c client.Client, s *runtime.Scheme, controller networkController) *genericNetworkReconciler {
-	return &genericNetworkReconciler{Client: c, Scheme: s, controller: controller}
+func newGenericNetworkReconciler(c client.Client, s *runtime.Scheme, controller networkController, statusPatcher status.Interface) *genericNetworkReconciler {
+	return &genericNetworkReconciler{
+		Client:        c,
+		Scheme:        s,
+		controller:    controller,
+		statusPatcher: statusPatcher,
+	}
 }
 
 // genericNetworkReconciler provide common code for all network controllers
 type genericNetworkReconciler struct {
 	client.Client
-	Scheme     *runtime.Scheme
-	controller networkController
+	Scheme        *runtime.Scheme
+	controller    networkController
+	statusPatcher status.Interface
 }
 
 func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -102,14 +109,21 @@ func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if instance.NetworkNamespace() != "" && instance.GetNamespace() != vars.Namespace {
+		errMsg := fmt.Errorf("spec.networkNamespace cannot be set when the resource is not in the operator namespace (%s)", vars.Namespace)
 		reqLogger.Error(
-			fmt.Errorf("bad value for NetworkNamespace"),
+			errMsg,
 			".spec.networkNamespace can't be specified if the resource belongs to a namespace other than the operator's",
 			"operatorNamespace", vars.Namespace,
 			".metadata.namespace", instance.GetNamespace(),
 			".spec.networkNamespace", instance.NetworkNamespace(),
 		)
-		return reconcile.Result{}, nil
+		err = r.statusPatcher.ApplyCondition(ctx, instance,
+			status.NewCondition(sriovnetworkv1.ConditionReady, metav1.ConditionFalse,
+				sriovnetworkv1.ReasonNetworkAttachmentDefInvalid, errMsg.Error(), instance.GetGeneration()))
+		if err != nil {
+			reqLogger.Error(err, "Failed to apply status conditions")
+		}
+		return reconcile.Result{}, err
 	}
 
 	// examine DeletionTimestamp to determine if object is under deletion
@@ -128,6 +142,11 @@ func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 	raw, err := instance.RenderNetAttDef()
 	if err != nil {
+		if updateErr := r.statusPatcher.ApplyCondition(ctx, instance,
+			status.NewCondition(sriovnetworkv1.ConditionReady, metav1.ConditionFalse,
+				sriovnetworkv1.ReasonNetworkAttachmentDefInvalid, err.Error(), instance.GetGeneration())); updateErr != nil {
+			reqLogger.Error(updateErr, "Failed to apply status conditions")
+		}
 		return reconcile.Result{}, err
 	}
 	netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
@@ -179,12 +198,23 @@ func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			err = r.Get(ctx, types.NamespacedName{Name: netAttDef.Namespace}, targetNamespace)
 			if errors.IsNotFound(err) {
 				reqLogger.Info("Target namespace doesn't exist, NetworkAttachmentDefinition will be created when namespace is available", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				if updateErr := r.statusPatcher.ApplyCondition(ctx, instance,
+					status.NewCondition(sriovnetworkv1.ConditionReady, metav1.ConditionFalse,
+						sriovnetworkv1.ReasonNamespaceNotFound, fmt.Sprintf("target namespace %q does not exist", netAttDef.Namespace), instance.GetGeneration())); updateErr != nil {
+					reqLogger.Error(updateErr, "Failed to apply status conditions")
+					return reconcile.Result{}, updateErr
+				}
 				return reconcile.Result{}, nil
 			}
 
 			reqLogger.Info("NetworkAttachmentDefinition CR not exist, creating")
 			err = r.Create(ctx, netAttDef)
 			if err != nil {
+				if updateErr := r.statusPatcher.ApplyCondition(ctx, instance,
+					status.NewCondition(sriovnetworkv1.ConditionReady, metav1.ConditionFalse,
+						sriovnetworkv1.ReasonNetworkAttachmentDefInvalid, err.Error(), instance.GetGeneration())); updateErr != nil {
+					reqLogger.Error(updateErr, "Failed to apply status conditions")
+				}
 				reqLogger.Error(err, "Couldn't create NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
 				return reconcile.Result{}, err
 			}
@@ -193,8 +223,20 @@ func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			if err != nil {
 				return reconcile.Result{}, err
 			}
+
+			if updateErr := r.statusPatcher.ApplyCondition(ctx, instance,
+				status.NewCondition(sriovnetworkv1.ConditionReady, metav1.ConditionTrue,
+					sriovnetworkv1.ReasonNetworkReady, "NetworkAttachmentDefinition is provisioned and ready", instance.GetGeneration())); updateErr != nil {
+				reqLogger.Error(updateErr, "Failed to apply status conditions")
+				return reconcile.Result{}, updateErr
+			}
 		} else {
 			reqLogger.Error(err, "Couldn't get NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+			if updateErr := r.statusPatcher.ApplyCondition(ctx, instance,
+				status.NewCondition(sriovnetworkv1.ConditionReady, metav1.ConditionFalse,
+					sriovnetworkv1.ReasonNetworkAttachmentDefNotFound, err.Error(), instance.GetGeneration())); updateErr != nil {
+				reqLogger.Error(updateErr, "Failed to apply status conditions")
+			}
 			return reconcile.Result{}, err
 		}
 	} else {
@@ -210,6 +252,14 @@ func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				"Namespace", netAttDef.Namespace, "Name", netAttDef.Name,
 				"CurrentOwner", foundOwner, "ExpectedOwner", expectedOwner,
 			)
+			if updateErr := r.statusPatcher.ApplyCondition(ctx, instance,
+				status.NewCondition(sriovnetworkv1.ConditionReady, metav1.ConditionFalse,
+					sriovnetworkv1.ReasonNetworkAttachmentDefInvalid,
+					fmt.Sprintf("NetworkAttachmentDefinition '%s/%s' already exists and is owned by %s", netAttDef.Namespace, netAttDef.Name, foundOwner),
+					instance.GetGeneration())); updateErr != nil {
+				reqLogger.Error(updateErr, "Failed to apply status conditions")
+				return reconcile.Result{}, updateErr
+			}
 			return reconcile.Result{}, nil
 		}
 
@@ -220,8 +270,20 @@ func (r *genericNetworkReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			err = r.Update(ctx, netAttDef)
 			if err != nil {
 				reqLogger.Error(err, "Couldn't update NetworkAttachmentDefinition CR", "Namespace", netAttDef.Namespace, "Name", netAttDef.Name)
+				if updateErr := r.statusPatcher.ApplyCondition(ctx, instance,
+					status.NewCondition(sriovnetworkv1.ConditionReady, metav1.ConditionFalse,
+						sriovnetworkv1.ReasonNetworkAttachmentDefInvalid, err.Error(), instance.GetGeneration())); updateErr != nil {
+					reqLogger.Error(updateErr, "Failed to apply status conditions")
+				}
 				return reconcile.Result{}, err
 			}
+		}
+
+		if err := r.statusPatcher.ApplyCondition(ctx, instance,
+			status.NewCondition(sriovnetworkv1.ConditionReady, metav1.ConditionTrue,
+				sriovnetworkv1.ReasonNetworkReady, "NetworkAttachmentDefinition is provisioned and ready", instance.GetGeneration())); err != nil {
+			reqLogger.Error(err, "Failed to apply status conditions")
+			return reconcile.Result{}, err
 		}
 	}
 
@@ -347,6 +409,10 @@ func (r *genericNetworkReconciler) cleanResourcesAndFinalizers(ctx context.Conte
 		if found {
 			instance.SetFinalizers(newFinalizers)
 			if err := r.Update(ctx, instance); err != nil {
+				// If the object is not found, it's already been deleted
+				if errors.IsNotFound(err) {
+					return nil
+				}
 				return err
 			}
 		}

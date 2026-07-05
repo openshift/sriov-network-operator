@@ -129,7 +129,7 @@ fmt-code:
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" applyconfiguration:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 mock-generate: gomock
 	go generate ./...
