@@ -1,0 +1,265 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+early_access: false
+enable_free_tier: true
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  review_status: true
+  collapse_walkthrough: false
+
+  path_filters:
+    - "!**/vendor/**"
+    - "!vendor/**"
+    - "!**/zz_generated*"
+    - "!go.sum"
+    - "!bindata/scripts/**"
+
+  auto_review:
+    enabled: true
+    drafts: true
+
+  # ── Path instructions ────────────────────────────────────────
+  path_instructions:
+
+    # ── Go code — general ────────────────────────────────────────
+    - path: "**/*.go"
+      instructions: |
+        Go security and best practices:
+        - Never ignore error returns; wrap errors with context using fmt.Errorf("...: %w", err)
+        - database/sql with placeholders; no fmt.Sprintf in queries
+        - Use stdlib crypto/* and golang.org/x/crypto; avoid third-party crypto libraries
+        - Integer overflow: bounds-check user-supplied sizes
+        - context.Context for cancellation and timeouts on all network/hardware operations
+        - Nil pointer checks on hardware info structs (PciAddress, DeviceInfo, VfInfo)
+          before accessing fields — SR-IOV hardware discovery can return incomplete data
+        - Use structured logging (klog) with appropriate verbosity levels
+
+    # ── CRD API types ────────────────────────────────────────────
+    - path: "api/v1/**/*.go"
+      instructions: |
+        CRD API types review:
+        - Verify kubebuilder validation markers (+kubebuilder:validation:...) are present and correct
+          for new or modified fields (Required, Minimum, Maximum, Enum, Pattern)
+        - Ensure backward compatibility: new fields should have omitempty and sensible zero values
+        - Field naming must follow Kubernetes API conventions (camelCase JSON tags)
+        - Check that CRD types (SriovNetworkNodePolicy, SriovNetworkNodeState, SriovNetwork,
+          SriovIBNetwork, OVSNetwork, SriovNetworkPoolConfig, SriovOperatorConfig) have
+          consistent validation between the types and the webhook validation logic in pkg/webhook/
+        - Verify that changes to spec fields are reflected in the deepcopy generated code
+          (run 'make generate' reminder if types changed)
+        - For SriovNetworkNodePolicy: numVfs must be bounded (0 to max supported by NIC),
+          deviceType should be validated (netdevice, vfio-pci, virtio)
+
+    # ── Controllers ──────────────────────────────────────────────
+    - path: "controllers/**/*.go"
+      instructions: |
+        Controller review (kubebuilder-based operator):
+        - Reconcile loops must be idempotent — verify no side effects on re-queue
+        - Finalizer handling: ensure finalizers are added/removed correctly
+          to prevent resource leaks or stuck deletions
+        - Status updates: use status subresource updates, not full object updates
+        - Error handling: return ctrl.Result{} with appropriate requeue timing;
+          do not swallow errors silently
+        - Watch/predicate setup: verify that only relevant events trigger reconciliation
+          to avoid unnecessary reconcile storms
+        - Check for proper RBAC annotations (+kubebuilder:rbac) matching actual API usage
+        - Verify that label selectors and owner references are set correctly
+          for child resources (DaemonSets, ConfigMaps, ServiceAccounts)
+
+    # ── Daemon ───────────────────────────────────────────────────
+    - path: "pkg/daemon/**/*.go"
+      instructions: |
+        Daemon code runs on each node with elevated privileges:
+        - Privileged operations safety: validate all sysfs/procfs paths before writing;
+          never construct paths from unvalidated input
+        - Systemd service file changes: verify service units are valid and restarts are graceful
+        - Node drain safety: ensure the daemon respects drain annotations and does not
+          configure hardware during active drain operations
+        - Error handling for hardware operations: NIC configuration can fail due to
+          hardware state, driver issues, or kernel bugs — always handle errors gracefully
+          and update SriovNetworkNodeState status with failure details
+        - Plugin loading: verify plugin interface compliance when loading vendor plugins
+        - Reconciliation loops must use context.Context for cancellation
+        - File operations on sysfs/procfs should use atomic writes where possible
+
+    # ── Vendor-specific NIC plugins ──────────────────────────────
+    - path: "pkg/plugins/**/*.go"
+      instructions: |
+        Vendor-specific NIC plugin review (Intel, Mellanox, generic, virtual, k8s):
+        - Plugin interface compliance: verify all methods of the VendorPlugin
+          interface are implemented correctly
+        - Vendor-specific initialization: check that NIC family detection is accurate
+          and does not make assumptions about PCI device IDs
+        - Safe error handling for hardware calls: NIC firmware/driver interactions
+          can panic or hang — use timeouts and recover from panics where appropriate
+        - Device configuration: verify VF (Virtual Function) count limits match
+          hardware capabilities per NIC model
+        - Switchdev/OVS mode changes: validate that mode transitions are safe
+          and properly sequenced (e.g., must disable VFs before changing eswitch mode)
+        - Mellanox-specific: verify firmware configuration (mstconfig) commands
+          are correct and handle firmware reset requirements
+
+    # ── Webhook validation ───────────────────────────────────────
+    - path: "pkg/webhook/**/*.go"
+      instructions: |
+        Webhook validation and mutation review:
+        - Validation must be consistent with kubebuilder markers in api/v1/ types
+        - Reject invalid configurations early with clear error messages
+        - Mutation webhooks: ensure defaulting is idempotent (applying defaults
+          twice should produce the same result)
+        - Check that webhook certificates and TLS configuration are secure
+        - Verify that validation covers edge cases: empty strings, negative numbers,
+          overlapping VF ranges, conflicting policies on the same PF (Physical Function)
+
+    # ── Kubernetes/OpenShift manifests ────────────────────────────
+    - path: "**/*.{yaml,yml}"
+      instructions: |
+        If this is a Kubernetes/OpenShift manifest:
+        - securityContext: runAsNonRoot, readOnlyRootFilesystem,
+          allowPrivilegeEscalation: false where applicable
+        - Drop ALL capabilities, add only what is required
+        - Resource limits (cpu, memory) on every container
+        - RBAC: least privilege; no cluster-admin for workloads
+        - Liveness + readiness probes defined
+        - automountServiceAccountToken: false unless needed
+
+        SR-IOV operator specifics:
+        - SriovNetworkNodePolicy: validate numVfs bounds, deviceType enum values
+          (netdevice, vfio-pci), resourceName format
+        - DaemonSet manifests for sriov-network-config-daemon: hostNetwork and hostPID
+          are required for hardware access — verify justification is documented
+        - RBAC for daemon ServiceAccount: must have access to node, pod, and
+          SR-IOV CRD resources but nothing more
+        - Webhook manifests: verify caBundle injection and failurePolicy settings
+
+    # ── Embedded manifests (bindata) ─────────────────────────────
+    - path: "bindata/manifests/**/*.yaml"
+      instructions: |
+        Embedded Kubernetes manifests review:
+        - These manifests are compiled into the operator binary and deployed at runtime
+        - RBAC: verify least-privilege for the sriov-network-config-daemon ServiceAccount;
+          it should only access SR-IOV CRDs, nodes, pods, and configmaps
+        - DaemonSet security context: the daemon needs elevated privileges for hardware
+          access — verify the scope is minimal and justified
+        - ConfigMap and Secret mounts: verify no unnecessary sensitive data is mounted
+        - Verify image references use the correct placeholder variables for
+          operator-managed image overrides
+        - Resource requests/limits should be defined for all containers
+
+    # ── Dockerfiles / container images ───────────────────────────
+    - path: "**/{Dockerfile,Containerfile}*"
+      instructions: |
+        Container image security:
+        - Multi-stage builds preferred; no build tools in final image
+        - USER non-root where possible
+        - COPY specific files, not entire context
+        - No secrets in ENV, ARG, or COPY
+        - No package manager cache in final layer
+        - This project has 3 container images:
+          Dockerfile (operator), Dockerfile.sriov-network-config-daemon (daemon),
+          Dockerfile.webhook (admission webhook)
+        - The daemon image may require additional tools for hardware configuration —
+          verify any added packages are justified
+
+    # ── E2E tests ────────────────────────────────────────────────
+    - path: "test/e2e/**/*.go"
+      instructions: |
+        E2E test quality (Ginkgo v2 + Gomega):
+        - Test names must be stable and deterministic — no dynamic values
+          (pod names, timestamps, UUIDs) in It/Describe/Context/When titles
+        - Cleanup SR-IOV resources after tests: VFs, SriovNetworkNodePolicy,
+          SriovNetwork, SriovIBNetwork objects must be deleted in AfterEach/AfterAll
+          to avoid leaking hardware configuration across tests
+        - Timeouts for hardware operations: SR-IOV VF creation, driver binding,
+          and device plugin restarts are slow — use generous Eventually timeouts
+          (2-5 minutes for VF readiness, not seconds)
+        - Verify node state returns to clean after test: check SriovNetworkNodeState
+          shows no leftover VF configuration
+        - Single responsibility: each It block should test one behavior
+        - Assertions should include meaningful failure messages
+
+    # ── Unit tests (excludes e2e — covered by test/e2e instruction) ──
+    - path: "{controllers,pkg,api,cmd}/**/*_test.go"
+      instructions: |
+        Unit test quality:
+        - Use table-driven tests for validation logic with multiple cases
+        - Mock external dependencies (hardware access, Kubernetes API calls)
+          rather than requiring real hardware or cluster
+        - Test error paths, not just happy paths
+        - For controller tests: verify reconcile is idempotent by running
+          it multiple times and asserting same result
+        - Assertions should include descriptive failure messages
+
+    # ── Supply chain & dependencies ──────────────────────────────
+    - path: "**/go.mod"
+      instructions: |
+        Supply chain security:
+        - New dependencies: justify the need, check license compatibility
+        - Pin exact versions; verify no unnecessary indirect dependencies added
+        - Flag known CVEs (cross-ref osv.dev)
+        - Check for replace directives pointing to forks — ensure they are
+          intentional and documented
+        - This project depends on openshift/api and openshift/client-go for
+          OpenShift compatibility — version bumps of these should be coordinated
+
+    # ── CI/CD & GitHub Actions ───────────────────────────────────
+    - path: ".github/workflows/**/*"
+      instructions: |
+        CI/CD security:
+        - Pin actions by full SHA, not tag
+        - No secrets in logs; mask sensitive outputs
+        - Least privilege: minimize GITHUB_TOKEN permissions
+        - No pull_request_target with checkout of PR head
+        - Verify test.yml runs the full validation suite (make all)
+        - Image build workflows: verify image tags and push targets are correct
+
+    # ── Cryptography files ───────────────────────────────────────
+    - path: "**/*{crypt,cipher,sign,hash,tls,ssl,cert,key,token}*"
+      instructions: |
+        Cryptographic security:
+        - Banned: MD5, SHA1, DES, RC4, 3DES, Blowfish, ECB mode
+        - Symmetric: AES-256-GCM or ChaCha20-Poly1305
+        - Signing: Ed25519 or ECDSA P-256+
+        - Constant-time comparison for all secret/token data
+        - No custom crypto; use vetted libraries only
+        - Webhook TLS certificates: verify proper rotation and
+          minimum TLS version (1.2+)
+
+  # ── Security scanners ────────────────────────────────────────
+  tools:
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+    checkov:
+      enabled: true
+    hadolint:
+      enabled: true
+    trivy:
+      enabled: true
+    osvScanner:
+      enabled: true
+    actionlint:
+      enabled: true
+    ast-grep:
+      essential_rules: true
+
+# ── Knowledge base ───────────────────────────────────────────
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/CONTRIBUTING.md"
+  issues:
+    scope: "auto"
+  pull_requests:
+    scope: "auto"
+
+chat:
+  auto_reply: true
+  art: false

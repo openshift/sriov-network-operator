@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -xeo pipefail
 
-OCP_VERSION=${OCP_VERSION:-4.20.3}
+OCP_VERSION=${OCP_VERSION:-4.22.3}
 OCP_RELEASE_TYPE=${OCP_RELEASE_TYPE:-stable}
 cluster_name=${CLUSTER_NAME:-ocp-virt}
 domain_name=lab
@@ -219,7 +219,7 @@ DELAY_SECONDS=10
 retries=0
 until [ $retries -ge $MAX_RETRIES ]; do
   # wait for all the openshift cluster operators to be running
-  if [ $(kubectl get clusteroperator --no-headers | awk '{print $3}' | grep -v True | wc -l) -eq 0 ]; then
+  if [ $(kubectl get clusteroperator --no-headers | awk '{print $3}' | { grep -v True || true; } | wc -l) -eq 0 ]; then
     break
   fi
   retries=$((retries+1))
@@ -231,6 +231,68 @@ if [ $retries -eq $MAX_RETRIES ]; then
   echo "Max retries reached. Exiting..."
   exit 1
 fi
+
+echo "## enabling TechPreviewNoUpgrade feature set"
+kubectl patch featuregate cluster --type merge -p '{"spec":{"featureSet":"TechPreviewNoUpgrade"}}'
+
+# Trigger CRIOCredentialProviderConfig early to avoid a late MCO-driven master reboot
+# during the test phase. The CRD is created by the CVO after TechPreview is enabled,
+# so we wait for it and then create the resource to force the MCO reboot now
+# instead of mid-test.
+echo "## waiting for CRIOCredentialProviderConfig CRD and creating resource"
+for i in $(seq 1 30); do
+  if kubectl get crd criocredentialproviderconfigs.config.openshift.io &>/dev/null; then
+    echo "CRD available, creating CRIOCredentialProviderConfig resource"
+    cat <<CRIOPROVIDER | kubectl apply -f - 2>/dev/null || true
+apiVersion: config.openshift.io/v1alpha1
+kind: CRIOCredentialProviderConfig
+metadata:
+  name: cluster
+spec: {}
+CRIOPROVIDER
+    break
+  fi
+  echo "Waiting for CRIOCredentialProviderConfig CRD... (Attempt $i/30)"
+  sleep 10
+done
+
+echo "## waiting for the cluster to stabilize after TechPreview enablement"
+MAX_RETRIES=40
+DELAY_SECONDS=30
+retries=0
+until [ $retries -ge $MAX_RETRIES ]; do
+  if kubectl get nodes >/dev/null 2>&1; then
+    not_available=$(kubectl get clusteroperator --no-headers 2>/dev/null | awk '{print $3}' | { grep -v True || true; } | wc -l)
+    progressing=$(kubectl get clusteroperator --no-headers 2>/dev/null | awk '{print $4}' | { grep True || true; } | wc -l)
+    if [ "$not_available" -eq 0 ] && [ "$progressing" -eq 0 ]; then
+      echo "Cluster is stable after TechPreview enablement"
+      break
+    fi
+    echo "Cluster not yet stable (unavailable=$not_available, progressing=$progressing). Retrying... (Attempt $retries/$MAX_RETRIES)"
+  else
+    echo "API not reachable. Retrying... (Attempt $retries/$MAX_RETRIES)"
+  fi
+  retries=$((retries+1))
+  sleep $DELAY_SECONDS
+done
+
+if [ $retries -eq $MAX_RETRIES ]; then
+  echo "Max retries reached waiting for cluster stability. Exiting..."
+  exit 1
+fi
+
+echo "## wait for MachineConfigPools to finish updating"
+retries=0
+until [ $retries -ge $MAX_RETRIES ]; do
+  updating=$(kubectl get mcp --no-headers 2>/dev/null | awk '{print $4}' | grep -c True || true)
+  if [ "$updating" -eq 0 ]; then
+    echo "All MachineConfigPools are stable"
+    break
+  fi
+  retries=$((retries+1))
+  echo "MachineConfigPools still updating. Retrying... (Attempt $retries/$MAX_RETRIES)"
+  sleep $DELAY_SECONDS
+done
 
 echo "## wait for registry to be available"
 kubectl wait configs.imageregistry.operator.openshift.io/cluster --for=condition=Available --timeout=120s

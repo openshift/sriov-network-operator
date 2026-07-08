@@ -63,10 +63,13 @@ type TrunkConfig struct {
 
 // OVSNetworkStatus defines the observed state of OVSNetwork
 type OVSNetworkStatus struct {
+	NetworkStatus `json:",inline"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // OVSNetwork is the Schema for the ovsnetworks API
 type OVSNetwork struct {
