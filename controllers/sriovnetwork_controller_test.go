@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
@@ -39,8 +40,9 @@ var _ = Describe("SriovNetwork Controller", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		err = (&SriovNetworkReconciler{
-			Client: k8sManager.GetClient(),
-			Scheme: k8sManager.GetScheme(),
+			Client:        k8sManager.GetClient(),
+			Scheme:        k8sManager.GetScheme(),
+			StatusPatcher: status.NewPatcher(k8sManager.GetClient(), k8sManager.GetEventRecorder("test"), k8sManager.GetScheme(), "test"),
 		}).SetupWithManager(k8sManager)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -342,6 +344,311 @@ var _ = Describe("SriovNetwork Controller", Ordered, func() {
 				WithTimeout(5 * time.Second).
 				MustPassRepeatedly(10).
 				Should(Succeed())
+		})
+
+		Context("conditions", func() {
+			It("should set Ready=True when network is successfully provisioned", func() {
+				cr := sriovnetworkv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cond-ready",
+						Namespace: testNamespace,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						NetworkNamespace: "default",
+						ResourceName:     "resource_cond",
+					},
+				}
+
+				err := k8sClient.Create(ctx, &cr)
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, &cr)).To(Succeed())
+				})
+
+				Eventually(func(g Gomega) {
+					network := &sriovnetworkv1.SriovNetwork{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: testNamespace}, network)).To(Succeed())
+
+					// Verify Ready condition
+					readyCondition := findCondition(network.Status.Conditions, sriovnetworkv1.ConditionReady)
+					g.Expect(readyCondition).ToNot(BeNil())
+					g.Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+					g.Expect(readyCondition.Reason).To(Equal(sriovnetworkv1.ReasonNetworkReady))
+					g.Expect(readyCondition.Message).To(ContainSubstring("NetworkAttachmentDefinition is provisioned"))
+
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+			})
+
+			It("should set Ready=False when target namespace does not exist", func() {
+				cr := sriovnetworkv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cond-degraded",
+						Namespace: testNamespace,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						NetworkNamespace: "non-existent-ns-degraded",
+						ResourceName:     "resource_cond_degraded",
+					},
+				}
+
+				err := k8sClient.Create(ctx, &cr)
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, &cr)).To(Succeed())
+				})
+
+				// Wait for conditions to be set
+				time.Sleep(2 * time.Second)
+
+				Eventually(func(g Gomega) {
+					network := &sriovnetworkv1.SriovNetwork{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: testNamespace}, network)).To(Succeed())
+
+					// Verify Ready condition is False (waiting for namespace)
+					readyCondition := findCondition(network.Status.Conditions, sriovnetworkv1.ConditionReady)
+					g.Expect(readyCondition).ToNot(BeNil())
+					g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+					g.Expect(readyCondition.Reason).To(Equal(sriovnetworkv1.ReasonNamespaceNotFound))
+					g.Expect(readyCondition.Message).To(ContainSubstring("does not exist"))
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+			})
+
+			It("should have consistent observedGeneration in conditions", func() {
+				cr := sriovnetworkv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cond-gen",
+						Namespace: testNamespace,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						NetworkNamespace: "default",
+						ResourceName:     "resource_cond_gen",
+					},
+				}
+
+				err := k8sClient.Create(ctx, &cr)
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, &cr)).To(Succeed())
+				})
+
+				Eventually(func(g Gomega) {
+					network := &sriovnetworkv1.SriovNetwork{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: testNamespace}, network)).To(Succeed())
+
+					readyCondition := findCondition(network.Status.Conditions, sriovnetworkv1.ConditionReady)
+					g.Expect(readyCondition).ToNot(BeNil())
+					g.Expect(readyCondition.ObservedGeneration).To(Equal(network.Generation))
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+			})
+
+			It("should set Ready=True when SriovNetwork is in application namespace (same as NetworkNamespace)", func() {
+				appNs := "app-ns-cond"
+				// Create application namespace
+				nsObj := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: appNs},
+				}
+				Expect(k8sClient.Create(ctx, nsObj)).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, nsObj)).NotTo(HaveOccurred())
+				})
+
+				// Create SriovNetwork in application namespace (not operator namespace)
+				cr := sriovnetworkv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "app-network",
+						Namespace: appNs,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						ResourceName: "resource_app",
+						// No NetworkNamespace specified - should use same namespace
+					},
+				}
+
+				err := k8sClient.Create(ctx, &cr)
+				Expect(err).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, &cr)).To(Succeed())
+				})
+
+				Eventually(func(g Gomega) {
+					network := &sriovnetworkv1.SriovNetwork{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: appNs}, network)).To(Succeed())
+
+					// Verify Ready condition is True (network in same namespace)
+					readyCondition := findCondition(network.Status.Conditions, sriovnetworkv1.ConditionReady)
+					g.Expect(readyCondition).ToNot(BeNil())
+					g.Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+					g.Expect(readyCondition.Reason).To(Equal(sriovnetworkv1.ReasonNetworkReady))
+
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+				// Verify NetworkAttachmentDefinition is created in the same namespace
+				Eventually(func(g Gomega) {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cr.Name, Namespace: appNs}, netAttDef)).NotTo(HaveOccurred())
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+			})
+
+			It("should show different conditions for networks in operator vs application namespace with cross-namespace target", func() {
+				appNs := "app-ns-multi"
+				// Create application namespace
+				nsObj := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: appNs},
+				}
+				Expect(k8sClient.Create(ctx, nsObj)).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, nsObj)).NotTo(HaveOccurred())
+				})
+
+				// Network 1: In operator namespace, targeting application namespace - should succeed
+				crOperator := sriovnetworkv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "network-operator-ns",
+						Namespace: testNamespace,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						NetworkNamespace: appNs,
+						ResourceName:     "resource_multi_1",
+					},
+				}
+
+				// Network 2: In application namespace, targeting different namespace - should not be Ready
+				// (cross-namespace targeting from non-operator namespace is not allowed)
+				crApp := sriovnetworkv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "network-app-ns",
+						Namespace: appNs,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						NetworkNamespace: "default", // Different from its own namespace
+						ResourceName:     "resource_multi_2",
+					},
+				}
+
+				Expect(k8sClient.Create(ctx, &crOperator)).NotTo(HaveOccurred())
+				Expect(k8sClient.Create(ctx, &crApp)).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, &crOperator)).To(Succeed())
+					Expect(k8sClient.Delete(ctx, &crApp)).To(Succeed())
+				})
+
+				// Network in operator namespace should be Ready
+				Eventually(func(g Gomega) {
+					network := &sriovnetworkv1.SriovNetwork{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crOperator.Name, Namespace: testNamespace}, network)).To(Succeed())
+
+					readyCondition := findCondition(network.Status.Conditions, sriovnetworkv1.ConditionReady)
+					g.Expect(readyCondition).ToNot(BeNil())
+					g.Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+				// Network in application namespace with cross-namespace target should not be Ready
+				Eventually(func(g Gomega) {
+					network := &sriovnetworkv1.SriovNetwork{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crApp.Name, Namespace: appNs}, network)).To(Succeed())
+
+					readyCondition := findCondition(network.Status.Conditions, sriovnetworkv1.ConditionReady)
+					g.Expect(readyCondition).ToNot(BeNil())
+					g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+					g.Expect(readyCondition.Reason).To(Equal(sriovnetworkv1.ReasonNetworkAttachmentDefInvalid))
+					g.Expect(readyCondition.Message).To(ContainSubstring("networkNamespace cannot be set"))
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+				// NAD should NOT be created in target namespace
+				time.Sleep(2 * time.Second)
+				Consistently(func(g Gomega) {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					err := k8sClient.Get(ctx, types.NamespacedName{Name: crApp.Name, Namespace: "default"}, netAttDef)
+					g.Expect(errors.IsNotFound(err)).To(BeTrue())
+				}, 2*time.Second, 100*time.Millisecond).Should(Succeed())
+			})
+
+			It("should set Ready=False on app network when operator network already owns the NAD with same name", func() {
+				targetNs := "target-ns-conflict"
+				nadName := "test-nad-conflict"
+
+				// Create target namespace
+				nsObj := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: targetNs},
+				}
+				Expect(k8sClient.Create(ctx, nsObj)).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, nsObj)).NotTo(HaveOccurred())
+				})
+
+				// Network 1: In operator namespace, targeting target-ns
+				// Creates NAD named "test-nad-conflict" in target-ns
+				crOperator := sriovnetworkv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      nadName,
+						Namespace: testNamespace,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						NetworkNamespace: targetNs,
+						ResourceName:     "resource_op",
+					},
+				}
+
+				// Network 2: In target namespace with SAME NAME
+				// Would try to create NAD with same name in same namespace - should not be Ready
+				crApp := sriovnetworkv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      nadName, // Same name as operator network
+						Namespace: targetNs,
+					},
+					Spec: sriovnetworkv1.SriovNetworkSpec{
+						ResourceName: "resource_app",
+						// No NetworkNamespace - uses same namespace (targetNs)
+					},
+				}
+
+				// Create operator network first
+				Expect(k8sClient.Create(ctx, &crOperator)).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, &crOperator)).To(Succeed())
+				})
+
+				// Wait for NAD to be created by operator network
+				Eventually(func(g Gomega) {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nadName, Namespace: targetNs}, netAttDef)).NotTo(HaveOccurred())
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+				// Network from operator namespace should be Ready
+				Eventually(func(g Gomega) {
+					network := &sriovnetworkv1.SriovNetwork{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crOperator.Name, Namespace: testNamespace}, network)).To(Succeed())
+
+					readyCondition := findCondition(network.Status.Conditions, sriovnetworkv1.ConditionReady)
+					g.Expect(readyCondition).ToNot(BeNil())
+					g.Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+				// Now create app network with same name - should not be Ready
+				Expect(k8sClient.Create(ctx, &crApp)).NotTo(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(k8sClient.Delete(ctx, &crApp)).To(Succeed())
+				})
+
+				// Network from app namespace should not be Ready (NAD already exists and is owned by another network)
+				Eventually(func(g Gomega) {
+					network := &sriovnetworkv1.SriovNetwork{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: crApp.Name, Namespace: targetNs}, network)).To(Succeed())
+
+					readyCondition := findCondition(network.Status.Conditions, sriovnetworkv1.ConditionReady)
+					g.Expect(readyCondition).ToNot(BeNil())
+					g.Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+
+				// Verify NAD still exists and is owned by operator network (not overwritten)
+				Eventually(func(g Gomega) {
+					netAttDef := &netattdefv1.NetworkAttachmentDefinition{}
+					g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: nadName, Namespace: targetNs}, netAttDef)).NotTo(HaveOccurred())
+					// The NAD should NOT have owner reference to app network (since they're in different namespaces)
+					// It should still be controlled by the operator network's reconciler
+					g.Expect(netAttDef.GetAnnotations()["k8s.v1.cni.cncf.io/resourceName"]).To(ContainSubstring("resource_op"))
+				}, util.APITimeout, util.RetryInterval).Should(Succeed())
+			})
 		})
 
 		Context("When the SriovNetwork namespace is not equal to the operator one", func() {

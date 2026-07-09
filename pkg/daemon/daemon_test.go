@@ -359,6 +359,84 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 			Expect(nodeState.Status.LastSyncError).To(Equal(""))
 		})
 
+		It("Should reset desired drain to idle when reboot is required during a partial drain", func(ctx context.Context) {
+			configureDrainRequiredScenario(ctx, nodeState)
+
+			By("simulating a partial drain already in progress")
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.Draining)
+
+			By("changing the desired state to require a reboot")
+			hostHelper.EXPECT().SetRDMASubsystem(constants.RdmaSubsystemModeExclusive).Return(nil).AnyTimes()
+			EventuallyWithOffset(1, func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+
+				nodeState.Spec.System.RdmaMode = constants.RdmaSubsystemModeExclusive
+				err = k8sClient.Update(ctx, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, waitTime, retryTime).Should(Succeed())
+
+			By("waiting for the daemon to abort the partial drain and request idle")
+			expectDrainState(nodeState, constants.DrainIdle, constants.Draining, constants.DrainIdle)
+		})
+
+		It("Should reset desired drain to idle after a partial drain completes and then re-request reboot", func(ctx context.Context) {
+			configureDrainRequiredScenario(ctx, nodeState)
+
+			By("simulating a completed partial drain")
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.DrainComplete)
+
+			By("changing the desired state to require a reboot")
+			hostHelper.EXPECT().SetRDMASubsystem(constants.RdmaSubsystemModeExclusive).Return(nil).AnyTimes()
+			EventuallyWithOffset(1, func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+
+				nodeState.Spec.System.RdmaMode = constants.RdmaSubsystemModeExclusive
+				err = k8sClient.Update(ctx, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, waitTime, retryTime).Should(Succeed())
+
+			By("waiting for the daemon to move the desired drain back to idle")
+			expectDrainState(nodeState, constants.DrainIdle, constants.DrainComplete, constants.DrainIdle)
+
+			By("simulating the operator finishing the rollback to idle")
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.DrainIdle)
+
+			By("waiting for the daemon to request a full reboot drain")
+			expectDrainState(nodeState, constants.RebootRequired, constants.DrainIdle, constants.RebootRequired)
+		})
+
+		It("Should keep reboot required when a full drain is already in progress", func(ctx context.Context) {
+			By("requesting a reboot-required drain")
+			hostHelper.EXPECT().SetRDMASubsystem(constants.RdmaSubsystemModeExclusive).Return(nil).AnyTimes()
+			EventuallyWithOffset(1, func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+
+				nodeState.Spec.System.RdmaMode = constants.RdmaSubsystemModeExclusive
+				err = k8sClient.Update(ctx, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, waitTime, retryTime).Should(Succeed())
+
+			expectDrainState(nodeState, constants.RebootRequired, constants.DrainIdle, constants.RebootRequired)
+
+			By("simulating the operator already performing the full drain")
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.Draining)
+
+			By("verifying the daemon does not downgrade the request back to idle")
+			ConsistentlyWithOffset(1, func(g Gomega) {
+				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+					ToNot(HaveOccurred())
+				g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotation]).To(Equal(constants.RebootRequired))
+				g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotationCurrent]).To(Equal(constants.Draining))
+
+				node := &corev1.Node{}
+				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: nodeName}, node)).ToNot(HaveOccurred())
+				g.Expect(node.Annotations[constants.NodeDrainAnnotation]).To(Equal(constants.RebootRequired))
+			}, 2*time.Second, 200*time.Millisecond).Should(Succeed())
+		})
+
 		It("Should apply external drainer annotation when useExternalDrainer is true", func(ctx context.Context) {
 			DeferCleanup(func(x bool) { vars.UseExternalDrainer = x }, vars.UseExternalDrainer)
 			vars.UseExternalDrainer = true
@@ -779,6 +857,115 @@ func patchAnnotation(nodeState *sriovnetworkv1.SriovNetworkNodeState, key, value
 	nodeState.Annotations[key] = value
 	err := k8sClient.Patch(context.Background(), nodeState, client.MergeFrom(originalNodeState))
 	Expect(err).ToNot(HaveOccurred())
+}
+
+// configureDrainRequiredScenario configures the test node so the daemon requests a partial SR-IOV drain.
+func configureDrainRequiredScenario(ctx context.Context, nodeState *sriovnetworkv1.SriovNetworkNodeState) {
+	originalInterface := sriovnetworkv1.InterfaceExt{
+		Name:           "eno1",
+		Driver:         "ice",
+		PciAddress:     "0000:16:00.0",
+		DeviceID:       "1593",
+		Vendor:         "8086",
+		EswitchMode:    "legacy",
+		LinkAdminState: "up",
+		LinkSpeed:      "10000 Mb/s",
+		LinkType:       "ETH",
+		Mac:            "aa:bb:cc:dd:ee:ff",
+		Mtu:            1500,
+		TotalVfs:       2,
+		NumVfs:         0,
+	}
+	discoverSriovReturn.SetOriginal([]sriovnetworkv1.InterfaceExt{originalInterface})
+
+	afterInterface := *originalInterface.DeepCopy()
+	afterInterface.NumVfs = 2
+	afterInterface.VFs = []sriovnetworkv1.VirtualFunction{
+		{
+			Name:       "eno1f0",
+			PciAddress: "0000:16:00.1",
+			VfID:       0,
+			Driver:     "iavf",
+		},
+		{
+			Name:       "eno1f1",
+			PciAddress: "0000:16:00.2",
+			VfID:       1,
+			Driver:     "iavf",
+		},
+	}
+	discoverSriovReturn.SetAfter([]sriovnetworkv1.InterfaceExt{afterInterface})
+
+	EventuallyWithOffset(1, func(g Gomega) {
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{
+			{Name: "eno1",
+				PciAddress: "0000:16:00.0",
+				LinkType:   "eth",
+				NumVfs:     2,
+				VfGroups: []sriovnetworkv1.VfGroup{
+					{ResourceName: "test",
+						DeviceType: "netdevice",
+						PolicyName: "test-policy",
+						VfRange:    "eno1#0-1"},
+				}},
+		}
+		err = k8sClient.Update(ctx, nodeState)
+		g.Expect(err).ToNot(HaveOccurred())
+	}, waitTime, retryTime).Should(Succeed())
+
+	waitForInterfaceNumVfs(nodeState, originalInterface.PciAddress, 2)
+	eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
+
+	EventuallyWithOffset(1, func(g Gomega) {
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{}
+		err = k8sClient.Update(ctx, nodeState)
+		g.Expect(err).ToNot(HaveOccurred())
+	}, waitTime, retryTime).Should(Succeed())
+
+	expectDrainState(nodeState, constants.DrainRequired, constants.DrainIdle, constants.DrainRequired)
+}
+
+// expectDrainState waits until the desired node, nodeState, and current-state drain annotations match the expected values.
+func expectDrainState(
+	nodeState *sriovnetworkv1.SriovNetworkNodeState,
+	expectedDesired string,
+	expectedCurrent string,
+	expectedNode string,
+) {
+	EventuallyWithOffset(1, func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+			ToNot(HaveOccurred())
+		g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotation]).To(Equal(expectedDesired))
+		g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotationCurrent]).To(Equal(expectedCurrent))
+
+		node := &corev1.Node{}
+		g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: nodeName}, node)).ToNot(HaveOccurred())
+		g.Expect(node.Annotations[constants.NodeDrainAnnotation]).To(Equal(expectedNode))
+	}, waitTime, retryTime).Should(Succeed())
+}
+
+// waitForInterfaceNumVfs waits until the status for the given PCI device reports the expected VF count.
+func waitForInterfaceNumVfs(nodeState *sriovnetworkv1.SriovNetworkNodeState, pciAddress string, expectedNumVfs int) {
+	EventuallyWithOffset(1, func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+			ToNot(HaveOccurred())
+
+		found := false
+		for _, iface := range nodeState.Status.Interfaces {
+			if iface.PciAddress == pciAddress {
+				found = true
+				g.Expect(iface.NumVfs).To(Equal(expectedNumVfs))
+			}
+		}
+
+		g.Expect(found).To(BeTrue(), "status interface for %s was not found", pciAddress)
+	}, waitTime, retryTime).Should(Succeed())
 }
 
 func createNode(nodeName string) *corev1.Node {

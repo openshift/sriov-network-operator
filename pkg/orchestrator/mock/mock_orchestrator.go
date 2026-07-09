@@ -100,6 +100,21 @@ func (mr *MockInterfaceMockRecorder) Flavor() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flavor", reflect.TypeOf((*MockInterface)(nil).Flavor))
 }
 
+// GetTLSConfig mocks base method.
+func (m *MockInterface) GetTLSConfig(arg0 context.Context) (*consts.TLSConfig, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTLSConfig", arg0)
+	ret0, _ := ret[0].(*consts.TLSConfig)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTLSConfig indicates an expected call of GetTLSConfig.
+func (mr *MockInterfaceMockRecorder) GetTLSConfig(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTLSConfig", reflect.TypeOf((*MockInterface)(nil).GetTLSConfig), arg0)
+}
+
 // Name mocks base method.
 func (m *MockInterface) Name() string {
 	m.ctrl.T.Helper()

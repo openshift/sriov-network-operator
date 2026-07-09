@@ -1,8 +1,15 @@
 package tests
 
 import (
+	"context"
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/clean"
@@ -67,3 +74,30 @@ var _ = AfterSuite(func() {
 	err := clean.All()
 	Expect(err).NotTo(HaveOccurred())
 })
+
+// conditionGetter is implemented by all network CRDs that expose conditions.
+type conditionGetter interface {
+	GetConditions() []metav1.Condition
+}
+
+// assertCondition verifies that a SR-IOV resource has the expected condition status.
+// The object must implement the conditionGetter interface (SriovNetwork, SriovIBNetwork, OVSNetwork).
+func assertCondition(obj runtimeclient.Object, conditionType string, expectedStatus metav1.ConditionStatus) {
+	name := obj.GetName()
+	namespace := obj.GetNamespace()
+
+	EventuallyWithOffset(1, func(g Gomega) {
+		err := clients.Get(context.Background(),
+			runtimeclient.ObjectKey{Name: name, Namespace: namespace}, obj)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		getter, ok := obj.(conditionGetter)
+		g.Expect(ok).To(BeTrue(), "object %T does not implement GetConditions", obj)
+		conditions := getter.GetConditions()
+
+		cond := meta.FindStatusCondition(conditions, conditionType)
+		g.Expect(cond).ToNot(BeNil(), "Condition %s not found on %T %s/%s", conditionType, obj, namespace, name)
+		g.Expect(cond.Status).To(Equal(expectedStatus),
+			"Expected condition %s to be %s but got %s", conditionType, expectedStatus, cond.Status)
+	}, 2*time.Minute, time.Second).Should(Succeed())
+}

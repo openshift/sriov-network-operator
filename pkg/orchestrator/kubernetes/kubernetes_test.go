@@ -61,4 +61,12 @@ var _ = Describe("Kubernetes Platform", func() {
 			Expect(shouldContinue).To(BeTrue())
 		})
 	})
+
+	Context("TLS Configuration", func() {
+		It("should always return nil as TLS is configured via environment variables on Kubernetes", func() {
+			tlsConfig, err := k8s.GetTLSConfig(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tlsConfig).To(BeNil())
+		})
+	})
 })

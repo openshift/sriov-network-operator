@@ -16,6 +16,7 @@ limitations under the License.
 
 // Package v1 contains API Schema definitions for the sriovnetwork v1 API group
 // +kubebuilder:object:generate=true
+// +kubebuilder:ac:generate=true
 // +groupName=sriovnetwork.openshift.io
 package v1
 
