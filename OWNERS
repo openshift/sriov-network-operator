@@ -12,6 +12,9 @@ reviewers:
   - zeeke
   - kunalmemane
   - MrSanketKumar
+  - SamD2021
+  - pablmart
+  - zhiqiangf
 approvers:
   - pliurh
   - zshi-redhat
@@ -27,5 +30,8 @@ approvers:
   - zeeke
   - kunalmemane
   - MrSanketKumar
+  - SamD2021
+  - pablmart
+  - zhiqiangf
 component: "Networking"
 subcomponent: "SR-IOV"
