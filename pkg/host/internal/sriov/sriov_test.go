@@ -1,10 +1,12 @@
 package sriov
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/jaypipes/ghw/pkg/pci"
 	"github.com/jaypipes/pcidb"
@@ -146,6 +148,58 @@ var _ = Describe("SRIOV", func() {
 					GUID:            "guid1",
 				}},
 			}))
+		})
+	})
+
+	Context("getVfDriverName", func() {
+		It("returns the driver without retry when it is available", func() {
+			dputilsLibMock.EXPECT().GetDriverName("0000:d8:00.2").Return("mlx5_core", nil).Times(1)
+
+			driver, err := s.(*sriov).getVfDriverNameWithRetry(context.Background(), "0000:d8:00.2", 3, 0)
+
+			Expect(err).NotTo(HaveOccurred(), "expected no error when the VF driver is available")
+			Expect(driver).To(Equal("mlx5_core"), "expected the discovered VF driver to match")
+		})
+
+		It("retries transient driver read failures", func() {
+			gomock.InOrder(
+				dputilsLibMock.EXPECT().GetDriverName("0000:d8:00.2").Return("", syscall.ENOENT),
+				dputilsLibMock.EXPECT().GetDriverName("0000:d8:00.2").Return("mlx5_core", nil),
+			)
+
+			driver, err := s.(*sriov).getVfDriverNameWithRetry(context.Background(), "0000:d8:00.2", 3, 0)
+
+			Expect(err).NotTo(HaveOccurred(), "expected transient VF driver read failure to recover")
+			Expect(driver).To(Equal("mlx5_core"), "expected the recovered VF driver to match")
+		})
+
+		It("returns an empty driver and error after retry exhaustion", func() {
+			dputilsLibMock.EXPECT().GetDriverName("0000:d8:00.2").Return("", syscall.ENOENT).Times(3)
+
+			driver, err := s.(*sriov).getVfDriverNameWithRetry(context.Background(), "0000:d8:00.2", 3, 0)
+
+			Expect(err).To(HaveOccurred(), "expected an error after VF driver read retry exhaustion")
+			Expect(driver).To(BeEmpty(), "expected no VF driver after retry exhaustion")
+		})
+
+		It("returns an empty driver without error when no driver is bound", func() {
+			dputilsLibMock.EXPECT().GetDriverName("0000:d8:00.2").Return("", nil).Times(3)
+
+			driver, err := s.(*sriov).getVfDriverNameWithRetry(context.Background(), "0000:d8:00.2", 3, 0)
+
+			Expect(err).NotTo(HaveOccurred(), "expected no error when the VF has no driver bound")
+			Expect(driver).To(BeEmpty(), "expected no VF driver when none is bound")
+		})
+
+		It("stops retrying when the context is canceled", func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			dputilsLibMock.EXPECT().GetDriverName("0000:d8:00.2").Return("", syscall.ENOENT).Times(1)
+
+			driver, err := s.(*sriov).getVfDriverNameWithRetry(ctx, "0000:d8:00.2", 3, time.Hour)
+
+			Expect(err).To(MatchError(ContainSubstring("context canceled")), "expected retry wait to observe context cancellation")
+			Expect(driver).To(BeEmpty(), "expected no VF driver after context cancellation")
 		})
 	})
 
