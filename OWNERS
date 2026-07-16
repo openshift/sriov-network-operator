@@ -1,6 +1,4 @@
 reviewers:
-  - pliurh
-  - zshi-redhat
   - dougbtv
   - fepan
   - s1061123
@@ -8,13 +6,13 @@ reviewers:
   - bn222
   - Billy99
   - wizhaoredhat
-  - SalDaniele
   - zeeke
   - kunalmemane
   - MrSanketKumar
+  - SamD2021
+  - pablmart
+  - zhiqiangf
 approvers:
-  - pliurh
-  - zshi-redhat
   - dougbtv
   - squeed
   - fepan
@@ -23,9 +21,11 @@ approvers:
   - bn222
   - Billy99
   - wizhaoredhat
-  - SalDaniele
   - zeeke
   - kunalmemane
   - MrSanketKumar
+  - SamD2021
+  - pablmart
+  - zhiqiangf
 component: "Networking"
 subcomponent: "SR-IOV"
