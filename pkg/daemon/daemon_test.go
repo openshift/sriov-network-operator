@@ -49,12 +49,13 @@ var (
 	discoverSriovReturn *sriovDiscoverReturn
 	nodeState           *sriovnetworkv1.SriovNetworkNodeState
 
-	daemonReconciler *daemon.NodeReconciler
+	daemonReconciler   *daemon.NodeReconciler
+	nodeStateCreateSeq int
 )
 
 const (
-	waitTime            = 30 * time.Minute
-	retryTime           = 5 * time.Second
+	waitTime            = 5 * time.Minute
+	retryTime           = time.Second
 	nodeName            = "node1"
 	devicePluginPodName = "sriov-device-plugin-test"
 )
@@ -111,7 +112,6 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		DeferCleanup(wg.Wait)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		DeferCleanup(cancel)
 
 		startDaemon = func(dc *daemon.NodeReconciler) {
 			By("start controller manager")
@@ -233,6 +233,12 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		daemonReconciler = createDaemon(platformMock, featureGates, []string{})
 		startDaemon(daemonReconciler)
 		createNode(nodeName)
+
+		// Register cancel last so it runs first in LIFO order.
+		// This ensures the parent context is canceled before any
+		// other cleanup, allowing both the manager and podRecreator
+		// goroutines to exit promptly.
+		DeferCleanup(cancel)
 	})
 
 	AfterAll(func() {
@@ -250,6 +256,14 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		Eventually(func(g Gomega) {
 			g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(nodeState), nodeState)).
 				ToNot(HaveOccurred())
+			if nodeState.Status.SyncStatus != constants.SyncStatusSucceeded {
+				// Bump annotation on each poll iteration to ensure the controller's
+				// AnnotationChangedPredicate fires when the informer's watch reconnects
+				// after a potential break (the re-list will see a changed annotation).
+				nodeStateCreateSeq++
+				nodeState.Annotations["test.sriov.openshift.io/create-seq"] = fmt.Sprintf("%d", nodeStateCreateSeq)
+				_ = k8sClient.Update(context.Background(), nodeState)
+			}
 			g.Expect(nodeState.Status.SyncStatus).To(Equal(constants.SyncStatusSucceeded))
 		}, waitTime, retryTime).Should(Succeed())
 	})
@@ -998,6 +1012,11 @@ func ensureEmptyNodeState(nodeName string) *sriovnetworkv1.SriovNetworkNodeState
 	} else {
 		Expect(apiErrors.IsNotFound(err)).To(BeTrue())
 	}
+
+	// Use a unique annotation value each time to guarantee that if the informer's
+	// watch reconnects and the re-list delivers this as an Update event (instead of
+	// a Create), the AnnotationChangedPredicate still passes and the reconciler is triggered.
+	nodeStateCreateSeq++
 	nodeState := sriovnetworkv1.SriovNetworkNodeState{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodeName,
@@ -1005,6 +1024,7 @@ func ensureEmptyNodeState(nodeName string) *sriovnetworkv1.SriovNetworkNodeState
 			Annotations: map[string]string{
 				constants.NodeStateDrainAnnotation:        constants.DrainIdle,
 				constants.NodeStateDrainAnnotationCurrent: constants.DrainIdle,
+				"test.sriov.openshift.io/create-seq":      fmt.Sprintf("%d", nodeStateCreateSeq),
 			},
 		},
 	}
@@ -1114,7 +1134,9 @@ func (pr *podRecreator) Stop() {
 		pr.cancel()
 	}
 	pr.wg.Wait()
-	pr.client.Delete(context.Background(), pr.podSpec)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = pr.client.Delete(ctx, pr.podSpec)
 }
 
 // ensurePodExists checks if the pod exists and creates it if not found.
