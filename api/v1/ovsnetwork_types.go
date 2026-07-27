@@ -63,7 +63,7 @@ type TrunkConfig struct {
 
 // OVSNetworkStatus defines the observed state of OVSNetwork
 type OVSNetworkStatus struct {
-	NetworkStatus `json:",inline"`
+	ConditionStatus `json:",inline"`
 }
 
 //+kubebuilder:object:root=true

@@ -47,7 +47,7 @@ type SriovIBNetworkSpec struct {
 
 // SriovIBNetworkStatus defines the observed state of SriovIBNetwork
 type SriovIBNetworkStatus struct {
-	NetworkStatus `json:",inline"`
+	ConditionStatus `json:",inline"`
 }
 
 //+kubebuilder:object:root=true
