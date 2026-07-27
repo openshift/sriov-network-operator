@@ -1111,6 +1111,30 @@ func TestNeedToUpdateSriov(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "driverless VF needs update",
+			args: args{
+				ifaceSpec: &v1.Interface{
+					NumVfs: 1,
+					VfGroups: []v1.VfGroup{
+						{
+							VfRange:    "0-0",
+							DeviceType: consts.DeviceTypeNetDevice,
+						},
+					},
+				},
+				ifaceStatus: &v1.InterfaceExt{
+					NumVfs: 1,
+					VFs: []v1.VirtualFunction{
+						{
+							VfID:   0,
+							Driver: "",
+						},
+					},
+				},
+			},
+			want: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
