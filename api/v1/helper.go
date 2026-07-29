@@ -904,6 +904,11 @@ func (cr *OVSNetwork) GetConditions() []metav1.Condition {
 	return cr.Status.Conditions
 }
 
+// GetConditions returns the conditions from the status.
+func (cr *SriovOperatorConfig) GetConditions() []metav1.Condition {
+	return cr.Status.Conditions
+}
+
 // NetFilterMatch -- parse netFilter and check for a match
 func NetFilterMatch(netFilter string, netValue string) (isMatch bool) {
 	logger := log.WithName("NetFilterMatch")

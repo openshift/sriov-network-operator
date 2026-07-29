@@ -72,6 +72,7 @@ type SriovOperatorConfigSpec struct {
 
 // SriovOperatorConfigStatus defines the observed state of SriovOperatorConfig
 type SriovOperatorConfigStatus struct {
+	ConditionStatus `json:",inline"`
 	// Show the runtime status of the network resource injector webhook
 	Injector string `json:"injector,omitempty"`
 	// Show the runtime status of the operator admission controller webhook
@@ -80,6 +81,8 @@ type SriovOperatorConfigStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // SriovOperatorConfig is the Schema for the sriovoperatorconfigs API
 type SriovOperatorConfig struct {
