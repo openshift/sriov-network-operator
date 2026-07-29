@@ -218,17 +218,48 @@ MAX_RETRIES=20
 DELAY_SECONDS=10
 retries=0
 until [ $retries -ge $MAX_RETRIES ]; do
-  # wait for all the openshift cluster operators to be running
-  if [ $(kubectl get clusteroperator --no-headers | awk '{print $3}' | { grep -v True || true; } | wc -l) -eq 0 ]; then
-    break
+  # wait for all the openshift cluster operators to be available and not progressing
+  if kubectl get nodes >/dev/null 2>&1; then
+    if clusteroperators=$(kubectl get clusteroperator --no-headers 2>/dev/null); then
+      not_available=$(printf '%s\n' "$clusteroperators" | awk '{print $3}' | { grep -v True || true; } | wc -l)
+      progressing=$(printf '%s\n' "$clusteroperators" | awk '{print $4}' | { grep True || true; } | wc -l)
+      if [ "$not_available" -eq 0 ] && [ "$progressing" -eq 0 ]; then
+        break
+      fi
+      echo "cluster operators are not ready (unavailable=$not_available, progressing=$progressing). Retrying... (Attempt $retries/$MAX_RETRIES)"
+    else
+      echo "Unable to query cluster operators. Retrying... (Attempt $retries/$MAX_RETRIES)"
+    fi
+  else
+    echo "API not reachable. Retrying... (Attempt $retries/$MAX_RETRIES)"
   fi
   retries=$((retries+1))
-  echo "cluster operators are not ready. Retrying... (Attempt $retries/$MAX_RETRIES)"
   sleep $DELAY_SECONDS
 done
 
 if [ $retries -eq $MAX_RETRIES ]; then
   echo "Max retries reached. Exiting..."
+  exit 1
+fi
+
+master_node_name="${cluster_name}-ctlplane-0.${domain_name}"
+echo "## capturing pre-TechPreview master MachineConfig"
+MAX_RETRIES=20
+DELAY_SECONDS=10
+retries=0
+pre_techpreview_master_config=""
+until [ $retries -ge $MAX_RETRIES ]; do
+  pre_techpreview_master_config=$(kubectl get node "${master_node_name}" -o jsonpath='{.metadata.annotations.machineconfiguration\.openshift\.io/currentConfig}' 2>/dev/null || true)
+  if [ -n "$pre_techpreview_master_config" ]; then
+    break
+  fi
+  retries=$((retries+1))
+  echo "Pre-TechPreview master MachineConfig is not available yet. Retrying... (Attempt $retries/$MAX_RETRIES)"
+  sleep $DELAY_SECONDS
+done
+
+if [ -z "$pre_techpreview_master_config" ]; then
+  echo "Failed to capture pre-TechPreview master MachineConfig. Exiting..."
   exit 1
 fi
 
@@ -256,19 +287,31 @@ CRIOPROVIDER
   sleep 10
 done
 
-echo "## waiting for the cluster to stabilize after TechPreview enablement"
-MAX_RETRIES=40
+echo "## waiting for TechPreview-triggered master MachineConfig rollout"
+MAX_RETRIES=80
 DELAY_SECONDS=30
 retries=0
+techpreview_rollout_seen=false
 until [ $retries -ge $MAX_RETRIES ]; do
   if kubectl get nodes >/dev/null 2>&1; then
-    not_available=$(kubectl get clusteroperator --no-headers 2>/dev/null | awk '{print $3}' | { grep -v True || true; } | wc -l)
-    progressing=$(kubectl get clusteroperator --no-headers 2>/dev/null | awk '{print $4}' | { grep True || true; } | wc -l)
-    if [ "$not_available" -eq 0 ] && [ "$progressing" -eq 0 ]; then
-      echo "Cluster is stable after TechPreview enablement"
-      break
+    master_current_config=$(kubectl get node "${master_node_name}" -o jsonpath='{.metadata.annotations.machineconfiguration\.openshift\.io/currentConfig}' 2>/dev/null || true)
+    master_desired_config=$(kubectl get node "${master_node_name}" -o jsonpath='{.metadata.annotations.machineconfiguration\.openshift\.io/desiredConfig}' 2>/dev/null || true)
+    master_state=$(kubectl get node "${master_node_name}" -o jsonpath='{.metadata.annotations.machineconfiguration\.openshift\.io/state}' 2>/dev/null || true)
+    if clusteroperators=$(kubectl get clusteroperator --no-headers 2>/dev/null) && mcp_output=$(kubectl get mcp --no-headers 2>/dev/null); then
+      not_available=$(printf '%s\n' "$clusteroperators" | awk '{print $3}' | { grep -v True || true; } | wc -l)
+      progressing=$(printf '%s\n' "$clusteroperators" | awk '{print $4}' | { grep True || true; } | wc -l)
+      updating=$(printf '%s\n' "$mcp_output" | awk '{print $4}' | grep -c True || true)
+      if [ -n "$master_desired_config" ] && [ "$master_desired_config" != "$pre_techpreview_master_config" ]; then
+        techpreview_rollout_seen=true
+      fi
+      if [ "$techpreview_rollout_seen" = true ] && [ "$master_current_config" = "$master_desired_config" ] && [ "$master_state" = "Done" ] && [ "$not_available" -eq 0 ] && [ "$progressing" -eq 0 ] && [ "$updating" -eq 0 ]; then
+        echo "Cluster is stable after TechPreview enablement and master MachineConfig rollout completed"
+        break
+      fi
+      echo "Cluster not yet stable after TechPreview (rollout_seen=$techpreview_rollout_seen, current=$master_current_config, desired=$master_desired_config, state=$master_state, unavailable=$not_available, progressing=$progressing, mcp_updating=$updating). Retrying... (Attempt $retries/$MAX_RETRIES)"
+    else
+      echo "Unable to query cluster operators or MachineConfigPools. Retrying... (Attempt $retries/$MAX_RETRIES)"
     fi
-    echo "Cluster not yet stable (unavailable=$not_available, progressing=$progressing). Retrying... (Attempt $retries/$MAX_RETRIES)"
   else
     echo "API not reachable. Retrying... (Attempt $retries/$MAX_RETRIES)"
   fi
@@ -277,7 +320,7 @@ until [ $retries -ge $MAX_RETRIES ]; do
 done
 
 if [ $retries -eq $MAX_RETRIES ]; then
-  echo "Max retries reached waiting for cluster stability. Exiting..."
+  echo "Max retries reached waiting for TechPreview MachineConfig rollout. Exiting..."
   exit 1
 fi
 
