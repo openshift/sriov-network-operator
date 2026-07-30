@@ -25,14 +25,14 @@ import (
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 )
 
-var _ = Describe("NetworkStatus", func() {
+var _ = Describe("ConditionStatus", func() {
 	It("should have empty conditions by default", func() {
-		status := v1.NetworkStatus{}
+		status := v1.ConditionStatus{}
 		Expect(status.Conditions).To(BeNil())
 	})
 
 	It("should store conditions", func() {
-		status := v1.NetworkStatus{
+		status := v1.ConditionStatus{
 			Conditions: []metav1.Condition{
 				{
 					Type:    v1.ConditionReady,

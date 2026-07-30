@@ -43,7 +43,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/apply"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
@@ -107,6 +106,9 @@ func (DrainAnnotationPredicate) Update(e event.UpdateEvent) bool {
 type DrainStateAnnotationPredicate struct {
 	predicate.Funcs
 }
+
+type renderManifestFunc func(string, *render.RenderData) ([]*uns.Unstructured, error)
+type applyManifestFunc func(context.Context, k8sclient.Client, *uns.Unstructured) error
 
 func (DrainStateAnnotationPredicate) Create(e event.CreateEvent) bool {
 	return e.Object != nil
@@ -174,7 +176,9 @@ func syncPluginDaemonObjs(ctx context.Context,
 	client k8sclient.Client,
 	scheme *runtime.Scheme,
 	dc *sriovnetworkv1.SriovOperatorConfig,
-	featureGate featuregate.FeatureGate) error {
+	featureGate featuregate.FeatureGate,
+	renderFn renderManifestFunc,
+	applyFn applyManifestFunc) error {
 	logger := log.Log.WithName("syncPluginDaemonObjs")
 	logger.V(1).Info("Start to sync sriov daemons objects")
 
@@ -189,7 +193,7 @@ func syncPluginDaemonObjs(ctx context.Context,
 	data.Data["NodeSelectorField"] = GetNodeSelectorForDevicePlugin(dc)
 	data.Data["UseCDI"] = dc.Spec.UseCDI
 	data.Data["BlockDevicePluginUntilConfigured"] = featureGate.IsEnabled(constants.BlockDevicePluginUntilConfiguredFeatureGate)
-	objs, err := renderDsForCR(constants.PluginPath, &data)
+	objs, err := renderDsForCR(constants.PluginPath, &data, renderFn)
 	if err != nil {
 		logger.Error(err, "Fail to render SR-IoV manifests")
 		return err
@@ -197,7 +201,7 @@ func syncPluginDaemonObjs(ctx context.Context,
 
 	// Sync DaemonSets
 	for _, obj := range objs {
-		err = syncDsObject(ctx, client, scheme, dc, obj)
+		err = syncDsObject(ctx, client, scheme, dc, obj, applyFn)
 		if err != nil {
 			logger.Error(err, "Couldn't sync SR-IoV daemons objects")
 			return err
@@ -207,7 +211,7 @@ func syncPluginDaemonObjs(ctx context.Context,
 	return nil
 }
 
-func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.Scheme, dc *sriovnetworkv1.SriovOperatorConfig, obj *uns.Unstructured) error {
+func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.Scheme, dc *sriovnetworkv1.SriovOperatorConfig, obj *uns.Unstructured, applyFn applyManifestFunc) error {
 	logger := log.Log.WithName("syncDsObject")
 	kind := obj.GetKind()
 	logger.V(1).Info("Start to sync Objects", "Kind", kind)
@@ -216,7 +220,7 @@ func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.
 		if err := controllerutil.SetControllerReference(dc, obj, scheme); err != nil {
 			return err
 		}
-		if err := apply.ApplyObject(ctx, client, obj); err != nil {
+		if err := applyFn(ctx, client, obj); err != nil {
 			logger.Error(err, "Fail to sync", "Kind", kind)
 			return err
 		}
@@ -236,12 +240,12 @@ func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.
 	return nil
 }
 
-// renderDsForCR returns a busybox pod with the same name/namespace as the cr
-func renderDsForCR(path string, data *render.RenderData) ([]*uns.Unstructured, error) {
+// renderDsForCR renders daemon objects using the provided renderer.
+func renderDsForCR(path string, data *render.RenderData, renderFn renderManifestFunc) ([]*uns.Unstructured, error) {
 	logger := log.Log.WithName("renderDsForCR")
 	logger.V(1).Info("Start to render objects")
 
-	objs, err := render.RenderDir(path, data)
+	objs, err := renderFn(path, data)
 	if err != nil {
 		return nil, errs.Wrap(err, "failed to render SR-IOV Network Operator manifests")
 	}

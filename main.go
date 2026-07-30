@@ -77,7 +77,7 @@ func main() {
 	var metricsAddr string
 	var probeAddr string
 
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metric endpoint binds to. Use \"0\" to disable metrics serving.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 
 	snolog.BindFlags(flag.CommandLine)
@@ -164,6 +164,7 @@ func main() {
 
 	// Create status patcher for network controllers using Server-Side Apply
 	globalStatusPatcher := status.NewPatcher(mgrGlobal.GetClient(), mgrGlobal.GetEventRecorder(consts.SriovNetworkOperatorIdentifier), mgrGlobal.GetScheme(), consts.SriovNetworkOperatorIdentifier)
+	namespacedStatusPatcher := status.NewPatcher(mgr.GetClient(), mgr.GetEventRecorder(consts.SriovNetworkOperatorIdentifier), mgr.GetScheme(), consts.SriovNetworkOperatorIdentifier)
 
 	if err = (&controllers.SriovNetworkReconciler{
 		Client:        mgrGlobal.GetClient(),
@@ -202,6 +203,7 @@ func main() {
 		Scheme:            mgr.GetScheme(),
 		Orchestrator:      orch,
 		FeatureGate:       featureGate,
+		StatusPatcher:     namespacedStatusPatcher,
 		UncachedAPIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovOperatorConfig")
