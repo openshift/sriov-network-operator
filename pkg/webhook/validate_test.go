@@ -739,6 +739,44 @@ func TestValidatePoliciesWithDifferentNumVfForTheSameResourceAndTheSameRootDevic
 	g.Expect(err).To(MatchError("root device 0000:86:00.1 is overlapped with existing policy previousPolicy"))
 }
 
+func TestValidateResourceName(t *testing.T) {
+	cases := []struct {
+		name      string
+		input     string
+		expectErr bool
+		errSubstr string
+	}{
+		{name: "valid simple", input: "myresource"},
+		{name: "valid with hyphen", input: "my-resource"},
+		{name: "valid uppercase", input: "MyResource"},
+		{name: "valid single char", input: "a"},
+		{name: "underscore in name", input: "my_resource"},
+		{name: "underscore with hyphen", input: "net_device-1"},
+		{name: "underscore only", input: "_", expectErr: true, errSubstr: "invalid"},
+		{name: "valid 63 chars", input: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		{name: "empty", input: "", expectErr: true, errSubstr: "must not be empty"},
+		{name: "leading hyphen", input: "-resource", expectErr: true, errSubstr: "invalid"},
+		{name: "trailing hyphen", input: "resource-", expectErr: true, errSubstr: "invalid"},
+		{name: "only hyphen", input: "-", expectErr: true, errSubstr: "invalid"},
+		{name: "64 chars", input: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", expectErr: true, errSubstr: "no more than 63"},
+		{name: "invalid char space", input: "my resource", expectErr: true, errSubstr: "invalid"},
+		{name: "invalid char dot", input: "my.resource", expectErr: true, errSubstr: "invalid"},
+		{name: "invalid char slash", input: "my/resource", expectErr: true, errSubstr: "invalid"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+			err := validateResourceName(tc.input)
+			if tc.expectErr {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err.Error()).To(ContainSubstring(tc.errSubstr))
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	}
+}
+
 func TestStaticValidateSriovNetworkNodePolicyWithValidVendorDevice(t *testing.T) {
 	policy := &SriovNetworkNodePolicy{
 		Spec: SriovNetworkNodePolicySpec{
