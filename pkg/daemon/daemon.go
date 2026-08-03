@@ -371,6 +371,7 @@ func (dn *NodeReconciler) CheckSystemdStatus() (*hosttypes.SriovResult, bool, er
 // 7. Updating the lastAppliedGeneration to the current generation.
 func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *hosttypes.SriovResult) (ctrl.Result, error) {
 	reqLogger := log.FromContext(ctx).WithName("Apply")
+	appliedGeneration := desiredNodeState.Generation
 
 	// Restart the device plugin *before* applying configuration if the
 	// BlockDevicePluginUntilConfiguredFeatureGate feature is enabled.
@@ -455,8 +456,10 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 		return ctrl.Result{}, err
 	}
 
-	// update the lastAppliedGeneration
-	dn.lastAppliedGeneration = desiredNodeState.Generation
+	// Preserve the generation that this reconcile actually applied. updateSyncState()
+	// refreshes ObjectMeta from the live object and may observe a newer generation
+	// that arrived mid-apply, but that newer spec still needs its own reconcile.
+	dn.lastAppliedGeneration = appliedGeneration
 
 	return ctrl.Result{RequeueAfter: consts.DaemonRequeueTime}, nil
 }
