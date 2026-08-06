@@ -120,7 +120,7 @@ var _ = Describe("SRIOV", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to reset VFs on secondary port"))
 		})
 
-		It("should return error if firmware reset fails", func() {
+		It("should not return error if firmware reset fails (best-effort)", func() {
 			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
 				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
 			}
@@ -130,7 +130,7 @@ var _ = Describe("SRIOV", func() {
 			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d8:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "-E- Failed to open the device", testError)
 
 			err := m.MlxResetFW([]string{"0000:d8:00.0"}, mellanoxNicsStatus)
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should handle multiple single-port NICs", func() {
@@ -199,7 +199,7 @@ var _ = Describe("SRIOV", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("should aggregate errors from multiple firmware reset failures", func() {
+		It("should not return error when multiple firmware resets fail (best-effort)", func() {
 			mellanoxNicsStatus["0000:d8:00."] = map[string]sriovnetworkv1.InterfaceExt{
 				"0000:d8:00.0": {PciAddress: "0000:d8:00.0", Vendor: "15b3"},
 			}
@@ -216,7 +216,7 @@ var _ = Describe("SRIOV", func() {
 			u.EXPECT().RunCommand("mstfwreset", "-d", "0000:d9:00.0", "--skip_driver", "-l", "3", "-y", "reset").Return("", "-E- Failed to open the device", testError)
 
 			err := m.MlxResetFW([]string{"0000:d8:00.0", "0000:d9:00.0"}, mellanoxNicsStatus)
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
