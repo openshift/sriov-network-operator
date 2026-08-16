@@ -2,6 +2,7 @@ package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -62,5 +63,8 @@ type SriovNetworkPoolConfigList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&SriovNetworkPoolConfig{}, &SriovNetworkPoolConfigList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(GroupVersion, &SriovNetworkPoolConfig{}, &SriovNetworkPoolConfigList{})
+		return nil
+	})
 }
