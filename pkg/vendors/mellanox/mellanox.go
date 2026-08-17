@@ -171,8 +171,7 @@ func (m *mellanoxHelper) MlxResetFW(pciAddresses []string, mellanoxNicsStatus ma
 		// We have to ensure that pciutils is installed into the container image Dockerfile.sriov-network-config-daemon
 		_, stderr, err := m.utils.RunCommand("mstfwreset", cmdArgs...)
 		if err != nil {
-			log.Log.Error(err, "mellanox-plugin resetFW(): failed", "stderr", stderr)
-			errs = append(errs, err)
+			log.Log.Error(err, "mellanox-plugin resetFW(): mstfwreset failed, continuing as best-effort", "stderr", stderr, "pciAddress", pciAddress)
 		}
 	}
 

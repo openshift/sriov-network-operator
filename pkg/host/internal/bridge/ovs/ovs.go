@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,8 +48,9 @@ type Interface interface {
 	GetOVSBridges(ctx context.Context) ([]sriovnetworkv1.OVSConfigExt, error)
 	// RemoveOVSBridge removes managed OVS bridge by name
 	RemoveOVSBridge(ctx context.Context, bridgeName string) error
-	// RemoveInterfaceFromOVSBridge interface from the managed OVS bridge
-	RemoveInterfaceFromOVSBridge(ctx context.Context, ifaceAddr string) error
+	// DetachUplinkAndVFRepresentorsFromOVSBridge detaches a PF uplink and all of its
+	// VF representors from the managed OVS bridge identified by the PF PCI address.
+	DetachUplinkAndVFRepresentorsFromOVSBridge(ctx context.Context, pciAddress string) error
 }
 
 // New creates new instance of the OVS interface
@@ -298,61 +300,129 @@ func (o *ovs) RemoveOVSBridge(ctx context.Context, bridgeName string) error {
 	return nil
 }
 
-// RemoveInterfaceFromOVSBridge removes interface from the managed OVS bridge
-func (o *ovs) RemoveInterfaceFromOVSBridge(ctx context.Context, pciAddress string) error {
+// DetachUplinkAndVFRepresentorsFromOVSBridge detaches a PF uplink and all of its
+// VF representors from the managed OVS bridge identified by the PF PCI address.
+func (o *ovs) DetachUplinkAndVFRepresentorsFromOVSBridge(ctx context.Context, pciAddress string) error {
 	ctx, cancel := setDefaultTimeout(ctx)
 	defer cancel()
 	funcLog := log.Log.WithValues("pciAddress", pciAddress)
-	funcLog.V(1).Info("RemoveInterfaceFromOVSBridge(): remove interface from managed bridge")
+	funcLog.V(1).Info("DetachUplinkAndVFRepresentorsFromOVSBridge(): detach uplink and VF representors from managed bridge")
 	knownConfigs, err := o.store.GetManagedOVSBridges()
 	if err != nil {
-		funcLog.Error(err, "RemoveInterfaceFromOVSBridge(): failed to read data from store")
-		return fmt.Errorf("failed to read data from store: %v", err)
+		funcLog.Error(err, "DetachUplinkAndVFRepresentorsFromOVSBridge(): failed to read data from store")
+		return fmt.Errorf("failed to read data from store: %w", err)
 	}
-	var relatedBridges []*sriovnetworkv1.OVSConfigExt
+	// iterate all uplinks in each bridge config to find the bridge that contains
+	// the PF with the given PCI address; a bridge may have multiple uplinks and
+	// the target PF is not necessarily at index 0
+	var brConf *sriovnetworkv1.OVSConfigExt
+	var pfName string
 	for _, kc := range knownConfigs {
-		if len(kc.Uplinks) > 0 && kc.Uplinks[0].PciAddress == pciAddress && kc.Uplinks[0].Name != "" {
-			relatedBridges = append(relatedBridges, kc)
+		for _, uplink := range kc.Uplinks {
+			if uplink.PciAddress == pciAddress && uplink.Name != "" {
+				brConf = kc
+				pfName = uplink.Name
+				break
+			}
+		}
+		if brConf != nil {
+			break
 		}
 	}
-	if len(relatedBridges) == 0 {
-		funcLog.V(2).Info("RemoveInterfaceFromOVSBridge(): can't find related managed OVS bridge in the store")
+	if brConf == nil {
+		funcLog.V(2).Info("DetachUplinkAndVFRepresentorsFromOVSBridge(): can't find related managed OVS bridge in the store")
 		return nil
 	}
-	if len(relatedBridges) > 1 {
-		funcLog.Info("RemoveInterfaceFromOVSBridge(): WARNING: uplink match more then one managed OVS bridge in the store, use first match")
-	}
-	brConf := relatedBridges[0]
+	funcLog = funcLog.WithValues("pfName", pfName, "bridge", brConf.Name)
 
 	dbClient, err := getClient(ctx)
 	if err != nil {
-		funcLog.Error(err, "RemoveInterfaceFromOVSBridge(): failed to connect to OVSDB")
-		return fmt.Errorf("failed to connect to OVSDB: %v", err)
+		funcLog.Error(err, "DetachUplinkAndVFRepresentorsFromOVSBridge(): failed to connect to OVSDB")
+		return fmt.Errorf("failed to connect to OVSDB: %w", err)
 	}
 	defer dbClient.Close()
 
-	funcLog.V(2).Info("RemoveInterfaceFromOVSBridge(): related managed bridge found for interface in the store", "bridge", brConf.Name)
-	currentState, err := o.getCurrentBridgeState(ctx, dbClient, brConf)
+	funcLog.V(2).Info("DetachUplinkAndVFRepresentorsFromOVSBridge(): related managed bridge found for interface in the store")
+	bridge, err := o.getBridgeByName(ctx, dbClient, brConf.Name)
 	if err != nil {
-		funcLog.Error(err, "RemoveInterfaceFromOVSBridge(): failed to get state of the managed bridge", "bridge", brConf.Name)
-		return err
+		funcLog.Error(err, "DetachUplinkAndVFRepresentorsFromOVSBridge(): failed to get the managed bridge")
+		return fmt.Errorf("failed to get managed bridge %s: %w", brConf.Name, err)
 	}
-	if currentState == nil {
-		funcLog.V(2).Info("RemoveInterfaceFromOVSBridge(): bridge not found, remove information about the bridge from the store", "bridge", brConf.Name)
+	if bridge == nil {
+		funcLog.V(2).Info("DetachUplinkAndVFRepresentorsFromOVSBridge(): bridge not found, remove information about the bridge from the store")
 		if err := o.store.RemoveManagedOVSBridge(brConf.Name); err != nil {
-			funcLog.Error(err, "RemoveInterfaceFromOVSBridge(): failed to remove information from the store", "bridge", brConf.Name)
-			return err
+			funcLog.Error(err, "DetachUplinkAndVFRepresentorsFromOVSBridge(): failed to remove information from the store")
+			return fmt.Errorf("failed to remove managed bridge %s from store: %w", brConf.Name, err)
 		}
 		return nil
 	}
 
-	funcLog.V(2).Info("RemoveInterfaceFromOVSBridge(): remove interface from the bridge")
-	if err := o.deleteInterfaceByName(ctx, dbClient, brConf.Uplinks[0].Name); err != nil {
-		funcLog.Error(err, "RemoveInterfaceFromOVSBridge(): failed to remove interface from the bridge", "bridge", brConf.Name)
-		return err
+	interfaceNames, err := o.getInterfaceNamesOnBridge(ctx, dbClient, bridge)
+	if err != nil {
+		funcLog.Error(err, "DetachUplinkAndVFRepresentorsFromOVSBridge(): failed to list interfaces on the managed bridge")
+		return fmt.Errorf("failed to list interfaces on managed bridge %s: %w", brConf.Name, err)
+	}
+	for _, repName := range interfaceNames {
+		if !isVFRepresentorName(repName, pfName) {
+			continue
+		}
+		if err := o.deleteInterfaceByName(ctx, dbClient, repName); err != nil {
+			funcLog.Error(err, "DetachUplinkAndVFRepresentorsFromOVSBridge(): failed to detach VF representor", "interface", repName)
+			return fmt.Errorf("failed to detach VF representor %s: %w", repName, err)
+		}
+	}
+
+	funcLog.V(2).Info("DetachUplinkAndVFRepresentorsFromOVSBridge(): detach PF uplink", "interface", pfName)
+	if err := o.deleteInterfaceByName(ctx, dbClient, pfName); err != nil {
+		funcLog.Error(err, "DetachUplinkAndVFRepresentorsFromOVSBridge(): failed to detach PF uplink")
+		return fmt.Errorf("failed to detach PF uplink %s: %w", pfName, err)
 	}
 
 	return nil
+}
+
+func (o *ovs) getInterfaceNamesOnBridge(ctx context.Context, dbClient client.Client, bridge *BridgeEntry) ([]string, error) {
+	ports := []*PortEntry{}
+	if err := dbClient.List(ctx, &ports); err != nil {
+		return nil, fmt.Errorf("failed to list ports: %w", err)
+	}
+
+	interfaceIDs := map[string]struct{}{}
+	for _, port := range ports {
+		if bridge.HasPort(port.UUID) {
+			// A Port can reference multiple Interface rows, for example when it
+			// represents a bond, so collect every interface attached to the port.
+			for _, interfaceID := range port.Interfaces {
+				interfaceIDs[interfaceID] = struct{}{}
+			}
+		}
+	}
+
+	interfaces := []*InterfaceEntry{}
+	if err := dbClient.List(ctx, &interfaces); err != nil {
+		return nil, fmt.Errorf("failed to list interfaces: %w", err)
+	}
+
+	interfaceNames := make([]string, 0, len(interfaceIDs))
+	for _, iface := range interfaces {
+		if _, found := interfaceIDs[iface.UUID]; found {
+			interfaceNames = append(interfaceNames, iface.Name)
+		}
+	}
+	sort.Strings(interfaceNames)
+	return interfaceNames, nil
+}
+
+// isVFRepresentorName reports whether interfaceName follows the naming convention
+// of the operator-created udev rule for a VF representor of pfName. For example,
+// enp216s0f0np0_7 is VF representor 7 of PF enp216s0f0np0.
+func isVFRepresentorName(interfaceName, pfName string) bool {
+	vfIndex, found := strings.CutPrefix(interfaceName, pfName+"_")
+	if !found || vfIndex == "" {
+		return false
+	}
+	vfIndexNumber, err := strconv.Atoi(vfIndex)
+	return err == nil && vfIndexNumber >= 0 && !strings.HasPrefix(vfIndex, "+")
 }
 
 func (o *ovs) getBridgeByName(ctx context.Context, dbClient client.Client, name string) (*BridgeEntry, error) {

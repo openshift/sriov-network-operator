@@ -21,6 +21,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -289,6 +290,9 @@ type CommonPrometheusFields struct {
 	// You can also disable sharding on a specific target by setting the
 	// `__tmp_disable_sharding` label with relabeling configuration. When
 	// the label value isn't empty, all Prometheus shards will scrape the target.
+	//
+	// Default: 1
+	// +kubebuilder:default=1
 	// +optional
 	Shards *int32 `json:"shards,omitempty"`
 
@@ -680,8 +684,9 @@ type CommonPrometheusFields struct {
 	// * Scrape objects with a sampleLimit value greater than enforcedSampleLimit are set to enforcedSampleLimit.
 	//
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	EnforcedSampleLimit *uint64 `json:"enforcedSampleLimit,omitempty"`
+	EnforcedSampleLimit *int64 `json:"enforcedSampleLimit,omitempty"`
 	// enforcedTargetLimit when defined specifies a global limit on the number
 	// of scraped targets. The value overrides any `spec.targetLimit` set by
 	// ServiceMonitor, PodMonitor, Probe objects unless `spec.targetLimit` is
@@ -697,8 +702,9 @@ type CommonPrometheusFields struct {
 	// * Scrape objects with a targetLimit value greater than enforcedTargetLimit are set to enforcedTargetLimit.
 	//
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	EnforcedTargetLimit *uint64 `json:"enforcedTargetLimit,omitempty"`
+	EnforcedTargetLimit *int64 `json:"enforcedTargetLimit,omitempty"`
 	// enforcedLabelLimit when defined specifies a global limit on the number
 	// of labels per sample. The value overrides any `spec.labelLimit` set by
 	// ServiceMonitor, PodMonitor, Probe objects unless `spec.labelLimit` is
@@ -713,8 +719,9 @@ type CommonPrometheusFields struct {
 	// * Scrape objects with a labelLimit value greater than enforcedLabelLimit are set to enforcedLabelLimit.
 	//
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	EnforcedLabelLimit *uint64 `json:"enforcedLabelLimit,omitempty"`
+	EnforcedLabelLimit *int64 `json:"enforcedLabelLimit,omitempty"`
 	// enforcedLabelNameLengthLimit when defined specifies a global limit on the length
 	// of labels name per sample. The value overrides any `spec.labelNameLengthLimit` set by
 	// ServiceMonitor, PodMonitor, Probe objects unless `spec.labelNameLengthLimit` is
@@ -729,8 +736,9 @@ type CommonPrometheusFields struct {
 	// * Scrape objects with a labelNameLengthLimit value greater than enforcedLabelNameLengthLimit are set to enforcedLabelNameLengthLimit.
 	//
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	EnforcedLabelNameLengthLimit *uint64 `json:"enforcedLabelNameLengthLimit,omitempty"`
+	EnforcedLabelNameLengthLimit *int64 `json:"enforcedLabelNameLengthLimit,omitempty"`
 	// enforcedLabelValueLengthLimit when not null defines a global limit on the length
 	// of labels value per sample. The value overrides any `spec.labelValueLengthLimit` set by
 	// ServiceMonitor, PodMonitor, Probe objects unless `spec.labelValueLengthLimit` is
@@ -745,8 +753,9 @@ type CommonPrometheusFields struct {
 	// * Scrape objects with a labelValueLengthLimit value greater than enforcedLabelValueLengthLimit are set to enforcedLabelValueLengthLimit.
 	//
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	EnforcedLabelValueLengthLimit *uint64 `json:"enforcedLabelValueLengthLimit,omitempty"`
+	EnforcedLabelValueLengthLimit *int64 `json:"enforcedLabelValueLengthLimit,omitempty"`
 	// enforcedKeepDroppedTargets when defined specifies a global limit on the number of targets
 	// dropped by relabeling that will be kept in memory. The value overrides
 	// any `spec.keepDroppedTargets` set by
@@ -762,8 +771,9 @@ type CommonPrometheusFields struct {
 	// * Scrape objects with a keepDroppedTargets value greater than enforcedKeepDroppedTargets are set to enforcedKeepDroppedTargets.
 	//
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	EnforcedKeepDroppedTargets *uint64 `json:"enforcedKeepDroppedTargets,omitempty"`
+	EnforcedKeepDroppedTargets *int64 `json:"enforcedKeepDroppedTargets,omitempty"`
 	// enforcedBodySizeLimit when defined specifies a global limit on the size
 	// of uncompressed response body that will be accepted by Prometheus.
 	// Targets responding with a body larger than this many bytes will cause
@@ -906,40 +916,45 @@ type CommonPrometheusFields struct {
 	// Note that the global limit only applies to scrape objects that don't specify an explicit limit value.
 	// If you want to enforce a maximum limit for all scrape objects, refer to enforcedSampleLimit.
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	SampleLimit *uint64 `json:"sampleLimit,omitempty"`
+	SampleLimit *int64 `json:"sampleLimit,omitempty"`
 	// targetLimit defines a limit on the number of scraped targets that will be accepted.
 	// Only valid in Prometheus versions 2.45.0 and newer.
 	//
 	// Note that the global limit only applies to scrape objects that don't specify an explicit limit value.
 	// If you want to enforce a maximum limit for all scrape objects, refer to enforcedTargetLimit.
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	TargetLimit *uint64 `json:"targetLimit,omitempty"`
+	TargetLimit *int64 `json:"targetLimit,omitempty"`
 	// labelLimit defines per-scrape limit on number of labels that will be accepted for a sample.
 	// Only valid in Prometheus versions 2.45.0 and newer.
 	//
 	// Note that the global limit only applies to scrape objects that don't specify an explicit limit value.
 	// If you want to enforce a maximum limit for all scrape objects, refer to enforcedLabelLimit.
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	LabelLimit *uint64 `json:"labelLimit,omitempty"`
+	LabelLimit *int64 `json:"labelLimit,omitempty"`
 	// labelNameLengthLimit defines the per-scrape limit on length of labels name that will be accepted for a sample.
 	// Only valid in Prometheus versions 2.45.0 and newer.
 	//
 	// Note that the global limit only applies to scrape objects that don't specify an explicit limit value.
 	// If you want to enforce a maximum limit for all scrape objects, refer to enforcedLabelNameLengthLimit.
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	LabelNameLengthLimit *uint64 `json:"labelNameLengthLimit,omitempty"`
+	LabelNameLengthLimit *int64 `json:"labelNameLengthLimit,omitempty"`
 	// labelValueLengthLimit defines the per-scrape limit on length of labels value that will be accepted for a sample.
 	// Only valid in Prometheus versions 2.45.0 and newer.
 	//
 	// Note that the global limit only applies to scrape objects that don't specify an explicit limit value.
 	// If you want to enforce a maximum limit for all scrape objects, refer to enforcedLabelValueLengthLimit.
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	LabelValueLengthLimit *uint64 `json:"labelValueLengthLimit,omitempty"`
+	LabelValueLengthLimit *int64 `json:"labelValueLengthLimit,omitempty"`
 	// keepDroppedTargets defines the per-scrape limit on the number of targets dropped by relabeling
 	// that will be kept in memory. 0 means no limit.
 	//
@@ -948,8 +963,9 @@ type CommonPrometheusFields struct {
 	// Note that the global limit only applies to scrape objects that don't specify an explicit limit value.
 	// If you want to enforce a maximum limit for all scrape objects, refer to enforcedKeepDroppedTargets.
 	//
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	KeepDroppedTargets *uint64 `json:"keepDroppedTargets,omitempty"`
+	KeepDroppedTargets *int64 `json:"keepDroppedTargets,omitempty"`
 
 	// reloadStrategy defines the strategy used to reload the Prometheus configuration.
 	// If not specified, the configuration is reloaded using the /-/reload HTTP endpoint.
@@ -1214,18 +1230,22 @@ type PrometheusSpec struct {
 	RetentionSize ByteSize `json:"retentionSize,omitempty"`
 
 	// shardRetentionPolicy defines the retention policy for the Prometheus shards.
-	// (Alpha) Using this field requires the 'PrometheusShardRetentionPolicy' feature gate to be enabled.
 	//
-	// The final goals for this feature can be seen at https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/proposals/202310-shard-autoscaling.md#graceful-scale-down-of-prometheus-servers,
-	// however, the feature is not yet fully implemented in this PR. The limitation being:
-	// * Retention duration is not settable, for now, shards are retained forever.
+	// (Beta) Using this mode requires the `PrometheusShardRetentionPolicy` feature gate (enabled by default).
 	//
 	// +optional
 	ShardRetentionPolicy *ShardRetentionPolicy `json:"shardRetentionPolicy,omitempty"`
 
 	// disableCompaction when true, the Prometheus compaction is disabled.
-	// When `spec.thanos.objectStorageConfig` or `spec.objectStorageConfigFile` are defined, the operator automatically
-	// disables block compaction to avoid race conditions during block uploads (as the Thanos documentation recommends).
+	//
+	// When `spec.thanos.objectStorageConfig` or `spec.thanos.objectStorageConfigFile` are defined, the operator's
+	// default handling depends on the Prometheus and Thanos sidecar versions:
+	//   - With Prometheus < v3.9.0 or a Thanos sidecar < v0.41.0, block compaction is disabled to avoid race
+	//     conditions during block uploads (as the Thanos documentation recommends).
+	//   - With Prometheus >= v3.9.0 and a Thanos sidecar >= v0.41.0, local compaction is kept enabled and coordinated
+	//     with the sidecar through the shipper meta file (`--storage.tsdb.delay-compact-file.path`), so blocks are only
+	//     compacted after they have been uploaded.
+	// Setting this field to true always disables local compaction regardless of the versions.
 	// +optional
 	DisableCompaction bool `json:"disableCompaction,omitempty"` // nolint:kubeapilinter
 
@@ -1395,7 +1415,8 @@ const (
 
 	// TopologyShardingStrategyMode enables zone-aware sharding.
 	// Each shard is assigned to a specific topology zone and only scrapes targets in that zone.
-	// (Alpha) Using this mode requires the `PrometheusTopologySharding` feature gate to be enabled.
+	//
+	// (Beta) Using this mode requires the `PrometheusTopologySharding` feature gate (enabled by default).
 	TopologyShardingStrategyMode ShardingStrategyMode = "Topology"
 )
 
@@ -2068,8 +2089,10 @@ type AzureWorkloadIdentity struct {
 // +k8s:openapi-gen=true
 type RemoteReadSpec struct {
 	// url defines the URL of the endpoint to query from.
+	//
+	// It must use the HTTP or HTTPS scheme.
 	// +required
-	URL string `json:"url"`
+	URL URL `json:"url"`
 
 	// name of the remote read queue, it must be unique if specified. The
 	// name is used in metrics and logging in order to differentiate read
@@ -2194,8 +2217,9 @@ type RelabelConfig struct {
 	// modulus to take of the hash of the source label values.
 	//
 	// Only applicable when the action is `HashMod`.
+	// +kubebuilder:validation:Minimum:=0
 	// +optional
-	Modulus uint64 `json:"modulus,omitempty"`
+	Modulus int64 `json:"modulus,omitempty"`
 
 	// replacement value against which a Replace action is performed if the
 	// regular expression matches.
@@ -2416,6 +2440,8 @@ type RulesAlert struct {
 type MetadataConfig struct {
 	// send defines whether metric metadata is sent to the remote storage or not.
 	//
+	// The setting is ignored when Remote Write message's version 2.0 is used.
+	//
 	// +optional
 	Send bool `json:"send,omitempty"` // nolint:kubeapilinter
 
@@ -2466,6 +2492,67 @@ type TSDBSpec struct {
 	// It requires Prometheus >= v2.39.0 or PrometheusAgent >= v2.54.0.
 	// +optional
 	OutOfOrderTimeWindow *Duration `json:"outOfOrderTimeWindow,omitempty"`
+
+	// staleSeriesCompactionThreshold configures the trigger point for compacting
+	// stale series from memory into persistent blocks and removing those stale
+	// series from memory.
+	//
+	// The threshold is a number between 0.0 and 1.0. It represents the ratio of
+	// stale series in memory to the total series in memory. The stale series
+	// compaction is triggered when this ratio crosses the configured threshold.
+	// It may not trigger the stale series compaction if the usual head compaction
+	// is about to happen soon.
+	//
+	// If set to 0, stale series compaction is disabled.
+	//
+	// It requires Prometheus >= v3.10.0.
+	// +optional
+	StaleSeriesCompactionThreshold *resource.Quantity `json:"staleSeriesCompactionThreshold,omitempty"`
+
+	// chunkEncoding configures per-chunk-type encoding overrides.
+	//
+	// It requires Prometheus >= v3.13.0.
+	//
+	// Notice: Setting "Xor" is incompatible with --enable-feature=st-storage
+	// (XOR chunks do not store start timestamps).
+	// +optional
+	ChunkEncoding *ChunkEncodingSpec `json:"chunkEncoding,omitempty"`
+}
+
+// Validate semantically validates the given TSDBSpec.
+func (ts *TSDBSpec) Validate() error {
+	if ts == nil || ts.StaleSeriesCompactionThreshold == nil {
+		return nil
+	}
+	v := ts.StaleSeriesCompactionThreshold.AsApproximateFloat64()
+	if v < 0 || v > 1 {
+		return fmt.Errorf("`staleSeriesCompactionThreshold` must be between 0 and 1. The current value is %s", ts.StaleSeriesCompactionThreshold.String())
+	}
+
+	return nil
+}
+
+// +kubebuilder:validation:Enum=Xor;Xor2
+type ChunkEncodingFloats string
+
+const (
+	ChunkEncodingFloatsXor  ChunkEncodingFloats = "Xor"
+	ChunkEncodingFloatsXor2 ChunkEncodingFloats = "Xor2"
+)
+
+// ChunkEncodingSpec configures per-chunk-type encoding overrides.
+type ChunkEncodingSpec struct {
+	// floats selects the encoding used for float chunks.
+	// Valid values are "Xor" and "Xor2".
+	//
+	// Notice:
+	//  * Setting "Xor" is incompatible with --enable-feature=st-storage
+	// (XOR chunks do not store start timestamps).
+	//  * Setting "Xor2" automatically adds the `xor2-encoding` feature flag.
+	//
+	// It requires Prometheus >= v3.13.0.
+	// +optional
+	Floats *ChunkEncodingFloats `json:"floats,omitempty"`
 }
 
 type Exemplars struct {
@@ -2507,11 +2594,11 @@ func (c *SafeAuthorization) Validate() error {
 	}
 
 	if strings.ToLower(strings.TrimSpace(c.Type)) == "basic" {
-		return errors.New("authorization type cannot be set to \"basic\", use \"basicAuth\" instead")
+		return errors.New("'authorization' type cannot be set to \"basic\", use \"basicAuth\" instead")
 	}
 
 	if c.Credentials == nil {
-		return errors.New("authorization credentials are required")
+		return errors.New("'authorization' credentials are required")
 	}
 
 	return nil
@@ -2681,6 +2768,26 @@ type OTLPConfig struct {
 	// It requires Prometheus >= v3.6.0.
 	// +optional
 	PromoteScopeMetadata *bool `json:"promoteScopeMetadata,omitempty"` // nolint:kubeapilinter
+
+	// labelNameUnderscoreSanitization controls whether to enable prepending of 'key_' to labels starting with '_'.
+	// Reserved labels starting with '__' are not modified.
+	// This is only relevant when translation_strategy uses underscore escaping (e.g., "UnderscoreEscapingWithSuffixes" or "UnderscoreEscapingWithoutSuffixes").
+	//
+	// Notice: This one has no impact if `nameEscapingScheme` is `AllowUTF8`.
+	//
+	// It requires Prometheus >= v3.8.0.
+	// +optional
+	LabelNameUnderscoreSanitization *bool `json:"labelNameUnderscoreSanitization,omitempty"` // nolint:kubeapilinter
+
+	// labelNamePreserveMultipleUnderscores enables preserving of multiple consecutive underscores in label names when translation_strategy uses
+	// underscore escaping.
+	// When true (default), multiple consecutive underscores are preserved during label name sanitization.
+	//
+	// Notice: This one has no impact if `nameEscapingScheme` is `AllowUTF8`.
+	//
+	// It requires Prometheus >= v3.8.0.
+	// +optional
+	LabelNamePreserveMultipleUnderscores *bool `json:"labelNamePreserveMultipleUnderscores,omitempty"` // nolint:kubeapilinter
 }
 
 // Validate semantically validates the given OTLPConfig section.

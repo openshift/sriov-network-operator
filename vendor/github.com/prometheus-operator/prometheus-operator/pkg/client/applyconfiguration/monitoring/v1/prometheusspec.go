@@ -43,15 +43,19 @@ type PrometheusSpecApplyConfiguration struct {
 	// retentionSize defines the maximum number of bytes used by the Prometheus data.
 	RetentionSize *monitoringv1.ByteSize `json:"retentionSize,omitempty"`
 	// shardRetentionPolicy defines the retention policy for the Prometheus shards.
-	// (Alpha) Using this field requires the 'PrometheusShardRetentionPolicy' feature gate to be enabled.
 	//
-	// The final goals for this feature can be seen at https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/proposals/202310-shard-autoscaling.md#graceful-scale-down-of-prometheus-servers,
-	// however, the feature is not yet fully implemented in this PR. The limitation being:
-	// * Retention duration is not settable, for now, shards are retained forever.
+	// (Beta) Using this mode requires the `PrometheusShardRetentionPolicy` feature gate (enabled by default).
 	ShardRetentionPolicy *ShardRetentionPolicyApplyConfiguration `json:"shardRetentionPolicy,omitempty"`
 	// disableCompaction when true, the Prometheus compaction is disabled.
-	// When `spec.thanos.objectStorageConfig` or `spec.objectStorageConfigFile` are defined, the operator automatically
-	// disables block compaction to avoid race conditions during block uploads (as the Thanos documentation recommends).
+	//
+	// When `spec.thanos.objectStorageConfig` or `spec.thanos.objectStorageConfigFile` are defined, the operator's
+	// default handling depends on the Prometheus and Thanos sidecar versions:
+	// - With Prometheus < v3.9.0 or a Thanos sidecar < v0.41.0, block compaction is disabled to avoid race
+	// conditions during block uploads (as the Thanos documentation recommends).
+	// - With Prometheus >= v3.9.0 and a Thanos sidecar >= v0.41.0, local compaction is kept enabled and coordinated
+	// with the sidecar through the shipper meta file (`--storage.tsdb.delay-compact-file.path`), so blocks are only
+	// compacted after they have been uploaded.
+	// Setting this field to true always disables local compaction regardless of the versions.
 	DisableCompaction *bool `json:"disableCompaction,omitempty"`
 	// rules defines the configuration of the Prometheus rules' engine.
 	Rules *RulesApplyConfiguration `json:"rules,omitempty"`
@@ -725,7 +729,7 @@ func (b *PrometheusSpecApplyConfiguration) WithEnforcedNamespaceLabel(value stri
 // WithEnforcedSampleLimit sets the EnforcedSampleLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the EnforcedSampleLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithEnforcedSampleLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithEnforcedSampleLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.EnforcedSampleLimit = &value
 	return b
 }
@@ -733,7 +737,7 @@ func (b *PrometheusSpecApplyConfiguration) WithEnforcedSampleLimit(value uint64)
 // WithEnforcedTargetLimit sets the EnforcedTargetLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the EnforcedTargetLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithEnforcedTargetLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithEnforcedTargetLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.EnforcedTargetLimit = &value
 	return b
 }
@@ -741,7 +745,7 @@ func (b *PrometheusSpecApplyConfiguration) WithEnforcedTargetLimit(value uint64)
 // WithEnforcedLabelLimit sets the EnforcedLabelLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the EnforcedLabelLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithEnforcedLabelLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithEnforcedLabelLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.EnforcedLabelLimit = &value
 	return b
 }
@@ -749,7 +753,7 @@ func (b *PrometheusSpecApplyConfiguration) WithEnforcedLabelLimit(value uint64) 
 // WithEnforcedLabelNameLengthLimit sets the EnforcedLabelNameLengthLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the EnforcedLabelNameLengthLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithEnforcedLabelNameLengthLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithEnforcedLabelNameLengthLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.EnforcedLabelNameLengthLimit = &value
 	return b
 }
@@ -757,7 +761,7 @@ func (b *PrometheusSpecApplyConfiguration) WithEnforcedLabelNameLengthLimit(valu
 // WithEnforcedLabelValueLengthLimit sets the EnforcedLabelValueLengthLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the EnforcedLabelValueLengthLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithEnforcedLabelValueLengthLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithEnforcedLabelValueLengthLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.EnforcedLabelValueLengthLimit = &value
 	return b
 }
@@ -765,7 +769,7 @@ func (b *PrometheusSpecApplyConfiguration) WithEnforcedLabelValueLengthLimit(val
 // WithEnforcedKeepDroppedTargets sets the EnforcedKeepDroppedTargets field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the EnforcedKeepDroppedTargets field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithEnforcedKeepDroppedTargets(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithEnforcedKeepDroppedTargets(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.EnforcedKeepDroppedTargets = &value
 	return b
 }
@@ -910,7 +914,7 @@ func (b *PrometheusSpecApplyConfiguration) WithBodySizeLimit(value monitoringv1.
 // WithSampleLimit sets the SampleLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the SampleLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithSampleLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithSampleLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.SampleLimit = &value
 	return b
 }
@@ -918,7 +922,7 @@ func (b *PrometheusSpecApplyConfiguration) WithSampleLimit(value uint64) *Promet
 // WithTargetLimit sets the TargetLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the TargetLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithTargetLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithTargetLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.TargetLimit = &value
 	return b
 }
@@ -926,7 +930,7 @@ func (b *PrometheusSpecApplyConfiguration) WithTargetLimit(value uint64) *Promet
 // WithLabelLimit sets the LabelLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the LabelLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithLabelLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithLabelLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.LabelLimit = &value
 	return b
 }
@@ -934,7 +938,7 @@ func (b *PrometheusSpecApplyConfiguration) WithLabelLimit(value uint64) *Prometh
 // WithLabelNameLengthLimit sets the LabelNameLengthLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the LabelNameLengthLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithLabelNameLengthLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithLabelNameLengthLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.LabelNameLengthLimit = &value
 	return b
 }
@@ -942,7 +946,7 @@ func (b *PrometheusSpecApplyConfiguration) WithLabelNameLengthLimit(value uint64
 // WithLabelValueLengthLimit sets the LabelValueLengthLimit field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the LabelValueLengthLimit field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithLabelValueLengthLimit(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithLabelValueLengthLimit(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.LabelValueLengthLimit = &value
 	return b
 }
@@ -950,7 +954,7 @@ func (b *PrometheusSpecApplyConfiguration) WithLabelValueLengthLimit(value uint6
 // WithKeepDroppedTargets sets the KeepDroppedTargets field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the KeepDroppedTargets field is set to the value of the last call.
-func (b *PrometheusSpecApplyConfiguration) WithKeepDroppedTargets(value uint64) *PrometheusSpecApplyConfiguration {
+func (b *PrometheusSpecApplyConfiguration) WithKeepDroppedTargets(value int64) *PrometheusSpecApplyConfiguration {
 	b.CommonPrometheusFieldsApplyConfiguration.KeepDroppedTargets = &value
 	return b
 }
