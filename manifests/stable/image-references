@@ -43,4 +43,8 @@ spec:
     from:
       kind: DockerImage
       name: quay.io/openshift/origin-kube-rbac-proxy:5.0
+  - name: dra-driver-sriov
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-dra-driver-sriov:5.0
 
