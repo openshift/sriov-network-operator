@@ -186,6 +186,13 @@ func (p *GenericPlugin) CheckStatusChanges(current *sriovnetworkv1.SriovNetworkN
 		}
 	}
 
+	if rdmaModeNeedsUpdate(current) {
+		log.Log.Info("CheckStatusChanges(): rdma mode needs to be updated",
+			"desired", current.Spec.System.RdmaMode,
+			"current", current.Status.System.RdmaMode)
+		return true, nil
+	}
+
 	shouldUpdate, err := p.shouldUpdateKernelArgs()
 	if err != nil {
 		log.Log.Error(err, "generic-plugin CheckStatusChanges(): failed to verify missing kernel arguments")
@@ -193,6 +200,16 @@ func (p *GenericPlugin) CheckStatusChanges(current *sriovnetworkv1.SriovNetworkN
 	}
 
 	return shouldUpdate, nil
+}
+
+// rdmaModeNeedsUpdate reports whether the nodeState spec requests an RDMA mode
+// that differs from the mode currently reported in status. An empty spec mode
+// means the operator is not managing RDMA, so no update is required.
+func rdmaModeNeedsUpdate(state *sriovnetworkv1.SriovNetworkNodeState) bool {
+	if state.Spec.System.RdmaMode == "" {
+		return false
+	}
+	return state.Spec.System.RdmaMode != state.Status.System.RdmaMode
 }
 
 func (p *GenericPlugin) syncDriverState() error {
