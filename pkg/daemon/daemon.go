@@ -240,6 +240,16 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	// updateSyncState copies live ObjectMeta onto desiredNodeState. If a newer spec
+	// arrived during this reconcile, Generation no longer matches the Spec we hold.
+	// Requeue so the next loop fetches the latest spec instead of applying a stale one.
+	if desiredNodeState.GetGeneration() != latest {
+		reqLogger.Info("nodeState generation changed during reconcile, requeue",
+			"reconcile-generation", latest,
+			"latest-generation", desiredNodeState.GetGeneration())
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+
 	reqReboot, reqDrain, err := dn.checkOnNodeStateChange(desiredNodeState)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -282,7 +292,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// if we finish the drain we should run apply here
 	if dn.isDrainCompleted(reqDrain, desiredNodeState) {
-		return dn.apply(ctx, desiredNodeState, reqReboot, sriovResult)
+		return dn.apply(ctx, desiredNodeState, reqReboot, sriovResult, latest)
 	}
 
 	return ctrl.Result{}, nil
@@ -368,10 +378,12 @@ func (dn *NodeReconciler) CheckSystemdStatus() (*hosttypes.SriovResult, bool, er
 // 4. Restarting the device plugin pod on the node.
 // 5. Requesting annotation updates for draining the idle state of the node.
 // 6. Synchronizing with the host network status and updating the sync status of the node in the nodeState object.
-// 7. Updating the lastAppliedGeneration to the current generation.
-func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *hosttypes.SriovResult) (ctrl.Result, error) {
+// 7. Updating lastAppliedGeneration to appliedGeneration, which must be the generation
+// fetched at the start of this reconcile. updateSyncState copies live ObjectMeta onto
+// desiredNodeState, so reading Generation after a status update can observe a newer
+// spec that has not been applied yet.
+func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *hosttypes.SriovResult, appliedGeneration int64) (ctrl.Result, error) {
 	reqLogger := log.FromContext(ctx).WithName("Apply")
-	appliedGeneration := desiredNodeState.Generation
 
 	// Restart the device plugin *before* applying configuration if the
 	// BlockDevicePluginUntilConfiguredFeatureGate feature is enabled.
