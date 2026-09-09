@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"errors"
 	"fmt"
 
 	"go.uber.org/mock/gomock"
@@ -82,16 +83,16 @@ var _ = Describe("Bridge", func() {
 		})
 	})
 
-	Context("DetachInterfaceFromManagedBridge", func() {
+	Context("DetachUplinkAndVFRepresentorsFromManagedBridge", func() {
 		It("succeed", func() {
-			ovsMock.EXPECT().RemoveInterfaceFromOVSBridge(gomock.Any(), "0000:d8:00.0").Return(nil)
-			err := br.DetachInterfaceFromManagedBridge("0000:d8:00.0")
+			ovsMock.EXPECT().DetachUplinkAndVFRepresentorsFromOVSBridge(gomock.Any(), "0000:d8:00.0").Return(nil)
+			err := br.DetachUplinkAndVFRepresentorsFromManagedBridge("0000:d8:00.0")
 			Expect(err).NotTo(HaveOccurred())
 		})
 		It("error", func() {
-			ovsMock.EXPECT().RemoveInterfaceFromOVSBridge(gomock.Any(), "0000:d8:00.0").Return(testErr)
-			err := br.DetachInterfaceFromManagedBridge("0000:d8:00.0")
-			Expect(err).To(MatchError(testErr))
+			ovsMock.EXPECT().DetachUplinkAndVFRepresentorsFromOVSBridge(gomock.Any(), "0000:d8:00.0").Return(testErr)
+			err := br.DetachUplinkAndVFRepresentorsFromManagedBridge("0000:d8:00.0")
+			Expect(errors.Is(err, testErr)).To(BeTrue())
 		})
 	})
 })

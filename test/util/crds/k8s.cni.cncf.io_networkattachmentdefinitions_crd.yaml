@@ -12,6 +12,7 @@ spec:
     kind: NetworkAttachmentDefinition
     listKind: NetworkAttachmentDefinitionList
     shortNames:
+    - nad
     - net-attach-def
   versions:
   - name: v1

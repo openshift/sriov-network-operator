@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -115,17 +116,15 @@ var _ = Describe("validation", func() {
 		})
 
 		It("should have SR-IOV node statuses not in progress", func() {
-			CheckStable()
+			Eventually(func(g Gomega) {
+				res, err := cluster.SriovStable(operatorNamespace, clients)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(res).To(BeTrue(), "SR-IOV status is not stable")
+
+				isClusterReady, err := cluster.IsClusterStable(clients)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(isClusterReady).To(BeTrue(), "Cluster is not stable")
+			}).WithTimeout(2 * time.Minute).WithPolling(10 * time.Second).Should(Succeed())
 		})
 	})
 })
-
-func CheckStable() {
-	res, err := cluster.SriovStable(operatorNamespace, clients)
-	Expect(err).ToNot(HaveOccurred())
-	Expect(res).To(BeTrue(), "SR-IOV status is not stable")
-
-	isClusterReady, err := cluster.IsClusterStable(clients)
-	Expect(err).ToNot(HaveOccurred())
-	Expect(isClusterReady).To(BeTrue(), "Cluster is not stable")
-}
