@@ -1,6 +1,7 @@
 package sriov
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
