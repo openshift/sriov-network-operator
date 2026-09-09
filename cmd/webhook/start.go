@@ -25,14 +25,12 @@ var (
 	enableHTTP2 bool
 )
 
-var (
-	startCmd = &cobra.Command{
-		Use:   "start",
-		Short: "Starts Webhook Daemon",
-		Long:  "Starts Webhook Daemon",
-		Run:   runStartCmd,
-	}
-)
+var startCmd = &cobra.Command{
+	Use:   "start",
+	Short: "Starts Webhook Daemon",
+	Long:  "Starts Webhook Daemon",
+	Run:   runStartCmd,
+}
 
 // admitv1Func handles a v1 admission
 type admitv1Func func(v1.AdmissionReview) *v1.AdmissionResponse
@@ -190,10 +188,10 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 	certUpdated := false
 	keyUpdated := false
 
-	for {
-		watcher.Add(certFile)
-		watcher.Add(keyFile)
+	watcher.Add(certFile)
+	watcher.Add(keyFile)
 
+	for {
 		select {
 		case event, ok := <-watcher.Events:
 			if !ok {
@@ -206,9 +204,11 @@ func runStartCmd(cmd *cobra.Command, args []string) {
 				setupLog.Info("modified file", "name", event.Name)
 				if event.Name == certFile {
 					certUpdated = true
+					watcher.Add(certFile)
 				}
 				if event.Name == keyFile {
 					keyUpdated = true
+					watcher.Add(keyFile)
 				}
 				if keyUpdated && certUpdated {
 					if err := keyPair.Reload(); err != nil {

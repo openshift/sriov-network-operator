@@ -718,13 +718,26 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					pod.DefineWithNetworks([]string{sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName, sriovNetworkName}),
 					node,
 				)
+
 				runningPodA, err := clients.Pods(testPodA.Namespace).Create(context.Background(), testPodA, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Error to create pod %s", testPodA.Name))
 				By("Checking that first Pod is in Running state")
 				runningPodA = waitForPodRunning(runningPodA)
 
-				By("Create second Pod which consumes one more VF")
+				By("Checking the sriov resource has the right number of devices has been injected to resource request and limit spec")
+				Expect(len(runningPodA.Spec.Containers)).To(Equal(1))
+				resource, exist := runningPodA.Spec.Containers[0].Resources.Requests[corev1.ResourceName(fmt.Sprintf("openshift.io/%s", resourceName))]
+				Expect(exist).To(BeTrue())
+				amount, valid := resource.AsInt64()
+				Expect(valid).To(BeTrue())
+				Expect(amount).To(Equal(int64(5)))
+				resource, exist = runningPodA.Spec.Containers[0].Resources.Limits[corev1.ResourceName(fmt.Sprintf("openshift.io/%s", resourceName))]
+				Expect(exist).To(BeTrue())
+				amount, valid = resource.AsInt64()
+				Expect(valid).To(BeTrue())
+				Expect(amount).To(Equal(int64(5)))
 
+				By("Create second Pod which consumes one more VF")
 				testPodB := pod.RedefineWithNodeSelector(
 					pod.DefineWithNetworks([]string{sriovNetworkName}),
 					node,
@@ -1954,21 +1967,32 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 		})))
 }
 
-func getConfigDaemonPod(nodeName string) *corev1.Pod {
+func getConfigDaemonPod(nodeName string) (*corev1.Pod, error) {
 	pods := &corev1.PodList{}
 	label, err := labels.Parse("app=sriov-network-config-daemon")
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 	field, err := fields.ParseSelector(fmt.Sprintf("spec.nodeName=%s", nodeName))
-	Expect(err).ToNot(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 	err = clients.List(context.Background(), pods, &runtimeclient.ListOptions{Namespace: operatorNamespace, LabelSelector: label, FieldSelector: field})
-	Expect(err).ToNot(HaveOccurred())
-	Expect(len(pods.Items)).To(Equal(1))
-	return &pods.Items[0]
+	if err != nil {
+		return nil, err
+	}
+	if len(pods.Items) != 1 {
+		return nil, fmt.Errorf("expected 1 config daemon pod on node %s, got %d", nodeName, len(pods.Items))
+	}
+	return &pods.Items[0], nil
 }
 
 func runCommandOnConfigDaemon(nodeName string, command ...string) (string, string, error) {
-	output, errOutput, err := pod.ExecCommand(clients, getConfigDaemonPod(nodeName), command...)
-	return output, errOutput, err
+	daemonPod, err := getConfigDaemonPod(nodeName)
+	if err != nil {
+		return "", "", err
+	}
+	return pod.ExecCommand(clients, daemonPod, command...)
 }
 
 func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {

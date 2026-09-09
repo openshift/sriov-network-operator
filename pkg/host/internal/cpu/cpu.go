@@ -34,6 +34,8 @@ func (c *cpuInfoProvider) GetCPUVendor() (types.CPUVendor, error) {
 		return types.CPUVendorAMD, nil
 	case "ARM":
 		return types.CPUVendorARM, nil
+	case "IBM/S390":
+		return types.CPUVendorS390X, nil
 	}
 
 	return -1, fmt.Errorf("unknown CPU vendor: %s", cpuInfo.Processors[0].Vendor)

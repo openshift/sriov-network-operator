@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -88,4 +89,24 @@ func GetChrootExtension() string {
 		return vars.FilesystemRoot
 	}
 	return fmt.Sprintf("chroot %s%s", vars.FilesystemRoot, consts.Host)
+}
+
+// WriteFileWithTimeout writes data to a file with a timeout.
+// This is useful for writing to sysfs files where the kernel driver may block
+// indefinitely if it is in a bad state.
+// Note: if the timeout expires, the write goroutine will remain blocked in the
+// kernel; it cannot be canceled but will be cleaned up when the process exits.
+func WriteFileWithTimeout(path string, data []byte, perm os.FileMode, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ch := make(chan error, 1)
+	go func() {
+		ch <- os.WriteFile(path, data, perm)
+	}()
+	select {
+	case err := <-ch:
+		return err
+	case <-timer.C:
+		return fmt.Errorf("timeout writing to file %s after %v", path, timeout)
+	}
 }

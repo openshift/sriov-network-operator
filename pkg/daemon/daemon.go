@@ -245,6 +245,16 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	// updateSyncState copies live ObjectMeta onto desiredNodeState. If a newer spec
+	// arrived during this reconcile, Generation no longer matches the Spec we hold.
+	// Requeue so the next loop fetches the latest spec instead of applying a stale one.
+	if desiredNodeState.GetGeneration() != latest {
+		reqLogger.Info("nodeState generation changed during reconcile, requeue",
+			"reconcile-generation", latest,
+			"latest-generation", desiredNodeState.GetGeneration())
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+
 	reqReboot, reqDrain, err := dn.checkOnNodeStateChange(desiredNodeState)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -287,7 +297,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// if we finish the drain we should run apply here
 	if dn.isDrainCompleted(reqDrain, desiredNodeState) {
-		return dn.apply(ctx, desiredNodeState, reqReboot, sriovResult)
+		return dn.apply(ctx, desiredNodeState, reqReboot, sriovResult, latest)
 	}
 
 	return ctrl.Result{}, nil
@@ -348,12 +358,12 @@ func (dn *NodeReconciler) checkSystemdStatus() (*hosttypes.SriovResult, bool, er
 
 	// check if the service exist
 	if serviceEnabled && postNetworkServiceEnabled {
-		exist = true
 		sriovResult, err = dn.HostHelpers.ReadSriovResult()
 		if err != nil {
 			funcLog.Error(err, "failed to load sriov result file from host")
 			return nil, false, err
 		}
+		exist = sriovResult != nil
 	}
 	return sriovResult, exist, nil
 }
@@ -365,8 +375,11 @@ func (dn *NodeReconciler) checkSystemdStatus() (*hosttypes.SriovResult, bool, er
 // 4. Restarting the device plugin pod on the node.
 // 5. Requesting annotation updates for draining the idle state of the node.
 // 6. Synchronizing with the host network status and updating the sync status of the node in the nodeState object.
-// 7. Updating the lastAppliedGeneration to the current generation.
-func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *hosttypes.SriovResult) (ctrl.Result, error) {
+// 7. Updating lastAppliedGeneration to appliedGeneration, which must be the generation
+// fetched at the start of this reconcile. updateSyncState copies live ObjectMeta onto
+// desiredNodeState, so reading Generation after a status update can observe a newer
+// spec that has not been applied yet.
+func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *hosttypes.SriovResult, appliedGeneration int64) (ctrl.Result, error) {
 	reqLogger := log.FromContext(ctx).WithName("Apply")
 
 	// Restart the device plugin *before* applying configuration if the
@@ -471,8 +484,10 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 		return ctrl.Result{}, err
 	}
 
-	// update the lastAppliedGeneration
-	dn.lastAppliedGeneration = desiredNodeState.Generation
+	// Preserve the generation that this reconcile actually applied. updateSyncState()
+	// refreshes ObjectMeta from the live object and may observe a newer generation
+	// that arrived mid-apply, but that newer spec still needs its own reconcile.
+	dn.lastAppliedGeneration = appliedGeneration
 
 	return ctrl.Result{RequeueAfter: consts.DaemonRequeueTime}, nil
 }
@@ -575,14 +590,34 @@ func (dn *NodeReconciler) writeSystemdConfigFile(desiredNodeState *sriovnetworkv
 // returns true if we need to finish the reconcile loop and wait for a new object
 func (dn *NodeReconciler) handleDrain(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool) (bool, error) {
 	funcLog := log.Log.WithName("handleDrain")
-	// done with the drain we can continue with the configuration
+
 	if utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainComplete) {
+		// If we need a reboot but the desired-state was Drain_Required, the completed drain
+		// was only partial (SR-IOV pods only). We must reset to Idle, wait for the operator to
+		// uncordon, then re-request with Reboot_Required to get a full drain before rebooting.
+		if reqReboot && !utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.RebootRequired) {
+			if utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.DrainIdle) {
+				funcLog.Info("reboot is required, waiting for operator to rollback to Idle")
+				return true, nil
+			}
+			funcLog.Info("drain completed but reboot is now required, resetting to Idle to re-request full drain")
+			return true, dn.annotate(ctx, desiredNodeState, consts.DrainIdle)
+		}
 		funcLog.Info("the node complete the draining")
 		return false, nil
 	}
 
-	// the operator is still draining the node so we reconcile
 	if utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.Draining) {
+		// If we need a reboot but the desired-state is only Drain_Required, the operator is
+		// performing a partial drain. Move to Idle to abort and re-request with Reboot_Required.
+		if reqReboot && !utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.RebootRequired) {
+			if utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.DrainIdle) {
+				funcLog.Info("reboot is required, waiting for operator to abort and rollback to Idle")
+				return true, nil
+			}
+			funcLog.Info("drain in progress but reboot now required, resetting to Idle to re-request full drain")
+			return true, dn.annotate(ctx, desiredNodeState, consts.DrainIdle)
+		}
 		funcLog.Info("the node is still draining")
 		return true, nil
 	}
@@ -645,7 +680,7 @@ func (dn *NodeReconciler) restartDevicePluginPod(ctx context.Context) error {
 			return err
 		}
 		newPod := &corev1.Pod{}
-		if err := wait.PollUntilContextCancel(ctx, time.Second, true, func(ctx context.Context) (bool, error) {
+		if err := wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 			err := dn.client.Get(ctx, client.ObjectKeyFromObject(&pod), newPod)
 			if errors.IsNotFound(err) {
 				funcLog.Info("device plugin pod exited")
@@ -664,6 +699,9 @@ func (dn *NodeReconciler) restartDevicePluginPod(ctx context.Context) error {
 				"pod-name", pod.Name, "pod-uid", newPod.UID)
 			return false, nil
 		}); err != nil {
+			if stdErrors.Is(err, context.DeadlineExceeded) {
+				err = fmt.Errorf("timed out waiting for device plugin pod to restart: pod=%s uid=%s: %w", pod.Name, podUID, err)
+			}
 			funcLog.Error(err, "failed to wait device plugin pod to exit")
 			return err
 		}

@@ -2,6 +2,7 @@ package daemon_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -47,12 +48,14 @@ var (
 	discoverSriovReturn *sriovDiscoverReturn
 	nodeState           *sriovnetworkv1.SriovNetworkNodeState
 
-	daemonReconciler *daemon.NodeReconciler
+	daemonReconciler   *daemon.NodeReconciler
+	nodeStateCreateSeq int
 )
 
 const (
-	waitTime            = 30 * time.Minute
-	retryTime           = 5 * time.Second
+	waitTime            = 5 * time.Minute
+	retryTime           = time.Second
+	nodeName            = "node1"
 	devicePluginPodName = "sriov-device-plugin-test"
 )
 
@@ -108,7 +111,6 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		DeferCleanup(wg.Wait)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		DeferCleanup(cancel)
 
 		startDaemon = func(dc *daemon.NodeReconciler) {
 			By("start controller manager")
@@ -223,8 +225,13 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		vars.FeatureGate = featureGates
 		daemonReconciler = createDaemon(hostHelper, platformHelper, featureGates, []string{})
 		startDaemon(daemonReconciler)
+		createNode(nodeName)
 
-		createNode("node1")
+		// Register cancel last so it runs first in LIFO order.
+		// This ensures the parent context is canceled before any
+		// other cleanup, allowing both the manager and podRecreator
+		// goroutines to exit promptly.
+		DeferCleanup(cancel)
 	})
 
 	AfterAll(func() {
@@ -238,10 +245,18 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 	BeforeEach(func() {
 		discoverSriovReturn.SetOriginal([]sriovnetworkv1.InterfaceExt{})
 		discoverSriovReturn.SetAfter([]sriovnetworkv1.InterfaceExt{})
-		nodeState = ensureEmptyNodeState("node1")
+		nodeState = ensureEmptyNodeState(nodeName)
 		Eventually(func(g Gomega) {
 			g.Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(nodeState), nodeState)).
 				ToNot(HaveOccurred())
+			if nodeState.Status.SyncStatus != constants.SyncStatusSucceeded {
+				// Bump annotation on each poll iteration to ensure the controller's
+				// AnnotationChangedPredicate fires when the informer's watch reconnects
+				// after a potential break (the re-list will see a changed annotation).
+				nodeStateCreateSeq++
+				nodeState.Annotations["test.sriov.openshift.io/create-seq"] = fmt.Sprintf("%d", nodeStateCreateSeq)
+				_ = k8sClient.Update(context.Background(), nodeState)
+			}
 			g.Expect(nodeState.Status.SyncStatus).To(Equal(constants.SyncStatusSucceeded))
 		}, waitTime, retryTime).Should(Succeed())
 	})
@@ -347,6 +362,84 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 			Expect(nodeState.Status.LastSyncError).To(Equal(""))
 		})
 
+		It("Should reset desired drain to idle when reboot is required during a partial drain", func(ctx context.Context) {
+			configureDrainRequiredScenario(ctx, nodeState)
+
+			By("simulating a partial drain already in progress")
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.Draining)
+
+			By("changing the desired state to require a reboot")
+			hostHelper.EXPECT().SetRDMASubsystem(constants.RdmaSubsystemModeExclusive).Return(nil).AnyTimes()
+			EventuallyWithOffset(1, func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+
+				nodeState.Spec.System.RdmaMode = constants.RdmaSubsystemModeExclusive
+				err = k8sClient.Update(ctx, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, waitTime, retryTime).Should(Succeed())
+
+			By("waiting for the daemon to abort the partial drain and request idle")
+			expectDrainState(nodeState, constants.DrainIdle, constants.Draining, constants.DrainIdle)
+		})
+
+		It("Should reset desired drain to idle after a partial drain completes and then re-request reboot", func(ctx context.Context) {
+			configureDrainRequiredScenario(ctx, nodeState)
+
+			By("simulating a completed partial drain")
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.DrainComplete)
+
+			By("changing the desired state to require a reboot")
+			hostHelper.EXPECT().SetRDMASubsystem(constants.RdmaSubsystemModeExclusive).Return(nil).AnyTimes()
+			EventuallyWithOffset(1, func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+
+				nodeState.Spec.System.RdmaMode = constants.RdmaSubsystemModeExclusive
+				err = k8sClient.Update(ctx, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, waitTime, retryTime).Should(Succeed())
+
+			By("waiting for the daemon to move the desired drain back to idle")
+			expectDrainState(nodeState, constants.DrainIdle, constants.DrainComplete, constants.DrainIdle)
+
+			By("simulating the operator finishing the rollback to idle")
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.DrainIdle)
+
+			By("waiting for the daemon to request a full reboot drain")
+			expectDrainState(nodeState, constants.RebootRequired, constants.DrainIdle, constants.RebootRequired)
+		})
+
+		It("Should keep reboot required when a full drain is already in progress", func(ctx context.Context) {
+			By("requesting a reboot-required drain")
+			hostHelper.EXPECT().SetRDMASubsystem(constants.RdmaSubsystemModeExclusive).Return(nil).AnyTimes()
+			EventuallyWithOffset(1, func(g Gomega) {
+				err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+
+				nodeState.Spec.System.RdmaMode = constants.RdmaSubsystemModeExclusive
+				err = k8sClient.Update(ctx, nodeState)
+				g.Expect(err).ToNot(HaveOccurred())
+			}, waitTime, retryTime).Should(Succeed())
+
+			expectDrainState(nodeState, constants.RebootRequired, constants.DrainIdle, constants.RebootRequired)
+
+			By("simulating the operator already performing the full drain")
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.Draining)
+
+			By("verifying the daemon does not downgrade the request back to idle")
+			ConsistentlyWithOffset(1, func(g Gomega) {
+				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+					ToNot(HaveOccurred())
+				g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotation]).To(Equal(constants.RebootRequired))
+				g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotationCurrent]).To(Equal(constants.Draining))
+
+				node := &corev1.Node{}
+				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: nodeName}, node)).ToNot(HaveOccurred())
+				g.Expect(node.Annotations[constants.NodeDrainAnnotation]).To(Equal(constants.RebootRequired))
+			}, 2*time.Second, 200*time.Millisecond).Should(Succeed())
+		})
+
 		It("Should unblock the device plugin pod when configuration is finished", func(ctx context.Context) {
 			DeferCleanup(func(x bool) { vars.DisableDrain = x }, vars.DisableDrain)
 			vars.DisableDrain = true
@@ -420,6 +513,115 @@ func patchAnnotation(nodeState *sriovnetworkv1.SriovNetworkNodeState, key, value
 	Expect(err).ToNot(HaveOccurred())
 }
 
+// configureDrainRequiredScenario configures the test node so the daemon requests a partial SR-IOV drain.
+func configureDrainRequiredScenario(ctx context.Context, nodeState *sriovnetworkv1.SriovNetworkNodeState) {
+	originalInterface := sriovnetworkv1.InterfaceExt{
+		Name:           "eno1",
+		Driver:         "ice",
+		PciAddress:     "0000:16:00.0",
+		DeviceID:       "1593",
+		Vendor:         "8086",
+		EswitchMode:    "legacy",
+		LinkAdminState: "up",
+		LinkSpeed:      "10000 Mb/s",
+		LinkType:       "ETH",
+		Mac:            "aa:bb:cc:dd:ee:ff",
+		Mtu:            1500,
+		TotalVfs:       2,
+		NumVfs:         0,
+	}
+	discoverSriovReturn.SetOriginal([]sriovnetworkv1.InterfaceExt{originalInterface})
+
+	afterInterface := *originalInterface.DeepCopy()
+	afterInterface.NumVfs = 2
+	afterInterface.VFs = []sriovnetworkv1.VirtualFunction{
+		{
+			Name:       "eno1f0",
+			PciAddress: "0000:16:00.1",
+			VfID:       0,
+			Driver:     "iavf",
+		},
+		{
+			Name:       "eno1f1",
+			PciAddress: "0000:16:00.2",
+			VfID:       1,
+			Driver:     "iavf",
+		},
+	}
+	discoverSriovReturn.SetAfter([]sriovnetworkv1.InterfaceExt{afterInterface})
+
+	EventuallyWithOffset(1, func(g Gomega) {
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{
+			{Name: "eno1",
+				PciAddress: "0000:16:00.0",
+				LinkType:   "eth",
+				NumVfs:     2,
+				VfGroups: []sriovnetworkv1.VfGroup{
+					{ResourceName: "test",
+						DeviceType: "netdevice",
+						PolicyName: "test-policy",
+						VfRange:    "eno1#0-1"},
+				}},
+		}
+		err = k8sClient.Update(ctx, nodeState)
+		g.Expect(err).ToNot(HaveOccurred())
+	}, waitTime, retryTime).Should(Succeed())
+
+	waitForInterfaceNumVfs(nodeState, originalInterface.PciAddress, 2)
+	eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
+
+	EventuallyWithOffset(1, func(g Gomega) {
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{}
+		err = k8sClient.Update(ctx, nodeState)
+		g.Expect(err).ToNot(HaveOccurred())
+	}, waitTime, retryTime).Should(Succeed())
+
+	expectDrainState(nodeState, constants.DrainRequired, constants.DrainIdle, constants.DrainRequired)
+}
+
+// expectDrainState waits until the desired node, nodeState, and current-state drain annotations match the expected values.
+func expectDrainState(
+	nodeState *sriovnetworkv1.SriovNetworkNodeState,
+	expectedDesired string,
+	expectedCurrent string,
+	expectedNode string,
+) {
+	EventuallyWithOffset(1, func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+			ToNot(HaveOccurred())
+		g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotation]).To(Equal(expectedDesired))
+		g.Expect(nodeState.Annotations[constants.NodeStateDrainAnnotationCurrent]).To(Equal(expectedCurrent))
+
+		node := &corev1.Node{}
+		g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: nodeName}, node)).ToNot(HaveOccurred())
+		g.Expect(node.Annotations[constants.NodeDrainAnnotation]).To(Equal(expectedNode))
+	}, waitTime, retryTime).Should(Succeed())
+}
+
+// waitForInterfaceNumVfs waits until the status for the given PCI device reports the expected VF count.
+func waitForInterfaceNumVfs(nodeState *sriovnetworkv1.SriovNetworkNodeState, pciAddress string, expectedNumVfs int) {
+	EventuallyWithOffset(1, func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+			ToNot(HaveOccurred())
+
+		found := false
+		for _, iface := range nodeState.Status.Interfaces {
+			if iface.PciAddress == pciAddress {
+				found = true
+				g.Expect(iface.NumVfs).To(Equal(expectedNumVfs))
+			}
+		}
+
+		g.Expect(found).To(BeTrue(), "status interface for %s was not found", pciAddress)
+	}, waitTime, retryTime).Should(Succeed())
+}
+
 func createNode(nodeName string) *corev1.Node {
 	node := corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -450,6 +652,11 @@ func ensureEmptyNodeState(nodeName string) *sriovnetworkv1.SriovNetworkNodeState
 	} else {
 		Expect(apiErrors.IsNotFound(err)).To(BeTrue())
 	}
+
+	// Use a unique annotation value each time to guarantee that if the informer's
+	// watch reconnects and the re-list delivers this as an Update event (instead of
+	// a Create), the AnnotationChangedPredicate still passes and the reconciler is triggered.
+	nodeStateCreateSeq++
 	nodeState := sriovnetworkv1.SriovNetworkNodeState{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodeName,
@@ -457,6 +664,7 @@ func ensureEmptyNodeState(nodeName string) *sriovnetworkv1.SriovNetworkNodeState
 			Annotations: map[string]string{
 				constants.NodeStateDrainAnnotation:        constants.DrainIdle,
 				constants.NodeStateDrainAnnotationCurrent: constants.DrainIdle,
+				"test.sriov.openshift.io/create-seq":      fmt.Sprintf("%d", nodeStateCreateSeq),
 			},
 		},
 	}
@@ -567,7 +775,9 @@ func (pr *podRecreator) Stop() {
 		pr.cancel()
 	}
 	pr.wg.Wait()
-	pr.client.Delete(context.Background(), pr.podSpec)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = pr.client.Delete(ctx, pr.podSpec)
 }
 
 // ensurePodExists checks if the pod exists and creates it if not found.

@@ -65,6 +65,7 @@ func (dr *DrainReconcile) handleNodeDrainOrReboot(ctx context.Context,
 	nodeDrainAnnotation,
 	nodeStateDrainAnnotationCurrent string) (ctrl.Result, error) {
 	reqLogger := ctx.Value("logger").(logr.Logger).WithName("handleNodeDrainOrReboot")
+
 	// nothing to do here we need to wait for the node to move back to idle
 	if nodeStateDrainAnnotationCurrent == constants.DrainComplete {
 		reqLogger.Info("node requested a drain and nodeState is on drain completed nothing todo")
