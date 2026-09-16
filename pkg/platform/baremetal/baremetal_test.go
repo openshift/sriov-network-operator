@@ -94,7 +94,7 @@ var _ = Describe("Baremetal", func() {
 				})
 
 				hostHelper.EXPECT().ReadServiceManifestFile(gomock.Any()).Return(&hosttypes.Service{Name: "test"}, nil).AnyTimes()
-				hostHelper.EXPECT().ReadServiceInjectionManifestFile(gomock.Any()).Return(&hosttypes.Service{Name: "test"}, nil).AnyTimes()
+				hostHelper.EXPECT().ReadOvsServiceInjectionManifestFile(gomock.Any(), gomock.Any()).Return(&hosttypes.Service{Name: "test"}, nil).AnyTimes()
 
 				// Assuming default cluster type is Kubernetes for these tests
 				// In a real-world scenario, you might need to mock orchestrator.New()

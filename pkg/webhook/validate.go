@@ -18,6 +18,7 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -107,6 +108,10 @@ func validateSriovNetworkPoolConfig(cr *sriovnetworkv1.SriovNetworkPoolConfig, o
 		if err != nil {
 			return false, warnings, fmt.Errorf("SriovOperatorConfig invalid maxUnavailable: %v", err)
 		}
+	}
+
+	if err := utils.ValidateOvsConfig(cr.Spec.OvsHardwareOffloadConfig.OvsConfig); err != nil {
+		return false, warnings, fmt.Errorf("SriovNetworkPoolConfig invalid OvsHardwareOffloadConfig: %v", err)
 	}
 
 	return true, warnings, nil
