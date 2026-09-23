@@ -934,6 +934,24 @@ var _ = Describe("Generic plugin", func() {
 				Expect(genericPlugin.(*GenericPlugin).DesiredKernelArgs[consts.KernelArgIommuPt]).To(BeTrue())
 			})
 
+			It("should detect rdma mode drift from spec vs status without prior kernel-arg sync", func() {
+				state := rdmaState.DeepCopy()
+				state.Spec.System.RdmaMode = consts.RdmaSubsystemModeExclusive
+				state.Status.System.RdmaMode = consts.RdmaSubsystemModeShared
+
+				changed, err := genericPlugin.CheckStatusChanges(state)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(changed).To(BeTrue())
+			})
+			It("should not detect rdma drift when spec matches status", func() {
+				state := rdmaState.DeepCopy()
+				state.Spec.System.RdmaMode = consts.RdmaSubsystemModeExclusive
+				state.Status.System.RdmaMode = consts.RdmaSubsystemModeExclusive
+
+				changed, err := genericPlugin.CheckStatusChanges(state)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(changed).To(BeFalse())
+			})
 			It("should enable rdma shared mode", func() {
 				hostHelper.EXPECT().SetRDMASubsystem(consts.RdmaSubsystemModeShared).Return(nil)
 				err := genericPlugin.(*GenericPlugin).configRdmaKernelArg(rdmaState)
