@@ -208,7 +208,7 @@ test-e2e-validation-only:
 	SUITE=./test/validation ./hack/run-e2e-conformance.sh
 
 test-e2e: generate manifests skopeo envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use --use-deprecated-gcs=false $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)"; source hack/env.sh; HOME="$(shell pwd)" go test ./test/e2e/... -timeout 60m -coverprofile cover.out -v
 
 test-e2e-k8s: export NAMESPACE=sriov-network-operator
 test-e2e-k8s: test-e2e
@@ -217,7 +217,7 @@ test-bindata-scripts: fakechroot
 	fakechroot ./test/scripts/enable-kargs_test.sh
 
 test-%: generate manifests envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./$*/... -coverprofile cover-$*.out -coverpkg ./... -v
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use --use-deprecated-gcs=false $(ENVTEST_K8S_VERSION) --bin-dir=/tmp -p path)" HOME="$(shell pwd)" go test ./$*/... -coverprofile cover-$*.out -coverpkg ./... -v
 
 GOCOVMERGE = $(BIN_DIR)/gocovmerge
 gocovmerge: ## Download gocovmerge locally if necessary.
