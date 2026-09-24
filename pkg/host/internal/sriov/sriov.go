@@ -32,11 +32,22 @@ const (
 	// sysfsWriteTimeout is the timeout for writing to sysfs files (e.g. sriov_numvfs).
 	// Kernel drivers can block indefinitely on these writes if the device is in a bad state.
 	sysfsWriteTimeout = 2 * time.Minute
+
+	// vfDriverReadAttempts and vfDriverReadInterval bound how long discovery
+	// re-reads a VF's bound driver before reporting it as driverless. VFs can
+	// be briefly unbound during normal lifecycle events such as driver rebinds.
+	vfDriverReadAttempts = 5
+	vfDriverReadInterval = 200 * time.Millisecond
 )
 
 type interfaceToConfigure struct {
 	Iface       sriovnetworkv1.Interface
 	IfaceStatus sriovnetworkv1.InterfaceExt
+}
+
+type vfInfoResult struct {
+	index int
+	vf    sriovnetworkv1.VirtualFunction
 }
 
 type sriov struct {
@@ -138,10 +149,62 @@ func (s *sriov) ResetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error 
 	return nil
 }
 
-func (s *sriov) getVfInfo(vfAddr string, pfName string, eswitchMode string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction {
-	driver, err := s.dputilsLib.GetDriverName(vfAddr)
+func (s *sriov) getVfInfos(ctx context.Context, vfAddrs []string, pfName string, eswitchMode string, devices []*ghw.PCIDevice) []sriovnetworkv1.VirtualFunction {
+	results := make(chan vfInfoResult, len(vfAddrs))
+	for index, vfAddr := range vfAddrs {
+		go func(index int, vfAddr string) {
+			results <- vfInfoResult{
+				index: index,
+				vf:    s.getVfInfo(ctx, vfAddr, pfName, eswitchMode, devices),
+			}
+		}(index, vfAddr)
+	}
+
+	vfs := make([]sriovnetworkv1.VirtualFunction, len(vfAddrs))
+	for range vfAddrs {
+		result := <-results
+		vfs[result.index] = result.vf
+	}
+	return vfs
+}
+
+func (s *sriov) getVfDriverName(ctx context.Context, vfAddr string) (string, error) {
+	return s.getVfDriverNameWithRetry(ctx, vfAddr, vfDriverReadAttempts, vfDriverReadInterval)
+}
+
+func (s *sriov) getVfDriverNameWithRetry(ctx context.Context, vfAddr string, attempts int, interval time.Duration) (string, error) {
+	if attempts < 1 {
+		attempts = 1
+	}
+
+	var driver string
+	var err error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		driver, err = s.dputilsLib.GetDriverName(vfAddr)
+		if err == nil && driver != "" {
+			return driver, nil
+		}
+		if attempt < attempts && interval > 0 {
+			select {
+			case <-ctx.Done():
+				return driver, fmt.Errorf("waiting to retry VF driver read for device %s: %w", vfAddr, ctx.Err())
+			case <-time.After(interval):
+			}
+		}
+	}
+
 	if err != nil {
-		log.Log.Error(err, "getVfInfo(): unable to parse device driver", "device", vfAddr)
+		return driver, fmt.Errorf("unable to parse device driver after %d attempts for device %s: %w", attempts, vfAddr, err)
+	}
+	log.Log.Info("getVfDriverName(): VF has no driver bound after retries",
+		"device", vfAddr, "attempts", attempts)
+	return driver, nil
+}
+
+func (s *sriov) getVfInfo(ctx context.Context, vfAddr string, pfName string, eswitchMode string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction {
+	driver, err := s.getVfDriverName(ctx, vfAddr)
+	if err != nil {
+		log.Log.Error(err, "getVfInfo(): unable to get VF driver", "device", vfAddr)
 	}
 	id, err := s.dputilsLib.GetVFID(vfAddr)
 	if err != nil {
@@ -332,10 +395,7 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 						"device", device)
 					continue
 				}
-				for _, vf := range vfs {
-					instance := s.getVfInfo(vf, pfNetName, iface.EswitchMode, devices)
-					iface.VFs = append(iface.VFs, instance)
-				}
+				iface.VFs = append(iface.VFs, s.getVfInfos(context.Background(), vfs, pfNetName, iface.EswitchMode, devices)...)
 			}
 		}
 		pfList = append(pfList, iface)
@@ -706,7 +766,7 @@ func (s *sriov) ConfigSriovInterfaces(storeManager store.ManagerInterface,
 	}
 	if err != nil {
 		log.Log.Error(err, "cannot configure sriov interfaces")
-		return fmt.Errorf("cannot configure sriov interfaces")
+		return fmt.Errorf("cannot configure sriov interfaces: %w", err)
 	}
 	if sriovnetworkv1.ContainsSwitchdevInterface(interfaces) && len(toBeConfigured) > 0 {
 		// for switchdev devices we create udev rule that renames VF representors
@@ -1146,6 +1206,16 @@ func (s *sriov) createVFs(iface *sriovnetworkv1.Interface) error {
 			return nil
 		}
 	}
+	// Clean stale VF representor interfaces and detach PF uplink from the managed
+	// bridge before VF re-creation. After host reboot, representors from the previous
+	// lifecycle remain in the bridge; the PF uplink also needs to be detached because
+	// setEswitchModeAndNumVFsMlx() skips bridge cleanup when NIC is already
+	// in legacy mode (which is always the case after reboot).
+	if expectedEswitchMode == sriovnetworkv1.ESwithModeSwitchDev {
+		if err := s.detachUplinkAndVFRepresentorsFromBridge(iface.PciAddress); err != nil {
+			return fmt.Errorf("failed to clean managed bridge before creating VFs for device %s: %w", iface.PciAddress, err)
+		}
+	}
 	return s.setEswitchModeAndNumVFs(iface.PciAddress, expectedEswitchMode, iface.NumVfs)
 }
 
@@ -1256,8 +1326,8 @@ func (s *sriov) setEswitchModeAndNumVFsMlx(pciAddr string, desiredEswitchMode st
 	if s.GetNicSriovMode(pciAddr) != sriovnetworkv1.ESwithModeLegacy {
 		// detach PF from the managed bridge before switching the mode,
 		// changing of eSwitch mode may fail if NIC is part of the bridge (has offloaded TC rules)
-		if err := s.detachPFFromBridge(pciAddr); err != nil {
-			return err
+		if err := s.detachUplinkAndVFRepresentorsFromBridge(pciAddr); err != nil {
+			return fmt.Errorf("failed to clean managed bridge before changing eSwitch mode for device %s: %w", pciAddr, err)
 		}
 		if err := s.unbindAllVFsOnPF(pciAddr); err != nil {
 			log.Log.Error(err, "setEswitchModeAndNumVFsMlx(): failed to unbind VFs", "device", pciAddr, "mode", desiredEswitchMode)
@@ -1311,15 +1381,16 @@ func (s *sriov) setEswitchModeAndNumVFsIce(pciAddr string, desiredEswitchMode st
 	return nil
 }
 
-// detach PF from the managed bridge
-func (s *sriov) detachPFFromBridge(pciAddr string) error {
-	log.Log.V(2).Info("detachPFFromBridge(): detach PF", "device", pciAddr)
+// detachUplinkAndVFRepresentorsFromBridge detaches a PF uplink and all of its VF
+// representors from the managed bridge.
+func (s *sriov) detachUplinkAndVFRepresentorsFromBridge(pciAddr string) error {
+	log.Log.V(2).Info("detachUplinkAndVFRepresentorsFromBridge(): detach uplink and VF representors", "device", pciAddr)
 	if !vars.ManageSoftwareBridges {
 		return nil
 	}
-	if err := s.bridgeHelper.DetachInterfaceFromManagedBridge(pciAddr); err != nil {
-		log.Log.Error(err, "detachPFFromBridge(): failed to detach interface from the managed bridge", "device", pciAddr)
-		return err
+	if err := s.bridgeHelper.DetachUplinkAndVFRepresentorsFromManagedBridge(pciAddr); err != nil {
+		log.Log.Error(err, "detachUplinkAndVFRepresentorsFromBridge(): failed to detach uplink and VF representors from the managed bridge", "device", pciAddr)
+		return fmt.Errorf("failed to detach uplink and VF representors from managed bridge for device %s: %w", pciAddr, err)
 	}
 	return nil
 }

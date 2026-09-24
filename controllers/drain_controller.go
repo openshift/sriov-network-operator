@@ -216,19 +216,25 @@ func (dr *DrainReconcile) SetupWithManager(mgr ctrl.Manager) error {
 	nodePredicates := builder.WithPredicates(DrainAnnotationPredicate{})
 	nodeStatePredicates := builder.WithPredicates(DrainStateAnnotationPredicate{})
 
+	// Both Node and SriovNetworkNodeState events are enqueued through the same
+	// handler so they share the same workqueue key ({Namespace, Name}).  This is
+	// critical: the workqueue guarantees per-key serialization, so using
+	// identical keys prevents two workers from draining the same node in
+	// parallel.  Using For(Node) would produce a different key (empty namespace
+	// for cluster-scoped Nodes) and break this guarantee.
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("drain-controller").
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 50,
 			LogConstructor: func(request *reconcile.Request) logr.Logger {
 				logger := mgr.GetLogger().WithValues("Function", "Drain")
-				// Inspired by https://github.com/kubernetes-sigs/controller-runtime/blob/52b17917caa97ec546423867d9637f1787830f3e/pkg/builder/controller.go#L447
 				if req, ok := any(request).(*reconcile.Request); ok && req != nil {
 					logger = logger.WithValues("node", request.Name)
 				}
 				return logger
 			},
 		}).
-		For(&corev1.Node{}, nodePredicates).
+		Watches(&corev1.Node{}, createUpdateEnqueue, nodePredicates).
 		Watches(&sriovnetworkv1.SriovNetworkNodeState{}, createUpdateEnqueue, nodeStatePredicates).
 		Complete(dr)
 }

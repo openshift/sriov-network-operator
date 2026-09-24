@@ -190,7 +190,7 @@ func getMetricsForNode(nodeName string) map[string]*dto.MetricFamily {
 
 	metricsExporterPod := metricsExporterPods.Items[0]
 
-	command := []string{"curl", "http://127.0.0.1:9110/metrics"}
+	command := []string{"wget", "-qO-", "http://127.0.0.1:9110/metrics"}
 	stdout, stderr, err := pod.ExecCommand(clients, &metricsExporterPod, command...)
 	Expect(err).ToNot(HaveOccurred(),
 		"pod: [%s/%s] command: [%v]\nstdout: %s\nstderr: %s", metricsExporterPod.Namespace, metricsExporterPod.Name, command, stdout, stderr)

@@ -182,7 +182,8 @@ var _ = Describe("[sriov] aws platform", Ordered, func() {
 			savedStatus := nodeState.Status
 
 			By("delete config daemon pod on the node")
-			configDaemonPod := getConfigDaemonPod(node)
+			configDaemonPod, err := getConfigDaemonPod(node)
+			Expect(err).ToNot(HaveOccurred())
 			oldPodName := configDaemonPod.Name
 			err = clients.Pods(operatorNamespace).Delete(context.Background(), configDaemonPod.Name, metav1.DeleteOptions{
 				GracePeriodSeconds: ptr.To(int64(0)),
@@ -191,9 +192,9 @@ var _ = Describe("[sriov] aws platform", Ordered, func() {
 
 			By("waiting for the new config daemon pod to be running")
 			Eventually(func() bool {
-				newPod := getConfigDaemonPod(node)
-				// Make sure we got a different pod (new one)
-				if newPod.Name == oldPodName {
+				newPod, err := getConfigDaemonPod(node)
+				// Make sure the replacement pod exists and is different from the deleted one
+				if err != nil || newPod.Name == oldPodName {
 					return false
 				}
 				return newPod.Status.Phase == corev1.PodRunning

@@ -3,6 +3,7 @@ package ovs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -243,6 +244,21 @@ var _ = Describe("OVS", func() {
 					map[string]string{"key2": "val2new"},
 				))
 		})
+	})
+
+	Context("isVFRepresentorName", func() {
+		DescribeTable("matching the operator udev naming convention",
+			func(interfaceName, pfName string, expected bool) {
+				Expect(isVFRepresentorName(interfaceName, pfName)).To(Equal(expected))
+			},
+			Entry("zero VF index", "enp216s0f0np0_0", "enp216s0f0np0", true),
+			Entry("sparse VF index", "enp216s0f0np0_7", "enp216s0f0np0", true),
+			Entry("non-numeric suffix", "enp216s0f0np0_backup", "enp216s0f0np0", false),
+			Entry("empty suffix", "enp216s0f0np0_", "enp216s0f0np0", false),
+			Entry("negative VF index", "enp216s0f0np0_-1", "enp216s0f0np0", false),
+			Entry("explicitly positive VF index", "enp216s0f0np0_+1", "enp216s0f0np0", false),
+			Entry("different PF", "enp216s0f1np0_0", "enp216s0f0np0", false),
+		)
 	})
 
 	Context("client", func() {
@@ -606,19 +622,27 @@ var _ = Describe("OVS", func() {
 				Expect(getDBContent(ctx, ovsClient)).To(Equal(initialDBContent))
 			})
 		})
-		Context("RemoveInterfaceFromOVSBridge", func() {
+		Context("DetachUplinkAndVFRepresentorsFromOVSBridge", func() {
+			It("should preserve a managed bridge store lookup error", func() {
+				testErr := errors.New("store lookup failed")
+				store.EXPECT().GetManagedOVSBridges().Return(nil, testErr)
+
+				err := ovs.DetachUplinkAndVFRepresentorsFromOVSBridge(ctx, "0000:d8:00.0")
+
+				Expect(errors.Is(err, testErr)).To(BeTrue())
+			})
 			It("should not remove if interface is part of unmanaged bridge", func() {
 				store.EXPECT().GetManagedOVSBridges().Return(nil, nil)
 				initialDBContent := getDefaultInitialDBContent()
 				createInitialDBContent(ctx, ovsClient, initialDBContent)
-				Expect(ovs.RemoveInterfaceFromOVSBridge(ctx, "0000:d8:00.0")).NotTo(HaveOccurred())
+				Expect(ovs.DetachUplinkAndVFRepresentorsFromOVSBridge(ctx, "0000:d8:00.0")).NotTo(HaveOccurred())
 				Expect(getDBContent(ctx, ovsClient)).To(Equal(initialDBContent))
 			})
 			It("should remove interface from managed bridge", func() {
 				store.EXPECT().GetManagedOVSBridges().Return(getManagedBridges(), nil)
 				initialDBContent := getDefaultInitialDBContent()
 				createInitialDBContent(ctx, ovsClient, initialDBContent)
-				Expect(ovs.RemoveInterfaceFromOVSBridge(ctx, "0000:d8:00.0")).NotTo(HaveOccurred())
+				Expect(ovs.DetachUplinkAndVFRepresentorsFromOVSBridge(ctx, "0000:d8:00.0")).NotTo(HaveOccurred())
 				dbContent := getDBContent(ctx, ovsClient)
 				Expect(dbContent.Bridge[0].UUID).To(Equal(initialDBContent.Bridge[0].UUID))
 				Expect(dbContent.Interface).To(BeEmpty())
@@ -627,7 +651,121 @@ var _ = Describe("OVS", func() {
 			It("bridge not found", func() {
 				store.EXPECT().GetManagedOVSBridges().Return(getManagedBridges(), nil)
 				store.EXPECT().RemoveManagedOVSBridge("br-0000_d8_00.0").Return(nil)
-				Expect(ovs.RemoveInterfaceFromOVSBridge(ctx, "0000:d8:00.0")).NotTo(HaveOccurred())
+				Expect(ovs.DetachUplinkAndVFRepresentorsFromOVSBridge(ctx, "0000:d8:00.0")).NotTo(HaveOccurred())
+			})
+			It("should preserve an error removing a stale bridge from the store", func() {
+				testErr := errors.New("store cleanup failed")
+				store.EXPECT().GetManagedOVSBridges().Return(getManagedBridges(), nil)
+				store.EXPECT().RemoveManagedOVSBridge("br-0000_d8_00.0").Return(testErr)
+
+				err := ovs.DetachUplinkAndVFRepresentorsFromOVSBridge(ctx, "0000:d8:00.0")
+
+				Expect(errors.Is(err, testErr)).To(BeTrue())
+			})
+			It("should remove every VF representor on the managed bridge", func() {
+				store.EXPECT().GetManagedOVSBridges().Return(getManagedBridges(), nil)
+				initialDBContent := getDefaultInitialDBContent()
+
+				// The gap verifies cleanup is based on actual bridge contents instead of
+				// stopping at the first missing VF index or using the current VF count.
+				rep0Iface := &InterfaceEntry{
+					Name: "enp216s0f0np0_0",
+					UUID: uuid.NewString(),
+					Type: "dpdk",
+				}
+				rep0Port := &PortEntry{
+					Name:       "enp216s0f0np0_0",
+					UUID:       uuid.NewString(),
+					Interfaces: []string{rep0Iface.UUID},
+				}
+				rep7Iface := &InterfaceEntry{
+					Name: "enp216s0f0np0_7",
+					UUID: uuid.NewString(),
+					Type: "dpdk",
+				}
+				rep7Port := &PortEntry{
+					Name:       "enp216s0f0np0_7",
+					UUID:       uuid.NewString(),
+					Interfaces: []string{rep7Iface.UUID},
+				}
+				unrelatedIface := &InterfaceEntry{
+					Name: "enp216s0f0np0_backup",
+					UUID: uuid.NewString(),
+					Type: "dpdk",
+				}
+				unrelatedPort := &PortEntry{
+					Name:       "enp216s0f0np0_backup",
+					UUID:       uuid.NewString(),
+					Interfaces: []string{unrelatedIface.UUID},
+				}
+				initialDBContent.Interface = append(initialDBContent.Interface, rep0Iface, rep7Iface, unrelatedIface)
+				initialDBContent.Port = append(initialDBContent.Port, rep0Port, rep7Port, unrelatedPort)
+				initialDBContent.Bridge[0].Ports = append(initialDBContent.Bridge[0].Ports, rep0Port.UUID, rep7Port.UUID, unrelatedPort.UUID)
+
+				createInitialDBContent(ctx, ovsClient, initialDBContent)
+				Expect(ovs.DetachUplinkAndVFRepresentorsFromOVSBridge(ctx, "0000:d8:00.0")).NotTo(HaveOccurred())
+				dbContent := getDBContent(ctx, ovsClient)
+				Expect(dbContent.Interface).To(ConsistOf(unrelatedIface))
+				Expect(dbContent.Port).To(ConsistOf(unrelatedPort))
+				Expect(dbContent.Bridge).To(HaveLen(1))
+				Expect(dbContent.Bridge[0].UUID).To(Equal(initialDBContent.Bridge[0].UUID))
+				Expect(dbContent.Bridge[0].Ports).To(ConsistOf(unrelatedPort.UUID))
+			})
+			It("should find interface on second uplink of multi-uplink bridge", func() {
+				mtu := 5000
+				multiUplinkBridges := map[string]*sriovnetworkv1.OVSConfigExt{
+					"br-0000_d8_00.0": {
+						Name:   "br-0000_d8_00.0",
+						Bridge: sriovnetworkv1.OVSBridgeConfig{DatapathType: "netdev"},
+						Uplinks: []sriovnetworkv1.OVSUplinkConfigExt{
+							{PciAddress: "0000:d8:00.0", Name: "enp216s0f0np0", Interface: sriovnetworkv1.OVSInterfaceConfig{Type: "dpdk", MTURequest: &mtu}},
+							{PciAddress: "0000:d8:00.1", Name: "enp216s0f1np0", Interface: sriovnetworkv1.OVSInterfaceConfig{Type: "dpdk", MTURequest: &mtu}},
+						},
+					},
+				}
+				store.EXPECT().GetManagedOVSBridges().Return(multiUplinkBridges, nil)
+
+				// Build DB content with only the second uplink
+				iface := &InterfaceEntry{
+					Name: "enp216s0f1np0",
+					UUID: uuid.NewString(),
+					Type: "dpdk",
+				}
+				port := &PortEntry{
+					Name:       "enp216s0f1np0",
+					UUID:       uuid.NewString(),
+					Interfaces: []string{iface.UUID},
+				}
+				br := &BridgeEntry{
+					Name:         "br-0000_d8_00.0",
+					UUID:         uuid.NewString(),
+					Ports:        []string{port.UUID},
+					DatapathType: "netdev",
+				}
+				ovsEntry := &OpenvSwitchEntry{
+					UUID:    uuid.NewString(),
+					Bridges: []string{br.UUID},
+				}
+				initialDBContent := &testDBEntries{
+					OpenVSwitch: []*OpenvSwitchEntry{ovsEntry},
+					Bridge:      []*BridgeEntry{br},
+					Port:        []*PortEntry{port},
+					Interface:   []*InterfaceEntry{iface},
+				}
+				createInitialDBContent(ctx, ovsClient, initialDBContent)
+				Expect(ovs.DetachUplinkAndVFRepresentorsFromOVSBridge(ctx, "0000:d8:00.1")).NotTo(HaveOccurred())
+				dbContent := getDBContent(ctx, ovsClient)
+				Expect(dbContent.Interface).To(BeEmpty())
+				Expect(dbContent.Port).To(BeEmpty())
+			})
+			It("should succeed when representor interfaces don't exist in OVSDB", func() {
+				store.EXPECT().GetManagedOVSBridges().Return(getManagedBridges(), nil)
+				initialDBContent := getDefaultInitialDBContent()
+				createInitialDBContent(ctx, ovsClient, initialDBContent)
+				Expect(ovs.DetachUplinkAndVFRepresentorsFromOVSBridge(ctx, "0000:d8:00.0")).NotTo(HaveOccurred())
+				dbContent := getDBContent(ctx, ovsClient)
+				Expect(dbContent.Interface).To(BeEmpty())
+				Expect(dbContent.Port).To(BeEmpty())
 			})
 		})
 	})

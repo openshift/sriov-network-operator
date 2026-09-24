@@ -174,34 +174,37 @@ var _ = Describe("Drain Controller", Ordered, func() {
 			simulateDaemonSetAnnotation(node1, constants.DrainRequired)
 			simulateDaemonSetAnnotation(node2, constants.DrainRequired)
 
-			// Only the first node drains
-			expectNodeStateAnnotation(nodeState1, constants.DrainComplete)
-			expectNodeStateAnnotation(nodeState2, constants.DrainIdle)
+			// Exactly one of the two nodes should drain first.
+			// Which one drains first is non-deterministic due to concurrent reconciles.
+			firstDrainedNode, firstDrainedNodeState, secondDrainedNode, secondDrainedNodeState :=
+				expectFirstDrainedNode(node1, nodeState1, node2, nodeState2)
+
+			expectNodeStateAnnotation(firstDrainedNodeState, constants.DrainComplete)
+			expectNodeStateAnnotation(secondDrainedNodeState, constants.DrainIdle)
 			expectNodeStateAnnotation(nodeState3, constants.DrainIdle)
-			expectNodeIsNotSchedulable(node1)
-			expectNodeIsSchedulable(node2)
+			expectNodeIsNotSchedulable(firstDrainedNode)
+			expectNodeIsSchedulable(secondDrainedNode)
 			expectNodeIsSchedulable(node3)
 
-			simulateDaemonSetAnnotation(node1, constants.DrainIdle)
+			simulateDaemonSetAnnotation(firstDrainedNode, constants.DrainIdle)
 
-			expectNodeStateAnnotation(nodeState1, constants.DrainIdle)
-			expectNodeIsSchedulable(node1)
+			expectNodeStateAnnotation(firstDrainedNodeState, constants.DrainIdle)
+			expectNodeIsSchedulable(firstDrainedNode)
 
-			// Second node starts draining
-			expectNodeStateAnnotation(nodeState1, constants.DrainIdle)
-			expectNodeStateAnnotation(nodeState2, constants.DrainComplete)
+			// Then the second node can drain.
+			expectNodeStateAnnotation(secondDrainedNodeState, constants.DrainComplete)
 			expectNodeStateAnnotation(nodeState3, constants.DrainIdle)
-			expectNodeIsSchedulable(node1)
-			expectNodeIsNotSchedulable(node2)
+			expectNodeIsSchedulable(firstDrainedNode)
+			expectNodeIsNotSchedulable(secondDrainedNode)
 			expectNodeIsSchedulable(node3)
 
-			simulateDaemonSetAnnotation(node2, constants.DrainIdle)
+			simulateDaemonSetAnnotation(secondDrainedNode, constants.DrainIdle)
 
-			expectNodeStateAnnotation(nodeState1, constants.DrainIdle)
-			expectNodeStateAnnotation(nodeState2, constants.DrainIdle)
+			expectNodeStateAnnotation(firstDrainedNodeState, constants.DrainIdle)
+			expectNodeStateAnnotation(secondDrainedNodeState, constants.DrainIdle)
 			expectNodeStateAnnotation(nodeState3, constants.DrainIdle)
-			expectNodeIsSchedulable(node1)
-			expectNodeIsSchedulable(node2)
+			expectNodeIsSchedulable(firstDrainedNode)
+			expectNodeIsSchedulable(secondDrainedNode)
 			expectNodeIsSchedulable(node3)
 		})
 
@@ -389,6 +392,34 @@ func ExpectDrainCompleteNodesHaveIsNotSchedule(nodesState ...*sriovnetworkv1.Sri
 			expectNodeIsNotSchedulable(node)
 		}
 	}
+}
+
+func expectFirstDrainedNode(
+	node1 *corev1.Node,
+	nodeState1 *sriovnetworkv1.SriovNetworkNodeState,
+	node2 *corev1.Node,
+	nodeState2 *sriovnetworkv1.SriovNetworkNodeState,
+) (*corev1.Node, *sriovnetworkv1.SriovNetworkNodeState, *corev1.Node, *sriovnetworkv1.SriovNetworkNodeState) {
+	firstIsNode1 := false
+
+	EventuallyWithOffset(1, func(g Gomega) {
+		g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState1.Namespace, Name: nodeState1.Name}, nodeState1)).
+			ToNot(HaveOccurred())
+		g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState2.Namespace, Name: nodeState2.Name}, nodeState2)).
+			ToNot(HaveOccurred())
+
+		node1DrainComplete := utils.ObjectHasAnnotation(nodeState1, constants.NodeStateDrainAnnotationCurrent, constants.DrainComplete)
+		node2DrainComplete := utils.ObjectHasAnnotation(nodeState2, constants.NodeStateDrainAnnotationCurrent, constants.DrainComplete)
+
+		// Exactly one node should complete draining first.
+		g.Expect(node1DrainComplete != node2DrainComplete).To(BeTrue())
+		firstIsNode1 = node1DrainComplete
+	}, "20s", "1s").Should(Succeed())
+
+	if firstIsNode1 {
+		return node1, nodeState1, node2, nodeState2
+	}
+	return node2, nodeState2, node1, nodeState1
 }
 
 func expectNodeIsNotSchedulable(node *corev1.Node) {

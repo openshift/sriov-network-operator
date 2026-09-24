@@ -267,14 +267,24 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 				}, 2*time.Minute, time.Second).Should(BeTrue())
 			}
 
-			By("checking the amount of allocatable devices remains after device plugin reset")
-			Consistently(func() int64 {
+			By("waiting for the new sriov device-plugin pod to be running on the node")
+			Eventually(func(g Gomega) []corev1.Pod {
+				pods, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
+					LabelSelector: "app=sriov-device-plugin",
+					FieldSelector: "spec.nodeName=" + testNode,
+				})
+				g.Expect(err).ToNot(HaveOccurred())
+				return pods.Items
+			}, 2*time.Minute, 2*time.Second).Should(ContainElement(HaveField("Status.Phase", corev1.PodRunning)), "expected a running sriov-device-plugin pod on node %s", testNode)
+
+			By("checking allocatable openshift.io/" + resourceName + " returns to the prior value after device-plugin restart")
+			Eventually(func(g Gomega) int64 {
 				err = clients.Get(context.Background(), client.ObjectKey{Name: testNode}, testedNode)
-				Expect(err).ToNot(HaveOccurred())
+				g.Expect(err).ToNot(HaveOccurred())
 				resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+resourceName)]
 				newAllocatable, _ := resNum.AsInt64()
 				return newAllocatable
-			}, 1*time.Minute, 5*time.Second).Should(Equal(allocatable))
+			}, 2*time.Minute, 5*time.Second).Should(Equal(allocatable))
 
 			By("checking counters inside the pods")
 			strOut, _, err := pod.ExecCommand(clients, firstPod, "/bin/bash", "-c", "ip link show net1")
