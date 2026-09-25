@@ -215,6 +215,17 @@ systemctl enable --now load-br-netfilter
 
 systemctl restart NetworkManager
 
+echo 'GRUB_TIMEOUT=1
+GRUB_DISTRIBUTOR="$(sed 's, release .*$,,g' /etc/system-release)"
+GRUB_DEFAULT=saved
+GRUB_DISABLE_SUBMENU=true
+GRUB_TERMINAL_OUTPUT="console"
+GRUB_CMDLINE_LINUX="console=ttyS0,115200n8 no_timer_check net.ifnames=0 hugepagesz=2M hugepages=16 crashkernel=1G-4G:192M,4G-64G:256M,64G-:512M"
+GRUB_DISABLE_RECOVERY="true"
+GRUB_ENABLE_BLSCFG=true' > /etc/default/grub
+
+grub2-mkconfig -o /boot/grub2/grub.cfg
+
 EOF
 
 }
@@ -223,6 +234,8 @@ update_host $cluster_name-ctlplane-0
 for ((num=0; num<NUM_OF_WORKERS; num++))
 do
   update_host $cluster_name-worker-$num
+  sleep 5
+  kcli ssh $cluster_name-worker-$num sudo reboot || true
 done
 
 # remove the patch after multus bug is fixed
