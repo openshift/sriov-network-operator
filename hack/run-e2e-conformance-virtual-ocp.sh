@@ -139,6 +139,26 @@ if [ `cat /etc/hosts | grep ${api_ip} | grep "default-route-openshift-image-regi
   sudo sed -i "s/${api_ip}/${api_ip} default-route-openshift-image-registry.apps.${cluster_name}.${domain_name}/g" /etc/hosts
 fi
 
+# Create performance profile to allocate hugepages
+cat <<EOF | oc apply -f -
+apiVersion: performance.openshift.io/v1
+kind: PerformanceProfile
+metadata:
+  name: performance
+spec:
+  cpu:
+    isolated: "2-5"
+    reserved: "0-1"
+  hugepages:
+    defaultHugepagesSize: 2M
+    pages:
+      - count: 16
+        size: 2M
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
+  realTimeKernel:
+    enabled: false
+EOF
 
 cat <<EOF | oc apply -f -
 apiVersion: v1

@@ -121,6 +121,9 @@ type System struct {
 	// +kubebuilder:validation:Enum=shared;exclusive
 	//RDMA subsystem. Allowed value "shared", "exclusive".
 	RdmaMode string `json:"rdmaMode,omitempty"`
+	// OVS config. It will be provided for ovs-vswitchd service as other_config option
+	// +kubebuilder:default:={hw-offload: "true"}
+	OvsConfig map[string]string `json:"ovsConfig,omitempty"`
 }
 
 // SriovNetworkNodeStateStatus defines the observed state of SriovNetworkNodeState

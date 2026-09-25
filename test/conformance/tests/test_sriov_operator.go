@@ -231,6 +231,93 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 							FieldPath:  "metadata.annotations",
 						},
 					})))
+
+				By("checking the label is present in the pod")
+				stdout, stderr, err := pod.ExecCommand(clients, runningPod, "/bin/bash", "-c", "cat /etc/podnetinfo/labels")
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("stdout: %s, stderr: %s", stdout, stderr))
+				Expect(stdout).To(ContainSubstring("anyname=\"anyvalue\""))
+			})
+
+			It("should inject also hugepages if requested in the pod", func() {
+				var hugepagesName string
+				var hupagesAmount int64
+
+				hasHugepages := false
+				nodeObj := &corev1.Node{}
+				Eventually(func() error {
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: node}, nodeObj)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				for resourceName, resource := range nodeObj.Status.Allocatable {
+					if strings.HasPrefix(string(resourceName), "hugepages") && resource.Value() > 0 {
+						hasHugepages = true
+						hugepagesName = string(resourceName)
+						hupagesAmount = resource.Value()
+						break
+					}
+				}
+				if !hasHugepages {
+					Skip("No hugepages found on the node")
+				}
+
+				sriovNetwork := &sriovv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-apivolnetwork",
+						Namespace: operatorNamespace,
+					},
+					Spec: sriovv1.SriovNetworkSpec{
+						ResourceName:     resourceName,
+						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181"}`,
+						NetworkNamespace: namespaces.Test,
+					}}
+				err := clients.Create(context.Background(), sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+
+				waitForNetAttachDef("test-apivolnetwork", namespaces.Test)
+
+				podDefinition := pod.RedefineWithHugepages(pod.DefineWithNetworks([]string{sriovNetwork.Name}), hugepagesName, hupagesAmount)
+				created, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+
+				runningPod := waitForPodRunning(created)
+
+				var downwardVolume *corev1.Volume
+				for _, v := range runningPod.Spec.Volumes {
+					if v.Name == volumePodNetInfo {
+						downwardVolume = v.DeepCopy()
+						break
+					}
+				}
+
+				// In the DownwardAPI the resource injector rename the hugepage size with underscores
+				// example hugepages-1Gi -> hugepages_1Gi
+				result := strings.Replace(hugepagesName, "-", "_", 1)
+				if len(result) > 0 {
+					result = result[:len(result)-1]
+				}
+
+				Expect(downwardVolume).ToNot(BeNil(), "Downward volume not found")
+				Expect(downwardVolume.DownwardAPI).ToNot(BeNil(), "Downward api not found in volume")
+				Expect(downwardVolume.DownwardAPI.Items).To(SatisfyAll(
+					ContainElement(MatchFields(IgnoreExtras, Fields{
+						"Path": Equal(fmt.Sprintf("%s_request_test", result)),
+						"ResourceFieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
+							"ContainerName": Equal("test"),
+							"Resource":      Equal(fmt.Sprintf("requests.%s", hugepagesName)),
+						})),
+					})), ContainElement(MatchFields(IgnoreExtras, Fields{
+						"Path": Equal(fmt.Sprintf("%s_limit_test", result)),
+						"ResourceFieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
+							"ContainerName": Equal("test"),
+							"Resource":      Equal(fmt.Sprintf("limits.%s", hugepagesName)),
+						})),
+					})), ContainElement(MatchFields(IgnoreExtras, Fields{
+						"Path": Equal("annotations"),
+						"FieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
+							"APIVersion": Equal("v1"),
+							"FieldPath":  Equal("metadata.annotations"),
+						})),
+					}))))
 			})
 		})
 

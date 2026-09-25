@@ -77,10 +77,7 @@ func (bm *Baremetal) GetVendorPlugins(ns *sriovnetworkv1.SriovNetworkNodeState) 
 	}
 
 	if clusterOrchestrator.ClusterType() == consts.ClusterTypeKubernetes {
-		k8sPlugin, err := k8splugin.NewK8sPlugin(bm.hostHelpers)
-		if err != nil {
-			return nil, nil, err
-		}
+		k8sPlugin := k8splugin.NewK8sPlugin(bm.hostHelpers)
 		additionalPlugins = append(additionalPlugins, k8sPlugin)
 	}
 
