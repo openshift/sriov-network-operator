@@ -14,7 +14,6 @@ rules:
       - services
       - endpoints
       - persistentvolumeclaims
-      - events
       - configmaps
       - secrets
     verbs:
@@ -77,6 +76,14 @@ rules:
       - 'leases'
     verbs:
       - '*'
+  - apiGroups:
+      - events.k8s.io
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+      - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -125,12 +132,13 @@ rules:
     verbs:
       - '*'
   - apiGroups:
-      - ""
+      - events.k8s.io
     resources:
       - events
     verbs:
       - create
       - patch
+      - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

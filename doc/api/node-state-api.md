@@ -145,6 +145,47 @@ status:
 |-------|------|-------------|
 | `syncStatus` | string | Synchronization status: "Succeeded", "Failed", "InProgress" |
 | `lastSyncError` | string | Last error message if sync failed |
+| `conditions` | []metav1.Condition | Standard Kubernetes conditions (see below) |
+
+### Status Conditions
+
+`SriovNetworkNodeState` exposes three standard Kubernetes conditions:
+
+| Condition | Owner | Description |
+|-----------|-------|-------------|
+| `Ready` | config daemon | `True` when the node's SR-IOV configuration has been successfully applied |
+| `Progressing` | config daemon | `True` when the daemon is actively applying configuration changes |
+| `Draining` | drain controller | `True` when the node is undergoing a drain operation |
+
+#### Ready Condition Reasons
+
+| Reason | Status | Description |
+|--------|--------|-------------|
+| `NodeConfigurationReady` | True | Node configuration has been successfully applied |
+| `NotReady` | False | Node configuration failed (message carries the error detail) |
+| `WaitingForDrain` | False | Configuration is pending because a node drain is required first |
+
+#### Progressing Condition Reasons
+
+| Reason | Status | Description |
+|--------|--------|-------------|
+| `ApplyingConfiguration` | True | Daemon is actively applying SR-IOV configuration |
+| `WaitingForDrain` | True | Daemon is waiting for the drain controller to drain the node |
+| `NotProgressing` | False | No configuration change is in progress |
+
+#### Draining Condition Reasons
+
+| Reason | Status | Description |
+|--------|--------|-------------|
+| `DrainNotNeeded` | False | No drain operation is in progress or required |
+| `DrainPending` | True | Drain is waiting for an available slot before it can start |
+| `DrainingNode` | True | Node drain is actively in progress |
+| `DrainFailed` | True | Drain is in progress but encountering errors (e.g., PDB violations) |
+| `DrainCompleted` | False | Drain operation completed successfully |
+
+The `Draining` condition is owned by the drain controller via Server-Side Apply, while `Ready` and `Progressing` are owned by the config daemon. This ownership split prevents conflicts when both components update status concurrently.
+
+Stability is defined as: `Ready=True`, `Progressing=False`, `Draining=False`. For a stable node, all three conditions are expected to be present with these values.
 
 ## Usage Examples
 

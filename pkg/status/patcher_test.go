@@ -365,3 +365,287 @@ var _ = Describe("ApplyCondition", func() {
 		})
 	})
 })
+
+var _ = Describe("ApplyStatus", func() {
+	var (
+		ctx       context.Context
+		nodeState *sriovnetworkv1.SriovNetworkNodeState
+		daemonMgr Interface
+		drainMgr  Interface
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		daemonMgr = NewPatcher(k8sClient, nil, scheme.Scheme, "daemon-manager")
+		drainMgr = NewPatcher(k8sClient, nil, scheme.Scheme, "drain-manager")
+
+		nodeState = &sriovnetworkv1.SriovNetworkNodeState{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "test-nodestate-",
+				Namespace:    "default",
+			},
+		}
+		Expect(k8sClient.Create(ctx, nodeState)).To(Succeed())
+		DeferCleanup(func() {
+			_ = k8sClient.Delete(ctx, nodeState)
+		})
+	})
+
+	It("should apply non-condition status fields and conditions together", func() {
+		statusFields := map[string]interface{}{
+			"syncStatus":    "Succeeded",
+			"lastSyncError": "",
+		}
+		conditions := []metav1.Condition{
+			NewCondition("Ready", metav1.ConditionTrue, "NodeReady", "all good", nodeState.Generation),
+			NewCondition("Progressing", metav1.ConditionFalse, "NotProgressing", "done", nodeState.Generation),
+		}
+
+		Expect(daemonMgr.ApplyStatus(ctx, nodeState, statusFields, conditions)).To(Succeed())
+
+		updated := &sriovnetworkv1.SriovNetworkNodeState{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), updated)).To(Succeed())
+
+		Expect(updated.Status.SyncStatus).To(Equal("Succeeded"))
+		Expect(updated.Status.LastSyncError).To(BeEmpty())
+		Expect(updated.Status.Conditions).To(HaveLen(2))
+	})
+
+	It("should ignore conditions in statusFields and apply ownedConditions only", func() {
+		statusFields := map[string]interface{}{
+			"syncStatus":    "Succeeded",
+			"lastSyncError": "",
+			"conditions": []map[string]interface{}{
+				{
+					"type":    "Ready",
+					"status":  "False",
+					"reason":  "StaleReason",
+					"message": "stale condition from statusFields",
+				},
+			},
+		}
+		ownedConditions := []metav1.Condition{
+			NewCondition("Ready", metav1.ConditionTrue, "NodeReady", "from ownedConditions", nodeState.Generation),
+		}
+
+		Expect(daemonMgr.ApplyStatus(ctx, nodeState, statusFields, ownedConditions)).To(Succeed())
+
+		updated := &sriovnetworkv1.SriovNetworkNodeState{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), updated)).To(Succeed())
+
+		Expect(updated.Status.SyncStatus).To(Equal("Succeeded"))
+		Expect(updated.Status.Conditions).To(HaveLen(1))
+		Expect(updated.Status.Conditions[0].Type).To(Equal("Ready"))
+		Expect(updated.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+		Expect(updated.Status.Conditions[0].Reason).To(Equal("NodeReady"))
+		Expect(updated.Status.Conditions[0].Message).To(Equal("from ownedConditions"))
+	})
+
+	It("should apply conditions when status fields are nil", func() {
+		conditions := []metav1.Condition{
+			NewCondition("Ready", metav1.ConditionTrue, "NodeReady", "all good", nodeState.Generation),
+		}
+
+		Expect(daemonMgr.ApplyStatus(ctx, nodeState, nil, conditions)).To(Succeed())
+
+		updated := &sriovnetworkv1.SriovNetworkNodeState{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), updated)).To(Succeed())
+		Expect(updated.Status.Conditions).To(HaveLen(1))
+		Expect(updated.Status.Conditions[0].Type).To(Equal("Ready"))
+		Expect(updated.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+	})
+
+	It("should apply complex status fields like interfaces and bridges", func() {
+		ifaces := sriovnetworkv1.InterfaceExts{
+			{PciAddress: "0000:00:01.0", Name: "eth0", NumVfs: 4, TotalVfs: 8},
+		}
+		statusFields := map[string]interface{}{
+			"syncStatus":    "Succeeded",
+			"lastSyncError": "",
+			"interfaces":    ifaces,
+		}
+
+		Expect(daemonMgr.ApplyStatus(ctx, nodeState, statusFields, nil)).To(Succeed())
+
+		updated := &sriovnetworkv1.SriovNetworkNodeState{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), updated)).To(Succeed())
+
+		Expect(updated.Status.SyncStatus).To(Equal("Succeeded"))
+		Expect(updated.Status.Interfaces).To(HaveLen(1))
+		Expect(updated.Status.Interfaces[0].PciAddress).To(Equal("0000:00:01.0"))
+		Expect(updated.Status.Interfaces[0].NumVfs).To(Equal(4))
+	})
+
+	It("should clear lastSyncError when set to empty string", func() {
+		statusFields := map[string]interface{}{
+			"syncStatus":    "Failed",
+			"lastSyncError": "some error",
+		}
+		Expect(daemonMgr.ApplyStatus(ctx, nodeState, statusFields, nil)).To(Succeed())
+
+		fetched := &sriovnetworkv1.SriovNetworkNodeState{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), fetched)).To(Succeed())
+		Expect(fetched.Status.LastSyncError).To(Equal("some error"))
+
+		statusFields["syncStatus"] = "Succeeded"
+		statusFields["lastSyncError"] = ""
+		Expect(daemonMgr.ApplyStatus(ctx, fetched, statusFields, nil)).To(Succeed())
+
+		updated := &sriovnetworkv1.SriovNetworkNodeState{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), updated)).To(Succeed())
+		Expect(updated.Status.SyncStatus).To(Equal("Succeeded"))
+		Expect(updated.Status.LastSyncError).To(BeEmpty())
+	})
+
+	Context("mixed ownership with drain controller", func() {
+		It("should not disturb drain-owned conditions when daemon applies status", func() {
+			By("drain controller sets Draining condition")
+			Expect(drainMgr.ApplyCondition(ctx, nodeState,
+				NewCondition("Draining", metav1.ConditionTrue, "DrainingNode", "drain in progress", nodeState.Generation),
+			)).To(Succeed())
+
+			By("daemon applies status fields and its owned conditions")
+			fetched := &sriovnetworkv1.SriovNetworkNodeState{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), fetched)).To(Succeed())
+
+			statusFields := map[string]interface{}{
+				"syncStatus":    "InProgress",
+				"lastSyncError": "",
+			}
+			daemonConditions := []metav1.Condition{
+				NewCondition("Progressing", metav1.ConditionTrue, "Applying", "configuring", fetched.Generation),
+				NewCondition("Ready", metav1.ConditionFalse, "NotReady", "not yet", fetched.Generation),
+			}
+
+			Expect(daemonMgr.ApplyStatus(ctx, fetched, statusFields, daemonConditions)).To(Succeed())
+
+			By("verifying all conditions coexist")
+			updated := &sriovnetworkv1.SriovNetworkNodeState{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), updated)).To(Succeed())
+
+			Expect(updated.Status.SyncStatus).To(Equal("InProgress"))
+			Expect(updated.Status.Conditions).To(HaveLen(3))
+
+			condMap := make(map[string]metav1.Condition)
+			for _, c := range updated.Status.Conditions {
+				condMap[c.Type] = c
+			}
+			Expect(condMap).To(HaveKey("Draining"))
+			Expect(condMap["Draining"].Status).To(Equal(metav1.ConditionTrue))
+			Expect(condMap["Draining"].Message).To(Equal("drain in progress"))
+			Expect(condMap).To(HaveKey("Progressing"))
+			Expect(condMap["Progressing"].Status).To(Equal(metav1.ConditionTrue))
+			Expect(condMap).To(HaveKey("Ready"))
+			Expect(condMap["Ready"].Status).To(Equal(metav1.ConditionFalse))
+		})
+
+		It("should preserve drain conditions across repeated daemon status updates", func() {
+			By("drain controller sets Draining condition")
+			Expect(drainMgr.ApplyCondition(ctx, nodeState,
+				NewCondition("Draining", metav1.ConditionFalse, "DrainCompleted", "drain done", nodeState.Generation),
+			)).To(Succeed())
+
+			By("daemon applies status — first time")
+			fetched := &sriovnetworkv1.SriovNetworkNodeState{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), fetched)).To(Succeed())
+
+			statusFields := map[string]interface{}{
+				"syncStatus":    "InProgress",
+				"lastSyncError": "",
+			}
+			Expect(daemonMgr.ApplyStatus(ctx, fetched, statusFields,
+				[]metav1.Condition{
+					NewCondition("Progressing", metav1.ConditionTrue, "Applying", "working", fetched.Generation),
+					NewCondition("Ready", metav1.ConditionFalse, "NotReady", "not yet", fetched.Generation),
+				},
+			)).To(Succeed())
+
+			By("daemon applies status — second time with new status")
+			fetched2 := &sriovnetworkv1.SriovNetworkNodeState{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), fetched2)).To(Succeed())
+
+			statusFields["syncStatus"] = "Succeeded"
+			Expect(daemonMgr.ApplyStatus(ctx, fetched2, statusFields,
+				[]metav1.Condition{
+					NewCondition("Progressing", metav1.ConditionFalse, "Done", "finished", fetched2.Generation),
+					NewCondition("Ready", metav1.ConditionTrue, "NodeReady", "ready", fetched2.Generation),
+				},
+			)).To(Succeed())
+
+			By("verifying drain conditions survived both daemon updates")
+			updated := &sriovnetworkv1.SriovNetworkNodeState{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), updated)).To(Succeed())
+
+			Expect(updated.Status.SyncStatus).To(Equal("Succeeded"))
+			Expect(updated.Status.Conditions).To(HaveLen(3))
+
+			condMap := make(map[string]metav1.Condition)
+			for _, c := range updated.Status.Conditions {
+				condMap[c.Type] = c
+			}
+			Expect(condMap["Draining"].Status).To(Equal(metav1.ConditionFalse))
+			Expect(condMap["Draining"].Message).To(Equal("drain done"))
+			Expect(condMap["Progressing"].Status).To(Equal(metav1.ConditionFalse))
+			Expect(condMap["Ready"].Status).To(Equal(metav1.ConditionTrue))
+		})
+
+		It("should allow drain controller to update its conditions after daemon status apply", func() {
+			By("daemon applies initial status")
+			statusFields := map[string]interface{}{
+				"syncStatus":    "Succeeded",
+				"lastSyncError": "",
+			}
+			Expect(daemonMgr.ApplyStatus(ctx, nodeState, statusFields,
+				[]metav1.Condition{
+					NewCondition("Ready", metav1.ConditionTrue, "NodeReady", "ready", nodeState.Generation),
+				},
+			)).To(Succeed())
+
+			By("drain controller sets its own condition")
+			fetched := &sriovnetworkv1.SriovNetworkNodeState{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), fetched)).To(Succeed())
+
+			Expect(drainMgr.ApplyCondition(ctx, fetched,
+				NewCondition("Draining", metav1.ConditionTrue, "DrainingNode", "draining node", fetched.Generation),
+			)).To(Succeed())
+
+			By("verifying both daemon status and drain conditions are present")
+			updated := &sriovnetworkv1.SriovNetworkNodeState{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), updated)).To(Succeed())
+
+			Expect(updated.Status.SyncStatus).To(Equal("Succeeded"))
+			Expect(updated.Status.Conditions).To(HaveLen(2))
+
+			condMap := make(map[string]metav1.Condition)
+			for _, c := range updated.Status.Conditions {
+				condMap[c.Type] = c
+			}
+			Expect(condMap["Ready"].Status).To(Equal(metav1.ConditionTrue))
+			Expect(condMap["Draining"].Status).To(Equal(metav1.ConditionTrue))
+		})
+	})
+
+	It("should preserve LastTransitionTime for conditions when status hasn't changed", func() {
+		oldTime := metav1.NewTime(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+		cond := NewCondition("Ready", metav1.ConditionTrue, "NodeReady", "ready", nodeState.Generation)
+		cond.LastTransitionTime = oldTime
+
+		statusFields := map[string]interface{}{
+			"syncStatus":    "Succeeded",
+			"lastSyncError": "",
+		}
+		Expect(daemonMgr.ApplyStatus(ctx, nodeState, statusFields, []metav1.Condition{cond})).To(Succeed())
+
+		fetched := &sriovnetworkv1.SriovNetworkNodeState{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), fetched)).To(Succeed())
+		Expect(fetched.Status.Conditions[0].LastTransitionTime.Equal(&oldTime)).To(BeTrue())
+
+		newCond := NewCondition("Ready", metav1.ConditionTrue, "NodeReady", "still ready", fetched.Generation)
+		Expect(daemonMgr.ApplyStatus(ctx, fetched, statusFields, []metav1.Condition{newCond})).To(Succeed())
+
+		updated := &sriovnetworkv1.SriovNetworkNodeState{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), updated)).To(Succeed())
+		Expect(updated.Status.Conditions[0].LastTransitionTime.Equal(&oldTime)).
+			To(BeTrue(), "LastTransitionTime should be preserved when condition status is unchanged")
+	})
+})

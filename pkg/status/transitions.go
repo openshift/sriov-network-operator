@@ -108,3 +108,8 @@ func DetectTransitions(oldConditions, newConditions []metav1.Condition) []Transi
 
 	return transitions
 }
+
+// HasTransitions returns true when any condition was added, changed, or removed.
+func HasTransitions(oldConditions, newConditions []metav1.Condition) bool {
+	return len(DetectTransitions(oldConditions, newConditions)) > 0
+}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -86,7 +87,7 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 			return nil, err
 		}
 		if !isStable {
-			return nil, fmt.Errorf("sync status still in progress")
+			return nil, fmt.Errorf("node %s conditions not stable (Ready/Progressing/Drain)", state.Name)
 		}
 
 		node := state.Name
@@ -297,15 +298,22 @@ func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool,
 }
 
 func stateStable(state sriovv1.SriovNetworkNodeState) (bool, error) {
-	switch state.Status.SyncStatus {
-	case "Succeeded":
-		return true, nil
-	// When the config daemon is restarted the status will be empty
-	// This doesn't mean the config was applied
-	case "":
+	readyCond := meta.FindStatusCondition(state.Status.Conditions, sriovv1.ConditionReady)
+	if readyCond == nil || readyCond.Status != metav1.ConditionTrue {
 		return false, nil
 	}
-	return false, nil
+
+	progressingCond := meta.FindStatusCondition(state.Status.Conditions, sriovv1.ConditionProgressing)
+	if progressingCond != nil && progressingCond.Status == metav1.ConditionTrue {
+		return false, nil
+	}
+
+	drainCond := meta.FindStatusCondition(state.Status.Conditions, sriovv1.ConditionDraining)
+	if drainCond != nil && drainCond.Status == metav1.ConditionTrue {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func IsPFDriverSupported(driver string) bool {

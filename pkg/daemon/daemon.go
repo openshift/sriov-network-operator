@@ -23,6 +23,7 @@ import (
 	hosttypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform"
 	plugin "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
@@ -38,7 +39,8 @@ type NodeReconciler struct {
 
 	eventRecorder *EventRecorder
 
-	featureGate featuregate.FeatureGate
+	featureGate   featuregate.FeatureGate
+	statusPatcher status.Interface
 
 	additionalPlugins []plugin.VendorPlugin
 	mainPlugin        plugin.VendorPlugin
@@ -53,6 +55,7 @@ func New(
 	platformInterface platform.Interface,
 	er *EventRecorder,
 	featureGates featuregate.FeatureGate,
+	statusPatcher status.Interface,
 ) *NodeReconciler {
 	return &NodeReconciler{
 		client:            client,
@@ -62,6 +65,7 @@ func New(
 		lastAppliedGeneration: 0,
 		eventRecorder:         er,
 		featureGate:           featureGates,
+		statusPatcher:         statusPatcher,
 	}
 }
 
@@ -185,7 +189,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	//TODO: in the case we need to think what to do if we try to apply again or not
 	if err != nil {
 		reqLogger.Error(err, "failed to check systemd status unexpected error")
-		err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusFailed, "unexpected error")
+		err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusFailed, "unexpected error", false)
 		if err != nil {
 			reqLogger.Error(err, "failed to update nodeState status")
 			return ctrl.Result{}, err
@@ -208,7 +212,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			shouldUpdate := dn.shouldUpdateStatus(current, desiredNodeState)
 			if shouldUpdate {
 				reqLogger.Info("updating nodeState with new host status")
-				err = dn.updateSyncState(ctx, desiredNodeState, desiredNodeState.Status.SyncStatus, desiredNodeState.Status.LastSyncError)
+				err = dn.updateSyncState(ctx, desiredNodeState, desiredNodeState.Status.SyncStatus, desiredNodeState.Status.LastSyncError, false)
 				if err != nil {
 					reqLogger.Error(err, "failed to update nodeState new host status")
 					return ctrl.Result{}, err
@@ -234,7 +238,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// set sync state to inProgress, but we don't clear the failed status
-	err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusInProgress, desiredNodeState.Status.LastSyncError)
+	err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusInProgress, desiredNodeState.Status.LastSyncError, false)
 	if err != nil {
 		reqLogger.Error(err, "failed to update sync status to inProgress")
 		return ctrl.Result{}, err
@@ -272,7 +276,8 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	reqLogger.V(0).Info("aggregated daemon node state requirement",
 		"drain-required", reqDrain, "reboot-required", reqReboot, "disable-drain", vars.DisableDrain)
 
-	// handle drain only if the plugins request drain, or we are already in a draining request state
+	// handle drain whenever the requested changes need a drain, or when the node
+	// is already in the middle of a drain transition.
 	if reqDrain ||
 		!utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotationCurrent, consts.DrainIdle) {
 		drainInProcess, err := dn.handleDrain(ctx, desiredNodeState, reqReboot)
@@ -285,6 +290,11 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		// drain is still in progress we will still requeue the request in case there is an un-expect state in the draining
 		// this will allow the daemon to try again.
 		if drainInProcess {
+			err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusInProgress, desiredNodeState.Status.LastSyncError, true)
+			if err != nil {
+				reqLogger.Error(err, "failed to update sync status while waiting for drain")
+				return ctrl.Result{}, err
+			}
 			reqLogger.Info("node drain still in progress, requeue")
 			return ctrl.Result{RequeueAfter: consts.DaemonRequeueTime}, nil
 		}
@@ -462,7 +472,7 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 		return ctrl.Result{}, err
 	}
 
-	err = dn.updateSyncState(ctx, desiredNodeState, syncStatus, lastSyncError)
+	err = dn.updateSyncState(ctx, desiredNodeState, syncStatus, lastSyncError, false)
 	if err != nil {
 		reqLogger.Error(err, "failed to update sync status")
 		return ctrl.Result{}, err
@@ -511,7 +521,7 @@ func (dn *NodeReconciler) checkHostStateDrift(ctx context.Context, desiredNodeSt
 			"name", desiredNodeState.Name)
 		if desiredNodeState.Status.SyncStatus != consts.SyncStatusSucceeded ||
 			desiredNodeState.Status.LastSyncError != "" {
-			err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusSucceeded, "")
+			err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusSucceeded, "", false)
 		}
 		return false, err
 	}

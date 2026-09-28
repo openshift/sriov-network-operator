@@ -41,20 +41,23 @@ import (
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/drain"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 type DrainReconcile struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	recorder events.EventRecorder
-	drainer  drain.DrainInterface
+	Scheme        *runtime.Scheme
+	recorder      events.EventRecorder
+	drainer       drain.DrainInterface
+	StatusPatcher status.Interface
 
 	drainCheckMutex sync.Mutex
 }
 
-func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, recorder events.EventRecorder, orchestrator orchestrator.Interface) (*DrainReconcile, error) {
+func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, recorder events.EventRecorder,
+	orchestrator orchestrator.Interface, statusPatcher status.Interface) (*DrainReconcile, error) {
 	drainer, err := drain.NewDrainer(orchestrator)
 	if err != nil {
 		return nil, err
@@ -65,6 +68,7 @@ func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, r
 		Scheme,
 		recorder,
 		drainer,
+		statusPatcher,
 		sync.Mutex{}}, nil
 }
 
@@ -134,6 +138,10 @@ func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// requeue the request if we needed to add any of the annotations
 	if !nodeExist || !currentNodeStateExist || !desireNodeStateExist {
+		if err := dr.updateDrainConditions(ctx, nodeNetworkState, sriovnetworkv1.DrainStateIdle, ""); err != nil {
+			reqLogger.Error(err, "failed to initialize drain conditions")
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{Requeue: true}, nil
 	}
 	reqLogger.V(2).Info("Drain annotations", "nodeAnnotation", nodeDrainAnnotation, "nodeStateAnnotation", nodeStateDrainAnnotationCurrent)
@@ -143,9 +151,13 @@ func (dr *DrainReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		// this cover the case the node is on idle
 
 		// node request to be on idle and the currect state is idle
-		// we don't do anything
+		// ensure drain conditions are set to idle state
 		if nodeStateDrainAnnotationCurrent == constants.DrainIdle {
-			reqLogger.Info("node and nodeState are on idle nothing todo")
+			reqLogger.Info("node and nodeState are on idle, ensuring drain conditions are set")
+			if err := dr.updateDrainConditions(ctx, nodeNetworkState, sriovnetworkv1.DrainStateIdle, ""); err != nil {
+				reqLogger.Error(err, "failed to update drain conditions to idle state")
+				return reconcile.Result{}, err
+			}
 			return reconcile.Result{}, nil
 		}
 

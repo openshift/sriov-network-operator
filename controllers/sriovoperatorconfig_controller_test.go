@@ -1141,6 +1141,12 @@ func (f *fakeStatusPatcher) ApplyCondition(_ context.Context, _ client.Object, c
 	return nil
 }
 
+// ApplyStatus is a no-op for the fake status patcher used in operator config tests.
+func (f *fakeStatusPatcher) ApplyStatus(_ context.Context, _ client.Object, _ map[string]interface{}, conditions []metav1.Condition) error {
+	f.conditions = append([]metav1.Condition(nil), conditions...)
+	return nil
+}
+
 // newDirectSriovOperatorConfigReconciler returns a reconciler wired for direct
 // Reconcile invocations against the envtest API.
 func newDirectSriovOperatorConfigReconciler(orchestrator *orchestratorMock.MockInterface) *SriovOperatorConfigReconciler {

@@ -37,6 +37,16 @@ type Interface interface {
 	// specific condition entries (keyed by type). Other conditions owned by
 	// different field managers are left untouched.
 	ApplyCondition(ctx context.Context, obj client.Object, conditions ...metav1.Condition) error
+
+	// ApplyStatus applies non-condition status fields together with owned condition
+	// entries to the status subresource using Server-Side Apply. The field manager
+	// claims ownership of exactly the fields present in statusFields plus the
+	// supplied condition entries. Condition types not included are left to their
+	// respective field managers.
+	//
+	// LastTransitionTime is preserved when a condition's Status has not changed.
+	// Kubernetes events are emitted for detected condition transitions.
+	ApplyStatus(ctx context.Context, obj client.Object, statusFields map[string]interface{}, ownedConditions []metav1.Condition) error
 }
 
 // Patcher implements Interface using Server-Side Apply for status updates.
@@ -107,6 +117,113 @@ func (p *Patcher) ApplyCondition(ctx context.Context, obj client.Object, conditi
 	}
 
 	return nil
+}
+
+// ApplyStatus applies non-condition status fields and owned conditions in a single
+// Server-Side Apply call. The field manager claims ownership of exactly the keys
+// present in statusFields plus the supplied condition entries. Conditions owned by
+// other field managers are not included in the payload, so their ownership is
+// preserved.
+func (p *Patcher) ApplyStatus(ctx context.Context, obj client.Object, statusFields map[string]interface{}, ownedConditions []metav1.Condition) error {
+	oldConditions := getConditionsFromObject(obj)
+
+	// Preserve LastTransitionTime when the condition Status has not changed.
+	oldMap := make(map[string]metav1.Condition, len(oldConditions))
+	for _, c := range oldConditions {
+		oldMap[c.Type] = c
+	}
+	for i := range ownedConditions {
+		if old, exists := oldMap[ownedConditions[i].Type]; exists && old.Status == ownedConditions[i].Status {
+			ownedConditions[i].LastTransitionTime = old.LastTransitionTime
+		}
+	}
+
+	// Detect transitions only among the condition types we own.
+	ownedTypes := make(map[string]struct{}, len(ownedConditions))
+	for _, c := range ownedConditions {
+		ownedTypes[c.Type] = struct{}{}
+	}
+	filteredOld := make([]metav1.Condition, 0, len(ownedConditions))
+	for _, c := range oldConditions {
+		if _, ok := ownedTypes[c.Type]; ok {
+			filteredOld = append(filteredOld, c)
+		}
+	}
+	transitions := DetectTransitions(filteredOld, ownedConditions)
+
+	ac, err := p.buildStatusApplyConfiguration(obj, statusFields, ownedConditions)
+	if err != nil {
+		return fmt.Errorf("failed to build status apply configuration: %w", err)
+	}
+
+	if err := p.client.Status().Apply(ctx, ac,
+		client.FieldOwner(p.fieldManager),
+		client.ForceOwnership); err != nil {
+		return fmt.Errorf("failed to apply status: %w", err)
+	}
+
+	if p.recorder != nil {
+		for _, transition := range transitions {
+			p.recorder.Eventf(obj, nil, transition.EventType(), transition.EventReason(), "StatusChange", "%s", transition.Message)
+		}
+	}
+
+	return nil
+}
+
+// buildStatusApplyConfiguration constructs a minimal unstructured apply configuration
+// containing the object identity, the supplied non-condition status fields, and the
+// owned condition entries.
+func (p *Patcher) buildStatusApplyConfiguration(obj client.Object, statusFields map[string]interface{}, conditions []metav1.Condition) (runtime.ApplyConfiguration, error) {
+	gvks, _, err := p.scheme.ObjectKinds(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get GVK for object: %w", err)
+	}
+	gvk := gvks[0]
+
+	// Round-trip through JSON so complex Go types become JSON-compatible
+	// map/slice/primitive values for the unstructured payload.
+	raw, err := json.Marshal(statusFields)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal status fields: %w", err)
+	}
+	var statusMap map[string]interface{}
+	if err := json.Unmarshal(raw, &statusMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal status fields: %w", err)
+	}
+	if statusMap == nil {
+		statusMap = map[string]interface{}{}
+	}
+
+	// Conditions are supplied separately via ownedConditions; strip any
+	// conditions key from statusFields to avoid accidental conflicts.
+	delete(statusMap, "conditions")
+
+	if len(conditions) > 0 {
+		conditionsData, err := json.Marshal(conditions)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal conditions: %w", err)
+		}
+		var conditionsSlice []interface{}
+		if err := json.Unmarshal(conditionsData, &conditionsSlice); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal conditions: %w", err)
+		}
+		statusMap["conditions"] = conditionsSlice
+	}
+
+	u := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": gvk.GroupVersion().String(),
+			"kind":       gvk.Kind,
+			"metadata": map[string]interface{}{
+				"name":      obj.GetName(),
+				"namespace": obj.GetNamespace(),
+			},
+			"status": statusMap,
+		},
+	}
+
+	return client.ApplyConfigurationFromUnstructured(u), nil
 }
 
 // getConditionsFromObject extracts the current conditions from the object

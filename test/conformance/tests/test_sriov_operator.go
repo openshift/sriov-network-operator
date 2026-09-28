@@ -1987,20 +1987,32 @@ func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
 }
 
 func WaitForSRIOVStable() {
-	// This used to be to check for sriov not to be stable first,
-	// then stable. The issue is that if no configuration is applied, then
-	// the status won't never go to not stable and the test will fail.
-	// TODO: find a better way to handle this scenario
-
-	time.Sleep((10 + snoTimeoutMultiplier*20) * time.Second)
-
 	fmt.Println("Waiting for the sriov state to stable")
+
+	// Track how long conditions have been continuously stable.
+	// We require conditions to remain stable for requiredStableDuration
+	// to guard against the race where the operator hasn't started
+	// processing a just-created policy yet.
+	var stableSince time.Time
+	requiredStableDuration := 5 * time.Second
+
 	Eventually(func(g Gomega) {
-		res, err := cluster.SriovStable(operatorNamespace, clients)
+		stable, err := cluster.SriovStable(operatorNamespace, clients)
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(res).To(BeTrue())
+		if !stable {
+			stableSince = time.Time{}
+			g.Expect(stable).To(BeTrue(), "conditions not yet stable")
+			return
+		}
+
+		if stableSince.IsZero() {
+			stableSince = time.Now()
+		}
+
+		g.Expect(time.Since(stableSince) >= requiredStableDuration).To(BeTrue(),
+			"conditions stable for %v, need %v", time.Since(stableSince), requiredStableDuration)
 	}, waitingTime, 1*time.Second).Should(Succeed(), func() string {
-		return "SR-IOV Operator is not stable" +
+		return "SR-IOV Operator is not stable\n" +
 			k8sreporter.SriovNetworkNodeStatesSummary(clients) +
 			k8sreporter.Events(clients, operatorNamespace)
 	})
