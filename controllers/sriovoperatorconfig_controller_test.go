@@ -140,7 +140,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				}
 				err = k8sClient.Update(ctx, config)
 				Expect(err).NotTo(HaveOccurred())
-			}).Should(Succeed())
+			}, util.APITimeout, util.RetryInterval).Should(Succeed())
 
 		})
 
