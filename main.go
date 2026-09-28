@@ -306,11 +306,19 @@ func setupDrainController(mgr ctrl.Manager, restConfig *rest.Config,
 		return err
 	}
 
+	drainStatusPatcher := status.NewPatcher(
+		drainKClient,
+		mgr.GetEventRecorder(consts.SriovNetworkOperatorIdentifier),
+		scheme,
+		consts.SriovNetworkOperatorIdentifier,
+	)
+
 	drainController, err := controllers.NewDrainReconcileController(
 		drainKClient,
 		mgr.GetScheme(),
 		mgr.GetEventRecorder("SR-IOV operator"),
-		orch)
+		orch,
+		drainStatusPatcher)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "DrainReconcile")
 		return err

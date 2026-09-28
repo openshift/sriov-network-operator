@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/drain"
 
@@ -21,6 +20,8 @@ var (
 	DrainTimeOut = 90 * time.Second
 )
 
+//go:generate ../../bin/mockgen -destination mock/mock_drain.go -source drainer.go
+
 // writer implements io.Writer interface as a pass-through for log.Log.
 type writer struct {
 	logFunc func(msg string, keysAndValues ...interface{})
@@ -32,8 +33,17 @@ func (w writer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+// DrainErrorCallback is a callback function that is called when a drain error occurs.
+// This allows the caller to be notified of errors immediately as they happen.
+// Must not be nil — use DrainErrorNoop when no action is needed.
+type DrainErrorCallback func(err error)
+
+// DrainErrorNoop is a no-op DrainErrorCallback for callers that do not need
+// to react to drain errors (e.g. the uncordon path in CompleteDrainNode).
+func DrainErrorNoop(_ error) {}
+
 type DrainInterface interface {
-	DrainNode(context.Context, *corev1.Node, bool, bool) (bool, error)
+	DrainNode(context.Context, *corev1.Node, bool, bool, DrainErrorCallback) (bool, error)
 	CompleteDrainNode(context.Context, *corev1.Node) (bool, error)
 }
 
@@ -57,14 +67,18 @@ func NewDrainer(orchestrator orchestrator.Interface) (DrainInterface, error) {
 // DrainNode the function cordon a node and drain pods from it
 // if fullNodeDrain true all the pods on the system will get drained
 // for openshift system we also pause the machine config pool this machine is part of it
-func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrain, singleNode bool) (bool, error) {
+// onError callback is called immediately when drain errors occur (e.g., pod eviction failures)
+func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrain, singleNode bool, onError DrainErrorCallback) (bool, error) {
 	reqLogger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("drainNode")
 	reqLogger.Info("Node drain requested")
 
 	completed, err := d.orchestrator.BeforeDrainNode(ctx, node)
 	if err != nil {
-		reqLogger.Error(err, fmt.Sprintf("failed to run BeforeDrainNode for orchestrator %s", d.orchestrator.ClusterType()))
-		return false, err
+		wrappedErr := fmt.Errorf("failed to run BeforeDrainNode for orchestrator %s on node %s: %w",
+			d.orchestrator.ClusterType(), node.Name, err)
+		reqLogger.Error(wrappedErr, "BeforeDrainNode failed")
+		onError(wrappedErr)
+		return false, wrappedErr
 	}
 
 	if !completed {
@@ -77,38 +91,25 @@ func (d *Drainer) DrainNode(ctx context.Context, node *corev1.Node, fullNodeDrai
 		return true, nil
 	}
 
-	drainHelper := createDrainHelper(d.kubeClient, ctx, fullNodeDrain)
-	backoff := wait.Backoff{
-		Steps:    3,
-		Duration: 2 * time.Second,
-		Factor:   2,
-	}
-	var lastErr error
+	drainHelper := createDrainHelper(d.kubeClient, ctx, fullNodeDrain, onError)
 
 	reqLogger.Info("drainNode(): Start draining")
-	if err = wait.ExponentialBackoffWithContext(ctx, backoff, func(ctx context.Context) (bool, error) {
-		nodeCopy := node.DeepCopy()
-		err := drain.RunCordonOrUncordon(drainHelper, node, true)
-		if err != nil {
-			lastErr = err
-			node = nodeCopy
-			reqLogger.Info("drainNode(): Cordon failed, retrying", "error", err)
-			return false, nil
-		}
-		err = drain.RunNodeDrain(drainHelper, node.Name)
-		if err == nil {
-			return true, nil
-		}
-		lastErr = err
-		reqLogger.Info("drainNode(): Draining failed, retrying", "error", err)
-		return false, nil
-	}); err != nil {
-		if wait.Interrupted(err) {
-			reqLogger.Info("drainNode(): failed to drain node", "steps", backoff.Steps, "error", lastErr)
-		}
-		reqLogger.Info("drainNode(): failed to drain node", "error", err)
-		return false, err
+
+	// Cordon the node first
+	if err = drain.RunCordonOrUncordon(drainHelper, node, true); err != nil {
+		wrappedErr := fmt.Errorf("failed to cordon node %s: %w", node.Name, err)
+		reqLogger.Error(wrappedErr, "drainNode(): Cordon failed")
+		onError(wrappedErr)
+		return false, wrappedErr
 	}
+
+	// Run the drain - RunNodeDrain has its own 90 second timeout for retrying evictions
+	if err = drain.RunNodeDrain(drainHelper, node.Name); err != nil {
+		wrappedErr := fmt.Errorf("failed to drain node %s: %w", node.Name, err)
+		reqLogger.Error(wrappedErr, "drainNode(): Drain failed")
+		return false, wrappedErr
+	}
+
 	reqLogger.Info("drainNode(): Drain completed")
 	return true, nil
 }
@@ -120,8 +121,8 @@ func (d *Drainer) CompleteDrainNode(ctx context.Context, node *corev1.Node) (boo
 	logger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("CompleteDrainNode")
 
 	// Create drain helper object
-	// full drain is not important here
-	drainHelper := createDrainHelper(d.kubeClient, ctx, false)
+	// full drain is not important here, onError callback not needed for uncordon
+	drainHelper := createDrainHelper(d.kubeClient, ctx, false, DrainErrorNoop)
 
 	// run the un cordon function on the node
 	if err := drain.RunCordonOrUncordon(drainHelper, node, false); err != nil {
@@ -144,7 +145,8 @@ func (d *Drainer) CompleteDrainNode(ctx context.Context, node *corev1.Node) (boo
 // createDrainHelper function to create a drain helper
 // if fullDrain is false we only remove pods that have the resourcePrefix
 // if not we remove all the pods in the node
-func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, fullDrain bool) *drain.Helper {
+// onError callback is called immediately when pod eviction/deletion errors occur
+func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, fullDrain bool, onError DrainErrorCallback) *drain.Helper {
 	logger := ctx.Value(constants.LoggerContextKey).(logr.Logger).WithName("createDrainHelper")
 
 	drainer := &drain.Helper{
@@ -169,9 +171,24 @@ func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, ful
 			}
 			logger.Info(fmt.Sprintf("%s pod %s/%s from node", verbStr, pod.Namespace, pod.Name))
 		},
-		Ctx:    ctx,
-		Out:    writer{func(msg string, kv ...interface{}) { logger.Info(strings.ReplaceAll(msg, "\n", "")) }},
-		ErrOut: writer{func(msg string, kv ...interface{}) { logger.Error(nil, strings.ReplaceAll(msg, "\n", ""), kv...) }},
+		Ctx: ctx,
+		Out: writer{func(msg string, kv ...interface{}) { logger.Info(strings.ReplaceAll(msg, "\n", "")) }},
+		// ErrOut receives progress and warning lines from k8s.io/kubectl/pkg/drain.
+		// Terminal failures are returned by RunNodeDrain; see IsInformationalDrainErrOutMessage.
+		ErrOut: writer{func(msg string, kv ...interface{}) {
+			cleanMsg := strings.ReplaceAll(msg, "\n", "")
+			if IsInformationalDrainErrOutMessage(cleanMsg) {
+				logger.Info(cleanMsg, kv...)
+			} else {
+				logger.Error(nil, cleanMsg, kv...)
+			}
+			// Retry progress is informational but still recorded so the condition
+			// names the pods blocking the drain. Empty and WARNING: lines are not.
+			if isIgnoredDrainErrOutMessage(cleanMsg) {
+				return
+			}
+			onError(fmt.Errorf("%s", cleanMsg))
+		}},
 	}
 
 	// when we just want to drain and not reboot we can only remove the pods using sriov devices
@@ -197,4 +214,27 @@ func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, ful
 	}
 
 	return drainer
+}
+
+// isIgnoredDrainErrOutMessage reports ErrOut lines that should not be recorded as
+// drain errors, such as empty output and kubectl WARNING: progress (e.g. DaemonSet pods).
+func isIgnoredDrainErrOutMessage(msg string) bool {
+	cleanMsg := strings.TrimSpace(strings.ReplaceAll(msg, "\n", ""))
+	return cleanMsg == "" || strings.HasPrefix(cleanMsg, "WARNING:")
+}
+
+// IsInformationalDrainErrOutMessage reports whether msg is a non-terminal progress or
+// warning line from k8s.io/kubectl/pkg/drain (v0.36.3). Terminal drain failures are
+// returned from RunNodeDrain and are not written to ErrOut.
+//
+// Known ErrOut patterns:
+//   - default.go RunNodeDrain: "WARNING: %s" for pods that will not be deleted
+//   - drain.go evictPods (TooManyRequests): "error when evicting pods/... (will retry after ...)"
+//   - drain.go evictPods (namespace terminating): "error when evicting pod ... from terminating namespace ... (will retry after ...)"
+func IsInformationalDrainErrOutMessage(msg string) bool {
+	if isIgnoredDrainErrOutMessage(msg) {
+		return true
+	}
+	cleanMsg := strings.TrimSpace(strings.ReplaceAll(msg, "\n", ""))
+	return strings.Contains(cleanMsg, "(will retry after")
 }

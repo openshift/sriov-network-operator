@@ -31,7 +31,8 @@ type TLSConfig struct {
 }
 
 const (
-	SriovNetworkOperatorIdentifier = "sriov-network-operator"
+	SriovNetworkOperatorIdentifier     = "sriov-network-operator"
+	SriovNetworkConfigDaemonIdentifier = "sriov-network-config-daemon"
 
 	Chroot = "/host"
 	Host   = "/host"

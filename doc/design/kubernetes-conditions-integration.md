@@ -41,9 +41,8 @@ Adding Kubernetes conditions to the SR-IOV Network Operator's CRDs is crucial fo
 2. **Node Configuration Health:**
    - The operator updates the `SriovNetworkNodeState` for a node
    - Condition `Progressing` when the operator is applying changes to the node's SR-IOV configuration
-   - Condition `Degraded` if a node's SR-IOV configuration is incorrect
    - Condition `Ready` indicating the overall readiness of the SR-IOV components on that specific node
-   - Drain-specific conditions (`DrainProgressing`, `DrainDegraded`, `DrainComplete`) for tracking drain operations
+   - Condition `Draining` for tracking whether the node is currently undergoing a drain operation
 
 3. **Operator Configuration Status:**
    - An administrator modifies the `SriovOperatorConfig`
@@ -91,23 +90,12 @@ The following condition types are implemented across SR-IOV CRDs:
 const (
     // ConditionProgressing indicates that the resource is being actively reconciled
     ConditionProgressing = "Progressing"
-    
-    // ConditionDegraded indicates that the resource is not functioning as expected
-    ConditionDegraded = "Degraded"
-    
+
     // ConditionReady indicates that the resource has reached its desired state and is fully functional
     ConditionReady = "Ready"
 
-    // Drain-specific conditions for SriovNetworkNodeState
-    
-    // ConditionDrainProgressing indicates that the node is being actively drained
-    ConditionDrainProgressing = "DrainProgressing"
-
-    // ConditionDrainDegraded indicates that the drain process is not functioning as expected
-    ConditionDrainDegraded = "DrainDegraded"
-
-    // ConditionDrainComplete indicates that the drain operation completed successfully
-    ConditionDrainComplete = "DrainComplete"
+    // ConditionDraining indicates that the node is currently undergoing a drain operation
+    ConditionDraining = "Draining"
 )
 ```
 
@@ -124,33 +112,26 @@ const (
     ReasonOperatorConfigReady  = "OperatorConfigReady"
     ReasonNotReady             = "NotReady"
 
-    // Reasons for Degraded condition
-    ReasonProvisioningFailed           = "ProvisioningFailed"
-    ReasonConfigurationFailed          = "ConfigurationFailed"
+    // Reasons for Network NotReady conditions
     ReasonNetworkAttachmentDefNotFound = "NetworkAttachmentDefinitionNotFound"
     ReasonNetworkAttachmentDefInvalid  = "NetworkAttachmentDefinitionInvalid"
     ReasonNamespaceNotFound            = "NamespaceNotFound"
-    ReasonHardwareError                = "HardwareError"
-    ReasonDriverError                  = "DriverError"
+
+    // Reasons for Operator Config NotReady conditions
     ReasonOperatorConfigSyncFailed     = "OperatorConfigSyncFailed"
     ReasonUnsupportedConfiguration     = "UnsupportedConfiguration"
-    ReasonNotDegraded                  = "NotDegraded"
 
     // Reasons for Progressing condition
-    ReasonConfiguringNode       = "ConfiguringNode"
     ReasonApplyingConfiguration = "ApplyingConfiguration"
-    ReasonCreatingVFs           = "CreatingVFs"
-    ReasonLoadingDriver         = "LoadingDriver"
-    ReasonDrainingNode          = "DrainingNode"
+    ReasonWaitingForDrain       = "WaitingForDrain"
     ReasonNotProgressing        = "NotProgressing"
 
-    // Reasons for DrainComplete condition
+    // Reasons for Draining condition
+    ReasonDrainingNode   = "DrainingNode"
     ReasonDrainCompleted = "DrainCompleted"
     ReasonDrainNotNeeded = "DrainNotNeeded"
     ReasonDrainPending   = "DrainPending"
-
-    // Reasons for DrainDegraded condition
-    ReasonDrainFailed = "DrainFailed"
+    ReasonDrainFailed    = "DrainFailed"
 
     // Reasons for Policy/PoolConfig conditions
     ReasonPolicyReady                = "PolicyReady"
@@ -222,13 +203,10 @@ type SriovNetworkNodeStateStatus struct {
 
 **Conditions:**
 - `Ready`: Node's SR-IOV configuration is complete and functional
-- `Progressing`: Node is being configured (VF creation, driver loading, node draining, etc.)
-- `Degraded`: Node configuration failed or hardware issues detected
-- `DrainProgressing`: Node drain operation is in progress
-- `DrainDegraded`: Node drain operation encountered errors (e.g., PDB violations)
-- `DrainComplete`: Node drain operation completed successfully
+- `Progressing`: Node is being configured (VF creation, driver loading, etc.)
+- `Draining`: Node drain operation is in progress (`True`) or not (`False`). Reasons distinguish between `DrainingNode`, `DrainPending`, `DrainFailed`, `DrainCompleted`, and `DrainNotNeeded`.
 
-**kubectl output columns:** Sync Status, Ready, Progressing, Degraded, DrainProgress, DrainDegraded, DrainComplete, Age
+**kubectl output columns:** Sync Status, Ready, Progressing, Draining, Desired Sync State, Current Sync State, Age
 
 #### SriovOperatorConfig
 
@@ -367,8 +345,8 @@ Each controller uses the status patcher to apply conditions:
 - Sets configuration conditions based on sync status
 
 **Drain Controller:**
-- Sets drain-specific conditions during drain operations
-- Updates `DrainProgressing`, `DrainDegraded`, `DrainComplete` based on drain state
+- Sets the `Draining` condition during drain operations
+- Updates `Draining` with appropriate reasons based on drain state (`DrainingNode`, `DrainPending`, `DrainFailed`, `DrainCompleted`, `DrainNotNeeded`)
 
 **Status Controllers (Policy and PoolConfig):**
 - Dedicated controllers aggregate conditions from matching `SriovNetworkNodeState` objects
@@ -397,8 +375,8 @@ worker-pool   5         5             True    False         False      15m
 
 # Check node state with all conditions
 kubectl get sriovnetworknodestate -o wide
-NAME      SYNC STATUS   READY   PROGRESSING   DEGRADED   DRAINPROGRESS   DRAINDEGRADED   DRAINCOMPLETE   AGE
-worker1   Succeeded     True    False         False      False           False           True            1h
+NAME      SYNC STATUS   READY   PROGRESSING   DRAINING   DESIRED SYNC STATE   CURRENT SYNC STATE   AGE
+worker1   Succeeded     True    False         False      Idle                 Idle                 1h
 ```
 
 ### Backward Compatibility

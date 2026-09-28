@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -21,7 +22,9 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	drainMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/drain/mock"
 	orchestratorMock "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator/mock"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
@@ -30,6 +33,7 @@ var _ = Describe("Drain Controller", Ordered, func() {
 
 	var cancel context.CancelFunc
 	var ctx context.Context
+	var drainTestClient client.Client
 
 	BeforeAll(func() {
 		By("Setup controller manager")
@@ -54,11 +58,13 @@ var _ = Describe("Drain Controller", Ordered, func() {
 			},
 		})
 		Expect(err).ToNot(HaveOccurred())
+		drainTestClient = drainKClient
 
 		drainController, err := NewDrainReconcileController(drainKClient,
 			k8sManager.GetScheme(),
 			k8sManager.GetEventRecorder("operator"),
-			orchestrator)
+			orchestrator,
+			status.NewPatcher(drainKClient, k8sManager.GetEventRecorder("test-drain"), k8sManager.GetScheme(), "test-drain"))
 		Expect(err).ToNot(HaveOccurred())
 		err = drainController.SetupWithManager(k8sManager)
 		Expect(err).ToNot(HaveOccurred())
@@ -354,6 +360,74 @@ var _ = Describe("Drain Controller", Ordered, func() {
 			expectNodeStateAnnotation(nodeState1, constants.Draining)
 		})
 	})
+
+	Context("drain conditions", func() {
+		It("should set Draining=False with DrainCompleted reason when drain completes", func(ctx context.Context) {
+			node, nodeState := createNode(ctx, "cond-node1", nil)
+
+			simulateDaemonSetAnnotation(node, constants.DrainRequired)
+
+			expectNodeStateAnnotation(nodeState, constants.DrainComplete)
+			expectDrainCondition(drainTestClient, nodeState, sriovnetworkv1.ConditionDraining, metav1.ConditionFalse, sriovnetworkv1.ReasonDrainCompleted)
+		})
+
+		It("should set Draining condition to idle state when drain returns to idle", func(ctx context.Context) {
+			node, nodeState := createNode(ctx, "cond-node3", nil)
+
+			simulateDaemonSetAnnotation(node, constants.DrainRequired)
+			expectNodeStateAnnotation(nodeState, constants.DrainComplete)
+
+			simulateDaemonSetAnnotation(node, constants.DrainIdle)
+			expectNodeStateAnnotation(nodeState, constants.DrainIdle)
+
+			expectDrainCondition(drainTestClient, nodeState, sriovnetworkv1.ConditionDraining, metav1.ConditionFalse, sriovnetworkv1.ReasonDrainNotNeeded)
+		})
+
+		It("should have correct observedGeneration on Draining condition", func(ctx context.Context) {
+			node, nodeState := createNode(ctx, "cond-node4", nil)
+
+			simulateDaemonSetAnnotation(node, constants.DrainRequired)
+			expectNodeStateAnnotation(nodeState, constants.DrainComplete)
+
+			EventuallyWithOffset(1, func(g Gomega) {
+				g.Expect(k8sClient.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+					ToNot(HaveOccurred())
+
+				draining := findCondition(nodeState.Status.Conditions, sriovnetworkv1.ConditionDraining)
+				g.Expect(draining).ToNot(BeNil())
+				g.Expect(draining.ObservedGeneration).To(Equal(nodeState.Generation))
+			}, "20s", "1s").Should(Succeed())
+		})
+
+		It("should set Draining=False for single node reboot", func(ctx context.Context) {
+			node, nodeState := createNode(ctx, "cond-node5", nil)
+
+			simulateDaemonSetAnnotation(node, constants.RebootRequired)
+
+			expectNodeStateAnnotation(nodeState, constants.DrainComplete)
+			expectDrainCondition(drainTestClient, nodeState, sriovnetworkv1.ConditionDraining, metav1.ConditionFalse, sriovnetworkv1.ReasonDrainCompleted)
+		})
+
+		It("should repair a stale draining annotation without re-running drain", func(ctx context.Context) {
+			node, nodeState := createNode(ctx, "cond-node6", nil)
+			mockCtrl := gomock.NewController(GinkgoT())
+			mockDrainer := drainMock.NewMockDrainInterface(mockCtrl)
+			reconciler := &DrainReconcile{
+				Client:  k8sClient,
+				Scheme:  scheme.Scheme,
+				drainer: mockDrainer,
+			}
+
+			nodeState.Annotations[constants.NodeStateDrainAnnotationCurrent] = constants.Draining
+			nodeState.SetNodeStateDrainConditions(sriovnetworkv1.DrainStateComplete, "")
+
+			loggerCtx := context.WithValue(ctx, constants.LoggerContextKey, logr.Discard())
+			_, err := reconciler.handleNodeDrainOrReboot(loggerCtx, node, nodeState, constants.DrainRequired, constants.Draining)
+			Expect(err).ToNot(HaveOccurred())
+
+			expectNodeStateAnnotation(nodeState, constants.DrainComplete)
+		})
+	})
 })
 
 func expectNodeStateAnnotation(nodeState *sriovnetworkv1.SriovNetworkNodeState, expectedAnnotationValue string) {
@@ -364,6 +438,22 @@ func expectNodeStateAnnotation(nodeState *sriovnetworkv1.SriovNetworkNodeState, 
 		g.Expect(utils.ObjectHasAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, expectedAnnotationValue)).
 			To(BeTrue(),
 				"Node[%s] annotation[%s] == '%s'. Expected '%s'", nodeState.Name, constants.NodeDrainAnnotation, nodeState.GetLabels()[constants.NodeStateDrainAnnotationCurrent], expectedAnnotationValue)
+	}, "20s", "1s").Should(Succeed())
+}
+
+func expectDrainCondition(c client.Client, nodeState *sriovnetworkv1.SriovNetworkNodeState, conditionType string, expectedStatus metav1.ConditionStatus, expectedReason string) {
+	EventuallyWithOffset(1, func(g Gomega) {
+		g.Expect(c.Get(context.Background(), types.NamespacedName{Namespace: nodeState.Namespace, Name: nodeState.Name}, nodeState)).
+			ToNot(HaveOccurred())
+
+		condition := findCondition(nodeState.Status.Conditions, conditionType)
+		g.Expect(condition).ToNot(BeNil(), "Expected condition %s to exist", conditionType)
+		g.Expect(condition.Status).To(Equal(expectedStatus),
+			"Condition %s: expected status %s, got %s", conditionType, expectedStatus, condition.Status)
+		if expectedReason != "" {
+			g.Expect(condition.Reason).To(Equal(expectedReason),
+				"Condition %s: expected reason %s, got %s", conditionType, expectedReason, condition.Reason)
+		}
 	}, "20s", "1s").Should(Succeed())
 }
 

@@ -1,12 +1,13 @@
 package k8s
 
 import (
+	"errors"
+	"os"
 	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	hostTypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	plugins "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/plugins"
@@ -90,17 +91,21 @@ const (
 	sriovUnitFile            = sriovUnits + "sriov-config-service.yaml"
 	sriovPostNetworkUnitFile = sriovUnits + "sriov-config-post-network-service.yaml"
 	ovsUnitFile              = switchdevManifestPath + "ovs-units/ovs-vswitchd.service.yaml"
+	// ovsMainServicePath is the on-disk path of the OVS service unit used to check
+	// whether OVS is installed; it is separate from the drop-in path stored in
+	// openVSwitchService.Path after ReadOvsServiceInjectionManifestFile.
+	ovsMainServicePath = "/usr/lib/systemd/system/ovs-vswitchd.service"
 )
 
 // Initialize our plugin and set up initial values
-func NewK8sPlugin(helper helper.HostHelpersInterface) (plugins.VendorPlugin, error) {
+func NewK8sPlugin(helper helper.HostHelpersInterface) plugins.VendorPlugin {
 	k8sPluging := &K8sPlugin{
 		PluginName:   PluginName,
 		hostHelper:   helper,
 		updateTarget: &k8sUpdateTarget{},
 	}
 
-	return k8sPluging, k8sPluging.readManifestFiles()
+	return k8sPluging
 }
 
 // Name returns the name of the plugin
@@ -111,6 +116,12 @@ func (p *K8sPlugin) Name() string {
 // OnNodeStateChange Invoked when SriovNetworkNodeState CR is created or updated, return if need dain and/or reboot node
 func (p *K8sPlugin) OnNodeStateChange(new *sriovnetworkv1.SriovNetworkNodeState) (needDrain bool, needReboot bool, err error) {
 	log.Log.Info("k8s plugin OnNodeStateChange()")
+	err = p.readManifestFiles(new.Spec.System.OvsConfig)
+	if err != nil {
+		log.Log.Error(err, "k8s plugin OnNodeStateChange(): failed to read manifests")
+		return
+	}
+
 	needDrain = false
 	needReboot = false
 
@@ -165,8 +176,8 @@ func (p *K8sPlugin) Apply() error {
 	return p.updateOVSService()
 }
 
-func (p *K8sPlugin) readOpenVSwitchdManifest() error {
-	openVSwitchService, err := p.hostHelper.ReadServiceInjectionManifestFile(ovsUnitFile)
+func (p *K8sPlugin) readOpenVSwitchdManifest(ovsConfig map[string]string) error {
+	openVSwitchService, err := p.hostHelper.ReadOvsServiceInjectionManifestFile(ovsUnitFile, ovsConfig)
 	if err != nil {
 		return err
 	}
@@ -192,8 +203,8 @@ func (p *K8sPlugin) readSriovPostNetworkServiceManifest() error {
 	return nil
 }
 
-func (p *K8sPlugin) readManifestFiles() error {
-	if err := p.readOpenVSwitchdManifest(); err != nil {
+func (p *K8sPlugin) readManifestFiles(ovsConfig map[string]string) error {
+	if err := p.readOpenVSwitchdManifest(ovsConfig); err != nil {
 		return err
 	}
 	if err := p.readSriovServiceManifest(); err != nil {
@@ -248,7 +259,8 @@ func (p *K8sPlugin) updateSriovServices() error {
 }
 
 func (p *K8sPlugin) ovsServiceStateUpdate() error {
-	exist, err := p.hostHelper.IsServiceExist(p.openVSwitchService.Path)
+	// Check that the OVS service itself is installed (not the drop-in).
+	exist, err := p.hostHelper.IsServiceExist(ovsMainServicePath)
 	if err != nil {
 		return err
 	}
@@ -257,21 +269,42 @@ func (p *K8sPlugin) ovsServiceStateUpdate() error {
 			"service", p.openVSwitchService.Name)
 		return nil
 	}
-	if !p.isSystemDServiceNeedUpdate(p.openVSwitchService) {
-		// service is up to date
+	if !p.isDropinNeedUpdate(p.openVSwitchService) {
+		// drop-in is up-to-date
 		return nil
 	}
-	if p.isOVSHwOffloadingEnabled() {
-		p.updateTarget.openVSwitch.SetNeedUpdate()
-	} else {
-		p.updateTarget.openVSwitch.SetNeedReboot()
-	}
+	p.updateTarget.openVSwitch.SetNeedReboot()
 	return nil
+}
+
+// isDropinNeedUpdate returns true when the on-disk drop-in file at
+// service.Path differs from the desired content, or does not exist yet.
+func (p *K8sPlugin) isDropinNeedUpdate(service *hostTypes.Service) bool {
+	existing, err := p.hostHelper.ReadService(service.Path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return true
+		}
+		log.Log.Error(err, "k8s plugin isDropinNeedUpdate(): failed to read drop-in, assuming update needed",
+			"path", service.Path)
+		return true
+	}
+	needChange, err := p.hostHelper.CompareServices(existing, service)
+	if err != nil {
+		log.Log.Error(err, "k8s plugin isDropinNeedUpdate(): failed to compare drop-in, assuming update needed")
+		return true
+	}
+	return needChange
 }
 
 func (p *K8sPlugin) updateOVSService() error {
 	if p.updateTarget.openVSwitch.NeedUpdate() {
-		return p.hostHelper.UpdateSystemService(p.openVSwitchService)
+		// Always write the drop-in so the file is in place before any reboot.
+		err := p.hostHelper.WriteServiceDropin(p.openVSwitchService)
+		if err != nil {
+			log.Log.Error(err, "k8s plugin updateOVSService(): failed to write OVS drop-in")
+			return err
+		}
 	}
 	return nil
 }
@@ -290,30 +323,6 @@ func (p *K8sPlugin) isSystemDServiceNeedUpdate(serviceObj *hostTypes.Service) bo
 			return false
 		}
 		return needChange
-	}
-	return false
-}
-
-// try to check if OVS HW offloading is already enabled
-// required to avoid unneeded reboots in case if HW offloading is already enabled by different entity
-// TODO move to the right package and avoid ovs-vsctl binary call
-// the function should be revisited when support for software bridge configuration
-// is implemented
-func (p *K8sPlugin) isOVSHwOffloadingEnabled() bool {
-	log.Log.V(2).Info("isOVSHwOffloadingEnabled()")
-	exit, err := p.hostHelper.Chroot(consts.Chroot)
-	if err != nil {
-		return false
-	}
-	defer exit()
-	out, _, err := p.hostHelper.RunCommand("ovs-vsctl", "get", "Open_vSwitch", ".", "other_config:hw-offload")
-	if err != nil {
-		log.Log.V(2).Info("isOVSHwOffloadingEnabled() check failed, assume offloading is disabled", "error", err.Error())
-		return false
-	}
-	if strings.Trim(out, "\n") == `"true"` {
-		log.Log.V(2).Info("isOVSHwOffloadingEnabled() offloading is already enabled")
-		return true
 	}
 	return false
 }
