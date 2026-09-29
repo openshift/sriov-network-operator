@@ -46,6 +46,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	snolog "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/log"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/status"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -261,9 +262,6 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	eventRecorder := daemon.NewEventRecorder(kClient, kubeclient, scheme)
-	defer eventRecorder.Shutdown()
-
 	// Initial supported nic IDs
 	if err := sriovnetworkv1.InitNicIDMapFromConfigMap(kubeclient, vars.Namespace); err != nil {
 		setupLog.Error(err, "failed to run init NicIdMap")
@@ -318,12 +316,24 @@ func runStartCmd(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
+	daemonEventRecorder := mgr.GetEventRecorder(consts.SriovNetworkConfigDaemonIdentifier)
+
+	nodeStateStatusPatcher := status.NewPatcher(
+		mgr.GetClient(),
+		daemonEventRecorder,
+		vars.Scheme,
+		consts.SriovNetworkConfigDaemonIdentifier,
+	)
+
+	eventRecorder := daemon.NewEventRecorder(kClient, daemonEventRecorder)
+
 	dm := daemon.New(
 		kClient,
 		hostHelpers,
 		plat,
 		eventRecorder,
-		fg)
+		fg,
+		nodeStateStatusPatcher)
 
 	// Init Daemon configuration on the node
 	if err = dm.Init(startOpts.disabledPlugins); err != nil {

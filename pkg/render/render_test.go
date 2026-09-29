@@ -12,7 +12,7 @@ func TestRenderSimple(t *testing.T) {
 
 	d := MakeRenderData()
 
-	o1, err := RenderTemplate("testdata/manifests/simple.yaml", &d)
+	o1, err := RenderFileTemplate("testdata/manifests/simple.yaml", &d)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	g.Expect(o1).To(HaveLen(1))
@@ -36,7 +36,7 @@ func TestRenderSimple(t *testing.T) {
 	g.Expect(o1[0].MarshalJSON()).To(MatchJSON(expected))
 
 	// test that json parses the same
-	o2, err := RenderTemplate("testdata/manifests/simple.json", &d)
+	o2, err := RenderFileTemplate("testdata/manifests/simple.json", &d)
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(o2).To(Equal(o1))
 }
@@ -47,7 +47,7 @@ func TestRenderMultiple(t *testing.T) {
 	p := "testdata/manifests/multiple.yaml"
 	d := MakeRenderData()
 
-	o, err := RenderTemplate(p, &d)
+	o, err := RenderFileTemplate(p, &d)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	g.Expect(o).To(HaveLen(3))
@@ -64,19 +64,19 @@ func TestTemplate(t *testing.T) {
 
 	// Test that missing variables are detected
 	d := MakeRenderData()
-	_, err := RenderTemplate(p, &d)
+	_, err := RenderFileTemplate(p, &d)
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(err.Error()).To(HaveSuffix(`function "fname" not defined`))
 
 	// Set expected function (but not variable)
 	d.Funcs["fname"] = func(s string) string { return "test-" + s }
-	_, err = RenderTemplate(p, &d)
+	_, err = RenderFileTemplate(p, &d)
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(err.Error()).To(HaveSuffix(`has no entry for key "Namespace"`))
 
 	// now we can render
 	d.Data["Namespace"] = "myns"
-	o, err := RenderTemplate(p, &d)
+	o, err := RenderFileTemplate(p, &d)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	g.Expect(o[0].GetName()).To(Equal("test-podname"))
@@ -95,7 +95,7 @@ func TestTemplateWithEmptyObject(t *testing.T) {
 
 	d := MakeRenderData()
 	d.Data["Enable"] = true
-	o, err := RenderTemplate(p, &d)
+	o, err := RenderFileTemplate(p, &d)
 	g.Expect(err).NotTo(HaveOccurred())
 
 	g.Expect(len(o)).To(Equal(2))

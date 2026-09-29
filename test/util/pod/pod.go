@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
@@ -100,6 +101,31 @@ func RedefineWithRestartPolicy(pod *corev1.Pod, restartPolicy corev1.RestartPoli
 
 func RedefineWithCapabilities(pod *corev1.Pod, capabilitiesList []corev1.Capability) *corev1.Pod {
 	pod.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: capabilitiesList}}
+	return pod
+}
+
+func RedefineWithHugepages(pod *corev1.Pod, hugepagesName string, hugepagesAmount int64) *corev1.Pod {
+	pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
+		Name: "hugepages",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{
+				Medium: corev1.StorageMediumHugePages,
+			},
+		},
+	})
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      "hugepages",
+		MountPath: "/hugepages",
+	})
+
+	resources := corev1.ResourceList{
+		corev1.ResourceName(hugepagesName): *resource.NewQuantity(hugepagesAmount, resource.BinarySI),
+		corev1.ResourceCPU:                 *resource.NewMilliQuantity(50, resource.DecimalSI),
+	}
+
+	pod.Spec.Containers[0].Resources.Requests = resources
+	pod.Spec.Containers[0].Resources.Limits = resources
+
 	return pod
 }
 

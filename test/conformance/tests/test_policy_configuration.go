@@ -9,7 +9,10 @@ import (
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -461,6 +464,121 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					createTestPod(nodeToTest, []string{sriovNetworkName})
 				})
 			})
+			Context("Drain with PDB", func() {
+				const (
+					pdbDrainResourceName = "pdbdrainres"
+					pdbDrainNetworkName  = "test-pdb-drain-network"
+					pdbDrainPodLabel     = "pdb-drain-test"
+				)
+
+				It("Should report DrainFailed while a PDB blocks SR-IOV pod eviction during policy removal", func() {
+					if discovery.Enabled() {
+						Skip("Test unsuitable to be run in discovery mode")
+					}
+
+					isSingleNode, err := cluster.IsSingleNode(clients)
+					Expect(err).ToNot(HaveOccurred())
+					if isSingleNode {
+						Skip("Drain is disabled on single-node clusters")
+					}
+
+					disableDrain, err := cluster.GetNodeDrainState(clients, operatorNamespace)
+					Expect(err).ToNot(HaveOccurred())
+					if disableDrain {
+						Skip("Drain is disabled in SriovOperatorConfig")
+					}
+
+					testNode := sriovInfos.Nodes[0]
+					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
+					Expect(err).ToNot(HaveOccurred())
+					unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
+					Expect(err).ToNot(HaveOccurred())
+					intf := unusedSriovDevices[0]
+					By("Using device " + intf.Name + " on node " + testNode)
+
+					sriovPolicy, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace,
+						intf.Name, testNode, 2, pdbDrainResourceName, "netdevice")
+					Expect(err).ToNot(HaveOccurred())
+					WaitForSRIOVStable()
+
+					err = network.CreateSriovNetwork(clients, intf, pdbDrainNetworkName, namespaces.Test,
+						operatorNamespace, pdbDrainResourceName, ipamIpv4)
+					Expect(err).ToNot(HaveOccurred())
+					waitForNetAttachDef(pdbDrainNetworkName, namespaces.Test)
+
+					podDefinition := pod.RedefineWithNodeSelector(
+						pod.DefineWithNetworks([]string{pdbDrainNetworkName}),
+						testNode,
+					)
+					podDefinition.Labels = map[string]string{pdbDrainPodLabel: "blocked"}
+					sriovPod, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+					Expect(err).ToNot(HaveOccurred())
+					waitForPodRunning(sriovPod)
+
+					minAvailable := intstr.FromInt32(1)
+					pdb := &policyv1.PodDisruptionBudget{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "test-pdb-drain",
+							Namespace: namespaces.Test,
+						},
+						Spec: policyv1.PodDisruptionBudgetSpec{
+							MinAvailable: &minAvailable,
+							Selector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{pdbDrainPodLabel: "blocked"},
+							},
+						},
+					}
+					Expect(clients.Create(context.Background(), pdb)).To(Succeed())
+					DeferCleanup(func() {
+						_ = clients.Delete(context.Background(), pdb, &runtimeclient.DeleteOptions{})
+					})
+
+					By("deleting the SR-IOV policy while the pod is protected by a PDB")
+					Expect(clients.Delete(context.Background(), sriovPolicy, &runtimeclient.DeleteOptions{})).To(Succeed())
+
+					By("waiting for the node to report a blocked drain")
+					assertNodeStateDrainCondition(testNode, sriovv1.ConditionDraining, metav1.ConditionTrue, sriovv1.ReasonDrainFailed,
+						sriovPod.Name,
+						namespaces.Test,
+						fmt.Sprintf("error when evicting pods/%q", sriovPod.Name),
+					)
+
+					Eventually(func(g Gomega) {
+						stable, err := cluster.SriovStable(operatorNamespace, clients)
+						g.Expect(err).ToNot(HaveOccurred())
+						g.Expect(stable).To(BeFalse(), "cluster should remain unstable while drain is blocked by PDB")
+					}, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+					By("removing the PDB so the drain can complete")
+					Expect(clients.Delete(context.Background(), pdb, &runtimeclient.DeleteOptions{})).To(Succeed())
+
+					By("waiting for the drain to complete and the node to become stable again")
+					EventuallyWithOffset(1, func(g Gomega) {
+						nodeState := &sriovv1.SriovNetworkNodeState{}
+						err := clients.Get(context.Background(),
+							runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: testNode}, nodeState)
+						g.Expect(err).ToNot(HaveOccurred())
+
+						condition := meta.FindStatusCondition(nodeState.Status.Conditions, sriovv1.ConditionDraining)
+						g.Expect(condition).ToNot(BeNil())
+						g.Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+						g.Expect(condition.Reason).To(SatisfyAny(
+							Equal(sriovv1.ReasonDrainCompleted),
+							Equal(sriovv1.ReasonDrainNotNeeded),
+						))
+					}, 10*time.Minute, 5*time.Second).Should(Succeed())
+					WaitForSRIOVStable()
+
+					Eventually(func(g Gomega) {
+						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})
+						g.Expect(err).ToNot(HaveOccurred())
+						resNum := testedNode.Status.Allocatable[corev1.ResourceName("openshift.io/"+pdbDrainResourceName)]
+						allocatable, _ := resNum.AsInt64()
+						g.Expect(allocatable).To(Equal(int64(0)))
+					}, 5*time.Minute, time.Second).Should(Succeed())
+				})
+			})
+
 			Context("PF shutdown", func() {
 				// 29398
 				It("Should be able to create pods successfully on a NIC with NO_CARRIER. Pods are able to communicate with each other on the same node", func() {
@@ -787,3 +905,27 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 	})
 
 })
+
+// assertNodeStateDrainCondition waits until the SriovNetworkNodeState drain condition matches
+// the expected status and reason on the given node. Optional messageSubstrings must all appear
+// in the condition message.
+func assertNodeStateDrainCondition(nodeName, conditionType string, expectedStatus metav1.ConditionStatus, expectedReason string, messageSubstrings ...string) {
+	EventuallyWithOffset(1, func(g Gomega) {
+		nodeState := &sriovv1.SriovNetworkNodeState{}
+		err := clients.Get(context.Background(),
+			runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: nodeName}, nodeState)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		condition := meta.FindStatusCondition(nodeState.Status.Conditions, conditionType)
+		g.Expect(condition).ToNot(BeNil(), "condition %s not found on node %s", conditionType, nodeName)
+		g.Expect(condition.Status).To(Equal(expectedStatus),
+			"condition %s on node %s: expected status %s, got %s", conditionType, nodeName, expectedStatus, condition.Status)
+		g.Expect(condition.Reason).To(Equal(expectedReason),
+			"condition %s on node %s: expected reason %s, got %s", conditionType, nodeName, expectedReason, condition.Reason)
+		for _, substring := range messageSubstrings {
+			g.Expect(condition.Message).To(ContainSubstring(substring),
+				"condition %s on node %s: expected message to contain %q, got %q",
+				conditionType, nodeName, substring, condition.Message)
+		}
+	}, 10*time.Minute, 5*time.Second).Should(Succeed())
+}

@@ -8,6 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +19,10 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
+
+// ovsKeyRegexp restricts OVS other_config keys to characters that are safe when
+// embedded literally in a single-quoted shell string (no quoting applied to keys).
+var ovsKeyRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 const (
 	httpRequestTimeout = 5 * time.Second
@@ -147,4 +154,45 @@ func WriteFileWithTimeout(path string, data []byte, perm os.FileMode, timeout ti
 	case <-timer.C:
 		return fmt.Errorf("timeout writing to file %s after %v", path, timeout)
 	}
+}
+
+// ValidateOvsConfig checks that all OVS other_config keys and values are safe
+// for embedding in a shell command. Call this at admission time to surface
+// errors before they reach RenderOtherOvsConfigOption.
+func ValidateOvsConfig(ovsConfig map[string]string) error {
+	for key, value := range ovsConfig {
+		if !ovsKeyRegexp.MatchString(key) {
+			return fmt.Errorf("OVS config key %q is invalid: use only alphanumeric characters, underscores and hyphens", key)
+		}
+		if strings.Contains(value, "'") {
+			return fmt.Errorf("OVS config value for key %q must not contain a single quote", key)
+		}
+	}
+	return nil
+}
+
+// RenderOtherOvsConfigOption formats ovsConfig entries for use in a shell
+// command. Keys must match [a-zA-Z0-9_-] and values must not contain single
+// quotes; both constraints prevent injection into the single-quoted bash -c
+// context where the output is embedded.
+func RenderOtherOvsConfigOption(ovsConfig map[string]string) (string, string, error) {
+	otherConfig := new(bytes.Buffer)
+	keys := make([]string, 0, len(ovsConfig))
+	for key := range ovsConfig {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	err := ValidateOvsConfig(ovsConfig)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid OVS configuration: %v", err)
+	}
+
+	externalIds := make([]string, 0, len(keys))
+	for _, key := range keys {
+		value := ovsConfig[key]
+		fmt.Fprintf(otherConfig, "other_config:%s=%q ", key, value)
+		externalIds = append(externalIds, key)
+	}
+	return strings.Join(externalIds, " "), otherConfig.String(), nil
 }

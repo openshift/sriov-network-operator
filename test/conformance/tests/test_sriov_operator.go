@@ -231,6 +231,93 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 							FieldPath:  "metadata.annotations",
 						},
 					})))
+
+				By("checking the label is present in the pod")
+				stdout, stderr, err := pod.ExecCommand(clients, runningPod, "/bin/bash", "-c", "cat /etc/podnetinfo/labels")
+				Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("stdout: %s, stderr: %s", stdout, stderr))
+				Expect(stdout).To(ContainSubstring("anyname=\"anyvalue\""))
+			})
+
+			It("should inject also hugepages if requested in the pod", func() {
+				var hugepagesName string
+				var hupagesAmount int64
+
+				hasHugepages := false
+				nodeObj := &corev1.Node{}
+				Eventually(func() error {
+					return clients.Get(context.Background(), runtimeclient.ObjectKey{Name: node}, nodeObj)
+				}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+				for resourceName, resource := range nodeObj.Status.Allocatable {
+					if strings.HasPrefix(string(resourceName), "hugepages") && resource.Value() > 0 {
+						hasHugepages = true
+						hugepagesName = string(resourceName)
+						hupagesAmount = resource.Value()
+						break
+					}
+				}
+				if !hasHugepages {
+					Skip("No hugepages found on the node")
+				}
+
+				sriovNetwork := &sriovv1.SriovNetwork{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-apivolnetwork",
+						Namespace: operatorNamespace,
+					},
+					Spec: sriovv1.SriovNetworkSpec{
+						ResourceName:     resourceName,
+						IPAM:             `{"type":"host-local","subnet":"10.10.10.0/24","rangeStart":"10.10.10.171","rangeEnd":"10.10.10.181"}`,
+						NetworkNamespace: namespaces.Test,
+					}}
+				err := clients.Create(context.Background(), sriovNetwork)
+				Expect(err).ToNot(HaveOccurred())
+
+				waitForNetAttachDef("test-apivolnetwork", namespaces.Test)
+
+				podDefinition := pod.RedefineWithHugepages(pod.DefineWithNetworks([]string{sriovNetwork.Name}), hugepagesName, hupagesAmount)
+				created, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+
+				runningPod := waitForPodRunning(created)
+
+				var downwardVolume *corev1.Volume
+				for _, v := range runningPod.Spec.Volumes {
+					if v.Name == volumePodNetInfo {
+						downwardVolume = v.DeepCopy()
+						break
+					}
+				}
+
+				// In the DownwardAPI the resource injector rename the hugepage size with underscores
+				// example hugepages-1Gi -> hugepages_1Gi
+				result := strings.Replace(hugepagesName, "-", "_", 1)
+				if len(result) > 0 {
+					result = result[:len(result)-1]
+				}
+
+				Expect(downwardVolume).ToNot(BeNil(), "Downward volume not found")
+				Expect(downwardVolume.DownwardAPI).ToNot(BeNil(), "Downward api not found in volume")
+				Expect(downwardVolume.DownwardAPI.Items).To(SatisfyAll(
+					ContainElement(MatchFields(IgnoreExtras, Fields{
+						"Path": Equal(fmt.Sprintf("%s_request_test", result)),
+						"ResourceFieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
+							"ContainerName": Equal("test"),
+							"Resource":      Equal(fmt.Sprintf("requests.%s", hugepagesName)),
+						})),
+					})), ContainElement(MatchFields(IgnoreExtras, Fields{
+						"Path": Equal(fmt.Sprintf("%s_limit_test", result)),
+						"ResourceFieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
+							"ContainerName": Equal("test"),
+							"Resource":      Equal(fmt.Sprintf("limits.%s", hugepagesName)),
+						})),
+					})), ContainElement(MatchFields(IgnoreExtras, Fields{
+						"Path": Equal("annotations"),
+						"FieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
+							"APIVersion": Equal("v1"),
+							"FieldPath":  Equal("metadata.annotations"),
+						})),
+					}))))
 			})
 		})
 
@@ -1900,20 +1987,32 @@ func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
 }
 
 func WaitForSRIOVStable() {
-	// This used to be to check for sriov not to be stable first,
-	// then stable. The issue is that if no configuration is applied, then
-	// the status won't never go to not stable and the test will fail.
-	// TODO: find a better way to handle this scenario
-
-	time.Sleep((10 + snoTimeoutMultiplier*20) * time.Second)
-
 	fmt.Println("Waiting for the sriov state to stable")
+
+	// Track how long conditions have been continuously stable.
+	// We require conditions to remain stable for requiredStableDuration
+	// to guard against the race where the operator hasn't started
+	// processing a just-created policy yet.
+	var stableSince time.Time
+	requiredStableDuration := 5 * time.Second
+
 	Eventually(func(g Gomega) {
-		res, err := cluster.SriovStable(operatorNamespace, clients)
+		stable, err := cluster.SriovStable(operatorNamespace, clients)
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(res).To(BeTrue())
+		if !stable {
+			stableSince = time.Time{}
+			g.Expect(stable).To(BeTrue(), "conditions not yet stable")
+			return
+		}
+
+		if stableSince.IsZero() {
+			stableSince = time.Now()
+		}
+
+		g.Expect(time.Since(stableSince) >= requiredStableDuration).To(BeTrue(),
+			"conditions stable for %v, need %v", time.Since(stableSince), requiredStableDuration)
 	}, waitingTime, 1*time.Second).Should(Succeed(), func() string {
-		return "SR-IOV Operator is not stable" +
+		return "SR-IOV Operator is not stable\n" +
 			k8sreporter.SriovNetworkNodeStatesSummary(clients) +
 			k8sreporter.Events(clients, operatorNamespace)
 	})

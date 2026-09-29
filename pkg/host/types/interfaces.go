@@ -103,16 +103,20 @@ type ServiceInterface interface {
 	IsServiceEnabled(servicePath string) (bool, error)
 	// ReadService reads a systemd servers and return it as a struct
 	ReadService(servicePath string) (*Service, error)
-	// EnableService enables a systemd server on the host
+	// EnableService enables a systemd service on the host
 	EnableService(service *Service) error
 	// ReadServiceManifestFile reads the systemd manifest for a specific service
 	ReadServiceManifestFile(path string) (*Service, error)
-	// ReadServiceInjectionManifestFile reads the injection manifest file for the systemd service
-	ReadServiceInjectionManifestFile(path string) (*Service, error)
+	// ReadOvsServiceInjectionManifestFile reads the injection manifest file for the systemd service
+	ReadOvsServiceInjectionManifestFile(path string, ovsConfig map[string]string) (*Service, error)
 	// CompareServices returns true if serviceA needs update(doesn't contain all fields from service B)
 	CompareServices(serviceA, serviceB *Service) (bool, error)
 	// UpdateSystemService updates a system service on the host
 	UpdateSystemService(serviceObj *Service) error
+	// WriteServiceDropin writes (or replaces) an operator-owned drop-in file for a
+	// systemd service. Unlike UpdateSystemService, it overwrites the file on every
+	// call so that stale directives from a previous configuration are never left behind.
+	WriteServiceDropin(service *Service) error
 }
 
 type SriovInterface interface {

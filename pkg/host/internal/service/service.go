@@ -14,6 +14,7 @@ import (
 
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/render"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/utils"
 )
 
@@ -32,6 +33,7 @@ func New(utilsHelper utils.CmdInterface) types.ServiceInterface {
 type ServiceInjectionManifestFile struct {
 	Name    string
 	Dropins []struct {
+		Name     string
 		Contents string
 	}
 }
@@ -130,9 +132,12 @@ OUTER:
 	return false, nil
 }
 
-// ReadServiceInjectionManifestFile reads service injection file
-func (s *service) ReadServiceInjectionManifestFile(path string) (*types.Service, error) {
-	data, err := os.ReadFile(path)
+// ReadOvsServiceInjectionManifestFile reads service injection file.
+// The returned Service.Path points to the operator-owned drop-in file inside the
+// service's .d/ directory; WriteServiceDropin must be used to apply it so that
+// each update replaces the file rather than appending another ExecStartPre.
+func (s *service) ReadOvsServiceInjectionManifestFile(filePath string, ovsConfig map[string]string) (*types.Service, error) {
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -142,11 +147,38 @@ func (s *service) ReadServiceInjectionManifestFile(path string) (*types.Service,
 		return nil, err
 	}
 
+	externalIds, otherOvsConfig, err := utils.RenderOtherOvsConfigOption(ovsConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	d := render.MakeRenderData()
+	d.Data["ExternalIds"] = externalIds
+	d.Data["OtherOvsConfig"] = otherOvsConfig
+
+	srv, err := render.RenderTemplate(serviceContent.Dropins[0].Contents, &d)
+	if err != nil {
+		return nil, err
+	}
+
+	dropinPath := systemdDir + serviceContent.Name + ".d/" + serviceContent.Dropins[0].Name
 	return &types.Service{
 		Name:    serviceContent.Name,
-		Path:    systemdDir + serviceContent.Name,
-		Content: serviceContent.Dropins[0].Contents,
+		Path:    dropinPath,
+		Content: srv.String(),
 	}, nil
+}
+
+// WriteServiceDropin creates (or replaces) the drop-in file for service.
+// The directory is created if it does not exist. This is the counterpart to
+// ReadOvsServiceInjectionManifestFile and must be used instead of
+// UpdateSystemService for OVS drop-in updates.
+func (s *service) WriteServiceDropin(service *types.Service) error {
+	dropinDir := path.Join(consts.Chroot, path.Dir(service.Path))
+	if err := os.MkdirAll(dropinDir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path.Join(consts.Chroot, service.Path), []byte(service.Content), 0o644)
 }
 
 // ReadServiceManifestFile reads service file
