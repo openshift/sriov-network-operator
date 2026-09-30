@@ -980,8 +980,24 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 				})
 
 				It("should deploy the sriov-network-metrics-exporter DaemonSet", func() {
-					err := util.WaitForNamespacedObject(&appsv1.DaemonSet{}, k8sClient, testNamespace, "sriov-network-metrics-exporter", util.RetryInterval, util.APITimeout)
+					assertDaemonSetFields := func() {
+						daemonSet := &appsv1.DaemonSet{}
+						err := util.WaitForNamespacedObject(daemonSet, k8sClient, testNamespace, "sriov-network-metrics-exporter", util.RetryInterval, util.APITimeout)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(daemonSet.Spec.UpdateStrategy.Type).To(Equal(appsv1.RollingUpdateDaemonSetStrategyType), "metrics exporter DaemonSet should use RollingUpdate")
+						rollingUpdate := daemonSet.Spec.UpdateStrategy.RollingUpdate
+						Expect(rollingUpdate).NotTo(BeNil(), "metrics exporter DaemonSet should define rolling update settings")
+						if rollingUpdate != nil {
+							Expect(rollingUpdate.MaxUnavailable.String()).To(Equal("33%"), "metrics exporter DaemonSet should set maxUnavailable to 33%%")
+						}
+						Expect(daemonSet.Spec.Template.Spec.Tolerations).To(Equal([]corev1.Toleration{{Operator: corev1.TolerationOpExists}}), "metrics exporter DaemonSet should tolerate all taints")
+						Expect(daemonSet.Spec.Template.Spec.PriorityClassName).To(Equal("system-node-critical"), "metrics exporter DaemonSet should use the system-node-critical priority class")
+					}
+
+					assertDaemonSetFields()
+					err := util.TriggerSriovOperatorConfigReconcile(k8sClient, testNamespace)
 					Expect(err).NotTo(HaveOccurred())
+					assertDaemonSetFields()
 
 					err = util.WaitForNamespacedObject(&corev1.Service{}, k8sClient, testNamespace, "sriov-network-metrics-exporter-service", util.RetryInterval, util.APITimeout)
 					Expect(err).ToNot(HaveOccurred())
