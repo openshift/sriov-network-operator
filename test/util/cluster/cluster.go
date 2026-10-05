@@ -65,7 +65,6 @@ func DiscoverSriov(clients *testclient.ClientSet, operatorNamespace string) (*En
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve note states %v", err)
 	}
-	fmt.Printf("nodeStates: %+v\n", nodeStates)
 
 	res := &EnabledNodes{}
 	res.States = make(map[string]sriovv1.SriovNetworkNodeState)
@@ -454,7 +453,6 @@ func DiscoverSriovForAws(clients *testclient.ClientSet, operatorNamespace string
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover sriov nodes: %w", err)
 	}
-	fmt.Printf("tmpEnabledNodes: %+v\n", tmpEnabledNodes)
 
 	res := &EnabledNodes{}
 	res.States = make(map[string]sriovv1.SriovNetworkNodeState)
