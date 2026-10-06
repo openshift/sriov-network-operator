@@ -1116,9 +1116,12 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					node = sriovInfos.Nodes[0]
 					sriovDeviceList, err := sriovInfos.FindSriovDevices(node)
 					Expect(err).ToNot(HaveOccurred())
-					unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
+					unusedSriovDevices, err := cluster.FindUnusedSriovDevices(clients, node, namespaces.Test, sriovDeviceList, false)
 					if err != nil {
 						Skip(err.Error())
+					}
+					if len(unusedSriovDevices) == 0 {
+						Skip("unused sriov devices not found")
 					}
 					intf = unusedSriovDevices[0]
 					By("Using device " + intf.Name + " on node " + node)
@@ -1409,9 +1412,12 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					node = sriovInfos.Nodes[0]
 					sriovDeviceList, err := sriovInfos.FindSriovDevices(node)
 					Expect(err).ToNot(HaveOccurred())
-					unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
+					unusedSriovDevices, err := cluster.FindUnusedSriovDevices(clients, node, namespaces.Test, sriovDeviceList, false)
 					if err != nil {
 						Skip(err.Error())
+					}
+					if len(unusedSriovDevices) == 0 {
+						Skip("unused sriov devices not found")
 					}
 					intf = unusedSriovDevices[0]
 					By("Using device " + intf.Name + " on node " + node)
@@ -1614,6 +1620,10 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 			})
 
 			It("should remove interface configuration from host even after reboot", func() {
+				node, err := clients.CoreV1Interface.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				oldBootID := node.Status.NodeInfo.BootID
+				Expect(oldBootID).ToNot(BeEmpty())
 				By("force rebooting the node")
 				_, errOutput, err := runCommandOnConfigDaemon(testNode, "chroot", "/host", "reboot")
 				Expect(err).ToNot(HaveOccurred(), errOutput)
@@ -1621,8 +1631,13 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				err = clients.Delete(context.Background(), policy)
 				Expect(err).ToNot(HaveOccurred())
 
-				By("waiting for node to be not ready")
-				waitForNodeCondition(testNode, corev1.NodeReady, corev1.ConditionUnknown)
+				// A fast reboot can finish before the node controller reports Unknown.
+				By("waiting for the node to report a new boot ID")
+				Eventually(func(g Gomega) string {
+					node, err := clients.CoreV1Interface.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})
+					g.Expect(err).ToNot(HaveOccurred())
+					return node.Status.NodeInfo.BootID
+				}, waitingTime, time.Second).Should(And(Not(BeEmpty()), Not(Equal(oldBootID))))
 
 				By("waiting for node to be ready")
 				waitForNodeCondition(testNode, corev1.NodeReady, corev1.ConditionTrue)
@@ -1716,7 +1731,7 @@ func findMainSriovDevice(executorPod *corev1.Pod, sriovDevices []*sriovv1.Interf
 	routes := strings.Split(stdout, "\n")
 
 	for _, device := range sriovDevices {
-		if isDefaultRouteInterface(device.Name, routes) {
+		if cluster.IsDefaultRouteInterface(device.Name, routes) {
 			fmt.Println("Chosen ", device.Name, " as it is the default gw")
 			return device
 		}
@@ -1734,49 +1749,6 @@ func findMainSriovDevice(executorPod *corev1.Pod, sriovDevices []*sriovv1.Interf
 	}
 
 	return nil
-}
-
-func findUnusedSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceExt) ([]*sriovv1.InterfaceExt, error) {
-	createdPod := createCustomTestPod(testNode, []string{}, true, nil)
-	filteredDevices := []*sriovv1.InterfaceExt{}
-	stdout, _, err := pod.ExecCommand(clients, createdPod, "ip", "route")
-	Expect(err).ToNot(HaveOccurred())
-	routes := strings.Split(stdout, "\n")
-
-	for _, device := range sriovDevices {
-		if isDefaultRouteInterface(device.Name, routes) {
-			continue
-		}
-		stdout, stderr, err := pod.ExecCommand(clients, createdPod, "ip", "link", "show", device.Name)
-		if err != nil {
-			fmt.Printf("Can't query link state for device [%s]: %s", device.Name, err.Error())
-			continue
-		}
-
-		if len(stdout) == 0 {
-			fmt.Printf("Can't query link state for device [%s]: stderr:[%s]", device.Name, stderr)
-			continue
-		}
-
-		if strings.Contains(stdout, "master ovs-system") {
-			continue // The interface is not active
-		}
-
-		filteredDevices = append(filteredDevices, device)
-	}
-	if len(filteredDevices) == 0 {
-		return nil, fmt.Errorf("unused sriov devices not found")
-	}
-	return filteredDevices, nil
-}
-
-func isDefaultRouteInterface(intfName string, routes []string) bool {
-	for _, route := range routes {
-		if strings.HasPrefix(route, "default") && strings.Contains(route, "dev "+intfName) {
-			return true
-		}
-	}
-	return false
 }
 
 func findNoCarrierSriovDevices(testNode string, sriovDevices []*sriovv1.InterfaceExt) ([]*sriovv1.InterfaceExt, error) {
@@ -2111,34 +2083,33 @@ func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {
 }
 
 func setSriovOperatorSpecFlag(flagName string, flagValue bool) func() {
-	cfg := sriovv1.SriovOperatorConfig{}
-	err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
-		Name:      "default",
-		Namespace: operatorNamespace,
-	}, &cfg)
-
 	ret := func() {}
+	Eventually(func(g Gomega) {
+		cfg := sriovv1.SriovOperatorConfig{}
+		err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+			Name:      "default",
+			Namespace: operatorNamespace,
+		}, &cfg)
+		g.Expect(err).ToNot(HaveOccurred())
 
-	Expect(err).ToNot(HaveOccurred())
-	if flagName == operatorNetworkInjectorFlag && cfg.Spec.EnableInjector != flagValue {
-		cfg.Spec.EnableInjector = flagValue
-		err = clients.Update(context.TODO(), &cfg)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.Spec.EnableInjector).To(Equal(flagValue))
+		var flag *bool
+		switch flagName {
+		case operatorNetworkInjectorFlag:
+			flag = &cfg.Spec.EnableInjector
+		case operatorWebhookFlag:
+			flag = &cfg.Spec.EnableOperatorWebhook
+		default:
+			Fail("Unknown operator flag: " + flagName)
+		}
+		if *flag == flagValue {
+			return
+		}
+		*flag = flagValue
+		g.Expect(clients.Update(context.TODO(), &cfg)).To(Succeed())
 		ret = func() {
 			setSriovOperatorSpecFlag(flagName, !flagValue)
 		}
-	}
-
-	if flagName == operatorWebhookFlag && cfg.Spec.EnableOperatorWebhook != flagValue {
-		cfg.Spec.EnableOperatorWebhook = flagValue
-		clients.Update(context.TODO(), &cfg)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.Spec.EnableOperatorWebhook).To(Equal(flagValue))
-		ret = func() {
-			setSriovOperatorSpecFlag(flagName, !flagValue)
-		}
-	}
+	}, time.Minute, 5*time.Second).Should(Succeed())
 
 	if flagValue {
 		Eventually(func(g Gomega) {

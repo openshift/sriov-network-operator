@@ -290,6 +290,20 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 	})
 
 	Context("Config Daemon generic flow", func() {
+		It("Should clear status after the last managed bridge disappears", func(ctx context.Context) {
+			patcher := status.NewPatcher(k8sClient, nil, scheme.Scheme, "test-daemon")
+			Expect(patcher.ApplyStatus(ctx, nodeState, map[string]interface{}{
+				"bridges": sriovnetworkv1.Bridges{OVS: []sriovnetworkv1.OVSConfigExt{{Name: "br-test"}}},
+			}, nil)).To(Succeed())
+			// Host discovery returns no bridges. Trigger the actual daemon status path.
+			patchAnnotation(nodeState, "bridge-removed", time.Now().Format(time.RFC3339Nano))
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), nodeState)).To(Succeed())
+				g.Expect(nodeState.Status.Bridges.OVS).To(BeEmpty())
+				g.Expect(nodeState.Status.SyncStatus).To(Equal(constants.SyncStatusSucceeded))
+			}, 10*time.Second, 100*time.Millisecond).Should(Succeed())
+		})
+
 		It("Should expose nodeState Status section", func(ctx context.Context) {
 			originalInterface := sriovnetworkv1.InterfaceExt{
 				Name:           "eno1",
