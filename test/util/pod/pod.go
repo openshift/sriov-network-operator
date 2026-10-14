@@ -3,6 +3,7 @@ package pod
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -20,6 +21,37 @@ import (
 )
 
 const hostnameLabel = "kubernetes.io/hostname"
+
+// AssertContainerReady checks that the pod and its named container are ready.
+// The returned error includes pod and readiness details for polling callbacks.
+func AssertContainerReady(p corev1.Pod, containerName string) error {
+	details := fmt.Sprintf("pod %s/%s container %q (phase=%q, reason=%q)",
+		p.Namespace, p.Name, containerName, p.Status.Phase, p.Status.Reason)
+	if p.Status.Phase != corev1.PodRunning {
+		return fmt.Errorf("%s is not running", details)
+	}
+
+	found := false
+	for _, container := range p.Spec.Containers {
+		if container.Name == containerName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("%s is missing from the pod spec", details)
+	}
+
+	for _, status := range p.Status.ContainerStatuses {
+		if status.Name == containerName {
+			if !status.Ready {
+				return fmt.Errorf("%s is not ready", details)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("%s has no container status", details)
+}
 
 func GetDefinition() *corev1.Pod {
 	podObject := &corev1.Pod{

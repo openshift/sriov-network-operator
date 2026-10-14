@@ -19,22 +19,21 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/discovery"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/namespaces"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/network"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/pod"
 )
 
 // operandTLSTarget describes an operand whose TLS CLI flags should be validated.
 type operandTLSTarget struct {
-	labelSelector  string
-	containerName  string
-	curveSupported bool
+	labelSelector string
+	containerName string
+	daemonSetName string
 }
 
 // tlsOperands is the list of operands that receive TLS configuration flags.
 var tlsOperands = []operandTLSTarget{
-	{labelSelector: "app=operator-webhook", containerName: "webhook-server", curveSupported: true},
-	{labelSelector: "app=network-resources-injector", containerName: "webhook-server", curveSupported: true},
-	// TODO: set curveSupported to true once kube-rbac-proxy supports --tls-curve-preferences
-	// Tracked by: https://github.com/kube-rbac-proxy/kube-rbac-proxy/issues/414
-	{labelSelector: "app=sriov-network-metrics-exporter", containerName: "kube-rbac-proxy", curveSupported: false},
+	{labelSelector: "app=operator-webhook", containerName: "webhook-server", daemonSetName: "operator-webhook"},
+	{labelSelector: "app=network-resources-injector", containerName: "webhook-server", daemonSetName: "network-resources-injector"},
+	{labelSelector: "app=sriov-network-metrics-exporter", containerName: "kube-rbac-proxy", daemonSetName: "sriov-network-metrics-exporter"},
 }
 
 var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func() {
@@ -142,6 +141,11 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 			By("Validating operands have initial TLS args")
 			assertAllOperandsHaveTLSArgs(firstCiphers, "VersionTLS12", curveNamesToNumericIDs("X25519"))
 
+			By("Reloading TLS configuration through reconciliation and rollout")
+			setOperatorTLSEnv(firstCiphers, "VersionTLS12", "secp256r1")
+			waitForOperatorPodReady()
+			assertAllOperandsHaveTLSArgs(firstCiphers, "VersionTLS12", curveNamesToNumericIDs("secp256r1"))
+
 			updatedCiphers := "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
 			By("Updating TLS configuration to new values")
 			setOperatorTLSEnv(updatedCiphers, "VersionTLS13", "X25519,secp256r1")
@@ -176,11 +180,7 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 			}, configv1.TLSAdherencePolicyLegacyAdheringComponentsOnly)
 
 			By("Validating operands do NOT have TLS args from the cluster profile")
-			assertOperandDoesNotHaveTLSArgs("app=operator-webhook", "webhook-server",
-				"--tls-cipher-suites=")
-
-			assertOperandDoesNotHaveTLSArgs("app=network-resources-injector", "webhook-server",
-				"-tls-cipher-suites=")
+			assertAllOperandsDoesNotHaveTLSArgs("--tls-cipher-suites=")
 		})
 
 		It("should propagate TLS profile when tlsAdherence is StrictAllComponents", func() {
@@ -212,8 +212,6 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 			By("Validating all operands have TLS args from the cluster profile")
 			assertAllOperandsHaveTLSArgs("", string(intermediateSpec.MinTLSVersion), expectedGroups)
 
-			By("Waiting for operand pods to be fully ready after TLS profile change")
-			waitForOperandPodsReady()
 		})
 
 		It("should update operands when tlsAdherence changes from Legacy to Strict", func() {
@@ -240,8 +238,7 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 			}, configv1.TLSAdherencePolicyLegacyAdheringComponentsOnly)
 
 			By("Validating operands do NOT have TLS args from the cluster profile")
-			assertOperandDoesNotHaveTLSArgs("app=operator-webhook", "webhook-server",
-				"--tls-cipher-suites=")
+			assertAllOperandsDoesNotHaveTLSArgs("--tls-cipher-suites=")
 
 			By("Updating tlsAdherence to StrictAllComponents (operator should now honor)")
 			setAPIServerConfig(&configv1.TLSSecurityProfile{
@@ -262,22 +259,36 @@ var _ = Describe("[sriov] TLS Configuration", Ordered, ContinueOnFailure, func()
 // cipher suites, min TLS version, and curve preferences flags.
 // Empty values are skipped (no validation for that field).
 func assertAllOperandsHaveTLSArgs(ciphers, minVersion, curvePreferences string) {
+	waitForOperandPodsReady()
 	for _, op := range tlsOperands {
 		if ciphers != "" {
 			By(fmt.Sprintf("Validating %s has tls-cipher-suites", op.labelSelector))
-			assertOperandHasTLSArgs(op.labelSelector, op.containerName,
+			assertOperandTLSArgs(op.labelSelector, op.containerName, haveTLSArgs,
 				"--tls-cipher-suites="+ciphers)
 		}
 		if minVersion != "" {
 			By(fmt.Sprintf("Validating %s has tls-min-version", op.labelSelector))
-			assertOperandHasTLSArgs(op.labelSelector, op.containerName,
+			assertOperandTLSArgs(op.labelSelector, op.containerName, haveTLSArgs,
 				"--tls-min-version="+minVersion)
 		}
-		if curvePreferences != "" && op.curveSupported {
+		if curvePreferences != "" {
 			By(fmt.Sprintf("Validating %s has tls-curve-preferences", op.labelSelector))
-			assertOperandHasTLSArgs(op.labelSelector, op.containerName,
+			assertOperandTLSArgs(op.labelSelector, op.containerName, haveTLSArgs,
 				"--tls-curve-preferences="+curvePreferences)
 		}
+	}
+}
+
+// assertAllOperandsDoesNotHaveTLSArgs rejects each TLS flag prefix on every operand.
+// Both CLI dash spellings are checked because the injector supports single-dash flags.
+func assertAllOperandsDoesNotHaveTLSArgs(prefixes ...string) {
+	var spellings []string
+	for _, prefix := range prefixes {
+		flag := strings.TrimLeft(prefix, "-")
+		spellings = append(spellings, "--"+flag, "-"+flag)
+	}
+	for _, op := range tlsOperands {
+		assertOperandTLSArgs(op.labelSelector, op.containerName, doesNotHaveTLSArgs, spellings...)
 	}
 }
 
@@ -352,11 +363,31 @@ func curveNamesToNumericIDs(names string) string {
 // This ensures that after a TLS profile change triggers a DaemonSet update,
 // the new pods are fully ready before the test proceeds.
 func waitForOperandPodsReady() {
-	for _, op := range tlsOperands {
-		Eventually(func(g Gomega) {
-			getReadyOperandPods(g, op.labelSelector)
-		}, 5*time.Minute, 5*time.Second).Should(Succeed())
-	}
+	Eventually(func(g Gomega) {
+		for _, op := range tlsOperands {
+			assertOperandRolloutReady(g, op)
+			for _, p := range getReadyOperandPods(g, op.labelSelector) {
+				g.Expect(pod.AssertContainerReady(p, op.containerName)).NotTo(HaveOccurred())
+				for _, cs := range p.Status.ContainerStatuses {
+					g.Expect(cs.Ready).To(BeTrue(),
+						fmt.Sprintf("Pod %s container %s not ready", p.Name, cs.Name))
+				}
+			}
+		}
+	}, 5*time.Minute, 5*time.Second).Should(Succeed())
+}
+
+// assertOperandRolloutReady requires the latest DaemonSet generation to be fully ready.
+func assertOperandRolloutReady(g Gomega, op operandTLSTarget) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ds, err := clients.AppsV1Interface.DaemonSets(operatorNamespace).Get(ctx, op.daemonSetName, metav1.GetOptions{})
+	cancel()
+	g.Expect(err).NotTo(HaveOccurred(), "DaemonSet %s", op.daemonSetName)
+	g.Expect(ds.Status.ObservedGeneration).To(BeNumerically(">=", ds.Generation), "DaemonSet %s", ds.Name)
+	g.Expect(ds.Status.DesiredNumberScheduled).To(BeNumerically(">", 0), "DaemonSet %s", ds.Name)
+	g.Expect(ds.Status.UpdatedNumberScheduled).To(Equal(ds.Status.DesiredNumberScheduled), "DaemonSet %s", ds.Name)
+	g.Expect(ds.Status.NumberReady).To(Equal(ds.Status.DesiredNumberScheduled), "DaemonSet %s", ds.Name)
+	g.Expect(ds.Status.NumberUnavailable).To(BeZero(), "DaemonSet %s", ds.Name)
 }
 
 func getReadyOperandPods(g Gomega, labelSelector string) []corev1.Pod {
@@ -445,25 +476,50 @@ func waitForOperatorPodReady() {
 	Eventually(func(g Gomega) {
 		deploy, err := clients.AppsV1Interface.Deployments(operatorNamespace).Get(
 			context.Background(), "sriov-network-operator", metav1.GetOptions{})
-		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(deploy.Status.ObservedGeneration).To(Equal(deploy.Generation))
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(deploy.Status.ObservedGeneration).To(BeNumerically(">=", deploy.Generation))
 		g.Expect(deploy.Status.UpdatedReplicas).To(Equal(*deploy.Spec.Replicas))
-		g.Expect(deploy.Status.Replicas).To(Equal(*deploy.Spec.Replicas))
 		g.Expect(deploy.Status.AvailableReplicas).To(Equal(*deploy.Spec.Replicas))
-	}, 3*time.Minute, 5*time.Second).Should(Succeed())
+		g.Expect(deploy.Status.ReadyReplicas).To(Equal(*deploy.Spec.Replicas))
+		g.Expect(deploy.Status.Replicas).To(Equal(*deploy.Spec.Replicas))
+		for _, p := range getReadyOperandPods(g, "name=sriov-network-operator") {
+			g.Expect(pod.AssertContainerReady(p, "sriov-network-operator")).NotTo(HaveOccurred())
+		}
+	}, 5*time.Minute, 5*time.Second).Should(Succeed())
 
 	WaitForSRIOVStable()
 }
 
-// assertOperandHasTLSArgs validates that the specified operand pods have the expected TLS arguments.
-func assertOperandHasTLSArgs(labelSelector, containerName string, expectedArgs ...string) {
+const (
+	haveTLSArgs        = true
+	doesNotHaveTLSArgs = false
+)
+
+// assertOperandTLSArgs validates exact arguments when have is true and rejects
+// arguments with the supplied prefixes when have is false.
+func assertOperandTLSArgs(labelSelector, containerName string, have bool, expectedArgs ...string) {
 	Eventually(func(g Gomega) {
+		for _, op := range tlsOperands {
+			if op.labelSelector == labelSelector && op.containerName == containerName {
+				assertOperandRolloutReady(g, op)
+			}
+		}
 		for _, p := range getReadyOperandPods(g, labelSelector) {
+			g.Expect(pod.AssertContainerReady(p, containerName)).NotTo(HaveOccurred())
 			args := getContainerArgs(p, containerName)
+			g.Expect(args).NotTo(BeEmpty(), "missing target container arguments")
 			for _, expected := range expectedArgs {
-				g.Expect(args).To(ContainElement(ContainSubstring(expected)),
-					fmt.Sprintf("Pod %s/%s container %s missing arg %q in args: %v",
-						p.Namespace, p.Name, containerName, expected, args))
+				if have {
+					g.Expect(args).To(ContainElement(expected),
+						fmt.Sprintf("Pod %s/%s container %s missing arg %q in args: %v",
+							p.Namespace, p.Name, containerName, expected, args))
+					continue
+				}
+				for _, arg := range args {
+					g.Expect(arg).ToNot(HavePrefix(expected),
+						fmt.Sprintf("Pod %s/%s container %s should NOT have arg with prefix %q, but found: %s",
+							p.Namespace, p.Name, containerName, expected, arg))
+				}
 			}
 		}
 	}, 5*time.Minute, 10*time.Second).Should(Succeed())
@@ -511,20 +567,6 @@ func restoreAPIServerConfig(profile *configv1.TLSSecurityProfile, adherence conf
 		adherence = configv1.TLSAdherencePolicyLegacyAdheringComponentsOnly
 	}
 	setAPIServerConfig(profile, adherence)
-}
-
-// assertOperandDoesNotHaveTLSArgs validates that operand pods do NOT have the specified TLS arg prefix.
-func assertOperandDoesNotHaveTLSArgs(labelSelector, containerName, argPrefix string) {
-	Eventually(func(g Gomega) {
-		for _, p := range getReadyOperandPods(g, labelSelector) {
-			args := getContainerArgs(p, containerName)
-			for _, arg := range args {
-				g.Expect(arg).ToNot(HavePrefix(argPrefix),
-					fmt.Sprintf("Pod %s/%s container %s should NOT have arg with prefix %q, but found: %s",
-						p.Namespace, p.Name, containerName, argPrefix, arg))
-			}
-		}
-	}, 3*time.Minute, 10*time.Second).Should(Succeed())
 }
 
 // validateOperandsWorkWithPolicy creates a SRIOV policy, network, and pod to confirm
