@@ -123,7 +123,6 @@ type System struct {
 	//RDMA subsystem. Allowed value "shared", "exclusive".
 	RdmaMode string `json:"rdmaMode,omitempty"`
 	// OVS config. It will be provided for ovs-vswitchd service as other_config option
-	// +kubebuilder:default:={hw-offload: "true"}
 	OvsConfig map[string]string `json:"ovsConfig,omitempty"`
 }
 
