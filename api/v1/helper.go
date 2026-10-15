@@ -242,6 +242,18 @@ func NeedToUpdateSriov(ifaceSpec *Interface, ifaceStatus *InterfaceExt) bool {
 							return true
 						}
 
+						// The admin MAC is set to the VF MAC when the VF is configured. If it differs, the
+						// configuration was interrupted (e.g. the daemon restarted in the middle of the VF
+						// configuration) and needs to be applied again. We skip the check when either MAC is
+						// unknown, e.g. the VF is allocated to a workload or the PF doesn't report the admin MAC.
+						if strings.EqualFold(ifaceStatus.LinkType, consts.LinkTypeETH) &&
+							vfStatus.Mac != "" && vfStatus.AdminMac != "" &&
+							!strings.EqualFold(vfStatus.Mac, vfStatus.AdminMac) {
+							log.V(0).Info("NeedToUpdateSriov(): VF admin MAC needs update",
+								"vf", vfStatus.VfID, "desired", vfStatus.Mac, "current", vfStatus.AdminMac)
+							return true
+						}
+
 						if (strings.EqualFold(ifaceStatus.LinkType, consts.LinkTypeETH) && groupSpec.IsRdma) || strings.EqualFold(ifaceStatus.LinkType, consts.LinkTypeIB) {
 							// We do this check only if a Node GUID is set to ensure that we were able to read the
 							// Node GUID. We intentionally skip empty Node GUID in vfStatus because this may happen
