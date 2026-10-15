@@ -1,7 +1,9 @@
-FROM golang:1.26 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26 AS builder
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /go/src/github.com/k8snetworkplumbingwg/sriov-network-operator
 COPY . .
-RUN make _build-webhook BIN_PATH=build/_output/cmd
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} make _build-webhook BIN_PATH=build/_output/cmd
 
 FROM quay.io/centos/centos:stream9
 LABEL io.k8s.display-name="sriov-network-webhook" \
