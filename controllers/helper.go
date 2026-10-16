@@ -19,6 +19,8 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -193,6 +195,24 @@ func syncPluginDaemonObjs(ctx context.Context,
 	data.Data["NodeSelectorField"] = GetNodeSelectorForDevicePlugin(dc)
 	data.Data["UseCDI"] = dc.Spec.UseCDI
 	data.Data["BlockDevicePluginUntilConfigured"] = featureGate.IsEnabled(constants.BlockDevicePluginUntilConfiguredFeatureGate)
+
+	// Hash the device-plugin ConfigMap data and embed it as a pod template
+	// annotation so the daemonset rolls when the config changes.
+	// See cluster-network-operator pkg/network/ovn_kubernetes.go renderOVNKubernetes().
+	cm := &corev1.ConfigMap{}
+	if err := client.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: constants.ConfigMapName}, cm); err != nil {
+		if errors.IsNotFound(err) {
+			data.Data["DevicePluginConfigHash"] = ""
+		} else {
+			return fmt.Errorf("failed to read device-plugin ConfigMap for hashing: %w", err)
+		}
+	} else {
+		raw, _ := json.Marshal(cm.Data)
+		h := sha256.New()
+		h.Write(raw)
+		data.Data["DevicePluginConfigHash"] = hex.EncodeToString(h.Sum(nil))
+	}
+
 	objs, err := renderDsForCR(constants.PluginPath, &data, renderFn)
 	if err != nil {
 		logger.Error(err, "Fail to render SR-IoV manifests")
