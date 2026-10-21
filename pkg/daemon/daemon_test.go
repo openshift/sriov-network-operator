@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -52,6 +53,9 @@ var (
 	platformMock        *mock_platform.MockInterface
 	discoverSriovReturn *sriovDiscoverReturn
 	nodeState           *sriovnetworkv1.SriovNetworkNodeState
+
+	triggerReboot atomic.Bool
+	rebootCount   atomic.Int32
 
 	daemonReconciler   *daemon.NodeReconciler
 	nodeStateCreateSeq int
@@ -200,12 +204,27 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 		hostHelper.EXPECT().ClearPCIAddressFolder().Return(nil).AnyTimes()
 		hostHelper.EXPECT().DiscoverRDMASubsystem().Return("shared", nil).AnyTimes()
 		hostHelper.EXPECT().GetCurrentKernelArgs().Return("", nil).AnyTimes()
-		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgPciRealloc).Return(true).AnyTimes()
+		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgPciRealloc).DoAndReturn(func(_, _ string) bool {
+			return !triggerReboot.Load()
+		}).AnyTimes()
 		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIntelIommu).Return(true).AnyTimes()
 		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgIommuPt).Return(true).AnyTimes()
 		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaExclusive).Return(false).AnyTimes()
 		hostHelper.EXPECT().IsKernelArgsSet("", constants.KernelArgRdmaShared).Return(false).AnyTimes()
 		hostHelper.EXPECT().SetRDMASubsystem("").Return(nil).AnyTimes()
+
+		hostHelper.EXPECT().GetRebootCount(gomock.Any()).DoAndReturn(func(_ int64) (int, error) {
+			return int(rebootCount.Load()), nil
+		}).AnyTimes()
+		hostHelper.EXPECT().IncrementRebootCounter(gomock.Any()).DoAndReturn(func(_ int64) error {
+			rebootCount.Add(1)
+			return nil
+		}).AnyTimes()
+		hostHelper.EXPECT().ResetRebootCounter(gomock.Any()).DoAndReturn(func(_ int64) error {
+			rebootCount.Store(0)
+			return nil
+		}).AnyTimes()
+		hostHelper.EXPECT().RunCommand("systemd-run", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return("", "", nil).AnyTimes()
 
 		hostHelper.EXPECT().ConfigSriovInterfaces(gomock.Any(), gomock.Any(), gomock.Any(), false).Do(
 			func(_, _, _, _ any) { discoverSriovReturn.ReplaceOriginalWithAfter() }).AnyTimes()
@@ -251,6 +270,8 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 	BeforeEach(func() {
 		discoverSriovReturn.SetOriginal([]sriovnetworkv1.InterfaceExt{})
 		discoverSriovReturn.SetAfter([]sriovnetworkv1.InterfaceExt{})
+		triggerReboot.Store(false)
+		rebootCount.Store(0)
 		nodeState = ensureEmptyNodeState(nodeName)
 		patchAnnotation(nodeState, "ensure-reconcile", time.Now().Format(time.RFC3339Nano))
 		Eventually(func(g Gomega) {
@@ -269,6 +290,20 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 	})
 
 	Context("Config Daemon generic flow", func() {
+		It("Should clear status after the last managed bridge disappears", func(ctx context.Context) {
+			patcher := status.NewPatcher(k8sClient, nil, scheme.Scheme, "test-daemon")
+			Expect(patcher.ApplyStatus(ctx, nodeState, map[string]interface{}{
+				"bridges": sriovnetworkv1.Bridges{OVS: []sriovnetworkv1.OVSConfigExt{{Name: "br-test"}}},
+			}, nil)).To(Succeed())
+			// Host discovery returns no bridges. Trigger the actual daemon status path.
+			patchAnnotation(nodeState, "bridge-removed", time.Now().Format(time.RFC3339Nano))
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), nodeState)).To(Succeed())
+				g.Expect(nodeState.Status.Bridges.OVS).To(BeEmpty())
+				g.Expect(nodeState.Status.SyncStatus).To(Equal(constants.SyncStatusSucceeded))
+			}, 10*time.Second, 100*time.Millisecond).Should(Succeed())
+		})
+
 		It("Should expose nodeState Status section", func(ctx context.Context) {
 			originalInterface := sriovnetworkv1.InterfaceExt{
 				Name:           "eno1",
@@ -883,6 +918,68 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 					devicePluginPod)).ToNot(HaveOccurred())
 				g.Expect(devicePluginPod.Annotations).ToNot(HaveKey(constants.DevicePluginWaitConfigAnnotation))
 			}, waitTime, retryTime).Should(Succeed())
+		})
+	})
+
+	Context("Reboot Limit", func() {
+		BeforeEach(func() {
+			oldDisableDrain := vars.DisableDrain
+			DeferCleanup(func() { vars.DisableDrain = oldDisableDrain })
+			vars.DisableDrain = true
+			triggerReboot.Store(true)
+		})
+
+		It("should set sync status to failed when reboots reach the limit", func() {
+			rebootCount.Store(int32(constants.MaxRebootsPerGeneration))
+
+			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(nodeState), nodeState)).ToNot(HaveOccurred())
+			nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{{PciAddress: "0000:16:00.0"}}
+			Expect(k8sClient.Update(context.Background(), nodeState)).ToNot(HaveOccurred())
+
+			eventuallySyncStatusEqual(nodeState, constants.SyncStatusFailed)
+			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(nodeState), nodeState)).ToNot(HaveOccurred())
+			Expect(nodeState.Status.LastSyncError).To(ContainSubstring("maximum number of allowed reboots"))
+		})
+
+		It("should reboot the node when count is below the limit", func() {
+			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(nodeState), nodeState)).ToNot(HaveOccurred())
+			nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{{PciAddress: "0000:16:00.0"}}
+			Expect(k8sClient.Update(context.Background(), nodeState)).ToNot(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				events := &corev1.EventList{}
+				g.Expect(k8sClient.List(context.Background(), events,
+					client.MatchingFields{
+						"involvedObject.name": nodeState.Name,
+						"reason":              "RebootNode",
+					})).ToNot(HaveOccurred())
+				g.Expect(events.Items).ToNot(BeEmpty())
+			}, 10*time.Second, 100*time.Millisecond).Should(Succeed())
+		})
+
+		It("should start fresh counter when generation changes", func() {
+			rebootCount.Store(int32(constants.MaxRebootsPerGeneration))
+
+			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(nodeState), nodeState)).ToNot(HaveOccurred())
+			nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{{PciAddress: "0000:16:00.0"}}
+			Expect(k8sClient.Update(context.Background(), nodeState)).ToNot(HaveOccurred())
+
+			eventuallySyncStatusEqual(nodeState, constants.SyncStatusFailed)
+
+			rebootCount.Store(0)
+			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(nodeState), nodeState)).ToNot(HaveOccurred())
+			nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{{PciAddress: "0000:16:00.0"}, {PciAddress: "0000:16:00.1"}}
+			Expect(k8sClient.Update(context.Background(), nodeState)).ToNot(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				events := &corev1.EventList{}
+				g.Expect(k8sClient.List(context.Background(), events,
+					client.MatchingFields{
+						"involvedObject.name": nodeState.Name,
+						"reason":              "RebootNode",
+					})).ToNot(HaveOccurred())
+				g.Expect(events.Items).ToNot(BeEmpty())
+			}, 10*time.Second, 100*time.Millisecond).Should(Succeed())
 		})
 	})
 })
