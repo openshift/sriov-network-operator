@@ -1,7 +1,9 @@
-FROM golang:1.26 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26 AS builder
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /go/src/github.com/k8snetworkplumbingwg/sriov-network-operator
 COPY . .
-RUN make _build-sriov-network-config-daemon BIN_PATH=build/_output/cmd
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} make _build-sriov-network-config-daemon BIN_PATH=build/_output/cmd
 
 FROM quay.io/centos/centos:stream9
 ARG MSTFLINT=mstflint

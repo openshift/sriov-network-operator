@@ -3,11 +3,17 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+
 jobs:
   execute:
     runs-on: ubuntu-24.04
     steps:
-      - uses: jpmcb/prow-github-actions@v2.0.0
+      - uses: cncf/prow-github-actions@187c5e3cd95a329c43448e1bdb3b1f5249232e44 # v3.0.1
         with:
           prow-commands: '/assign
             /unassign

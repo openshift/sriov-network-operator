@@ -171,10 +171,9 @@ func ValidateOvsConfig(ovsConfig map[string]string) error {
 	return nil
 }
 
-// RenderOtherOvsConfigOption formats ovsConfig entries for use in a shell
-// command. Keys must match [a-zA-Z0-9_-] and values must not contain single
-// quotes; both constraints prevent injection into the single-quoted bash -c
-// context where the output is embedded.
+// RenderOtherOvsConfigOption formats complete systemd arguments, without a shell.
+// Escape percent specifiers; ExecStartPre uses the colon prefix to disable
+// environment expansion. Keys and values retain admission validation.
 func RenderOtherOvsConfigOption(ovsConfig map[string]string) (string, string, error) {
 	otherConfig := new(bytes.Buffer)
 	keys := make([]string, 0, len(ovsConfig))
@@ -191,7 +190,7 @@ func RenderOtherOvsConfigOption(ovsConfig map[string]string) (string, string, er
 	externalIds := make([]string, 0, len(keys))
 	for _, key := range keys {
 		value := ovsConfig[key]
-		fmt.Fprintf(otherConfig, "other_config:%s=%q ", key, value)
+		fmt.Fprintf(otherConfig, "%q ", "other_config:"+key+"="+strings.ReplaceAll(value, "%", "%%"))
 		externalIds = append(externalIds, key)
 	}
 	return strings.Join(externalIds, " "), otherConfig.String(), nil

@@ -82,6 +82,11 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 				g.Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
 			}, 20*time.Minute, 5*time.Second).Should(Succeed())
 
+			By("Checking reboot tracker file exists after reboot")
+			trackerOutput, _, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host"+consts.SriovRebootTrackerFilePath)
+			Expect(err).ToNot(HaveOccurred(), "reboot tracker file should exist after reboot")
+			Expect(trackerOutput).To(ContainSubstring("rebootCount: 0"), "reboot counter should be reset after successful configuration")
+
 			By("Checking rdma mode and kernel args")
 			cmdlineOutput, _, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline")
 			errDescription := fmt.Sprintf("kernel args are not right, printing current kernel args %s", cmdlineOutput)

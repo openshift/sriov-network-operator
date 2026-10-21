@@ -65,8 +65,12 @@ func (dn *NodeReconciler) updateSyncState(ctx context.Context, desiredNodeState 
 		"syncStatus":    desiredNodeState.Status.SyncStatus,
 		"lastSyncError": desiredNodeState.Status.LastSyncError,
 		"interfaces":    desiredNodeState.Status.Interfaces,
-		"bridges":       desiredNodeState.Status.Bridges,
 		"system":        desiredNodeState.Status.System,
+	}
+	// Omit an empty object so SSA removes the previously owned bridge fields.
+	// Applying {} after the last bridge is removed can produce an invalid null.
+	if len(desiredNodeState.Status.Bridges.OVS) > 0 {
+		statusFields["bridges"] = desiredNodeState.Status.Bridges
 	}
 
 	oldSyncStatus := currentNodeState.Status.SyncStatus

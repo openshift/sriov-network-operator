@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -22,6 +23,34 @@ type Network struct {
 }
 
 type SriovNetworkOptions func(*sriovv1.SriovNetwork)
+
+// OffloadedPackets counts IPv4 redirects for one VF pair in an OVS
+// dpctl/dump-flows --names type=offloaded response.
+func OffloadedPackets(dump, inPort, outPort, srcMAC, dstMAC string) (uint64, error) {
+	var total uint64
+	for _, line := range strings.Split(dump, "\n") {
+		if !strings.Contains(line, "in_port("+inPort+")") ||
+			!strings.Contains(line, "eth(src="+srcMAC+",dst="+dstMAC+")") ||
+			!strings.Contains(line, "eth_type(0x0800)") {
+			continue
+		}
+		stats, actions, ok := strings.Cut(line, "actions:")
+		if !ok || !sriovv1.StringInArray(outPort, strings.Split(strings.TrimSpace(actions), ",")) {
+			continue
+		}
+		_, value, ok := strings.Cut(stats, "packets:")
+		if !ok {
+			return 0, fmt.Errorf("offloaded flow has no packet counter: %s", line)
+		}
+		value, _, _ = strings.Cut(value, ",")
+		count, err := strconv.ParseUint(strings.TrimSpace(value), 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid offloaded packet counter: %w", err)
+		}
+		total += count
+	}
+	return total, nil
+}
 
 func CreateSriovNetwork(clientSet *testclient.ClientSet, intf *sriovv1.InterfaceExt, name string, namespace string, operatorNamespace string, resourceName string, ipam string, options ...SriovNetworkOptions) error {
 	sriovNetwork := &sriovv1.SriovNetwork{
@@ -119,7 +148,7 @@ func GetNicsByPrefix(pod *k8sv1.Pod, ifcPrefix string) ([]string, error) {
 func GetSriovNicIPs(pod *k8sv1.Pod, ifcName string) ([]string, error) {
 	networksStatus, ok := pod.ObjectMeta.Annotations[netattdefv1.NetworkStatusAnnot]
 	if !ok {
-		return nil, fmt.Errorf("pod [%s] has no annotation `%s`", netattdefv1.NetworkStatusAnnot, pod.Name)
+		return nil, fmt.Errorf("pod [%s] has no annotation `%s`", pod.Name, netattdefv1.NetworkStatusAnnot)
 	}
 
 	var nets []Network

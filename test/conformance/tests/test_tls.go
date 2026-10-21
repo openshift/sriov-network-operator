@@ -354,24 +354,30 @@ func curveNamesToNumericIDs(names string) string {
 func waitForOperandPodsReady() {
 	for _, op := range tlsOperands {
 		Eventually(func(g Gomega) {
-			pods, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
-				LabelSelector: op.labelSelector,
-			})
-			g.Expect(err).ToNot(HaveOccurred())
-			g.Expect(pods.Items).ToNot(BeEmpty(), fmt.Sprintf("No pods found for %s", op.labelSelector))
-			for _, p := range pods.Items {
-				if p.DeletionTimestamp != nil {
-					continue
-				}
-				g.Expect(p.Status.Phase).To(Equal(corev1.PodRunning),
-					fmt.Sprintf("Pod %s not running (phase=%s)", p.Name, p.Status.Phase))
-				for _, cs := range p.Status.ContainerStatuses {
-					g.Expect(cs.Ready).To(BeTrue(),
-						fmt.Sprintf("Pod %s container %s not ready", p.Name, cs.Name))
-				}
-			}
+			getReadyOperandPods(g, op.labelSelector)
 		}, 5*time.Minute, 5*time.Second).Should(Succeed())
 	}
+}
+
+func getReadyOperandPods(g Gomega, labelSelector string) []corev1.Pod {
+	pods, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	g.Expect(err).ToNot(HaveOccurred())
+	readyPods := make([]corev1.Pod, 0, len(pods.Items))
+	for _, p := range pods.Items {
+		if p.DeletionTimestamp != nil {
+			continue
+		}
+		g.Expect(p.Status.Phase).To(Equal(corev1.PodRunning),
+			fmt.Sprintf("Pod %s/%s not running (phase=%s)", p.Namespace, p.Name, p.Status.Phase))
+		g.Expect(p.Status.Conditions).To(ContainElement(And(
+			HaveField("Type", corev1.PodReady), HaveField("Status", corev1.ConditionTrue))),
+			fmt.Sprintf("Pod %s/%s not ready", p.Namespace, p.Name))
+		readyPods = append(readyPods, p)
+	}
+	g.Expect(readyPods).ToNot(BeEmpty(), fmt.Sprintf("No active pods found for %s", labelSelector))
+	return readyPods
 }
 
 // getOperatorDeployment retrieves the sriov-network-operator Deployment.
@@ -437,23 +443,13 @@ func setEnvVar(envs []corev1.EnvVar, name, value string) []corev1.EnvVar {
 // waitForOperatorPodReady waits for the operator pod to be running after a deployment update.
 func waitForOperatorPodReady() {
 	Eventually(func(g Gomega) {
-		podList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
-			LabelSelector: "name=sriov-network-operator",
-		})
+		deploy, err := clients.AppsV1Interface.Deployments(operatorNamespace).Get(
+			context.Background(), "sriov-network-operator", metav1.GetOptions{})
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(podList.Items).ToNot(BeEmpty(), "No operator pod found")
-
-		readyPods := 0
-		for _, p := range podList.Items {
-			if p.Status.Phase == corev1.PodRunning && p.DeletionTimestamp == nil {
-				for _, c := range p.Status.ContainerStatuses {
-					if c.Ready {
-						readyPods++
-					}
-				}
-			}
-		}
-		g.Expect(readyPods).To(BeNumerically(">=", 1))
+		g.Expect(deploy.Status.ObservedGeneration).To(Equal(deploy.Generation))
+		g.Expect(deploy.Status.UpdatedReplicas).To(Equal(*deploy.Spec.Replicas))
+		g.Expect(deploy.Status.Replicas).To(Equal(*deploy.Spec.Replicas))
+		g.Expect(deploy.Status.AvailableReplicas).To(Equal(*deploy.Spec.Replicas))
 	}, 3*time.Minute, 5*time.Second).Should(Succeed())
 
 	WaitForSRIOVStable()
@@ -462,17 +458,7 @@ func waitForOperatorPodReady() {
 // assertOperandHasTLSArgs validates that the specified operand pods have the expected TLS arguments.
 func assertOperandHasTLSArgs(labelSelector, containerName string, expectedArgs ...string) {
 	Eventually(func(g Gomega) {
-		pods, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
-			LabelSelector: labelSelector,
-		})
-		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(pods.Items).ToNot(BeEmpty(),
-			fmt.Sprintf("No pods found with label selector %s", labelSelector))
-
-		for _, p := range pods.Items {
-			if p.DeletionTimestamp != nil || p.Status.Phase != corev1.PodRunning {
-				continue
-			}
+		for _, p := range getReadyOperandPods(g, labelSelector) {
 			args := getContainerArgs(p, containerName)
 			for _, expected := range expectedArgs {
 				g.Expect(args).To(ContainElement(ContainSubstring(expected)),
@@ -530,17 +516,7 @@ func restoreAPIServerConfig(profile *configv1.TLSSecurityProfile, adherence conf
 // assertOperandDoesNotHaveTLSArgs validates that operand pods do NOT have the specified TLS arg prefix.
 func assertOperandDoesNotHaveTLSArgs(labelSelector, containerName, argPrefix string) {
 	Eventually(func(g Gomega) {
-		pods, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
-			LabelSelector: labelSelector,
-		})
-		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(pods.Items).ToNot(BeEmpty(),
-			fmt.Sprintf("No pods found with label selector %s", labelSelector))
-
-		for _, p := range pods.Items {
-			if p.DeletionTimestamp != nil || p.Status.Phase != corev1.PodRunning {
-				continue
-			}
+		for _, p := range getReadyOperandPods(g, labelSelector) {
 			args := getContainerArgs(p, containerName)
 			for _, arg := range args {
 				g.Expect(arg).ToNot(HavePrefix(argPrefix),

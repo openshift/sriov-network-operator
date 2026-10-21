@@ -11,6 +11,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -34,11 +35,20 @@ type EnabledNodes struct {
 }
 
 var (
-	supportedPFDrivers = []string{"mlx5_core", "i40e", "ixgbe", "ice", "igb", "ena"}
-	supportedVFDrivers = []string{"iavf", "vfio-pci", "mlx5_core", "igbvf", "ena"}
-	mlxVendorID        = "15b3"
-	intelVendorID      = "8086"
+	supportedPFDrivers        = []string{"mlx5_core", "i40e", "ixgbe", "ice", "igb", "ena"}
+	supportedSwitchdevDrivers = []string{"mlx5_core", "ice"}
+	supportedVFDrivers        = []string{"iavf", "vfio-pci", "mlx5_core", "igbvf", "ena"}
+	mlxVendorID               = "15b3"
+	intelVendorID             = "8086"
 )
+
+func init() {
+	if VirtualCluster() {
+		supportedPFDrivers = append(supportedPFDrivers, "mock_smartnic_pf")
+		supportedSwitchdevDrivers = append(supportedSwitchdevDrivers, "mock_smartnic_pf")
+		supportedVFDrivers = append(supportedVFDrivers, "mock_smartnic_vf")
+	}
+}
 
 // Name of environment variable to filter which decives can be discovered by FindSriovDevices and FindOneSriovDevice.
 // The filter is a regexp matched against node names and device name in the form <node_name>:<device_name>
@@ -184,6 +194,90 @@ func (n *EnabledNodes) FindSriovDevicesAndNode() (string, []*sriovv1.InterfaceEx
 	return retNode, retDevices, nil
 }
 
+// FindSwitchdevDevicesAndNode selects unused switchdev devices independently of
+// the device-name filter used by regular conformance tests. Nodes remain scoped
+// by NODES_SELECTOR during discovery.
+func (n *EnabledNodes) FindSwitchdevDevicesAndNode(clients *testclient.ClientSet, namespace string) (string, []*sriovv1.InterfaceExt, error) {
+	retNode := ""
+	retDevices := []*sriovv1.InterfaceExt{}
+	for _, node := range n.Nodes {
+		devices, err := n.FindSriovDevicesIgnoreFilters(node)
+		if err != nil {
+			return "", nil, err
+		}
+		devices, err = FindUnusedSriovDevices(clients, node, namespace, devices, true)
+		if err != nil {
+			return "", nil, err
+		}
+		switchdev := []*sriovv1.InterfaceExt{}
+		for _, device := range devices {
+			if sriovv1.StringInArray(device.Driver, supportedSwitchdevDrivers) {
+				switchdev = append(switchdev, device)
+			}
+		}
+		if len(switchdev) > len(retDevices) {
+			retNode, retDevices = node, switchdev
+		}
+	}
+	return retNode, retDevices, nil
+}
+
+// FindUnusedSriovDevices excludes default-route interfaces and OVS ports,
+// optionally requiring carrier for traffic tests.
+func FindUnusedSriovDevices(clients *testclient.ClientSet, node, namespace string, devices []*sriovv1.InterfaceExt, requireLinkUp bool) (unused []*sriovv1.InterfaceExt, err error) {
+	if len(devices) == 0 {
+		return nil, nil
+	}
+	executor, err := createPodOnNode(clients, node, namespace)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = errors.Join(err, clients.Pods(namespace).Delete(context.Background(), executor.Name, metav1.DeleteOptions{GracePeriodSeconds: ptr.To(int64(0))}))
+	}()
+	var routes []string
+	for _, family := range []string{"-4", "-6"} {
+		stdout, stderr, err := pod.ExecCommand(clients, executor, "ip", family, "route", "show", "table", "all")
+		if err != nil {
+			return nil, fmt.Errorf("query routes on %s: %s: %w", node, stderr, err)
+		}
+		routes = append(routes, strings.Split(stdout, "\n")...)
+	}
+	for _, device := range devices {
+		if IsDefaultRouteInterface(device.Name, routes) {
+			continue
+		}
+		stdout, stderr, err := pod.ExecCommand(clients, executor, "ip", "link", "show", "dev", device.Name)
+		if err != nil || stdout == "" {
+			fmt.Printf("Can't query link state for device [%s]: stderr:[%s] error:[%v]\n", device.Name, stderr, err)
+			continue
+		}
+		if isUnusedSriovLink(stdout, requireLinkUp) {
+			unused = append(unused, device)
+		}
+	}
+	return unused, nil
+}
+
+func isUnusedSriovLink(link string, requireLinkUp bool) bool {
+	return !strings.Contains(link, "master ovs-system") && (!requireLinkUp || strings.Contains(link, "LOWER_UP"))
+}
+
+func IsDefaultRouteInterface(name string, routes []string) bool {
+	for _, route := range routes {
+		fields := strings.Fields(route)
+		if len(fields) == 0 || fields[0] != "default" {
+			continue
+		}
+		for i := 1; i+1 < len(fields); i++ {
+			if fields[i] == "dev" && fields[i+1] == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // FindSriovDevicesIgnoreFilters retrieves all valid sriov devices for the given node.
 func (n *EnabledNodes) FindSriovDevicesIgnoreFilters(node string) ([]*sriovv1.InterfaceExt, error) {
 	devices := []*sriovv1.InterfaceExt{}
@@ -270,7 +364,7 @@ func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.Interfa
 	return nil, fmt.Errorf("no Mellanox devices found in node %s. Available devices [%+v]", node, devices)
 }
 
-// SriovStable tells if all the node states are in sync (and the cluster is ready for another round of tests)
+// SriovStable checks current node configuration and device-plugin readiness.
 func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool, error) {
 	nodeStates := &sriovv1.SriovNetworkNodeStateList{}
 	err := clients.List(context.Background(), nodeStates, &runtimeclient.ListOptions{Namespace: operatorNamespace})
@@ -286,6 +380,7 @@ func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool,
 	if len(nodeStates.Items) == 0 {
 		return false, nil
 	}
+	configuredNodes := 0
 	for _, state := range nodeStates.Items {
 		nodeReady, err := stateStable(state)
 		if err != nil {
@@ -294,13 +389,37 @@ func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool,
 		if !nodeReady {
 			return false, nil
 		}
+		if len(state.Spec.Interfaces) > 0 {
+			configuredNodes++
+		}
+	}
+	for name, expected := range map[string]int{
+		"sriov-network-config-daemon": len(nodeStates.Items),
+		"sriov-device-plugin":         configuredNodes,
+	} {
+		if expected == 0 {
+			continue
+		}
+		plugin, err := clients.DaemonSets(operatorNamespace).Get(context.Background(), name, metav1.GetOptions{})
+		if k8serrors.IsNotFound(err) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if plugin.Status.ObservedGeneration != plugin.Generation ||
+			int(plugin.Status.DesiredNumberScheduled) < expected ||
+			plugin.Status.NumberReady != plugin.Status.DesiredNumberScheduled ||
+			plugin.Status.UpdatedNumberScheduled != plugin.Status.DesiredNumberScheduled {
+			return false, nil
+		}
 	}
 	return true, nil
 }
 
 func stateStable(state sriovv1.SriovNetworkNodeState) (bool, error) {
 	readyCond := meta.FindStatusCondition(state.Status.Conditions, sriovv1.ConditionReady)
-	if readyCond == nil || readyCond.Status != metav1.ConditionTrue {
+	if readyCond == nil || readyCond.Status != metav1.ConditionTrue || readyCond.ObservedGeneration != state.Generation {
 		return false, nil
 	}
 
