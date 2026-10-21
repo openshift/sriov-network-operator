@@ -2,7 +2,7 @@ contents: |
   [Unit]
   Description=Configures SRIOV NIC - post network configuration
   After=systemd-networkd-wait-online.service NetworkManager-wait-online.service openvswitch-switch.service sriov-config.service
-  Before=kubelet.service
+  Before=kubelet.service rke2-agent.service rke2-server.service k3s.service k3s-agent.service
 
   [Service]
   Type=oneshot
