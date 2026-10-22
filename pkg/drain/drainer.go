@@ -224,7 +224,7 @@ func isIgnoredDrainErrOutMessage(msg string) bool {
 }
 
 // IsInformationalDrainErrOutMessage reports whether msg is a non-terminal progress or
-// warning line from k8s.io/kubectl/pkg/drain (v0.36.3). Terminal drain failures are
+// warning line from k8s.io/kubectl/pkg/drain (v0.37.1). Terminal drain failures are
 // returned from RunNodeDrain and are not written to ErrOut.
 //
 // Known ErrOut patterns:
