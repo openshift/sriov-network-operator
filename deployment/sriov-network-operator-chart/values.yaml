@@ -150,7 +150,7 @@ images:
   resourcesInjector: ghcr.io/k8snetworkplumbingwg/network-resources-injector
   webhook: ghcr.io/k8snetworkplumbingwg/sriov-network-operator-webhook
   metricsExporter: ghcr.io/k8snetworkplumbingwg/sriov-network-metrics-exporter
-  metricsExporterKubeRbacProxy: quay.io/brancz/kube-rbac-proxy:v0.21.2
+  metricsExporterKubeRbacProxy: quay.io/brancz/kube-rbac-proxy:v0.23.0
 
 imagePullSecrets: []
 extraDeploy: []

@@ -8,3 +8,17 @@ podman_tag_and_push() {
   podman tag ${local_image} ${cluster_image}
   podman push --tls-verify=false ${cluster_image}
 }
+
+validate_mock_driver_repo() {
+  [[ $1 =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?/[a-zA-Z0-9._/-]+$ ]] || {
+    echo 'Mock driver requires an HTTPS repository.' >&2
+    return 1
+  }
+}
+
+fetch_mock_driver_source() {
+  local repo=$1 source_dir=$2
+  if [[ ! -d $source_dir ]]; then
+    git clone --depth 1 --single-branch --branch main -- "$repo" "$source_dir"
+  fi
+}

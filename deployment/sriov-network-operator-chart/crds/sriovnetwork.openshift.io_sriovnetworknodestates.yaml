@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.21.0
+    controller-gen.kubebuilder.io/version: v0.22.0
   name: sriovnetworknodestates.sriovnetwork.openshift.io
 spec:
   group: sriovnetwork.openshift.io
@@ -199,8 +199,6 @@ spec:
                   ovsConfig:
                     additionalProperties:
                       type: string
-                    default:
-                      hw-offload: "true"
                     description: OVS config. It will be provided for ovs-vswitchd
                       service as other_config option
                     type: object
@@ -453,8 +451,6 @@ spec:
                   ovsConfig:
                     additionalProperties:
                       type: string
-                    default:
-                      hw-offload: "true"
                     description: OVS config. It will be provided for ovs-vswitchd
                       service as other_config option
                     type: object

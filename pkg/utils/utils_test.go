@@ -109,26 +109,32 @@ func TestRenderOtherOvsConfigOption(t *testing.T) {
 			name:            "single entry",
 			config:          map[string]string{"hw-offload": "true"},
 			wantExternalIds: "hw-offload",
-			wantOtherConfig: `other_config:hw-offload="true" `,
+			wantOtherConfig: `"other_config:hw-offload=true" `,
 		},
 		{
 			name:   "multiple entries are sorted by key",
 			config: map[string]string{"tc_policy": "none", "hw-offload": "true"},
 			// keys sorted: hw-offload < tc_policy
 			wantExternalIds: "hw-offload tc_policy",
-			wantOtherConfig: `other_config:hw-offload="true" other_config:tc_policy="none" `,
+			wantOtherConfig: `"other_config:hw-offload=true" "other_config:tc_policy=none" `,
 		},
 		{
 			name:            "value with double quotes is escaped by %q",
 			config:          map[string]string{"key": `val"ue`},
 			wantExternalIds: "key",
-			wantOtherConfig: `other_config:key="val\"ue" `,
+			wantOtherConfig: `"other_config:key=val\"ue" `,
 		},
 		{
 			name:            "value with dollar sign is kept as-is",
 			config:          map[string]string{"key": "$value"},
 			wantExternalIds: "key",
-			wantOtherConfig: `other_config:key="$value" `,
+			wantOtherConfig: `"other_config:key=$value" `,
+		},
+		{
+			name:            "systemd specifiers are escaped",
+			config:          map[string]string{"key": "%n $HOME; $(exit 73)"},
+			wantExternalIds: "key",
+			wantOtherConfig: `"other_config:key=%%n $HOME; $(exit 73)" `,
 		},
 		{
 			name:      "invalid key with dot returns error",

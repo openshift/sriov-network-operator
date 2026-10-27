@@ -155,7 +155,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 					FeatureGates:          map[string]bool{},
 				}
 				err = k8sClient.Update(ctx, config)
-				Expect(err).NotTo(HaveOccurred())
+				g.Expect(err).NotTo(HaveOccurred())
 			}, util.APITimeout, util.RetryInterval).Should(Succeed())
 
 		})
@@ -973,9 +973,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 						g.Expect(proxyArgs).NotTo(BeEmpty())
 						g.Expect(proxyArgs).To(ContainSubstring("--tls-cipher-suites=TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"))
 						g.Expect(proxyArgs).To(ContainSubstring("--tls-min-version=VersionTLS13"))
-						// TODO: Validate --tls-curve-preferences once kube-rbac-proxy supports it.
-						// Tracked by: https://github.com/kube-rbac-proxy/kube-rbac-proxy/issues/414
-						// g.Expect(proxyArgs).To(ContainSubstring("--tls-curve-preferences=X25519,secp256r1"))
+						g.Expect(proxyArgs).To(ContainSubstring("--tls-curve-preferences=29,23"))
 					}, util.APITimeout, util.RetryInterval).Should(Succeed())
 				})
 

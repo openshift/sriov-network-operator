@@ -665,6 +665,21 @@ func (mr *MockHostHelpersInterfaceMockRecorder) GetPhysSwitchID(name any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPhysSwitchID", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetPhysSwitchID), name)
 }
 
+// GetRebootCount mocks base method.
+func (m *MockHostHelpersInterface) GetRebootCount(generation int64) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRebootCount", generation)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRebootCount indicates an expected call of GetRebootCount.
+func (mr *MockHostHelpersInterfaceMockRecorder) GetRebootCount(generation any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRebootCount", reflect.TypeOf((*MockHostHelpersInterface)(nil).GetRebootCount), generation)
+}
+
 // HTTPGetFetchData mocks base method.
 func (m *MockHostHelpersInterface) HTTPGetFetchData(arg0 string) (string, error) {
 	m.ctrl.T.Helper()
@@ -693,6 +708,20 @@ func (m *MockHostHelpersInterface) HasDriver(pciAddr string) (bool, string) {
 func (mr *MockHostHelpersInterfaceMockRecorder) HasDriver(pciAddr any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasDriver", reflect.TypeOf((*MockHostHelpersInterface)(nil).HasDriver), pciAddr)
+}
+
+// IncrementRebootCounter mocks base method.
+func (m *MockHostHelpersInterface) IncrementRebootCounter(generation int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IncrementRebootCounter", generation)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// IncrementRebootCounter indicates an expected call of IncrementRebootCounter.
+func (mr *MockHostHelpersInterfaceMockRecorder) IncrementRebootCounter(generation any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementRebootCounter", reflect.TypeOf((*MockHostHelpersInterface)(nil).IncrementRebootCounter), generation)
 }
 
 // IsKernelArgsSet mocks base method.
@@ -1089,6 +1118,20 @@ func (m *MockHostHelpersInterface) RemoveVfRepresentorUdevRule(pfPciAddress stri
 func (mr *MockHostHelpersInterfaceMockRecorder) RemoveVfRepresentorUdevRule(pfPciAddress any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveVfRepresentorUdevRule", reflect.TypeOf((*MockHostHelpersInterface)(nil).RemoveVfRepresentorUdevRule), pfPciAddress)
+}
+
+// ResetRebootCounter mocks base method.
+func (m *MockHostHelpersInterface) ResetRebootCounter(generation int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetRebootCounter", generation)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ResetRebootCounter indicates an expected call of ResetRebootCounter.
+func (mr *MockHostHelpersInterfaceMockRecorder) ResetRebootCounter(generation any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetRebootCounter", reflect.TypeOf((*MockHostHelpersInterface)(nil).ResetRebootCounter), generation)
 }
 
 // ResetSriovDevice mocks base method.
