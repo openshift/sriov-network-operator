@@ -1,12 +1,23 @@
 name: "Run Jobs on PR"
-on: pull_request
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+# Runs from the base context; never check out or execute pull request head code.
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+  actions: write
 
 jobs:
   execute:
     name: "remove the lgtm label"
     runs-on: ubuntu-24.04
     steps:
-      - uses: jpmcb/prow-github-actions@v2.0.0
+      - uses: cncf/prow-github-actions@187c5e3cd95a329c43448e1bdb3b1f5249232e44 # v3.0.1
         with:
           jobs: 'lgtm'
           github-token: "${{ secrets.GITHUB_TOKEN }}"

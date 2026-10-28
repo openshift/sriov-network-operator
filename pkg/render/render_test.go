@@ -1,10 +1,46 @@
 package render
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/yaml"
 )
+
+func TestRenderOvsVswitchdDropin(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		otherOvsConfig string
+		externalIds    string
+		commandCount   int
+	}{
+		{name: "empty", commandCount: 2},
+		{name: "configured", otherOvsConfig: `"other_config:hw-offload=true"`, externalIds: "hw-offload", commandCount: 3},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewGomegaWithT(t)
+			d := MakeRenderData()
+			d.Data["OtherOvsConfig"] = tt.otherOvsConfig
+			d.Data["ExternalIds"] = tt.externalIds
+			rendered, err := renderFileTemplate("../../bindata/manifests/switchdev-config/ovs-units/ovs-vswitchd.service.yaml", &d)
+			g.Expect(err).NotTo(HaveOccurred())
+			var manifest map[string]interface{}
+			g.Expect(yaml.Unmarshal(rendered.Bytes(), &manifest)).To(Succeed())
+			dropin := manifest["dropins"].([]interface{})[0].(map[string]interface{})
+			contents := dropin["contents"].(string)
+			g.Expect(strings.Count(contents, "ExecStartPre=")).To(Equal(tt.commandCount))
+			g.Expect(contents).To(ContainSubstring(`external_ids:sriov-operator-owned-keys=` + tt.externalIds + `"`))
+			g.Expect(contents).To(ContainSubstring("remove Open_vSwitch . other_config"))
+			setCommand := "ExecStartPre=:/bin/ovs-vsctl --no-wait set Open_vSwitch . "
+			if tt.otherOvsConfig == "" {
+				g.Expect(contents).NotTo(ContainSubstring(setCommand))
+			} else {
+				g.Expect(contents).To(ContainSubstring(setCommand + tt.otherOvsConfig + "\n"))
+			}
+		})
+	}
+}
 
 // TestRenderSimple tests rendering a single object with no templates
 func TestRenderSimple(t *testing.T) {

@@ -48,3 +48,9 @@ type SriovResult struct {
 	SyncStatus    string `yaml:"syncStatus"`
 	LastSyncError string `yaml:"lastSyncError"`
 }
+
+// RebootTrackerFile: Tracks the number of reboots performed for a specific generation to prevent infinite reboot loops
+type RebootTrackerFile struct {
+	Generation  int64 `yaml:"generation"`
+	RebootCount int   `yaml:"rebootCount"`
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/netlink"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/lib/sriovnet"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/network"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/reboottracker"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/service"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/sriov"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/internal/systemd"
@@ -34,6 +35,7 @@ type HostManagerInterface interface {
 	types.BridgeInterface
 	types.CPUInfoProviderInterface
 	types.SystemdInterface
+	types.RebootTrackerInterface
 }
 
 type hostManager struct {
@@ -48,6 +50,7 @@ type hostManager struct {
 	types.BridgeInterface
 	types.CPUInfoProviderInterface
 	types.SystemdInterface
+	types.RebootTrackerInterface
 }
 
 func NewDefaultHostManager() (HostManagerInterface, error) {
@@ -74,6 +77,7 @@ func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, er
 	sr := sriov.New(utilsInterface, k, n, u, v, ib, netlinkLib, dpUtils, sriovnetLib, ghwLib, br)
 	cpuInfoProvider := cpu.New(ghwLib)
 	s := systemd.New()
+	rt := reboottracker.New()
 	return &hostManager{
 		utilsInterface,
 		k,
@@ -86,5 +90,6 @@ func NewHostManager(utilsInterface utils.CmdInterface) (HostManagerInterface, er
 		br,
 		cpuInfoProvider,
 		s,
+		rt,
 	}, nil
 }

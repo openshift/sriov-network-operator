@@ -104,6 +104,7 @@ const (
 	DrainIdle                          = "Idle"
 	DrainRequired                      = "Drain_Required"
 	RebootRequired                     = "Reboot_Required"
+	MaxRebootsPerGeneration            = 5
 	Draining                           = "Draining"
 	DrainComplete                      = "DrainComplete"
 
@@ -180,6 +181,7 @@ const (
 	SriovSystemdResultPath        = SriovConfBasePath + "/sriov-interface-result.yaml"
 	SriovSystemdSupportedNicPath  = SriovConfBasePath + "/sriov-supported-nics-ids.yaml"
 	SriovSystemdServiceBinaryPath = "/var/lib/sriov/sriov-network-config-daemon"
+	SriovRebootTrackerFilePath    = "/var/lib/sriov/reboot-tracker.yaml"
 
 	SriovServiceBasePath        = "/etc/systemd/system"
 	SriovServicePath            = SriovServiceBasePath + "/sriov-config.service"

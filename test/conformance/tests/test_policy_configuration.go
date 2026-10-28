@@ -422,17 +422,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Checking the SriovNetworkNodeState is consistently stable")
-					Eventually(cluster.SriovStable).
-						WithTimeout(10*time.Second).
-						WithPolling(1*time.Second).
-						WithArguments(operatorNamespace, clients).
-						Should(BeTrue())
-
-					Eventually(cluster.SriovStable).
-						WithTimeout(5*time.Second).
-						WithPolling(1*time.Second).
-						WithArguments(operatorNamespace, clients).
-						Should(BeTrue())
+					WaitForSRIOVStable()
 				})
 			})
 
@@ -491,13 +481,14 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					testNode := sriovInfos.Nodes[0]
 					sriovDeviceList, err := sriovInfos.FindSriovDevices(testNode)
 					Expect(err).ToNot(HaveOccurred())
-					unusedSriovDevices, err := findUnusedSriovDevices(testNode, sriovDeviceList)
+					unusedSriovDevices, err := cluster.FindUnusedSriovDevices(clients, testNode, namespaces.Test, sriovDeviceList, false)
 					Expect(err).ToNot(HaveOccurred())
+					Expect(unusedSriovDevices).ToNot(BeEmpty(), "unused sriov devices not found")
 					intf := unusedSriovDevices[0]
 					By("Using device " + intf.Name + " on node " + testNode)
 
 					sriovPolicy, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace,
-						intf.Name, testNode, 2, pdbDrainResourceName, "netdevice")
+						intf.Name, testNode, 5, pdbDrainResourceName, "netdevice")
 					Expect(err).ToNot(HaveOccurred())
 					WaitForSRIOVStable()
 
@@ -679,9 +670,12 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						node = sriovInfos.Nodes[0]
 						sriovDeviceList, err := sriovInfos.FindSriovDevices(node)
 						Expect(err).ToNot(HaveOccurred())
-						unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
+						unusedSriovDevices, err := cluster.FindUnusedSriovDevices(clients, node, namespaces.Test, sriovDeviceList, false)
 						if err != nil {
 							Skip(err.Error())
+						}
+						if len(unusedSriovDevices) == 0 {
+							Skip("unused sriov devices not found")
 						}
 						intf = unusedSriovDevices[0]
 						By("Using device " + intf.Name + " on node " + node)
@@ -811,8 +805,9 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					node = sriovInfos.Nodes[0]
 					sriovDeviceList, err := sriovInfos.FindSriovDevices(node)
 					Expect(err).ToNot(HaveOccurred())
-					unusedSriovDevices, err := findUnusedSriovDevices(node, sriovDeviceList)
+					unusedSriovDevices, err := cluster.FindUnusedSriovDevices(clients, node, namespaces.Test, sriovDeviceList, false)
 					Expect(err).ToNot(HaveOccurred())
+					Expect(unusedSriovDevices).ToNot(BeEmpty(), "unused sriov devices not found")
 
 					intf = unusedSriovDevices[0]
 					By("Using device " + intf.Name + " on node " + node)

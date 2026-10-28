@@ -86,3 +86,6 @@ tags
 registry-login.conf
 # go telemetry
 .config/
+
+# Keep all vendored dependencies tracked.
+!vendor/**
