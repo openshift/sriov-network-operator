@@ -700,8 +700,8 @@ auth=base64.b64encode(("serviceaccount:"+token).encode()).decode()
 json.dump({"auths":{sys.argv[1]:{"auth":auth}}},sys.stdout)
 ' "${image%%/*}" > "$work/pull-auth.json"
   chmod 600 "$work/pull-auth.json"
-  # The only ingress router may be on the worker being rebooted. Cache the exact
-  # digest while kubelet/ingress are available, then use Podman's missing policy.
+  # Cache the exact digest while kubelet/ingress are available: boot must load
+  # the driver before OVS and cannot depend on the cluster registry or network.
   while read -r node bdf mac || [[ -n $node ]]; do
     [[ -n $node && $node != \#* ]] || continue
     # shellcheck disable=SC2016
@@ -718,7 +718,6 @@ set -Eeuo pipefail
 read -r node bdf mac < <(awk -v node="\$(hostname)" '\$1 == node {print; found++} END {if (found != 1) exit 1}' /etc/mock-smartnic/targets.tsv)
 [[ -n \$bdf && -n \$mac ]]
 mkdir -p /var/lib/mock-smartnic-ocp
-podman pull --policy=missing --authfile=/etc/mock-smartnic/pull-auth.json --cert-dir=/etc/mock-smartnic/certs '$image'
 exec podman run --rm --pull=never --privileged --network=host --pid=host \\
   --volume=/sys:/sys --volume=/usr/lib/modules:/usr/lib/modules:ro \\
   --volume=/var/lib/mock-smartnic-ocp:/state '$image' "\$bdf" "\$mac"
@@ -733,9 +732,10 @@ nm = '[device-mock-smartnic]\nmatch-device=driver:mock_smartnic_pf,driver:mock_s
 files.append({'path':'/etc/NetworkManager/conf.d/90-mock-smartnic-ocp.conf','mode':0o644,'contents':{'source':'data:;base64,'+base64.b64encode(nm.encode()).decode()}})
 unit = '''[Unit]
 Description=Load the kernel-matched mock SmartNIC on worker test PFs
-Wants=network-online.target
-After=network-online.target ovs-configuration.service
-Before=kubelet.service sriov-config.service sriov-config-post-network.service
+Wants=systemd-udev-settle.service
+After=systemd-udev-settle.service
+# OVS must not attach the native PF before the loader checks its ownership.
+Before=ovs-vswitchd.service kubelet.service sriov-config.service sriov-config-post-network.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
@@ -786,8 +786,9 @@ PY
       p=/sys/bus/pci/devices/$1
       systemctl is-active mock-smartnic.service
       loaded=$(systemctl show mock-smartnic.service -p ExecMainExitTimestampMonotonic --value)
+      ovs=$(systemctl show ovs-vswitchd.service -p ExecMainStartTimestampMonotonic --value)
       kubelet=$(systemctl show kubelet.service -p ExecMainStartTimestampMonotonic --value)
-      ((loaded > 0 && kubelet > loaded))
+      ((loaded > 0 && ovs > loaded && kubelet > loaded))
       [[ $(cat /sys/module/mock_smartnic/parameters/target_pf) == "$1" ]]
       [[ $(basename "$(readlink -f "$p/driver")") == mock_smartnic_pf && $(cat "$p/sriov_numvfs") == 0 ]]
       [[ ! -e /run/netns/mock-ocp-vf0 && ! -e /run/netns/mock-ocp-vf1 ]]
