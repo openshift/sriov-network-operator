@@ -189,7 +189,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	//TODO: in the case we need to think what to do if we try to apply again or not
 	if err != nil {
 		reqLogger.Error(err, "failed to check systemd status unexpected error")
-		err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusFailed, "unexpected error", false)
+		err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusFailed, "unexpected error", false, latest)
 		if err != nil {
 			reqLogger.Error(err, "failed to update nodeState status")
 			return ctrl.Result{}, err
@@ -200,7 +200,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// if we are on the latest generation make a refresh on the nics
 	if dn.lastAppliedGeneration == latest {
-		isDrifted, err := dn.checkHostStateDrift(ctx, desiredNodeState)
+		isDrifted, err := dn.checkHostStateDrift(ctx, desiredNodeState, latest)
 		if err != nil {
 			reqLogger.Error(err, "failed to refresh host state")
 			return ctrl.Result{}, err
@@ -212,7 +212,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			shouldUpdate := dn.shouldUpdateStatus(current, desiredNodeState)
 			if shouldUpdate {
 				reqLogger.Info("updating nodeState with new host status")
-				err = dn.updateSyncState(ctx, desiredNodeState, desiredNodeState.Status.SyncStatus, desiredNodeState.Status.LastSyncError, false)
+				err = dn.updateSyncState(ctx, desiredNodeState, desiredNodeState.Status.SyncStatus, desiredNodeState.Status.LastSyncError, false, latest)
 				if err != nil {
 					reqLogger.Error(err, "failed to update nodeState new host status")
 					return ctrl.Result{}, err
@@ -238,7 +238,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// set sync state to inProgress, but we don't clear the failed status
-	err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusInProgress, desiredNodeState.Status.LastSyncError, false)
+	err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusInProgress, desiredNodeState.Status.LastSyncError, false, latest)
 	if err != nil {
 		reqLogger.Error(err, "failed to update sync status to inProgress")
 		return ctrl.Result{}, err
@@ -290,7 +290,7 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		// drain is still in progress we will still requeue the request in case there is an un-expect state in the draining
 		// this will allow the daemon to try again.
 		if drainInProcess {
-			err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusInProgress, desiredNodeState.Status.LastSyncError, true)
+			err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusInProgress, desiredNodeState.Status.LastSyncError, true, latest)
 			if err != nil {
 				reqLogger.Error(err, "failed to update sync status while waiting for drain")
 				return ctrl.Result{}, err
@@ -438,7 +438,7 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 			dn.eventRecorder.SendEvent(ctx, "RebootLimitReached",
 				fmt.Sprintf("reached maximum number of allowed reboots (%d) while trying to configure node", consts.MaxRebootsPerGeneration))
 			err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusFailed,
-				fmt.Sprintf("reached maximum number of allowed reboots (%d) while trying to configure node", consts.MaxRebootsPerGeneration), false)
+				fmt.Sprintf("reached maximum number of allowed reboots (%d) while trying to configure node", consts.MaxRebootsPerGeneration), false, appliedGeneration)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -493,7 +493,7 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 		return ctrl.Result{}, err
 	}
 
-	err = dn.updateSyncState(ctx, desiredNodeState, syncStatus, lastSyncError, false)
+	err = dn.updateSyncState(ctx, desiredNodeState, syncStatus, lastSyncError, false, appliedGeneration)
 	if err != nil {
 		reqLogger.Error(err, "failed to update sync status")
 		return ctrl.Result{}, err
@@ -533,10 +533,10 @@ func (dn *NodeReconciler) tryUnblockDevicePlugin(ctx context.Context,
 
 // checkHostStateDrift returns true if the node state drifted from the nodeState policy
 // Check if there is a change in the host network interfaces that require a reconfiguration by the daemon
-func (dn *NodeReconciler) checkHostStateDrift(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState) (bool, error) {
+func (dn *NodeReconciler) checkHostStateDrift(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, generation int64) (bool, error) {
 	funcLog := log.Log.WithName("checkHostStateDrift()")
 	// Skip when SriovNetworkNodeState object has just been created.
-	if desiredNodeState.GetGeneration() == 1 && len(desiredNodeState.Spec.Interfaces) == 0 {
+	if generation == 1 && len(desiredNodeState.Spec.Interfaces) == 0 {
 		err := dn.hostHelpers.ClearPCIAddressFolder()
 		if err != nil {
 			funcLog.Error(err, "failed to clear the PCI address configuration")
@@ -547,7 +547,7 @@ func (dn *NodeReconciler) checkHostStateDrift(ctx context.Context, desiredNodeSt
 			"name", desiredNodeState.Name)
 		if desiredNodeState.Status.SyncStatus != consts.SyncStatusSucceeded ||
 			desiredNodeState.Status.LastSyncError != "" {
-			err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusSucceeded, "", false)
+			err = dn.updateSyncState(ctx, desiredNodeState, consts.SyncStatusSucceeded, "", false, generation)
 		}
 		return false, err
 	}

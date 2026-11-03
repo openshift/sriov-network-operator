@@ -241,7 +241,7 @@ func TestValidateSriovNetworkPoolConfigWithParallelAndHWOffload(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	config := newDefaultNetworkPoolConfig()
-	config.Spec.OvsHardwareOffloadConfig.Name = "test"
+	config.Spec.OvsHardwareOffloadConfig = &OvsHardwareOffloadConfig{Name: "test"}
 	client = fake.NewClientBuilder().WithScheme(vars.Scheme).Build()
 
 	ok, _, err := validateSriovNetworkPoolConfig(config, "UPDATE")

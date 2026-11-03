@@ -1265,6 +1265,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					return err
 				}, 1*time.Minute, time.Second).ShouldNot(HaveOccurred())
 
+				WaitForSRIOVStable()
 				Eventually(func() int64 {
 					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
@@ -1293,6 +1294,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					return err
 				}, 2*time.Minute, time.Second).ShouldNot(HaveOccurred())
 
+				WaitForSRIOVStable()
 				Eventually(func() int64 {
 					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
@@ -1344,6 +1346,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 				sriovPolicy, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, nic.Name, node, numVfs, resourceName, "netdevice")
 				Expect(err).ToNot(HaveOccurred())
 
+				WaitForSRIOVStable()
 				Eventually(func() int64 {
 					testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), node, metav1.GetOptions{})
 					Expect(err).ToNot(HaveOccurred())
@@ -1958,13 +1961,11 @@ func pingPod(ip string, nodeSelector string, sriovNetworkAttachment string) {
 	}, 3*time.Minute, 1*time.Second).Should(Equal(corev1.PodSucceeded))
 }
 
+// WaitForSRIOVStable waits for current policy generations and node and daemon readiness.
 func WaitForSRIOVStable() {
 	fmt.Println("Waiting for the sriov state to stable")
 
-	// Track how long conditions have been continuously stable.
-	// We require conditions to remain stable for requiredStableDuration
-	// to guard against the race where the operator hasn't started
-	// processing a just-created policy yet.
+	// Allow policy-deletion cleanup and daemon rollouts to start before declaring stability.
 	var stableSince time.Time
 	requiredStableDuration := 5 * time.Second
 
@@ -2296,7 +2297,7 @@ func assertNodeStateHasVFMatching(nodeName string, fields Fields) {
 		nodeState := &sriovv1.SriovNetworkNodeState{}
 		err := clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: nodeName}, nodeState)
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(nodeState.Status.SyncStatus).To(Equal("Succeeded"))
+		g.Expect(nodeState.IsReady()).To(BeTrue())
 		return nodeState.Status.Interfaces
 	}, 3*time.Minute, 1*time.Second).
 		Should(

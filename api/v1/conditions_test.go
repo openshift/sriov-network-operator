@@ -360,3 +360,116 @@ var _ = Describe("Conditions isolation", func() {
 		Expect(ready.Status).To(Equal(metav1.ConditionTrue))
 	})
 })
+
+var _ = Describe("SriovNetworkNodeState IsReady", func() {
+	DescribeTable("requires a true Ready condition for the current generation",
+		func(conditions []metav1.Condition, expected bool) {
+			state := &v1.SriovNetworkNodeState{
+				ObjectMeta: metav1.ObjectMeta{Generation: 5},
+				Status:     v1.SriovNetworkNodeStateStatus{Conditions: conditions},
+			}
+			Expect(state.IsReady()).To(Equal(expected))
+		},
+		Entry("missing Ready", []metav1.Condition{{Type: v1.ConditionProgressing, Status: metav1.ConditionTrue, ObservedGeneration: 5}}, false),
+		Entry("false Ready", []metav1.Condition{{Type: v1.ConditionReady, Status: metav1.ConditionFalse, ObservedGeneration: 5}}, false),
+		Entry("unknown Ready", []metav1.Condition{{Type: v1.ConditionReady, Status: metav1.ConditionUnknown, ObservedGeneration: 5}}, false),
+		Entry("stale Ready", []metav1.Condition{{Type: v1.ConditionReady, Status: metav1.ConditionTrue, ObservedGeneration: 4}}, false),
+		Entry("current Ready", []metav1.Condition{{Type: v1.ConditionReady, Status: metav1.ConditionTrue, ObservedGeneration: 5}}, true),
+	)
+})
+
+var _ = Describe("SriovNetworkNodeState FailureReason", func() {
+	DescribeTable("uses current conditions before sync status",
+		func(conditions []metav1.Condition, syncStatus, expected string) {
+			state := &v1.SriovNetworkNodeState{
+				ObjectMeta: metav1.ObjectMeta{Generation: 5},
+				Status:     v1.SriovNetworkNodeStateStatus{Conditions: conditions, SyncStatus: syncStatus},
+			}
+			Expect(state.FailureReason()).To(Equal(expected))
+		},
+		Entry("missing Ready", nil, consts.SyncStatusFailed, v1.ReasonApplyingConfiguration),
+		Entry("stale Ready", []metav1.Condition{{Type: v1.ConditionReady, ObservedGeneration: 4, Reason: v1.ReasonWaitingForDrain}}, consts.SyncStatusFailed, v1.ReasonApplyingConfiguration),
+		Entry("waiting for drain takes precedence", []metav1.Condition{{Type: v1.ConditionReady, ObservedGeneration: 5, Reason: v1.ReasonWaitingForDrain}}, consts.SyncStatusFailed, v1.ReasonWaitingForDrain),
+		Entry("sync failed", []metav1.Condition{{Type: v1.ConditionReady, ObservedGeneration: 5}}, consts.SyncStatusFailed, v1.ReasonNodeSyncFailed),
+		Entry("configuration in progress", []metav1.Condition{{Type: v1.ConditionReady, ObservedGeneration: 5}}, consts.SyncStatusInProgress, v1.ReasonApplyingConfiguration),
+	)
+})
+
+var _ = Describe("SriovNetworkNodeState AffectsAggregate", func() {
+	var source *v1.SriovNetworkNodeState
+
+	BeforeEach(func() {
+		source = &v1.SriovNetworkNodeState{
+			ObjectMeta: metav1.ObjectMeta{Generation: 5, Annotations: map[string]string{
+				consts.NodeStatePolicyRevisionsAnnotation: "policy-revision",
+				consts.PoolRevisionAnnotation:             "pool-revision",
+			}},
+			Status: v1.SriovNetworkNodeStateStatus{
+				SyncStatus: consts.SyncStatusSucceeded,
+				Interfaces: v1.InterfaceExts{
+					{Name: "ens1", PciAddress: "0000:01:00.0", AltNames: []string{"pf0", "alt0"},
+						VFs: []v1.VirtualFunction{{VfID: 1}, {VfID: 0}}},
+					{Name: "ens2", PciAddress: "0000:02:00.0"},
+				},
+				Conditions: []metav1.Condition{{Type: v1.ConditionReady, Status: metav1.ConditionTrue,
+					Reason: v1.ReasonNodeReady, ObservedGeneration: 5}},
+			},
+		}
+	})
+
+	DescribeTable("detects aggregate changes without changing either object",
+		func(change func(*v1.SriovNetworkNodeState), expected bool) {
+			dest := source.DeepCopy()
+			change(dest)
+			originalSource, originalDest := source.DeepCopy(), dest.DeepCopy()
+			Expect(source.AffectsAggregate(dest)).To(Equal(expected))
+			Expect(dest.AffectsAggregate(source)).To(Equal(expected))
+			Expect(source).To(Equal(originalSource))
+			Expect(dest).To(Equal(originalDest))
+		},
+		Entry("unchanged", func(*v1.SriovNetworkNodeState) {}, false),
+		Entry("generation changed", func(s *v1.SriovNetworkNodeState) { s.Generation++ }, true),
+		Entry("sync status changed", func(s *v1.SriovNetworkNodeState) { s.Status.SyncStatus = consts.SyncStatusFailed }, true),
+		Entry("policy revision changed", func(s *v1.SriovNetworkNodeState) { s.Annotations[consts.NodeStatePolicyRevisionsAnnotation] = "new" }, true),
+		Entry("pool revision removed", func(s *v1.SriovNetworkNodeState) { delete(s.Annotations, consts.PoolRevisionAnnotation) }, true),
+		Entry("unrelated annotation changed", func(s *v1.SriovNetworkNodeState) { s.Annotations["unrelated"] = "new" }, false),
+		Entry("resource version changed", func(s *v1.SriovNetworkNodeState) { s.ResourceVersion = "new" }, false),
+		Entry("interface added", func(s *v1.SriovNetworkNodeState) {
+			s.Status.Interfaces = append(s.Status.Interfaces, v1.InterfaceExt{PciAddress: "0000:03:00.0"})
+		}, true),
+		Entry("interfaces removed", func(s *v1.SriovNetworkNodeState) { s.Status.Interfaces = nil }, true),
+		Entry("interface field changed", func(s *v1.SriovNetworkNodeState) { s.Status.Interfaces[0].Mtu = 9000 }, true),
+		Entry("VF field changed", func(s *v1.SriovNetworkNodeState) { s.Status.Interfaces[0].VFs[0].Driver = "vfio-pci" }, true),
+		Entry("alternate name changed", func(s *v1.SriovNetworkNodeState) { s.Status.Interfaces[0].AltNames[0] = "new" }, true),
+		Entry("interface order changed", func(s *v1.SriovNetworkNodeState) {
+			s.Status.Interfaces[0], s.Status.Interfaces[1] = s.Status.Interfaces[1], s.Status.Interfaces[0]
+		}, false),
+		Entry("VF order changed", func(s *v1.SriovNetworkNodeState) { vfs := s.Status.Interfaces[0].VFs; vfs[0], vfs[1] = vfs[1], vfs[0] }, false),
+		Entry("alternate name order changed", func(s *v1.SriovNetworkNodeState) {
+			names := s.Status.Interfaces[0].AltNames
+			names[0], names[1] = names[1], names[0]
+		}, false),
+		Entry("nil slices become empty", func(s *v1.SriovNetworkNodeState) {
+			s.Status.Interfaces[1].AltNames = []string{}
+			s.Status.Interfaces[1].VFs = []v1.VirtualFunction{}
+		}, false),
+		Entry("Ready removed", func(s *v1.SriovNetworkNodeState) { s.Status.Conditions = nil }, true),
+		Entry("Ready status changed", func(s *v1.SriovNetworkNodeState) { s.Status.Conditions[0].Status = metav1.ConditionFalse }, true),
+		Entry("Ready reason changed", func(s *v1.SriovNetworkNodeState) { s.Status.Conditions[0].Reason = v1.ReasonWaitingForDrain }, true),
+		Entry("Ready observed generation changed", func(s *v1.SriovNetworkNodeState) { s.Status.Conditions[0].ObservedGeneration-- }, true),
+		Entry("Ready message changed", func(s *v1.SriovNetworkNodeState) { s.Status.Conditions[0].Message = "new" }, false),
+		Entry("Ready transition time changed", func(s *v1.SriovNetworkNodeState) { s.Status.Conditions[0].LastTransitionTime = metav1.Now() }, false),
+		Entry("unrelated condition added", func(s *v1.SriovNetworkNodeState) {
+			s.Status.Conditions = append(s.Status.Conditions, metav1.Condition{Type: v1.ConditionDraining, Status: metav1.ConditionTrue})
+		}, false),
+	)
+
+	It("ignores condition order and missing Ready on both objects", func() {
+		dest := source.DeepCopy()
+		dest.Status.Conditions = append([]metav1.Condition{{Type: v1.ConditionDraining}}, dest.Status.Conditions...)
+		Expect(source.AffectsAggregate(dest)).To(BeFalse())
+		source.Status.Conditions = nil
+		dest.Status.Conditions = []metav1.Condition{{Type: v1.ConditionDraining}}
+		Expect(source.AffectsAggregate(dest)).To(BeFalse())
+	})
+})

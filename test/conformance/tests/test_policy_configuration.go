@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	netattdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
@@ -41,6 +42,86 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 		})
 
 		Describe("Configuration", func() {
+			It("Should report two matched and ready workers for a policy in a virtual PF cluster", func() {
+				if !cluster.VirtualCluster() {
+					Skip("Test requires a virtual cluster with emulated PFs")
+				}
+				if discovery.Enabled() {
+					Skip("Test unsuitable to be run in discovery mode")
+				}
+
+				workers, err := clients.Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/worker"})
+				Expect(err).ToNot(HaveOccurred())
+				var testWorkers []corev1.Node
+				for _, worker := range workers.Items {
+					if _, found := sriovInfos.States[worker.Name]; found {
+						testWorkers = append(testWorkers, worker)
+					}
+				}
+				if len(testWorkers) < 2 {
+					Skip("Test requires at least two SR-IOV workers")
+				}
+				testWorkers = testWorkers[:2]
+				firstDevices, err := sriovInfos.FindSriovDevices(testWorkers[0].Name)
+				Expect(err).ToNot(HaveOccurred())
+				secondDevices, err := sriovInfos.FindSriovDevices(testWorkers[1].Name)
+				Expect(err).ToNot(HaveOccurred())
+				nicName := ""
+				for _, first := range firstDevices {
+					for _, second := range secondDevices {
+						if first.Name == second.Name && first.TotalVfs >= 2 && second.TotalVfs >= 2 {
+							nicName = first.Name
+							break
+						}
+					}
+					if nicName != "" {
+						break
+					}
+				}
+				if nicName == "" {
+					Skip("The two workers do not have a shared NIC name supporting two VFs")
+				}
+
+				By(fmt.Sprintf("targeting NIC %s on workers %s and %s", nicName, testWorkers[0].Name, testWorkers[1].Name))
+				labelKey := "sriovnetwork.openshift.io/two-worker-test-" + string(uuid.NewUUID())
+				for _, worker := range testWorkers {
+					previousWorker := worker.DeepCopy()
+					worker.Labels[labelKey] = "true"
+					Expect(clients.Patch(context.Background(), &worker, runtimeclient.MergeFrom(previousWorker))).To(Succeed())
+					DeferCleanup(func() {
+						current := &corev1.Node{}
+						Expect(clients.Get(context.Background(), runtimeclient.ObjectKey{Name: worker.Name}, current)).To(Succeed())
+						previous := current.DeepCopy()
+						delete(current.Labels, labelKey)
+						Expect(clients.Patch(context.Background(), current, runtimeclient.MergeFrom(previous))).To(Succeed())
+					})
+				}
+
+				policy, err := network.CreateSriovPolicy(clients, "test-two-worker-policy-", operatorNamespace,
+					nicName, testWorkers[0].Name, 2, "testtwoworkers", "netdevice", func(policy *sriovv1.SriovNetworkNodePolicy) {
+						policy.Spec.NodeSelector = map[string]string{labelKey: "true"}
+					})
+				Expect(err).ToNot(HaveOccurred())
+				DeferCleanup(func() {
+					Expect(clients.Delete(context.Background(), policy)).To(Succeed())
+					WaitForSRIOVStable()
+				})
+				WaitForSRIOVStable()
+				By("verifying the applied VF configuration on both workers")
+				for _, worker := range testWorkers {
+					Eventually(func(g Gomega) {
+						state := &sriovv1.SriovNetworkNodeState{}
+						g.Expect(clients.Get(context.Background(), runtimeclient.ObjectKey{Name: worker.Name, Namespace: operatorNamespace}, state)).To(Succeed())
+						g.Expect(state.Spec.Interfaces).To(ContainElement(MatchFields(IgnoreExtras, Fields{"Name": Equal(nicName), "NumVfs": Equal(2)})))
+						g.Expect(state.Status.Interfaces).To(ContainElement(MatchFields(IgnoreExtras, Fields{"Name": Equal(nicName), "NumVfs": Equal(2)})))
+					}, 2*time.Minute, time.Second).Should(Succeed())
+				}
+				assertAggregateReadiness(policy, metav1.ConditionTrue, sriovv1.ReasonPolicyReady, new(int32(2)), new(int32(2)))
+				for _, worker := range testWorkers {
+					assertNodeStatePolicyRevision(worker.Name, policy)
+				}
+			})
+
 			Context("Create vfio-pci node policy", func() {
 				var vfioNode string
 				var vfioNic sriovv1.InterfaceExt
@@ -78,6 +159,16 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 					By("waiting the sriov to be stable on the node")
 					WaitForSRIOVStable()
+					assertAggregateReadiness(vfioPolicy, metav1.ConditionTrue, sriovv1.ReasonPolicyReady, new(int32(1)), new(int32(1)))
+					assertNodeStatePolicyRevision(vfioNode, vfioPolicy)
+
+					By("observing a policy update that leaves the node configuration unchanged")
+					previousPolicy := vfioPolicy.DeepCopy()
+					vfioPolicy.Spec.Priority--
+					err = clients.Patch(context.Background(), vfioPolicy, runtimeclient.MergeFrom(previousPolicy))
+					Expect(err).ToNot(HaveOccurred())
+					assertAggregateReadiness(vfioPolicy, metav1.ConditionTrue, sriovv1.ReasonPolicyReady, new(int32(1)), new(int32(1)))
+					assertNodeStatePolicyRevision(vfioNode, vfioPolicy)
 
 					By("waiting for the resources to be available")
 					Eventually(func() int64 {
@@ -155,7 +246,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					}
 					By("Using device " + vfioNic.Name + " on node " + vfioNode)
 
-					_, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name+"#2-4", vfioNode, 5, testResourceName, "netdevice")
+					netdevicePolicy, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name+"#2-4", vfioNode, 5, testResourceName, "netdevice")
 					Expect(err).ToNot(HaveOccurred())
 
 					Eventually(func() sriovv1.Interfaces {
@@ -187,8 +278,10 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						capacity, _ := resNum.AsInt64()
 						return capacity
 					}, 3*time.Minute, time.Second).Should(Equal(int64(3)))
+					assertAggregateReadiness(netdevicePolicy, metav1.ConditionTrue, sriovv1.ReasonPolicyReady, new(int32(1)), new(int32(1)))
+					assertNodeStatePolicyRevision(vfioNode, netdevicePolicy)
 
-					_, err = network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name+"#0-1", vfioNode, 5, "testresource1", "vfio-pci")
+					vfioPolicy, err := network.CreateSriovPolicy(clients, "test-policy-", operatorNamespace, vfioNic.Name+"#0-1", vfioNode, 5, "testresource1", "vfio-pci")
 					Expect(err).ToNot(HaveOccurred())
 
 					Eventually(func() sriovv1.Interfaces {
@@ -228,6 +321,10 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						Expect(err).ToNot(HaveOccurred())
 						return res
 					}, 15*time.Minute, 5*time.Second).Should(BeTrue())
+					assertAggregateReadiness(netdevicePolicy, metav1.ConditionTrue, sriovv1.ReasonPolicyReady, new(int32(1)), new(int32(1)))
+					assertNodeStatePolicyRevision(vfioNode, netdevicePolicy)
+					assertAggregateReadiness(vfioPolicy, metav1.ConditionTrue, sriovv1.ReasonPolicyReady, new(int32(1)), new(int32(1)))
+					assertNodeStatePolicyRevision(vfioNode, vfioPolicy)
 
 					Eventually(func() map[string]int64 {
 						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), vfioNode, metav1.GetOptions{})
@@ -410,6 +507,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					By("Checking the SriovNetworkNodeState is correctly configured")
+					WaitForSRIOVStable()
 					assertNodeStateHasVFMatching(vfioNode,
 						Fields{"VfID": Equal(0), "Driver": Equal("vfio-pci")})
 					assertNodeStateHasVFMatching(vfioNode,
@@ -461,7 +559,7 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 					pdbDrainPodLabel     = "pdb-drain-test"
 				)
 
-				It("Should report DrainFailed while a PDB blocks SR-IOV pod eviction during policy removal", func() {
+				It("Should keep the policy unready while a PDB blocks SR-IOV pod eviction during policy update", func() {
 					if discovery.Enabled() {
 						Skip("Test unsuitable to be run in discovery mode")
 					}
@@ -491,6 +589,8 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						intf.Name, testNode, 5, pdbDrainResourceName, "netdevice")
 					Expect(err).ToNot(HaveOccurred())
 					WaitForSRIOVStable()
+					assertAggregateReadiness(sriovPolicy, metav1.ConditionTrue, sriovv1.ReasonPolicyReady, new(int32(1)), new(int32(1)))
+					assertNodeStatePolicyRevision(testNode, sriovPolicy)
 
 					err = network.CreateSriovNetwork(clients, intf, pdbDrainNetworkName, namespaces.Test,
 						operatorNamespace, pdbDrainResourceName, ipamIpv4)
@@ -524,8 +624,10 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						_ = clients.Delete(context.Background(), pdb, &runtimeclient.DeleteOptions{})
 					})
 
-					By("deleting the SR-IOV policy while the pod is protected by a PDB")
-					Expect(clients.Delete(context.Background(), sriovPolicy, &runtimeclient.DeleteOptions{})).To(Succeed())
+					By("updating the SR-IOV policy while the pod is protected by a PDB")
+					previousPolicy := sriovPolicy.DeepCopy()
+					sriovPolicy.Spec.NumVfs = 1
+					Expect(clients.Patch(context.Background(), sriovPolicy, runtimeclient.MergeFrom(previousPolicy))).To(Succeed())
 
 					By("waiting for the node to report a blocked drain")
 					assertNodeStateDrainCondition(testNode, sriovv1.ConditionDraining, metav1.ConditionTrue, sriovv1.ReasonDrainFailed,
@@ -533,12 +635,26 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						namespaces.Test,
 						fmt.Sprintf("error when evicting pods/%q", sriovPod.Name),
 					)
+					assertAggregateReadiness(sriovPolicy, metav1.ConditionFalse, sriovv1.ReasonWaitingForDrain, new(int32(1)), new(int32(0)))
+					assertNodeStatePolicyRevision(testNode, sriovPolicy)
 
-					Eventually(func(g Gomega) {
+					By("keeping policy status and applied VFs unchanged while drain is blocked")
+					blockedPolicyStatus := sriovPolicy.Status.DeepCopy()
+					Consistently(func(g Gomega) {
+						g.Expect(clients.Get(context.Background(), runtimeclient.ObjectKeyFromObject(sriovPolicy), sriovPolicy)).To(Succeed())
+						g.Expect(sriovPolicy.Status).To(Equal(*blockedPolicyStatus))
+						nodeState := &sriovv1.SriovNetworkNodeState{}
+						g.Expect(clients.Get(context.Background(), runtimeclient.ObjectKey{Namespace: operatorNamespace, Name: testNode}, nodeState)).To(Succeed())
+						g.Expect(nodeState.Spec.Interfaces).To(ContainElement(MatchFields(IgnoreExtras, Fields{
+							"Name": Equal(intf.Name), "NumVfs": Equal(1),
+						})))
+						g.Expect(nodeState.Status.Interfaces).To(ContainElement(MatchFields(IgnoreExtras, Fields{
+							"Name": Equal(intf.Name), "NumVfs": Equal(previousPolicy.Spec.NumVfs),
+						})))
 						stable, err := cluster.SriovStable(operatorNamespace, clients)
 						g.Expect(err).ToNot(HaveOccurred())
 						g.Expect(stable).To(BeFalse(), "cluster should remain unstable while drain is blocked by PDB")
-					}, 2*time.Minute, 5*time.Second).Should(Succeed())
+					}, time.Minute, 5*time.Second).Should(Succeed())
 
 					By("removing the PDB so the drain can complete")
 					Expect(clients.Delete(context.Background(), pdb, &runtimeclient.DeleteOptions{})).To(Succeed())
@@ -559,6 +675,13 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 						))
 					}, 10*time.Minute, 5*time.Second).Should(Succeed())
 					WaitForSRIOVStable()
+					assertAggregateReadiness(sriovPolicy, metav1.ConditionTrue, sriovv1.ReasonPolicyReady, new(int32(1)), new(int32(1)))
+					assertNodeStatePolicyRevision(testNode, sriovPolicy)
+
+					By("deleting the policy after the blocked update has completed")
+					Expect(clients.Delete(context.Background(), sriovPolicy, &runtimeclient.DeleteOptions{})).To(Succeed())
+					WaitForSRIOVStable()
+					assertNodeStatePolicyRevisionAbsent(testNode, sriovPolicy)
 
 					Eventually(func(g Gomega) {
 						testedNode, err := clients.CoreV1Interface.Nodes().Get(context.Background(), testNode, metav1.GetOptions{})

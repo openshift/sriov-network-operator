@@ -95,6 +95,12 @@ const (
 	SriovDevicePluginLabel         = "sriovnetwork.openshift.io/device-plugin"
 	SriovDevicePluginLabelEnabled  = "Enabled"
 	SriovDevicePluginLabelDisabled = "Disabled"
+	// NodeStatePolicyRevisionsAnnotation records a SriovNetworkNodePolicy UID and generation on
+	// a NodeState.
+	NodeStatePolicyRevisionsAnnotation = "sriovnetwork.openshift.io/policy-revisions"
+	// PoolRevisionAnnotation records a SriovNetworkPoolConfig UID and generation on
+	// a NodeState or an offload MachineConfig.
+	PoolRevisionAnnotation = "sriovnetwork.openshift.io/pool-revision"
 
 	NodeDrainAnnotation                = "sriovnetwork.openshift.io/state"
 	NodeStateDrainAnnotation           = "sriovnetwork.openshift.io/desired-state"

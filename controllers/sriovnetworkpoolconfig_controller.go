@@ -32,7 +32,8 @@ type SriovNetworkPoolConfigReconciler struct {
 }
 
 const (
-	mcPriority string = "00-"
+	mcPriority     = "00-"
+	masterPoolName = "master"
 )
 
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnetworkpoolconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -76,7 +77,7 @@ func (r *SriovNetworkPoolConfigReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	// we don't need a finalizer for pools that doesn't use the ovs hardware offload feature
-	if instance.Spec.OvsHardwareOffloadConfig.Name == "" {
+	if instance.Spec.OvsHardwareOffloadConfig == nil || instance.Spec.OvsHardwareOffloadConfig.Name == "" {
 		return ctrl.Result{}, nil
 	}
 
@@ -148,7 +149,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 		return nil
 	}
 
-	if mcpName == "master" {
+	if mcpName == masterPoolName {
 		logger.Info("Master nodes are selected by OvsHardwareOffloadConfig.Name, ignoring.")
 		return nil
 	}
@@ -169,6 +170,9 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 	data.Data["ExternalIds"] = externalIds
 	mc, err := render.GenerateMachineConfig("bindata/manifests/switchdev-config", mcName, mcpName, true, &data)
 	if err != nil {
+		return err
+	}
+	if err := nc.SetRevisionOnObject(mc); err != nil {
 		return err
 	}
 
@@ -204,7 +208,7 @@ func (r *SriovNetworkPoolConfigReconciler) syncOvsHardwareOffloadMachineConfigs(
 			// ignition and compare.
 			json.Unmarshal(foundMC.Spec.Config.Raw, &foundIgn)
 			json.Unmarshal(mc.Spec.Config.Raw, &renderedIgn)
-			if !equality.Semantic.DeepEqual(foundIgn, renderedIgn) {
+			if !equality.Semantic.DeepEqual(foundIgn, renderedIgn) || !nc.RevisionMatchesInObject(foundMC) {
 				logger.Info("MachineConfig already exists, updating")
 				mc.SetResourceVersion(foundMC.GetResourceVersion())
 				err = r.Update(ctx, mc)

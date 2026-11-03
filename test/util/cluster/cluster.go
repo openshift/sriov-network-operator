@@ -363,8 +363,22 @@ func (n *EnabledNodes) FindOneMellanoxSriovDevice(node string) (*sriovv1.Interfa
 	return nil, fmt.Errorf("no Mellanox devices found in node %s. Available devices [%+v]", node, devices)
 }
 
-// SriovStable checks current node configuration and device-plugin readiness.
+// SriovStable checks current-generation policy readiness, node configuration, and daemon readiness.
 func SriovStable(operatorNamespace string, clients *testclient.ClientSet) (bool, error) {
+	policies := &sriovv1.SriovNetworkNodePolicyList{}
+	if err := clients.List(context.Background(), policies, runtimeclient.InNamespace(operatorNamespace)); err != nil {
+		return false, fmt.Errorf("failed to fetch node policies: %w", err)
+	}
+	for _, policy := range policies.Items {
+		if policy.Name == consts.DefaultPolicyName {
+			continue
+		}
+		ready := meta.FindStatusCondition(policy.Status.Conditions, sriovv1.ConditionReady)
+		if ready == nil || ready.Status != metav1.ConditionTrue || ready.ObservedGeneration != policy.Generation {
+			return false, nil
+		}
+	}
+
 	nodeStates := &sriovv1.SriovNetworkNodeStateList{}
 	err := clients.List(context.Background(), nodeStates, &runtimeclient.ListOptions{Namespace: operatorNamespace})
 	switch err {

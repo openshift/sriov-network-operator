@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	errs "github.com/pkg/errors"
@@ -334,16 +335,12 @@ func findNodePoolConfig(ctx context.Context, node *corev1.Node, c k8sclient.Clie
 	nodesInPools := map[string]interface{}{}
 
 	for _, npc := range npcl.Items {
-		// we skip hw offload objects
-		if npc.Spec.OvsHardwareOffloadConfig.Name != "" {
+		// OpenShift hardware offload uses MachineConfigs rather than NodeStates.
+		if vars.ClusterType == constants.ClusterTypeOpenshift && npc.Spec.OvsHardwareOffloadConfig != nil && npc.Spec.OvsHardwareOffloadConfig.Name != "" {
 			continue
 		}
 
-		if npc.Spec.NodeSelector == nil {
-			npc.Spec.NodeSelector = &metav1.LabelSelector{}
-		}
-
-		selector, err := metav1.LabelSelectorAsSelector(npc.Spec.NodeSelector)
+		selector, err := npc.GetNodeSelector()
 		if err != nil {
 			logger.Error(err, "failed to create label selector from nodeSelector", "nodeSelector", npc.Spec.NodeSelector)
 			return nil, nil, err
@@ -375,7 +372,7 @@ func findNodePoolConfig(ctx context.Context, node *corev1.Node, c k8sclient.Clie
 	} else if len(selectedNpcl) == 1 {
 		// found one pool for our node
 		logger.V(2).Info("found sriovNetworkPool", "pool", *selectedNpcl[0])
-		selector, err := metav1.LabelSelectorAsSelector(selectedNpcl[0].Spec.NodeSelector)
+		selector, err := selectedNpcl[0].GetNodeSelector()
 		if err != nil {
 			logger.Error(err, "failed to create label selector from nodeSelector", "nodeSelector", selectedNpcl[0].Spec.NodeSelector)
 			return nil, nil, err
@@ -408,4 +405,35 @@ func findNodePoolConfig(ctx context.Context, node *corev1.Node, c k8sclient.Clie
 		}
 		return defaultPoolConfig, defaultNodeLists, nil
 	}
+}
+
+// managedNodes lists managed nodes in name order using the configured daemon selector.
+func managedNodes(ctx context.Context, c k8sclient.Client) ([]corev1.Node, error) {
+	config := &sriovnetworkv1.SriovOperatorConfig{}
+	if err := c.Get(ctx, types.NamespacedName{Name: constants.DefaultConfigName, Namespace: vars.Namespace}, config); err != nil {
+		return nil, err
+	}
+	selector := GetDefaultNodeSelector()
+	if len(config.Spec.ConfigDaemonNodeSelector) > 0 {
+		selector = config.Spec.ConfigDaemonNodeSelector
+	}
+	nodes := &corev1.NodeList{}
+	if err := c.List(ctx, nodes, k8sclient.MatchingLabels(selector)); err != nil {
+		return nil, err
+	}
+	sort.Slice(nodes.Items, func(i, j int) bool { return nodes.Items[i].Name < nodes.Items[j].Name })
+	return nodes.Items, nil
+}
+
+// nodeStatesByName indexes NodeStates from the operator namespace by node name.
+func nodeStatesByName(ctx context.Context, c k8sclient.Client) (map[string]*sriovnetworkv1.SriovNetworkNodeState, error) {
+	list := &sriovnetworkv1.SriovNetworkNodeStateList{}
+	if err := c.List(ctx, list, k8sclient.InNamespace(vars.Namespace)); err != nil {
+		return nil, err
+	}
+	states := make(map[string]*sriovnetworkv1.SriovNetworkNodeState, len(list.Items))
+	for i := range list.Items {
+		states[list.Items[i].Name] = &list.Items[i]
+	}
+	return states, nil
 }

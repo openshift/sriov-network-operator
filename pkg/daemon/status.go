@@ -23,7 +23,9 @@ const (
 // via a single Server-Side Apply call. SSA eliminates resource-version conflicts,
 // so no RetryOnConflict loop is needed. Drain-owned conditions are not included
 // in the payload and remain under the drain controller's field manager.
-func (dn *NodeReconciler) updateSyncState(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, syncStatus, failedMessage string, waitingForDrain bool) error {
+// generation identifies the spec this status describes, even when a newer
+// NodeState spec arrives while host work is in flight.
+func (dn *NodeReconciler) updateSyncState(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, syncStatus, failedMessage string, waitingForDrain bool, generation int64) error {
 	funcLog := log.Log.WithName("updateSyncState")
 
 	desiredNodeState.Status.SyncStatus = syncStatus
@@ -44,6 +46,7 @@ func (dn *NodeReconciler) updateSyncState(ctx context.Context, desiredNodeState 
 	statusFieldsChanged := !currentNodeState.Status.StatusFieldsEqual(&desiredNodeState.Status)
 
 	conditionState := currentNodeState.DeepCopy()
+	conditionState.Generation = generation
 	conditionState.SetNodeStateConfigurationConditions(syncStatus, failedMessage, waitingForDrain)
 	configConditions := configurationOwnedConditions(conditionState.Status.Conditions)
 	currentOwnedConditions := configurationOwnedConditions(currentNodeState.Status.Conditions)
