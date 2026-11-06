@@ -1781,8 +1781,9 @@ var _ = Describe("SRIOV", func() {
 				}})).NotTo(HaveOccurred())
 		})
 
-		It("should not configure when NeedToUpdateSriov returns false", func() {
-			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil)
+		It("should still configure VFs when NeedToUpdateSriov returns false", func() {
+			hostMock.EXPECT().BindDefaultDriver("0000:d8:00.0").Return(nil)
+			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil).Times(2)
 
 			Expect(s.ConfigSriovDevicesVirtual(storeManagerMode,
 				[]sriovnetworkv1.Interface{{
@@ -1830,8 +1831,9 @@ var _ = Describe("SRIOV", func() {
 				}})).NotTo(HaveOccurred())
 		})
 
-		It("should not configure when MTU is lower than current (no update needed)", func() {
-			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil)
+		It("should still configure VFs when MTU is lower than current (no PF update needed)", func() {
+			hostMock.EXPECT().BindDefaultDriver("0000:d8:00.0").Return(nil)
+			storeManagerMode.EXPECT().SaveLastPfAppliedStatus(gomock.Any()).Return(nil).Times(2)
 
 			Expect(s.ConfigSriovDevicesVirtual(storeManagerMode,
 				[]sriovnetworkv1.Interface{{

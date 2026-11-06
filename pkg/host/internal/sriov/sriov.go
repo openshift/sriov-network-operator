@@ -41,8 +41,9 @@ const (
 )
 
 type interfaceToConfigure struct {
-	Iface       sriovnetworkv1.Interface
-	IfaceStatus sriovnetworkv1.InterfaceExt
+	Iface               sriovnetworkv1.Interface
+	IfaceStatus         sriovnetworkv1.InterfaceExt
+	SkipPFConfiguration bool
 }
 
 type vfInfoResult struct {
@@ -709,10 +710,12 @@ func (s *sriov) configSriovVFDevices(iface *sriovnetworkv1.Interface) error {
 	return nil
 }
 
-func (s *sriov) configSriovDevice(iface *sriovnetworkv1.Interface, skipVFConfiguration bool) error {
+func (s *sriov) configSriovDevice(iface *sriovnetworkv1.Interface, skipVFConfiguration bool, skipPFConfiguration bool) error {
 	log.Log.V(2).Info("configSriovDevice(): configure sriov device",
-		"device", iface.PciAddress, "config", iface, "skipVFConfiguration", skipVFConfiguration)
-	if !iface.ExternallyManaged {
+		"device", iface.PciAddress, "config", iface,
+		"skipVFConfiguration", skipVFConfiguration,
+		"skipPFConfiguration", skipPFConfiguration)
+	if !skipPFConfiguration && !iface.ExternallyManaged {
 		if err := s.configSriovPFDevice(iface); err != nil {
 			return err
 		}
@@ -798,17 +801,18 @@ func (s *sriov) getConfigureAndReset(storeManager store.ManagerInterface, interf
 		for _, iface := range interfaces {
 			if iface.PciAddress == ifaceStatus.PciAddress {
 				configured = true
-				skip, err := skipSriovConfig(&iface, &ifaceStatus, storeManager)
+				skipPF, err := skipPFSriovConfig(&iface, &ifaceStatus, storeManager)
 				if err != nil {
 					log.Log.Error(err, "getConfigureAndReset(): failed to check interface")
 					return nil, nil, err
 				}
-				if skip {
-					break
-				}
 				iface := iface
 				ifaceStatus := ifaceStatus
-				toBeConfigured = append(toBeConfigured, interfaceToConfigure{Iface: iface, IfaceStatus: ifaceStatus})
+				toBeConfigured = append(toBeConfigured, interfaceToConfigure{
+					Iface:               iface,
+					IfaceStatus:         ifaceStatus,
+					SkipPFConfiguration: skipPF,
+				})
 			}
 		}
 
@@ -829,7 +833,7 @@ func (s *sriov) configSriovInterfacesInParallel(storeManager store.ManagerInterf
 		interfacesToConfigure += 1
 		go func(iface *interfaceToConfigure) {
 			var err error
-			if err = s.configSriovDevice(&iface.Iface, skipVFConfiguration); err != nil {
+			if err = s.configSriovDevice(&iface.Iface, skipVFConfiguration, iface.SkipPFConfiguration); err != nil {
 				log.Log.Error(err, "configSriovInterfacesInParallel(): fail to configure sriov interface. resetting interface.", "address", iface.Iface.PciAddress)
 				if iface.Iface.ExternallyManaged {
 					log.Log.V(2).Info("configSriovInterfacesInParallel(): skipping device reset as the nic is marked as externally created")
@@ -893,7 +897,7 @@ func (s *sriov) resetSriovInterfacesInParallel(storeManager store.ManagerInterfa
 func (s *sriov) configSriovInterfaces(storeManager store.ManagerInterface, interfaces []interfaceToConfigure, skipVFConfiguration bool) error {
 	log.Log.V(2).Info("configSriovInterfaces(): start sriov configuration")
 	for _, iface := range interfaces {
-		if err := s.configSriovDevice(&iface.Iface, skipVFConfiguration); err != nil {
+		if err := s.configSriovDevice(&iface.Iface, skipVFConfiguration, iface.SkipPFConfiguration); err != nil {
 			log.Log.Error(err, "configSriovInterfaces(): fail to configure sriov interface. resetting interface.", "address", iface.Iface.PciAddress)
 			if iface.Iface.ExternallyManaged {
 				log.Log.V(2).Info("configSriovInterfaces(): skipping device reset as the nic is marked as externally created")
@@ -927,15 +931,20 @@ func (s *sriov) resetSriovInterfaces(storeManager store.ManagerInterface, interf
 	return nil
 }
 
-// / skipSriovConfig checks if we need to apply SR-IOV configuration specified specific interface
-func skipSriovConfig(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt, storeManager store.ManagerInterface) (bool, error) {
+// skipPFSriovConfig checks if PF-level configuration can be skipped for the
+// interface. When NeedToUpdateSriov returns false (e.g. numVfs already matches),
+// PF config is skipped but VF config still runs. This handles the case where
+// the daemon was killed after writing sriov_numvfs but before completing VF
+// setup (SetVfAdminMac, driver bindings).
+func skipPFSriovConfig(iface *sriovnetworkv1.Interface, ifaceStatus *sriovnetworkv1.InterfaceExt, storeManager store.ManagerInterface) (bool, error) {
 	if !sriovnetworkv1.NeedToUpdateSriov(iface, ifaceStatus) {
-		log.Log.V(2).Info("ConfigSriovInterfaces(): no need update interface", "address", iface.PciAddress)
+		log.Log.V(2).Info("skipPFSriovConfig(): PF config up to date, skipping PF config only",
+			"address", iface.PciAddress)
 
 		// Save the PF status to the host
 		err := storeManager.SaveLastPfAppliedStatus(iface)
 		if err != nil {
-			log.Log.Error(err, "ConfigSriovInterfaces(): failed to save PF applied status config to host")
+			log.Log.Error(err, "skipPFSriovConfig(): failed to save PF applied status config to host")
 			return false, err
 		}
 
