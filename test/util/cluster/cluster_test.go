@@ -13,10 +13,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	sriovv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 )
 
-func TestSriovStableWaitsForDevicePlugin(t *testing.T) {
+// TestSriovStableWaitsForPoliciesAndDaemons rejects stale policy status even when nodes and daemons are ready.
+func TestSriovStableWaitsForPoliciesAndDaemons(t *testing.T) {
 	scheme := runtime.NewScheme()
 	assert.NoError(t, sriovv1.AddToScheme(scheme))
 	state := &sriovv1.SriovNetworkNodeState{
@@ -47,6 +49,39 @@ func TestSriovStableWaitsForDevicePlugin(t *testing.T) {
 	stable, err = SriovStable("operator", clients)
 	assert.NoError(t, err)
 	assert.True(t, stable)
+	for _, tc := range []struct {
+		name       string
+		policyName string
+		namespace  string
+		conditions []metav1.Condition
+		stable     bool
+	}{
+		{name: "missing condition"},
+		{name: "not ready", conditions: []metav1.Condition{{Type: sriovv1.ConditionReady, Status: metav1.ConditionFalse, ObservedGeneration: 2}}},
+		{name: "unknown", conditions: []metav1.Condition{{Type: sriovv1.ConditionReady, Status: metav1.ConditionUnknown, ObservedGeneration: 2}}},
+		{name: "stale ready", conditions: []metav1.Condition{{Type: sriovv1.ConditionReady, Status: metav1.ConditionTrue, ObservedGeneration: 1}}},
+		{name: "current ready", conditions: []metav1.Condition{{Type: sriovv1.ConditionReady, Status: metav1.ConditionTrue, ObservedGeneration: 2}}, stable: true},
+		{name: "ignored default policy", policyName: consts.DefaultPolicyName, stable: true},
+		{name: "another namespace", namespace: "other-operator", stable: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := &sriovv1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: "operator", Generation: 2},
+				Status:     sriovv1.SriovNetworkNodePolicyStatus{ConditionStatus: sriovv1.ConditionStatus{Conditions: tc.conditions}},
+			}
+			if tc.policyName != "" {
+				policy.Name = tc.policyName
+			}
+			if tc.namespace != "" {
+				policy.Namespace = tc.namespace
+			}
+			assert.NoError(t, clients.Create(context.Background(), policy))
+			stable, err := SriovStable("operator", clients)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.stable, stable)
+			assert.NoError(t, clients.Delete(context.Background(), policy))
+		})
+	}
 	configDaemon.Status.NumberReady = 0
 	_, err = kube.AppsV1().DaemonSets("operator").UpdateStatus(context.Background(), configDaemon, metav1.UpdateOptions{})
 	assert.NoError(t, err)

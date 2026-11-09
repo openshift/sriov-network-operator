@@ -118,7 +118,7 @@ var _ = Describe("SriovNetworkPoolConfig controller", Ordered, func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			config.Spec.OvsHardwareOffloadConfig = sriovnetworkv1.OvsHardwareOffloadConfig{
+			config.Spec.OvsHardwareOffloadConfig = &sriovnetworkv1.OvsHardwareOffloadConfig{
 				Name: mcpName,
 			}
 			err = k8sClient.Create(ctx, config)
@@ -126,6 +126,10 @@ var _ = Describe("SriovNetworkPoolConfig controller", Ordered, func() {
 			DeferCleanup(func() {
 				err = k8sClient.Delete(ctx, config)
 				Expect(err).ToNot(HaveOccurred())
+				// Finish finalization before deleting the MachineConfigPool or stopping its controller.
+				Eventually(func() bool {
+					return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: config.Name, Namespace: config.Namespace}, config))
+				}, util.APITimeout, util.RetryInterval).Should(BeTrue())
 			})
 
 			Eventually(func() error {

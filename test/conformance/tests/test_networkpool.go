@@ -61,6 +61,55 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 		WaitForSRIOVStable()
 	})
 
+	Context("Aggregate status", func() {
+		BeforeEach(func() {
+			if discovery.Enabled() {
+				Skip("Test unsuitable to be run in discovery mode")
+			}
+		})
+
+		It("should report node counts for empty selections, conflicts and recovery", func() {
+			By("creating a drain-only pool with no matching nodes")
+			networkPool := &sriovv1.SriovNetworkPoolConfig{
+				ObjectMeta: metav1.ObjectMeta{GenerateName: "test-status-pool-", Namespace: operatorNamespace},
+				Spec: sriovv1.SriovNetworkPoolConfigSpec{
+					NodeSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"kubernetes.io/hostname": testNode},
+						MatchExpressions: []metav1.LabelSelectorRequirement{{
+							Key: "kubernetes.io/hostname", Operator: metav1.LabelSelectorOpNotIn, Values: []string{testNode},
+						}},
+					},
+				},
+			}
+			Expect(clients.Create(context.Background(), networkPool)).To(Succeed())
+			assertAggregateReadiness(networkPool, metav1.ConditionFalse, sriovv1.ReasonNoMatchingNodes, new(int32(0)), new(int32(0)))
+
+			By("updating the selector to match one node")
+			previousPool := networkPool.DeepCopy()
+			networkPool.Spec.NodeSelector.MatchExpressions = nil
+			Expect(clients.Patch(context.Background(), networkPool, client.MergeFrom(previousPool))).To(Succeed())
+			assertAggregateReadiness(networkPool, metav1.ConditionTrue, sriovv1.ReasonPoolConfigReady, new(int32(1)), new(int32(1)))
+
+			assertNodeStatePoolRevision(testNode, networkPool)
+
+			By("creating another pool that selects the same node")
+			conflictingPool := &sriovv1.SriovNetworkPoolConfig{
+				ObjectMeta: metav1.ObjectMeta{GenerateName: "test-conflicting-pool-", Namespace: operatorNamespace},
+				Spec:       *networkPool.Spec.DeepCopy(),
+			}
+			Expect(clients.Create(context.Background(), conflictingPool)).To(Succeed())
+			assertAggregateReadiness(networkPool, metav1.ConditionFalse, sriovv1.ReasonPoolConflict, new(int32(1)), new(int32(0)))
+			assertAggregateReadiness(conflictingPool, metav1.ConditionFalse, sriovv1.ReasonPoolConflict, new(int32(1)), new(int32(0)))
+			assertNodeStatePoolRevision(testNode, networkPool)
+
+			By("removing the conflicting pool and checking recovery")
+			Expect(clients.Delete(context.Background(), conflictingPool)).To(Succeed())
+			assertAggregateReadiness(networkPool, metav1.ConditionTrue, sriovv1.ReasonPoolConfigReady, new(int32(1)), new(int32(1)))
+			assertNodeStatePoolRevision(testNode, networkPool)
+		})
+
+	})
+
 	Context("Configure rdma namespace mode", func() {
 		It("should switch rdma mode", func() {
 			By("create a pool with only that node")
@@ -81,6 +130,7 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 				g.Expect(nodeState.Spec.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
 				g.Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeExclusive))
 			}, 20*time.Minute, 5*time.Second).Should(Succeed())
+			assertAggregateReadiness(networkPool, metav1.ConditionTrue, sriovv1.ReasonPoolConfigReady, new(int32(1)), new(int32(1)))
 
 			By("Checking reboot tracker file exists after reboot")
 			trackerOutput, _, err := runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host"+consts.SriovRebootTrackerFilePath)
@@ -115,6 +165,7 @@ var _ = Describe("[sriov] NetworkPool", Ordered, func() {
 				g.Expect(nodeState.Spec.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
 				g.Expect(nodeState.Status.System.RdmaMode).To(Equal(consts.RdmaSubsystemModeShared))
 			}, 20*time.Minute, 5*time.Second).Should(Succeed())
+			assertAggregateReadiness(networkPool, metav1.ConditionTrue, sriovv1.ReasonPoolConfigReady, new(int32(1)), new(int32(1)))
 
 			By("Checking rdma mode and kernel args")
 			cmdlineOutput, _, err = runCommandOnConfigDaemon(testNode, "/bin/bash", "-c", "cat /host/proc/cmdline")

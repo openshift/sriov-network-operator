@@ -9,7 +9,7 @@ import (
 // SriovNetworkPoolConfigSpec defines the desired state of SriovNetworkPoolConfig
 type SriovNetworkPoolConfigSpec struct {
 	// OvsHardwareOffloadConfig describes the OVS HWOL configuration for selected Nodes
-	OvsHardwareOffloadConfig OvsHardwareOffloadConfig `json:"ovsHardwareOffloadConfig,omitempty"`
+	OvsHardwareOffloadConfig *OvsHardwareOffloadConfig `json:"ovsHardwareOffloadConfig,omitempty"`
 
 	// nodeSelector specifies a label selector for Nodes
 	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
@@ -34,6 +34,7 @@ type OvsHardwareOffloadConfig struct {
 	// Name is the name of OvsHardwareOffloadConfig
 	// On OpenShift:
 	// Name is the name of MachineConfigPool to be enabled with OVS hardware offload
+	// TODO: Remove MachineConfig-related configuration from SriovNetworkPoolConfig in the future.
 	Name string `json:"name,omitempty"`
 	// OVS config. It will be provided for ovs-vswitchd service as other_config option
 	// +kubebuilder:default:={hw-offload: "true"}
@@ -42,10 +43,21 @@ type OvsHardwareOffloadConfig struct {
 
 // SriovNetworkPoolConfigStatus defines the observed state of SriovNetworkPoolConfig
 type SriovNetworkPoolConfigStatus struct {
+	// MatchedNodeCount counts managed nodes targeted by a regular pool.
+	// Nil means unknown or not applicable to a hardware offload MachineConfig pool.
+	MatchedNodeCount *int32 `json:"matchedNodeCount,omitempty"`
+	// ReadyNodeCount counts matched nodes where a regular pool is effective.
+	// Nil means unknown or not applicable to a hardware offload MachineConfig pool.
+	ReadyNodeCount  *int32 `json:"readyNodeCount,omitempty"`
+	ConditionStatus `json:",inline"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Matched",type=integer,JSONPath=`.status.matchedNodeCount`
+//+kubebuilder:printcolumn:name="Ready Nodes",type=integer,JSONPath=`.status.readyNodeCount`
+//+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+//+kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // SriovNetworkPoolConfig is the Schema for the sriovnetworkpoolconfigs API
 type SriovNetworkPoolConfig struct {
