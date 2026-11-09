@@ -389,6 +389,66 @@ var _ = Describe("Daemon Controller", Ordered, func() {
 			Expect(nodeState.Status.LastSyncError).To(Equal(""))
 		})
 
+		It("Should finish a pending drain when the PF comes back up before drain completes", func(ctx context.Context) {
+			iface := sriovnetworkv1.InterfaceExt{
+				Name:           "ens1f1np1",
+				PciAddress:     "0000:16:00.0",
+				Driver:         "ice",
+				Vendor:         "8086",
+				DeviceID:       "1593",
+				LinkAdminState: "up",
+				LinkType:       "ETH",
+				NumVfs:         1,
+				TotalVfs:       2,
+				VFs: []sriovnetworkv1.VirtualFunction{{
+					PciAddress: "0000:16:00.1",
+					Driver:     "iavf",
+					VfID:       0,
+				}},
+			}
+			discoverSriovReturn.SetOriginal([]sriovnetworkv1.InterfaceExt{iface})
+			discoverSriovReturn.SetAfter([]sriovnetworkv1.InterfaceExt{iface})
+			nodeState.Spec.Interfaces = []sriovnetworkv1.Interface{{
+				Name:       iface.Name,
+				PciAddress: iface.PciAddress,
+				NumVfs:     iface.NumVfs,
+			}}
+			Expect(k8sClient.Update(ctx, nodeState)).To(Succeed())
+			Eventually(func() int64 {
+				return daemonReconciler.GetLastAppliedGeneration()
+			}, waitTime, retryTime).Should(Equal(nodeState.Generation))
+			eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
+			generation := nodeState.Generation
+
+			By("bringing the PF down without changing the desired configuration")
+			downInterface := *iface.DeepCopy()
+			downInterface.LinkAdminState = "down"
+			discoverSriovReturn.SetOriginal([]sriovnetworkv1.InterfaceExt{downInterface})
+			patchAnnotation(nodeState, "pf-link-change", "down")
+			expectDrainState(nodeState, constants.DrainRequired, constants.DrainIdle, constants.DrainRequired)
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.Draining)
+
+			By("bringing the PF up while the drain is still in progress")
+			discoverSriovReturn.SetOriginal([]sriovnetworkv1.InterfaceExt{iface})
+			patchAnnotation(nodeState, "pf-link-change", "up")
+			Eventually(func(g Gomega) {
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(nodeState), nodeState)).To(Succeed())
+				g.Expect(nodeState.Status.Interfaces).To(HaveLen(1))
+				g.Expect(nodeState.Status.Interfaces[0].LinkAdminState).To(Equal("up"))
+				g.Expect(nodeState.Status.SyncStatus).To(Equal(constants.SyncStatusInProgress))
+			}, 10*time.Second, 100*time.Millisecond).Should(Succeed())
+			expectDrainState(nodeState, constants.DrainRequired, constants.Draining, constants.DrainRequired)
+
+			By("completing the drain after the host drift has disappeared")
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.DrainComplete)
+			eventuallySyncStatusEqual(nodeState, constants.SyncStatusSucceeded)
+			expectDrainState(nodeState, constants.DrainIdle, constants.DrainComplete, constants.DrainIdle)
+			Expect(nodeState.Generation).To(Equal(generation))
+			Expect(meta.IsStatusConditionTrue(nodeState.Status.Conditions, sriovnetworkv1.ConditionReady)).To(BeTrue())
+			Expect(meta.IsStatusConditionFalse(nodeState.Status.Conditions, sriovnetworkv1.ConditionProgressing)).To(BeTrue())
+			patchAnnotation(nodeState, constants.NodeStateDrainAnnotationCurrent, constants.DrainIdle)
+		})
+
 		It("Should reset desired drain to idle when reboot is required during a partial drain", func(ctx context.Context) {
 			configureDrainRequiredScenario(ctx, nodeState)
 
