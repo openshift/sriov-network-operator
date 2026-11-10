@@ -18,6 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	intstrutil "k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -910,8 +912,148 @@ func (cr *SriovOperatorConfig) GetConditions() []metav1.Condition {
 	return cr.Status.Conditions
 }
 
+// SetPolicyRevisions records the policy identities and generations rendered into the NodeState.
+func (s *SriovNetworkNodeState) SetPolicyRevisions(revisions map[string]SourceRevision) error {
+	encoded, err := json.Marshal(revisions)
+	if err != nil {
+		return err
+	}
+	SetAnnotationKey(s, consts.NodeStatePolicyRevisionsAnnotation, string(encoded))
+	return nil
+}
+
 // GetConditions returns the conditions from the status.
 func (s *SriovNetworkNodeState) GetConditions() []metav1.Condition {
+	return s.Status.Conditions
+}
+
+// IsReady reports whether configuration is ready for the current spec generation.
+func (s *SriovNetworkNodeState) IsReady() bool {
+	ready := meta.FindStatusCondition(s.Status.Conditions, ConditionReady)
+	return ready != nil && ready.Status == metav1.ConditionTrue && ready.ObservedGeneration == s.Generation
+}
+
+// FailureReason reports why configuration is not ready for the current spec generation.
+func (s *SriovNetworkNodeState) FailureReason() string {
+	condition := meta.FindStatusCondition(s.Status.Conditions, ConditionReady)
+	if condition == nil || condition.ObservedGeneration != s.Generation {
+		return ReasonApplyingConfiguration
+	}
+	if condition.Reason == ReasonWaitingForDrain {
+		return ReasonWaitingForDrain
+	}
+	if s.Status.SyncStatus == consts.SyncStatusFailed {
+		return ReasonNodeSyncFailed
+	}
+	return ReasonApplyingConfiguration
+}
+
+// AffectsAggregate reports whether differences from other can change policy or pool readiness.
+func (s *SriovNetworkNodeState) AffectsAggregate(other *SriovNetworkNodeState) bool {
+	if s.Generation != other.Generation ||
+		s.Status.SyncStatus != other.Status.SyncStatus ||
+		!interfaceStatusEqual(s.Status.Interfaces, other.Status.Interfaces) {
+		return true
+	}
+
+	if s.Annotations[consts.NodeStatePolicyRevisionsAnnotation] != other.Annotations[consts.NodeStatePolicyRevisionsAnnotation] ||
+		s.Annotations[consts.PoolRevisionAnnotation] != other.Annotations[consts.PoolRevisionAnnotation] {
+		return true
+	}
+	oldReady := meta.FindStatusCondition(s.Status.Conditions, ConditionReady)
+	newReady := meta.FindStatusCondition(other.Status.Conditions, ConditionReady)
+	if oldReady == nil && newReady == nil {
+		return false
+	}
+	if oldReady == nil || newReady == nil {
+		return true
+	}
+	return oldReady.Status != newReady.Status || oldReady.Reason != newReady.Reason ||
+		oldReady.ObservedGeneration != newReady.ObservedGeneration
+}
+
+// interfaceStatusEqual ignores discovery order without mutating informer objects.
+func interfaceStatusEqual(a, b InterfaceExts) bool {
+	a, b = a.DeepCopy(), b.DeepCopy()
+	for _, interfaces := range []InterfaceExts{a, b} {
+		sort.Slice(interfaces, func(i, j int) bool { return interfaces[i].PciAddress < interfaces[j].PciAddress })
+		for i := range interfaces {
+			iface := &interfaces[i]
+			sort.Strings(iface.AltNames)
+			sort.Slice(iface.VFs, func(i, j int) bool { return iface.VFs[i].VfID < iface.VFs[j].VfID })
+		}
+	}
+	return equality.Semantic.DeepEqual(a, b)
+}
+
+// MatchesInterfaceInNodeState reports whether the policy selects a discovered NIC.
+func (p *SriovNetworkNodePolicy) MatchesInterfaceInNodeState(state *SriovNetworkNodeState) bool {
+	if p.Spec.NicSelector.IsEmpty() {
+		return false
+	}
+	for i := range state.Status.Interfaces {
+		if p.Spec.NicSelector.Selected(&state.Status.Interfaces[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+// RevisionMatchesInNodeState reports whether the NodeState records the policy's current identity and generation.
+func (p *SriovNetworkNodePolicy) RevisionMatchesInNodeState(state *SriovNetworkNodeState) bool {
+	var revisions map[string]SourceRevision
+	if err := json.Unmarshal([]byte(state.GetAnnotations()[consts.NodeStatePolicyRevisionsAnnotation]), &revisions); err != nil {
+		return false
+	}
+	revision, found := revisions[p.Name]
+	return found && revision.UID == p.UID && revision.Generation == p.Generation
+}
+
+// GetConditions returns the conditions from the status.
+func (p *SriovNetworkNodePolicy) GetConditions() []metav1.Condition {
+	return p.Status.Conditions
+}
+
+// SetRevisionOnObject records pool identity on obj, or clears the stamp when the receiver is nil.
+func (s *SriovNetworkPoolConfig) SetRevisionOnObject(obj metav1.Object) error {
+	if s == nil {
+		SetAnnotationKey(obj, consts.PoolRevisionAnnotation, "")
+		return nil
+	}
+	encoded, err := json.Marshal(SourceRevision{Name: s.Name, UID: s.UID, Generation: s.Generation})
+	if err != nil {
+		return err
+	}
+	SetAnnotationKey(obj, consts.PoolRevisionAnnotation, string(encoded))
+	return nil
+}
+
+// RevisionMatchesInObject reports whether obj carries the pool's current identity and generation.
+func (s *SriovNetworkPoolConfig) RevisionMatchesInObject(obj metav1.Object) bool {
+	var recorded SourceRevision
+	if err := json.Unmarshal([]byte(obj.GetAnnotations()[consts.PoolRevisionAnnotation]), &recorded); err != nil {
+		return false
+	}
+	return recorded == (SourceRevision{Name: s.Name, UID: s.UID, Generation: s.Generation})
+}
+
+// HasHostConfigurations reports whether the pool configures RDMA or OVS on the host.
+func (s *SriovNetworkPoolConfig) HasHostConfigurations() bool {
+	return s.Spec.RdmaMode != "" ||
+		(s.Spec.OvsHardwareOffloadConfig != nil && len(s.Spec.OvsHardwareOffloadConfig.OvsConfig) > 0)
+}
+
+// GetNodeSelector converts the pool's node selector; nil matches all nodes.
+func (s *SriovNetworkPoolConfig) GetNodeSelector() (labels.Selector, error) {
+	selector := s.Spec.NodeSelector
+	if selector == nil {
+		selector = &metav1.LabelSelector{}
+	}
+	return metav1.LabelSelectorAsSelector(selector)
+}
+
+// GetConditions returns the conditions from the status.
+func (s *SriovNetworkPoolConfig) GetConditions() []metav1.Condition {
 	return s.Status.Conditions
 }
 
@@ -941,8 +1083,11 @@ func NetFilterMatch(netFilter string, netValue string) (isMatch bool) {
 // MaxUnavailable calculate the max number of unavailable nodes to represent the number of nodes
 // we can drain in parallel
 func (s *SriovNetworkPoolConfig) MaxUnavailable(numOfNodes int) (int, error) {
-	// this means we want to drain all the nodes in parallel
 	if s.Spec.MaxUnavailable == nil {
+		// Named offload pools cannot set maxUnavailable, so keep the default drain limit.
+		if ovs := s.Spec.OvsHardwareOffloadConfig; ovs != nil && ovs.Name != "" {
+			return 1, nil
+		}
 		return -1, nil
 	}
 	intOrPercent := *s.Spec.MaxUnavailable
@@ -1190,4 +1335,29 @@ func (s *SriovNetworkNodeState) SetNodeStateDrainConditions(state DrainState, er
 			ObservedGeneration: generation,
 		})
 	}
+}
+
+// SourceRevision records source identity in metadata without forcing daemon reconfiguration.
+// MachineConfigs use the same stamp to avoid re-rendering unchanged pool configuration.
+type SourceRevision struct {
+	Name       string    `json:"name,omitempty"`
+	UID        types.UID `json:"uid"`
+	Generation int64     `json:"generation"`
+}
+
+// SetAnnotationKey writes or clears an annotation on obj.
+func SetAnnotationKey(obj metav1.Object, key, value string) {
+	anns := obj.GetAnnotations()
+	if value == "" {
+		if anns != nil {
+			delete(anns, key)
+			obj.SetAnnotations(anns)
+		}
+		return
+	}
+	if anns == nil {
+		anns = map[string]string{}
+	}
+	anns[key] = value
+	obj.SetAnnotations(anns)
 }

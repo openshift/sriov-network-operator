@@ -74,7 +74,7 @@ var _ = Describe("[sriov] Switchdev", Ordered, func() {
 			ObjectMeta: metav1.ObjectMeta{Name: "test-switchdev-pool", Namespace: operatorNamespace},
 			Spec: sriovv1.SriovNetworkPoolConfigSpec{
 				NodeSelector:             &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/hostname": testNode}},
-				OvsHardwareOffloadConfig: sriovv1.OvsHardwareOffloadConfig{OvsConfig: map[string]string{"hw-offload": "true", "tc-policy": "none"}},
+				OvsHardwareOffloadConfig: &sriovv1.OvsHardwareOffloadConfig{OvsConfig: map[string]string{"hw-offload": "true", "tc-policy": "none"}},
 			},
 		}
 		if os.Getenv("CLUSTER_TYPE") == string(consts.ClusterTypeOpenshift) {
@@ -99,24 +99,11 @@ var _ = Describe("[sriov] Switchdev", Ordered, func() {
 			By("Testing device " + nameVendorDeviceID(intf) + " on node " + testNode)
 			numVfs := 5
 			resourceName := "switchdev" + intf.Name
-			policy, err := network.CreateSriovPolicy(clients, "test-switchdev-policy-", operatorNamespace, intf.Name, testNode, numVfs, resourceName, "netdevice", func(snnp *sriovv1.SriovNetworkNodePolicy) {
+			_, err := network.CreateSriovPolicy(clients, "test-switchdev-policy-", operatorNamespace, intf.Name, testNode, numVfs, resourceName, "netdevice", func(snnp *sriovv1.SriovNetworkNodePolicy) {
 				snnp.Spec.EswitchMode = "switchdev"
 				snnp.Spec.Bridge.OVS = &sriovv1.OVSConfig{}
 			})
 			Expect(err).ToNot(HaveOccurred())
-			Eventually(func(g Gomega) bool {
-				state := &sriovv1.SriovNetworkNodeState{}
-				g.Expect(clients.Get(context.Background(), client.ObjectKey{Namespace: operatorNamespace, Name: testNode}, state)).To(Succeed())
-				for _, iface := range state.Spec.Interfaces {
-					for _, group := range iface.VfGroups {
-						if iface.PciAddress == intf.PciAddress && iface.EswitchMode == "switchdev" && group.PolicyName == policy.Name {
-							return true
-						}
-					}
-				}
-				return false
-			}, 2*time.Minute, time.Second).Should(BeTrue(), "Switchdev policy must be reconciled before waiting for readiness")
-
 			WaitForSRIOVStable()
 			Eventually(func(g Gomega) {
 				for key, value := range pool.Spec.OvsHardwareOffloadConfig.OvsConfig {

@@ -157,6 +157,10 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 			qHandler(w)
 		},
 		UpdateFunc: func(c context.Context, e event.TypedUpdateEvent[client.Object], w workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			if e.ObjectOld.GetGeneration() == e.ObjectNew.GetGeneration() &&
+				equality.Semantic.DeepEqual(e.ObjectOld.GetDeletionTimestamp(), e.ObjectNew.GetDeletionTimestamp()) {
+				return
+			}
 			log.Log.WithName("SriovNetworkNodePolicy").
 				Info("Enqueuing sync for update event", "resource", e.ObjectNew.GetName(), "type", e.ObjectNew.GetObjectKind().GroupVersionKind().String())
 			qHandler(w)
@@ -170,6 +174,16 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 			log.Log.WithName("SriovNetworkNodePolicy").
 				Info("Enqueuing sync for generic event", "resource", e.Object.GetName(), "type", e.Object.GetObjectKind().GroupVersionKind().String())
 			qHandler(w)
+		},
+	}
+
+	nodeStateDiscoveryHandler := handler.Funcs{
+		UpdateFunc: func(c context.Context, e event.TypedUpdateEvent[client.Object], w workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			oldState := e.ObjectOld.(*sriovnetworkv1.SriovNetworkNodeState)
+			newState := e.ObjectNew.(*sriovnetworkv1.SriovNetworkNodeState)
+			if !equality.Semantic.DeepEqual(oldState.Status.Interfaces, newState.Status.Interfaces) {
+				qHandler(w)
+			}
 		},
 	}
 
@@ -206,6 +220,7 @@ func (r *SriovNetworkNodePolicyReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Watches(&corev1.Node{}, nodeEvenHandler).
 		Watches(&sriovnetworkv1.SriovNetworkNodePolicy{}, delayedEventHandler).
 		Watches(&sriovnetworkv1.SriovNetworkPoolConfig{}, delayedEventHandler).
+		Watches(&sriovnetworkv1.SriovNetworkNodeState{}, nodeStateDiscoveryHandler).
 		WatchesRawSource(source.Channel(eventChan, &handler.EnqueueRequestForObject{})).
 		Complete(r)
 }
@@ -281,7 +296,13 @@ func (r *SriovNetworkNodePolicyReconciler) syncDevicePluginConfigMap(ctx context
 			return fmt.Errorf("failed to get ConfigMap: %v", err)
 		}
 	} else {
+		// optimization to avoid unnecessary updates
+		if equality.Semantic.DeepEqual(found.Data, cm.Data) &&
+			equality.Semantic.DeepEqual(found.OwnerReferences, cm.OwnerReferences) {
+			return nil
+		}
 		logger.V(1).Info("ConfigMap already exists, updating")
+		cm.ResourceVersion = found.ResourceVersion
 		err = r.Update(ctx, cm)
 		if err != nil {
 			return fmt.Errorf("couldn't update ConfigMap: %v", err)
@@ -305,15 +326,19 @@ func (r *SriovNetworkNodePolicyReconciler) syncAllSriovNetworkNodeStates(ctx con
 		netPoolConfig, _, err := findNodePoolConfig(ctx, &node, r.Client)
 		if err != nil {
 			logger.Error(err, "failed to get SriovNetworkPoolConfig for the current node")
+			return fmt.Errorf("failed to get SriovNetworkPoolConfig for node %s: %w", node.Name, err)
 		}
 		if netPoolConfig != nil {
 			ns.Spec.System.RdmaMode = netPoolConfig.Spec.RdmaMode
-			if netPoolConfig.Spec.OvsHardwareOffloadConfig.OvsConfig != nil {
+			if netPoolConfig.Spec.OvsHardwareOffloadConfig != nil && netPoolConfig.Spec.OvsHardwareOffloadConfig.OvsConfig != nil {
 				ns.Spec.System.OvsConfig = make(map[string]string, len(netPoolConfig.Spec.OvsHardwareOffloadConfig.OvsConfig))
 				for k, v := range netPoolConfig.Spec.OvsHardwareOffloadConfig.OvsConfig {
 					ns.Spec.System.OvsConfig[k] = v
 				}
 			}
+		}
+		if err := netPoolConfig.SetRevisionOnObject(ns); err != nil {
+			return err
 		}
 		j, _ := json.Marshal(ns)
 		logger.V(2).Info("SriovNetworkNodeState CR", "content", j)
@@ -449,42 +474,17 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 		newVersion := found.DeepCopy()
 		newVersion.Spec = ns.Spec
 		newVersion.OwnerReferences = ns.OwnerReferences
+		sriovnetworkv1.SetAnnotationKey(newVersion, constants.PoolRevisionAnnotation, ns.Annotations[constants.PoolRevisionAnnotation])
 
-		// Previous Policy Priority(ppp) records the priority of previous evaluated policy in node policy list.
-		// Since node policy list is already sorted with priority number, comparing current priority with ppp shall
-		// be sufficient.
-		// ppp is set to 100 as initial value to avoid matching with the first policy in policy list, although
-		// it should not matter since the flag used in p.Apply() will only be applied when VF partition is detected.
-		ppp := 100
-		for _, p := range npl.Items {
-			// Note(adrianc): default policy is deprecated and ignored.
-			if p.Name == constants.DefaultPolicyName {
-				continue
-			}
-			if p.Selected(node) {
-				logger.Info("apply", "policy", p.Name, "node", node.Name)
-				// Merging only for policies with the same priority (ppp == p.Spec.Priority)
-				// This boolean flag controls merging of PF configuration (e.g. mtu, numvfs etc)
-				// when VF partition is configured.
-				err = p.Apply(newVersion, ppp == p.Spec.Priority)
-				if err != nil {
-					return err
-				}
-				if r.FeatureGate.IsEnabled(constants.ManageSoftwareBridgesFeatureGate) {
-					err = p.ApplyBridgeConfig(newVersion)
-					if err != nil {
-						return err
-					}
-				}
-				// record the evaluated policy priority for next loop
-				ppp = p.Spec.Priority
-			}
+		if err := renderNodePolicies(newVersion, npl, node, r.FeatureGate); err != nil {
+			return err
 		}
 
 		// Note(adrianc): we check same ownerReferences since SriovNetworkNodeState
 		// was owned by a default SriovNetworkNodePolicy. if we encounter a descripancy
 		// we need to update.
-		if !keepUntilAnnotationUpdated && equality.Semantic.DeepEqual(newVersion.OwnerReferences, found.OwnerReferences) &&
+		if !keepUntilAnnotationUpdated && equality.Semantic.DeepEqual(newVersion.Annotations, found.Annotations) &&
+			equality.Semantic.DeepEqual(newVersion.OwnerReferences, found.OwnerReferences) &&
 			equality.Semantic.DeepEqual(newVersion.Spec, found.Spec) {
 			logger.V(1).Info("SriovNetworkNodeState did not change, not updating")
 			return nil
@@ -497,10 +497,36 @@ func (r *SriovNetworkNodePolicyReconciler) syncSriovNetworkNodeState(ctx context
 	return nil
 }
 
+// renderNodePolicies builds the NodeState spec from selected policies.
+func renderNodePolicies(state *sriovnetworkv1.SriovNetworkNodeState, policies *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node, gate featuregate.FeatureGate) error {
+	previousPriority := 100
+	revisions := map[string]sriovnetworkv1.SourceRevision{}
+	for i := range policies.Items {
+		policy := &policies.Items[i]
+		if policy.Name == constants.DefaultPolicyName || !policy.Selected(node) {
+			continue
+		}
+		if err := policy.Apply(state, previousPriority == policy.Spec.Priority); err != nil {
+			return err
+		}
+		if gate != nil && gate.IsEnabled(constants.ManageSoftwareBridgesFeatureGate) {
+			if err := policy.ApplyBridgeConfig(state); err != nil {
+				return err
+			}
+		}
+		if policy.MatchesInterfaceInNodeState(state) {
+			revisions[policy.Name] = sriovnetworkv1.SourceRevision{UID: policy.UID, Generation: policy.Generation}
+		}
+		previousPriority = policy.Spec.Priority
+	}
+	return state.SetPolicyRevisions(revisions)
+}
+
 func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx context.Context, pl *sriovnetworkv1.SriovNetworkNodePolicyList, node *corev1.Node) (dptypes.ResourceConfList, error) {
 	logger := log.Log.WithName("renderDevicePluginConfigData")
 	logger.V(1).Info("Start to render device plugin config data", "node", node.Name)
 	rcl := dptypes.ResourceConfList{}
+	var nodeState *sriovnetworkv1.SriovNetworkNodeState
 	for _, p := range pl.Items {
 		// Note(adrianc): default policy is deprecated and ignored.
 		if p.Name == constants.DefaultPolicyName {
@@ -512,10 +538,13 @@ func (r *SriovNetworkNodePolicyReconciler) renderDevicePluginConfigData(ctx cont
 			continue
 		}
 
-		nodeState := &sriovnetworkv1.SriovNetworkNodeState{}
-		err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: node.Name}, nodeState)
-		if err != nil {
-			return rcl, err
+		// check if we have a nodeState for the node and if not, get it
+		// this is done here to avoid the overhead of getting the nodeState for each policy
+		if nodeState == nil {
+			nodeState = &sriovnetworkv1.SriovNetworkNodeState{}
+			if err := r.Get(ctx, types.NamespacedName{Namespace: vars.Namespace, Name: node.Name}, nodeState); err != nil {
+				return rcl, err
+			}
 		}
 
 		found, i := resourceNameInList(p.Spec.ResourceName, &rcl)

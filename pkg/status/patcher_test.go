@@ -649,3 +649,38 @@ var _ = Describe("ApplyStatus", func() {
 			To(BeTrue(), "LastTransitionTime should be preserved when condition status is unchanged")
 	})
 })
+
+var _ = Describe("Aggregate policy status", func() {
+	It("writes counts and Ready together and clears counts when observation becomes unknown", func() {
+		ctx := context.Background()
+		policy := &sriovnetworkv1.SriovNetworkNodePolicy{
+			ObjectMeta: metav1.ObjectMeta{GenerateName: "status-policy-", Namespace: "default"},
+			Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+				ResourceName: "status_test", NodeSelector: map[string]string{"kubernetes.io/os": "linux"},
+				NicSelector: sriovnetworkv1.SriovNetworkNicSelector{PfNames: []string{"ens1"}}, NumVfs: 1,
+			},
+		}
+		Expect(k8sClient.Create(ctx, policy)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, policy) })
+
+		one := int32(1)
+		Expect(patcher.ApplyStatus(ctx, policy, map[string]interface{}{
+			"matchedNodeCount": &one, "readyNodeCount": &one,
+		}, []metav1.Condition{NewCondition("Ready", metav1.ConditionTrue, "PolicyReady", "1/1 target nodes ready", policy.Generation)})).To(Succeed())
+
+		observed := &sriovnetworkv1.SriovNetworkNodePolicy{}
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(policy), observed)).To(Succeed())
+		Expect(observed.Status.MatchedNodeCount).NotTo(BeNil())
+		Expect(observed.Status.ReadyNodeCount).NotTo(BeNil())
+		Expect(*observed.Status.MatchedNodeCount).To(Equal(one))
+		Expect(*observed.Status.ReadyNodeCount).To(Equal(one))
+		Expect(observed.Status.Conditions).To(HaveLen(1))
+
+		Expect(patcher.ApplyStatus(ctx, observed, nil,
+			[]metav1.Condition{NewCondition("Ready", metav1.ConditionUnknown, "StatusUnknown", "Cannot list nodes", policy.Generation)})).To(Succeed())
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(policy), observed)).To(Succeed())
+		Expect(observed.Status.MatchedNodeCount).To(BeNil())
+		Expect(observed.Status.ReadyNodeCount).To(BeNil())
+		Expect(observed.Status.Conditions[0].Status).To(Equal(metav1.ConditionUnknown))
+	})
+})

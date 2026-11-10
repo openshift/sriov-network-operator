@@ -198,6 +198,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SriovNetworkNodePolicy")
 		os.Exit(1)
 	}
+	if err = (&controllers.AggregateStatusReconciler{
+		Client:        mgr.GetClient(),
+		StatusPatcher: namespacedStatusPatcher,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SriovAggregateStatus")
+		os.Exit(1)
+	}
 	if err = (&controllers.SriovOperatorConfigReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),

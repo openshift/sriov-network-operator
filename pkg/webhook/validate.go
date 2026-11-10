@@ -99,7 +99,7 @@ func validateSriovNetworkPoolConfig(cr *sriovnetworkv1.SriovNetworkPoolConfig, o
 	log.Log.V(2).Info("validateSriovNetworkPoolConfig", "object", cr)
 	var warnings []string
 
-	if (cr.Spec.MaxUnavailable != nil || cr.Spec.NodeSelector != nil) && cr.Spec.OvsHardwareOffloadConfig.Name != "" {
+	if (cr.Spec.MaxUnavailable != nil || cr.Spec.NodeSelector != nil) && cr.Spec.OvsHardwareOffloadConfig != nil && cr.Spec.OvsHardwareOffloadConfig.Name != "" {
 		return false, warnings, fmt.Errorf("SriovOperatorConfig can't have both parallel configuration and OvsHardwareOffloadConfig")
 	}
 
@@ -110,8 +110,10 @@ func validateSriovNetworkPoolConfig(cr *sriovnetworkv1.SriovNetworkPoolConfig, o
 		}
 	}
 
-	if err := utils.ValidateOvsConfig(cr.Spec.OvsHardwareOffloadConfig.OvsConfig); err != nil {
-		return false, warnings, fmt.Errorf("SriovNetworkPoolConfig invalid OvsHardwareOffloadConfig: %v", err)
+	if cr.Spec.OvsHardwareOffloadConfig != nil {
+		if err := utils.ValidateOvsConfig(cr.Spec.OvsHardwareOffloadConfig.OvsConfig); err != nil {
+			return false, warnings, fmt.Errorf("SriovNetworkPoolConfig invalid OvsHardwareOffloadConfig: %v", err)
+		}
 	}
 
 	return true, warnings, nil

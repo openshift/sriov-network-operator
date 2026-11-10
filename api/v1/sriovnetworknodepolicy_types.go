@@ -138,12 +138,19 @@ type OVSInterfaceConfig struct {
 
 // SriovNetworkNodePolicyStatus defines the observed state of SriovNetworkNodePolicy
 type SriovNetworkNodePolicyStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// MatchedNodeCount counts managed nodes selected by this policy. Nil means unknown.
+	MatchedNodeCount *int32 `json:"matchedNodeCount,omitempty"`
+	// ReadyNodeCount counts matched nodes where this policy is applied. Nil means unknown.
+	ReadyNodeCount  *int32 `json:"readyNodeCount,omitempty"`
+	ConditionStatus `json:",inline"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Matched",type=integer,JSONPath=`.status.matchedNodeCount`
+//+kubebuilder:printcolumn:name="Ready Nodes",type=integer,JSONPath=`.status.readyNodeCount`
+//+kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+//+kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // SriovNetworkNodePolicy is the Schema for the sriovnetworknodepolicies API
 type SriovNetworkNodePolicy struct {
