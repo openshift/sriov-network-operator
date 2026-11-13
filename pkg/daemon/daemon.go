@@ -206,9 +206,8 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			return ctrl.Result{}, err
 		}
 
-		// if there are no host state drift changes, and we are on the latest applied policy
-		// we check if we need to publish a new nodeState status if not we requeue
-		if !isDrifted {
+		// A pending drain must finish even if the host drift disappears.
+		if !isDrifted && utils.ObjectHasAnnotation(desiredNodeState, consts.NodeStateDrainAnnotation, consts.DrainIdle) {
 			shouldUpdate := dn.shouldUpdateStatus(current, desiredNodeState)
 			if shouldUpdate {
 				reqLogger.Info("updating nodeState with new host status")
