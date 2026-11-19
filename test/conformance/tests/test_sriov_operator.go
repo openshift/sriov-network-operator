@@ -2207,11 +2207,15 @@ func setFeatureFlag(featureFlag string, value bool) {
 }
 
 func getOperatorPod() corev1.Pod {
+	// A graceful node shutdown leaves the previous pod Succeeded. Its cri-o
+	// container is gone, but the API still lists it, often first. Read logs
+	// from the pod that is actually running.
 	podList, err := clients.Pods(operatorNamespace).List(context.Background(), metav1.ListOptions{
 		LabelSelector: "name=sriov-network-operator",
+		FieldSelector: fields.OneTermEqualSelector("status.phase", string(corev1.PodRunning)).String(),
 	})
 	ExpectWithOffset(1, err).ToNot(HaveOccurred())
-	ExpectWithOffset(1, podList.Items).ToNot(HaveLen(0), "At least one operator pod expected")
+	ExpectWithOffset(1, podList.Items).ToNot(HaveLen(0), "at least one running operator pod expected")
 	return podList.Items[0]
 }
 
