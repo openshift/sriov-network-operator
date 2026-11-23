@@ -275,49 +275,67 @@ var _ = Describe("[sriov] operator", Ordered, func() {
 
 				waitForNetAttachDef("test-apivolnetwork", namespaces.Test)
 
+				assertHugepageInjection := func(g Gomega, admittedPod *corev1.Pod) {
+					var downwardVolume *corev1.Volume
+					for _, v := range admittedPod.Spec.Volumes {
+						if v.Name == volumePodNetInfo {
+							downwardVolume = v.DeepCopy()
+							break
+						}
+					}
+
+					// In the DownwardAPI the resource injector rename the hugepage size with underscores
+					// example hugepages-1Gi -> hugepages_1Gi
+					result := strings.Replace(hugepagesName, "-", "_", 1)
+					if len(result) > 0 {
+						result = result[:len(result)-1]
+					}
+
+					g.Expect(downwardVolume).ToNot(BeNil(), "Downward volume not found")
+					g.Expect(downwardVolume.DownwardAPI).ToNot(BeNil(), "Downward api not found in volume")
+					g.Expect(downwardVolume.DownwardAPI.Items).To(SatisfyAll(
+						ContainElement(MatchFields(IgnoreExtras, Fields{
+							"Path": Equal(fmt.Sprintf("%s_request_test", result)),
+							"ResourceFieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
+								"ContainerName": Equal("test"),
+								"Resource":      Equal(fmt.Sprintf("requests.%s", hugepagesName)),
+							})),
+						})), ContainElement(MatchFields(IgnoreExtras, Fields{
+							"Path": Equal(fmt.Sprintf("%s_limit_test", result)),
+							"ResourceFieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
+								"ContainerName": Equal("test"),
+								"Resource":      Equal(fmt.Sprintf("limits.%s", hugepagesName)),
+							})),
+						})), ContainElement(MatchFields(IgnoreExtras, Fields{
+							"Path": Equal("annotations"),
+							"FieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
+								"APIVersion": Equal("v1"),
+								"FieldPath":  Equal("metadata.annotations"),
+							})),
+						}))))
+				}
+
 				podDefinition := pod.RedefineWithHugepages(pod.DefineWithNetworks([]string{sriovNetwork.Name}), hugepagesName, hupagesAmount)
+				By("Waiting for the resource injector to load its hugepage configuration")
+				// A Ready injector can still be waiting for its first ConfigMap poll after
+				// a restart. Probe admission without creating pods until injection is active.
+				// TODO: Remove this dry-run probe and use Eventually on the real pod creation
+				// when consts.ResourceInjectorMatchConditionFeatureGate defaults to true,
+				// which will block pod creation while the webhook is not ready.
+				probeCtx, cancelProbe := context.WithTimeout(context.Background(), 2*time.Minute)
+				defer cancelProbe()
+				Eventually(probeCtx, func(g Gomega) {
+					admittedPod, err := clients.Pods(namespaces.Test).Create(probeCtx, podDefinition.DeepCopy(), metav1.CreateOptions{
+						DryRun: []string{metav1.DryRunAll},
+					})
+					g.Expect(err).ToNot(HaveOccurred())
+					assertHugepageInjection(g, admittedPod)
+				}, 2*time.Minute, time.Second).Should(Succeed())
+				cancelProbe()
+
 				created, err := clients.Pods(namespaces.Test).Create(context.Background(), podDefinition, metav1.CreateOptions{})
 				Expect(err).ToNot(HaveOccurred())
-
-				runningPod := waitForPodRunning(created)
-
-				var downwardVolume *corev1.Volume
-				for _, v := range runningPod.Spec.Volumes {
-					if v.Name == volumePodNetInfo {
-						downwardVolume = v.DeepCopy()
-						break
-					}
-				}
-
-				// In the DownwardAPI the resource injector rename the hugepage size with underscores
-				// example hugepages-1Gi -> hugepages_1Gi
-				result := strings.Replace(hugepagesName, "-", "_", 1)
-				if len(result) > 0 {
-					result = result[:len(result)-1]
-				}
-
-				Expect(downwardVolume).ToNot(BeNil(), "Downward volume not found")
-				Expect(downwardVolume.DownwardAPI).ToNot(BeNil(), "Downward api not found in volume")
-				Expect(downwardVolume.DownwardAPI.Items).To(SatisfyAll(
-					ContainElement(MatchFields(IgnoreExtras, Fields{
-						"Path": Equal(fmt.Sprintf("%s_request_test", result)),
-						"ResourceFieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
-							"ContainerName": Equal("test"),
-							"Resource":      Equal(fmt.Sprintf("requests.%s", hugepagesName)),
-						})),
-					})), ContainElement(MatchFields(IgnoreExtras, Fields{
-						"Path": Equal(fmt.Sprintf("%s_limit_test", result)),
-						"ResourceFieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
-							"ContainerName": Equal("test"),
-							"Resource":      Equal(fmt.Sprintf("limits.%s", hugepagesName)),
-						})),
-					})), ContainElement(MatchFields(IgnoreExtras, Fields{
-						"Path": Equal("annotations"),
-						"FieldRef": PointTo(MatchFields(IgnoreExtras, Fields{
-							"APIVersion": Equal("v1"),
-							"FieldPath":  Equal("metadata.annotations"),
-						})),
-					}))))
+				assertHugepageInjection(NewGomegaWithT(GinkgoT()), waitForPodRunning(created))
 			})
 		})
 
