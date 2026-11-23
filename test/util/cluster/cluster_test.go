@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,8 +37,16 @@ func TestSriovStableWaitsForPoliciesAndDaemons(t *testing.T) {
 	configDaemon.Name = "sriov-network-config-daemon"
 	configDaemon.Status.NumberReady = 1
 	kube := k8sfake.NewSimpleClientset(plugin, configDaemon)
+	config := &sriovv1.SriovOperatorConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: consts.DefaultConfigName, Namespace: "operator"},
+		Status: sriovv1.SriovOperatorConfigStatus{
+			ConditionStatus: sriovv1.ConditionStatus{Conditions: []metav1.Condition{
+				{Type: sriovv1.ConditionReady, Status: metav1.ConditionTrue},
+			}},
+		},
+	}
 	clients := &testclient.ClientSet{
-		Client:          fake.NewClientBuilder().WithScheme(scheme).WithObjects(state).Build(),
+		Client:          fake.NewClientBuilder().WithScheme(scheme).WithObjects(state, config).Build(),
 		AppsV1Interface: kube.AppsV1(),
 	}
 	stable, err := SriovStable("operator", clients)
@@ -88,6 +97,111 @@ func TestSriovStableWaitsForPoliciesAndDaemons(t *testing.T) {
 	stable, err = SriovStable("operator", clients)
 	assert.NoError(t, err)
 	assert.False(t, stable, "a config-daemon rollout must finish before workloads start")
+}
+
+func TestSriovStableProviderReadiness(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		dra             bool
+		configured      bool
+		missingProvider bool
+		mutateProvider  func(*appsv1.DaemonSet)
+		mutateConfig    func(*sriovv1.SriovOperatorConfig)
+		stable          bool
+	}{
+		{name: "DRA with configured VFs and no device plugin", dra: true, configured: true, stable: true},
+		{name: "DRA before any policy", dra: true, stable: true},
+		{name: "DRA missing before any policy", dra: true, missingProvider: true},
+		{name: "DRA missing with configured VFs", dra: true, configured: true, missingProvider: true},
+		{name: "DRA pod not ready", dra: true, configured: true, mutateProvider: func(ds *appsv1.DaemonSet) {
+			ds.Status.NumberReady--
+		}},
+		{name: "DRA rollout incomplete", dra: true, configured: true, mutateProvider: func(ds *appsv1.DaemonSet) {
+			ds.Status.UpdatedNumberScheduled--
+		}},
+		{name: "DRA generation stale", dra: true, configured: true, mutateProvider: func(ds *appsv1.DaemonSet) {
+			ds.Status.ObservedGeneration--
+		}},
+		{name: "DRA must also cover unconfigured nodes", dra: true, configured: true, mutateProvider: func(ds *appsv1.DaemonSet) {
+			ds.Status.DesiredNumberScheduled = 1
+			ds.Status.NumberReady = 1
+			ds.Status.UpdatedNumberScheduled = 1
+		}},
+		{name: "device plugin only covers configured nodes", configured: true, stable: true},
+		{name: "device plugin missing with configured VFs", configured: true, missingProvider: true},
+		{name: "device plugin unnecessary before any policy", missingProvider: true, stable: true},
+		{name: "operator config not ready with no policies", missingProvider: true, mutateConfig: func(c *sriovv1.SriovOperatorConfig) {
+			c.Status.Conditions[0].Status = metav1.ConditionFalse
+		}},
+		{name: "operator config readiness unknown", mutateConfig: func(c *sriovv1.SriovOperatorConfig) {
+			c.Status.Conditions[0].Status = metav1.ConditionUnknown
+		}},
+		{name: "operator config readiness missing", mutateConfig: func(c *sriovv1.SriovOperatorConfig) {
+			c.Status.Conditions = nil
+		}},
+		{name: "operator config readiness stale", missingProvider: true, mutateConfig: func(c *sriovv1.SriovOperatorConfig) {
+			c.Status.Conditions[0].ObservedGeneration--
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			require.NoError(t, sriovv1.AddToScheme(scheme))
+			config := &sriovv1.SriovOperatorConfig{
+				ObjectMeta: metav1.ObjectMeta{Name: consts.DefaultConfigName, Namespace: "operator", Generation: 2},
+				Spec: sriovv1.SriovOperatorConfigSpec{
+					FeatureGates: map[string]bool{consts.DynamicResourceAllocationFeatureGate: tc.dra},
+				},
+				Status: sriovv1.SriovOperatorConfigStatus{
+					ConditionStatus: sriovv1.ConditionStatus{Conditions: []metav1.Condition{
+						{Type: sriovv1.ConditionReady, Status: metav1.ConditionTrue, ObservedGeneration: 2},
+					}},
+				},
+			}
+			if tc.mutateConfig != nil {
+				tc.mutateConfig(config)
+			}
+			state := &sriovv1.SriovNetworkNodeState{
+				ObjectMeta: metav1.ObjectMeta{Name: "worker-0", Namespace: "operator", Generation: 1},
+				Status: sriovv1.SriovNetworkNodeStateStatus{Conditions: []metav1.Condition{
+					{Type: sriovv1.ConditionReady, Status: metav1.ConditionTrue, ObservedGeneration: 1},
+				}},
+			}
+			unconfigured := state.DeepCopy()
+			unconfigured.Name = "worker-1"
+			if tc.configured {
+				state.Spec.Interfaces = sriovv1.Interfaces{{Name: "msnicp0"}}
+			}
+			configDaemon := &appsv1.DaemonSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "sriov-network-config-daemon", Namespace: "operator", Generation: 1},
+				Status: appsv1.DaemonSetStatus{
+					ObservedGeneration: 1, DesiredNumberScheduled: 2, NumberReady: 2, UpdatedNumberScheduled: 2,
+				},
+			}
+			provider := configDaemon.DeepCopy()
+			provider.Name = consts.DRADriverDaemonSetName
+			if !tc.dra {
+				provider.Name = "sriov-device-plugin"
+				provider.Status.DesiredNumberScheduled = 1
+				provider.Status.NumberReady = 1
+				provider.Status.UpdatedNumberScheduled = 1
+			}
+			if tc.mutateProvider != nil {
+				tc.mutateProvider(provider)
+			}
+			kube := k8sfake.NewSimpleClientset(configDaemon)
+			if !tc.missingProvider {
+				_, err := kube.AppsV1().DaemonSets("operator").Create(context.Background(), provider, metav1.CreateOptions{})
+				require.NoError(t, err)
+			}
+			clients := &testclient.ClientSet{
+				Client:          fake.NewClientBuilder().WithScheme(scheme).WithObjects(config, state, unconfigured).Build(),
+				AppsV1Interface: kube.AppsV1(),
+			}
+			stable, err := SriovStable("operator", clients)
+			require.NoError(t, err)
+			assert.Equal(t, tc.stable, stable)
+		})
+	}
 }
 
 func TestStateStableRequiresCurrentGeneration(t *testing.T) {

@@ -2052,6 +2052,10 @@ func createVanillaNetworkPolicy(node string, sriovInfos *cluster.EnabledNodes, n
 }
 
 func getConfigDaemonPod(nodeName string) (*corev1.Pod, error) {
+	return getConfigDaemonPodWithContext(context.Background(), nodeName)
+}
+
+func getConfigDaemonPodWithContext(ctx context.Context, nodeName string) (*corev1.Pod, error) {
 	pods := &corev1.PodList{}
 	label, err := labels.Parse("app=sriov-network-config-daemon")
 	if err != nil {
@@ -2061,7 +2065,7 @@ func getConfigDaemonPod(nodeName string) (*corev1.Pod, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = clients.List(context.Background(), pods, &runtimeclient.ListOptions{Namespace: operatorNamespace, LabelSelector: label, FieldSelector: field})
+	err = clients.List(ctx, pods, &runtimeclient.ListOptions{Namespace: operatorNamespace, LabelSelector: label, FieldSelector: field})
 	if err != nil {
 		return nil, err
 	}
@@ -2072,11 +2076,15 @@ func getConfigDaemonPod(nodeName string) (*corev1.Pod, error) {
 }
 
 func runCommandOnConfigDaemon(nodeName string, command ...string) (string, string, error) {
-	daemonPod, err := getConfigDaemonPod(nodeName)
+	return runCommandOnConfigDaemonWithContext(context.Background(), nodeName, command...)
+}
+
+func runCommandOnConfigDaemonWithContext(ctx context.Context, nodeName string, command ...string) (string, string, error) {
+	daemonPod, err := getConfigDaemonPodWithContext(ctx, nodeName)
 	if err != nil {
 		return "", "", err
 	}
-	return pod.ExecCommand(clients, daemonPod, command...)
+	return pod.ExecCommandWithContext(ctx, clients, daemonPod, command...)
 }
 
 func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {

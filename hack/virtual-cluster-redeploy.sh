@@ -37,6 +37,7 @@ if [ $CLUSTER_TYPE == "openshift" ]; then
   export MULTUS_NAMESPACE="openshift-multus"
   export OPERATOR_EXEC=kubectl
   export CLUSTER_TYPE=openshift
+  export CNI_BIN_PATH=${CNI_BIN_PATH:-/var/lib/cni/bin}
   export DEV_MODE=TRUE
   export CLUSTER_HAS_EMULATED_PF=TRUE
   export METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED=true
@@ -86,7 +87,7 @@ podman push --tls-verify=false "${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}"
 podman push --tls-verify=false "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
 
 echo "## apply CRDs"
-kubectl apply -f "${root}/config/crd/bases"
+kubectl apply -f "${root}/deployment/sriov-network-operator-chart/crds/"
 
 if [ $CLUSTER_TYPE == "openshift" ]; then
   export SRIOV_NETWORK_OPERATOR_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-operator:latest"
@@ -96,7 +97,6 @@ if [ $CLUSTER_TYPE == "openshift" ]; then
   echo "## deploying SRIOV Network Operator"
   hack/deploy-setup.sh $NAMESPACE
 else
-  export HELM_MODE=upgrade
   hack/deploy-operator-helm.sh
 fi
 
