@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
@@ -17,6 +18,62 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	testclient "github.com/k8snetworkplumbingwg/sriov-network-operator/test/util/client"
 )
+
+func TestIsClusterStableWaitsForNodeRecovery(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		ready       corev1.ConditionStatus
+		cordoned    bool
+		annotations map[string]string
+		stable      bool
+	}{
+		{name: "ready Kubernetes node", ready: corev1.ConditionTrue, stable: true},
+		{name: "cordoned node", ready: corev1.ConditionTrue, cordoned: true},
+		{name: "missing readiness"},
+		{name: "not ready", ready: corev1.ConditionFalse},
+		{name: "kubelet stopped reporting", ready: corev1.ConditionUnknown},
+		{name: "MachineConfig update pending before reboot", ready: corev1.ConditionTrue, annotations: map[string]string{
+			"machineconfiguration.openshift.io/currentConfig": "rendered-worker-old",
+			"machineconfiguration.openshift.io/desiredConfig": "rendered-worker-new",
+			"machineconfiguration.openshift.io/state":         "Done",
+		}},
+		{name: "MachineConfig reboot in progress", ready: corev1.ConditionUnknown, annotations: map[string]string{
+			"machineconfiguration.openshift.io/currentConfig": "rendered-worker-old",
+			"machineconfiguration.openshift.io/desiredConfig": "rendered-worker-new",
+			"machineconfiguration.openshift.io/state":         "Working",
+		}},
+		{name: "MachineConfig update still working", ready: corev1.ConditionTrue, annotations: map[string]string{
+			"machineconfiguration.openshift.io/currentConfig": "rendered-worker-new",
+			"machineconfiguration.openshift.io/desiredConfig": "rendered-worker-new",
+			"machineconfiguration.openshift.io/state":         "Working",
+		}},
+		{name: "MachineConfig degraded", ready: corev1.ConditionTrue, annotations: map[string]string{
+			"machineconfiguration.openshift.io/currentConfig": "rendered-worker-new",
+			"machineconfiguration.openshift.io/desiredConfig": "rendered-worker-new",
+			"machineconfiguration.openshift.io/state":         "Degraded",
+		}},
+		{name: "MachineConfig rollout complete", ready: corev1.ConditionTrue, stable: true, annotations: map[string]string{
+			"machineconfiguration.openshift.io/currentConfig": "rendered-worker-new",
+			"machineconfiguration.openshift.io/desiredConfig": "rendered-worker-new",
+			"machineconfiguration.openshift.io/state":         "Done",
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			node := &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: "worker", Annotations: tc.annotations},
+				Spec:       corev1.NodeSpec{Unschedulable: tc.cordoned},
+			}
+			if tc.ready != "" {
+				node.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: tc.ready}}
+			}
+			kube := k8sfake.NewSimpleClientset(node)
+			clients := &testclient.ClientSet{CoreV1Interface: kube.CoreV1()}
+			stable, err := IsClusterStable(clients)
+			require.NoError(t, err)
+			assert.Equal(t, tc.stable, stable)
+		})
+	}
+}
 
 // TestSriovStableWaitsForPoliciesAndDaemons rejects stale policy status even when nodes and daemons are ready.
 func TestSriovStableWaitsForPoliciesAndDaemons(t *testing.T) {

@@ -376,6 +376,16 @@ done
 
 if [ $retries -eq $MAX_RETRIES ]; then
   echo "Max retries reached waiting for TechPreview MachineConfig rollout. Exiting..."
+  # The EXIT trap deletes the cluster. Preserve the reason for a degraded pool
+  # before teardown, including failures that happen before conformance starts.
+  setup_report_dir="${TEST_REPORT_PATH:-ocp-artifacts}/cluster-setup"
+  mkdir -p "$setup_report_dir"
+  kubectl --request-timeout=10s get nodes -o yaml > "$setup_report_dir/nodes.yaml" 2>&1 || true
+  kubectl --request-timeout=10s get mcp -o yaml > "$setup_report_dir/machineconfigpools.yaml" 2>&1 || true
+  kubectl --request-timeout=10s get clusteroperators -o yaml > "$setup_report_dir/clusteroperators.yaml" 2>&1 || true
+  timeout 60 kubectl --request-timeout=10s logs -n openshift-machine-config-operator \
+    -l k8s-app=machine-config-daemon --all-containers=true --prefix --tail=200 \
+    > "$setup_report_dir/machine-config-daemon.log" 2>&1 || true
   exit 1
 fi
 

@@ -493,6 +493,26 @@ func IsClusterStable(clients *testclient.ClientSet) (bool, error) {
 		if node.Spec.Unschedulable {
 			return false, nil
 		}
+		ready := false
+		for _, condition := range node.Status.Conditions {
+			if condition.Type == corev1.NodeReady {
+				ready = condition.Status == corev1.ConditionTrue
+				break
+			}
+		}
+		if !ready {
+			return false, nil
+		}
+
+		// A node can still be schedulable and report Ready while an OpenShift
+		// MachineConfig update is about to reboot it. Wait for that update too.
+		// These annotations are absent on Kubernetes nodes.
+		if node.Annotations["machineconfiguration.openshift.io/currentConfig"] != node.Annotations[consts.DesiredMachineConfigAnnotation] {
+			return false, nil
+		}
+		if state := node.Annotations["machineconfiguration.openshift.io/state"]; state != "" && state != "Done" {
+			return false, nil
+		}
 	}
 
 	return true, nil
