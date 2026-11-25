@@ -549,7 +549,7 @@ spec:
     kubernetes.io/hostname: $build_node
   containers:
   - name: podman
-    image: quay.io/podman/stable
+    image: quay.io/podman/stable:v5.8
     command: [sleep, infinity]
     securityContext:
       privileged: true
