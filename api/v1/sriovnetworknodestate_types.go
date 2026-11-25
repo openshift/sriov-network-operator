@@ -79,6 +79,7 @@ type InterfaceExts []InterfaceExt
 type VirtualFunction struct {
 	Name            string `json:"name,omitempty"`
 	Mac             string `json:"mac,omitempty"`
+	AdminMac        string `json:"adminMac,omitempty"`
 	Assigned        string `json:"assigned,omitempty"`
 	Driver          string `json:"driver,omitempty"`
 	PciAddress      string `json:"pciAddress"`
