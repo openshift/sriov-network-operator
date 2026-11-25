@@ -1079,6 +1079,25 @@ func TestSriovNetworkPoolConfig_MaxUnavailable(t *testing.T) {
 	}
 }
 
+func vfAdminMacSpec() *v1.Interface {
+	return &v1.Interface{
+		NumVfs: 1,
+		VfGroups: []v1.VfGroup{
+			{VfRange: "0-0", DeviceType: consts.DeviceTypeNetDevice},
+		},
+	}
+}
+
+func vfAdminMacStatus(linkType, driver, mac, adminMac string) *v1.InterfaceExt {
+	return &v1.InterfaceExt{
+		NumVfs:   1,
+		LinkType: linkType,
+		VFs: []v1.VirtualFunction{
+			{VfID: 0, Driver: driver, Mac: mac, AdminMac: adminMac},
+		},
+	}
+}
+
 func TestNeedToUpdateSriov(t *testing.T) {
 	type args struct {
 		ifaceSpec   *v1.Interface
@@ -1160,6 +1179,67 @@ func TestNeedToUpdateSriov(t *testing.T) {
 				},
 			},
 			want: true,
+		},
+		{
+			name: "VF admin MAC is not set (zero) while the VF has a MAC",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "4e:fd:3d:08:59:b1", "00:00:00:00:00:00"),
+			},
+			want: true,
+		},
+		{
+			name: "VF admin MAC differs from the VF MAC",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "4e:fd:3d:08:59:b1", "4e:fd:3d:08:59:b2"),
+			},
+			want: true,
+		},
+		{
+			name: "VF admin MAC equals the VF MAC",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "4e:fd:3d:08:59:b1", "4E:FD:3D:08:59:B1"),
+			},
+			want: false,
+		},
+		{
+			name: "VF admin MAC unknown",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "4e:fd:3d:08:59:b1", ""),
+			},
+			want: false,
+		},
+		{
+			name: "VF MAC unknown (VF allocated to a workload)",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "", "00:00:00:00:00:00"),
+			},
+			want: false,
+		},
+		{
+			name: "VF admin MAC mismatch is ignored for infiniband",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeIB, "iavf", "4e:fd:3d:08:59:b1", "00:00:00:00:00:00"),
+			},
+			want: false,
+		},
+		{
+			name: "VF admin MAC mismatch is ignored for dpdk driver",
+			args: args{
+				ifaceSpec: &v1.Interface{
+					NumVfs: 1,
+					VfGroups: []v1.VfGroup{
+						{VfRange: "0-0", DeviceType: consts.DeviceTypeVfioPci},
+					},
+				},
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "vfio-pci", "4e:fd:3d:08:59:b1", "00:00:00:00:00:00"),
+			},
+			want: false,
 		},
 	}
 	for _, tt := range tests {
