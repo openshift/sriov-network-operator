@@ -130,6 +130,7 @@ status:
 | `mtu` | int | MTU size |
 | `vfID` | int | Virtual function index |
 | `vdpaType` | string | vDPA type |
+| `adminMac` | string | Administrative MAC address configured on the VF through the PF |
 | `representorName` | string | Representor interface name |
 | `guid` | string | GUID for InfiniBand devices |
 
