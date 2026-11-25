@@ -375,6 +375,8 @@ spec:
                         properties:
                           Vlan:
                             type: integer
+                          adminMac:
+                            type: string
                           assigned:
                             type: string
                           deviceID:
