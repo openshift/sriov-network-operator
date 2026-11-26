@@ -2012,34 +2012,33 @@ func defaultFilterPolicy(policy sriovv1.SriovNetworkNodePolicy) bool {
 }
 
 func setSriovOperatorSpecFlag(flagName string, flagValue bool) func() {
-	cfg := sriovv1.SriovOperatorConfig{}
-	err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
-		Name:      "default",
-		Namespace: operatorNamespace,
-	}, &cfg)
-
 	ret := func() {}
+	Eventually(func(g Gomega) {
+		cfg := sriovv1.SriovOperatorConfig{}
+		err := clients.Get(context.TODO(), runtimeclient.ObjectKey{
+			Name:      "default",
+			Namespace: operatorNamespace,
+		}, &cfg)
+		g.Expect(err).ToNot(HaveOccurred())
 
-	Expect(err).ToNot(HaveOccurred())
-	if flagName == operatorNetworkInjectorFlag && cfg.Spec.EnableInjector != flagValue {
-		cfg.Spec.EnableInjector = flagValue
-		err = clients.Update(context.TODO(), &cfg)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.Spec.EnableInjector).To(Equal(flagValue))
+		var flag *bool
+		switch flagName {
+		case operatorNetworkInjectorFlag:
+			flag = &cfg.Spec.EnableInjector
+		case operatorWebhookFlag:
+			flag = &cfg.Spec.EnableOperatorWebhook
+		default:
+			Fail("Unknown operator flag: " + flagName)
+		}
+		if *flag == flagValue {
+			return
+		}
+		*flag = flagValue
+		g.Expect(clients.Update(context.TODO(), &cfg)).To(Succeed())
 		ret = func() {
 			setSriovOperatorSpecFlag(flagName, !flagValue)
 		}
-	}
-
-	if flagName == operatorWebhookFlag && cfg.Spec.EnableOperatorWebhook != flagValue {
-		cfg.Spec.EnableOperatorWebhook = flagValue
-		clients.Update(context.TODO(), &cfg)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(cfg.Spec.EnableOperatorWebhook).To(Equal(flagValue))
-		ret = func() {
-			setSriovOperatorSpecFlag(flagName, !flagValue)
-		}
-	}
+	}, time.Minute, 5*time.Second).Should(Succeed())
 
 	if flagValue {
 		Eventually(func(g Gomega) {
