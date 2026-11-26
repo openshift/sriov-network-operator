@@ -1,0 +1,11 @@
+---
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata:
+  name: sriovnetwork.k8snetworkplumbingwg.io
+  labels:
+    sriovnetwork.openshift.io/generated-by: sriov-network-operator
+spec:
+  selectors:
+  - cel: 
+      expression: "device.driver == 'sriovnetwork.k8snetworkplumbingwg.io'"

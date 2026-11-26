@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strings"
@@ -28,8 +29,10 @@ import (
 	errs "github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	resourceapi "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	uns "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -63,12 +66,23 @@ var (
 )
 
 const (
+	// Device plugin bindata (constants.PluginPath) — keep resource names in sync with manifests.
+	devicePluginDaemonSetName            = "sriov-device-plugin"
+	devicePluginServiceAccountName       = "sriov-device-plugin"
+	devicePluginSCCRoleName              = "sriov-plugin"
+	devicePluginSCCRoleBindingName       = "sriov-device-plugin"
+	devicePluginPodAccessRoleName        = "sriov-device-plugin-pod-access"
+	devicePluginPodAccessRoleBindingName = "sriov-device-plugin-pod-access"
+
 	clusterRoleResourceName               = "ClusterRole"
 	clusterRoleBindingResourceName        = "ClusterRoleBinding"
+	deviceClassResourceName               = "DeviceClass"
 	mutatingWebhookConfigurationCRDName   = "MutatingWebhookConfiguration"
 	validatingWebhookConfigurationCRDName = "ValidatingWebhookConfiguration"
 	machineConfigCRDName                  = "MachineConfig"
 	trueString                            = "true"
+	defaultCNIBinPath                     = "/var/lib/cni/bin"
+	defaultDRADriverCDIRoot               = "/var/run/cdi"
 )
 
 type DrainAnnotationPredicate struct {
@@ -142,6 +156,17 @@ func GetImagePullSecrets() []string {
 	}
 }
 
+// GetCNIBinPath returns the host filesystem path for CNI plugin binaries.
+// Matches syncConfigDaemonSet (SRIOV_CNI_BIN_PATH env or default /var/lib/cni/bin).
+func GetCNIBinPath() string {
+	if p := os.Getenv("SRIOV_CNI_BIN_PATH"); p != "" {
+		log.Log.V(1).Info("Using custom CNI bin path", "CNIBinPath", p)
+		return p
+	}
+	log.Log.V(1).Info("Using default CNI bin path", "CNIBinPath", defaultCNIBinPath)
+	return defaultCNIBinPath
+}
+
 func formatJSON(str string) (string, error) {
 	var prettyJSON bytes.Buffer
 	if err := json.Indent(&prettyJSON, []byte(str), "", "    "); err != nil {
@@ -173,17 +198,19 @@ func GetNodeSelectorForDevicePlugin(dc *sriovnetworkv1.SriovOperatorConfig) map[
 	return tmp.ConfigDaemonNodeSelector
 }
 
-func syncPluginDaemonObjs(ctx context.Context,
-	client k8sclient.Client,
-	scheme *runtime.Scheme,
-	dc *sriovnetworkv1.SriovOperatorConfig,
-	featureGate featuregate.FeatureGate,
-	renderFn renderManifestFunc,
-	applyFn applyManifestFunc) error {
-	logger := log.Log.WithName("syncPluginDaemonObjs")
-	logger.V(1).Info("Start to sync sriov daemons objects")
+// GetNodeSelectorForDRADriver returns ConfigDaemonNodeSelector when set, otherwise GetDefaultNodeSelector.
+// The DRA driver DaemonSet is scheduled on the same nodes as the config daemon and does not add
+// SriovDevicePluginLabel (see GetNodeSelectorForDevicePlugin).
+func GetNodeSelectorForDRADriver(dc *sriovnetworkv1.SriovOperatorConfig) map[string]string {
+	if len(dc.Spec.ConfigDaemonNodeSelector) > 0 {
+		return dc.Spec.ConfigDaemonNodeSelector
+	}
+	return GetDefaultNodeSelector()
+}
 
-	// render plugin manifests
+// renderPluginDaemonObjs is shared by deployment and cleanup so both use the same inventory.
+func renderPluginDaemonObjs(dc *sriovnetworkv1.SriovOperatorConfig,
+	featureGate featuregate.FeatureGate, renderFn renderManifestFunc) ([]*uns.Unstructured, error) {
 	data := render.MakeRenderData()
 	data.Data["Namespace"] = vars.Namespace
 	data.Data["SRIOVDevicePluginImage"] = os.Getenv("SRIOV_DEVICE_PLUGIN_IMAGE")
@@ -194,7 +221,20 @@ func syncPluginDaemonObjs(ctx context.Context,
 	data.Data["NodeSelectorField"] = GetNodeSelectorForDevicePlugin(dc)
 	data.Data["UseCDI"] = dc.Spec.UseCDI
 	data.Data["BlockDevicePluginUntilConfigured"] = featureGate.IsEnabled(constants.BlockDevicePluginUntilConfiguredFeatureGate)
-	objs, err := renderDsForCR(constants.PluginPath, &data, renderFn)
+	return renderDsForCR(constants.PluginPath, &data, renderFn)
+}
+
+func syncPluginDaemonObjs(ctx context.Context,
+	client k8sclient.Client,
+	scheme *runtime.Scheme,
+	dc *sriovnetworkv1.SriovOperatorConfig,
+	featureGate featuregate.FeatureGate,
+	renderFn renderManifestFunc,
+	applyFn applyManifestFunc) error {
+	logger := log.Log.WithName("syncPluginDaemonObjs")
+	logger.V(1).Info("Start to sync sriov daemons objects")
+
+	objs, err := renderPluginDaemonObjs(dc, featureGate, renderFn)
 	if err != nil {
 		logger.Error(err, "Fail to render SR-IoV manifests")
 		return err
@@ -212,6 +252,192 @@ func syncPluginDaemonObjs(ctx context.Context,
 	return nil
 }
 
+// renderDRADriverObjs is shared by deployment and cleanup so both use the same inventory.
+func renderDRADriverObjs(dc *sriovnetworkv1.SriovOperatorConfig,
+	renderFn renderManifestFunc) ([]*uns.Unstructured, error) {
+	data := render.MakeRenderData()
+	data.Data["Namespace"] = vars.Namespace
+	data.Data["SRIOVDRADriverImage"] = os.Getenv("SRIOV_DRA_DRIVER_IMAGE")
+	data.Data["SRIOVNetworkConfigDaemonImage"] = os.Getenv("SRIOV_NETWORK_CONFIG_DAEMON_IMAGE")
+	data.Data["ReleaseVersion"] = os.Getenv("RELEASEVERSION")
+	data.Data["ImagePullSecrets"] = GetImagePullSecrets()
+	data.Data["NodeSelectorField"] = GetNodeSelectorForDRADriver(dc)
+
+	// DRA driver specific configuration
+	draDriverCDIRoot := os.Getenv("DRA_DRIVER_CDI_ROOT")
+	if draDriverCDIRoot == "" {
+		draDriverCDIRoot = defaultDRADriverCDIRoot
+	}
+	data.Data["DRADriverCDIRoot"] = draDriverCDIRoot
+
+	return renderDsForCR(constants.DRADriverPath, &data, renderFn)
+}
+
+func syncDRADriverObjs(ctx context.Context,
+	client k8sclient.Client,
+	scheme *runtime.Scheme,
+	dc *sriovnetworkv1.SriovOperatorConfig,
+	renderFn renderManifestFunc,
+	applyFn applyManifestFunc) error {
+	logger := log.Log.WithName("syncDRADriverObjs")
+	logger.V(1).Info("Start to sync DRA driver objects")
+
+	objs, err := renderDRADriverObjs(dc, renderFn)
+	if err != nil {
+		logger.Error(err, "Fail to render DRA driver manifests")
+		return err
+	}
+
+	// Sync DRA driver objects
+	for _, obj := range objs {
+		err = syncDsObject(ctx, client, scheme, dc, obj, applyFn)
+		if err != nil {
+			logger.Error(err, "Couldn't sync DRA driver objects")
+			return err
+		}
+	}
+
+	return nil
+}
+
+// deleteObservedObject deletes only the object version that passed ownership checks.
+// Return conflicts so the next reconciliation reads fresh objects and checks
+// ownership again before retrying. An already deleted object needs no further work.
+func deleteObservedObject(ctx context.Context, c k8sclient.Client, obj k8sclient.Object) error {
+	uid, resourceVersion := obj.GetUID(), obj.GetResourceVersion()
+	preconditions := k8sclient.Preconditions{UID: &uid, ResourceVersion: &resourceVersion}
+	if err := c.Delete(ctx, obj, preconditions); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("delete %T %s: %w", obj, k8sclient.ObjectKeyFromObject(obj), err)
+	}
+	return nil
+}
+
+func objectHasOperatorManagedLabel(obj metav1.Object) bool {
+	if obj == nil {
+		return false
+	}
+	labels := obj.GetLabels()
+	return labels != nil && labels[constants.DRAGeneratedByLabel] == constants.SriovNetworkOperatorIdentifier
+}
+
+func mergeOperatorManagedLabels(obj *uns.Unstructured) {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	maps.Copy(labels, constants.DRAOperatorLabels)
+	obj.SetLabels(labels)
+}
+
+// deleteOperatorManagedIgnoringNotFound deletes obj only when it exists and carries the operator management marker.
+func deleteOperatorManagedIgnoringNotFound(ctx context.Context, c k8sclient.Client, obj k8sclient.Object) error {
+	key := k8sclient.ObjectKeyFromObject(obj)
+	existing := obj.DeepCopyObject().(k8sclient.Object)
+	if err := c.Get(ctx, key, existing); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if !objectHasOperatorManagedLabel(existing) {
+		log.Log.WithName("deleteOperatorManagedIgnoringNotFound").V(1).Info(
+			"Skipping delete of object without operator management marker",
+			"Kind", existing.GetObjectKind().GroupVersionKind().Kind, "Name", existing.GetName())
+		return nil
+	}
+	return deleteObservedObject(ctx, c, existing)
+}
+
+func hasSupportedProviderOwnerReference(obj metav1.Object) bool {
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.Controller == nil || !*ref.Controller || ref.APIVersion != sriovnetworkv1.GroupVersion.String() {
+			continue
+		}
+		switch ref.Kind {
+		case "SriovOperatorConfig":
+			return ref.Name == constants.DefaultConfigName
+		case "SriovNetworkNodePolicy":
+			return ref.Name == constants.DefaultPolicyName
+		}
+	}
+	return false
+}
+
+// deleteNamespacedProviderObject deletes only a live object owned by this
+// operator. The node-policy owner is retained for device-plugin objects
+// created by older operator versions.
+func deleteNamespacedProviderObject(ctx context.Context, c k8sclient.Client, obj k8sclient.Object) error {
+	key := k8sclient.ObjectKeyFromObject(obj)
+	existing := obj.DeepCopyObject().(k8sclient.Object)
+	if err := c.Get(ctx, key, existing); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if !hasSupportedProviderOwnerReference(existing) {
+		log.Log.WithName("deleteNamespacedProviderObject").V(1).Info(
+			"Skipping delete of object without a supported operator owner reference",
+			"Kind", existing.GetObjectKind().GroupVersionKind().Kind, "Name", existing.GetName())
+		return nil
+	}
+	return deleteObservedObject(ctx, c, existing)
+}
+
+// cleanupDRADriverObjs removes the DRA resources defined by the deployment manifests.
+func cleanupDRADriverObjs(ctx context.Context, client k8sclient.Client,
+	dc *sriovnetworkv1.SriovOperatorConfig, renderFn renderManifestFunc) error {
+	objs, err := renderDRADriverObjs(dc, renderFn)
+	if err != nil {
+		return err
+	}
+	return cleanupProviderObjs(ctx, client, objs)
+}
+
+// cleanupDevicePluginObjs removes the device plugin resources defined by the deployment manifests.
+func cleanupDevicePluginObjs(ctx context.Context, client k8sclient.Client,
+	dc *sriovnetworkv1.SriovOperatorConfig, featureGate featuregate.FeatureGate, renderFn renderManifestFunc) error {
+	objs, err := renderPluginDaemonObjs(dc, featureGate, renderFn)
+	if err != nil {
+		return err
+	}
+	return cleanupProviderObjs(ctx, client, objs)
+}
+
+func cleanupProviderObjs(ctx context.Context, client k8sclient.Client, objs []*uns.Unstructured) error {
+	logger := log.FromContext(ctx).WithName("cleanupProviderObjs")
+	// Request DaemonSet deletion first so a failure preserves its access.
+	// Deletion is asynchronous; this does not wait for pods to terminate.
+	sort.SliceStable(objs, func(i, j int) bool {
+		return objs[i].GetKind() == constants.DaemonSet && objs[j].GetKind() != constants.DaemonSet
+	})
+	for _, manifest := range objs {
+		var obj k8sclient.Object = manifest
+		if manifest.GetKind() == deviceClassResourceName {
+			obj = &resourceapi.DeviceClass{
+				ObjectMeta: metav1.ObjectMeta{Name: manifest.GetName()},
+			}
+		}
+		var err error
+		if manifest.GetNamespace() == "" {
+			// Cluster-scoped resources cannot be owned by the namespaced operator config.
+			// Only delete them when the live object has the operator management marker.
+			err = deleteOperatorManagedIgnoringNotFound(ctx, client, obj)
+		} else {
+			err = deleteNamespacedProviderObject(ctx, client, obj)
+		}
+		if err != nil {
+			if manifest.GetKind() == deviceClassResourceName && apimeta.IsNoMatchError(err) {
+				logger.V(1).Info("DeviceClass API not available, skipping cleanup")
+				continue
+			}
+			return fmt.Errorf("cleanup %s %s: %w", manifest.GetKind(), k8sclient.ObjectKeyFromObject(obj), err)
+		}
+	}
+	logger.V(1).Info("Cleaned up provider objects")
+	return nil
+}
+
 func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.Scheme, dc *sriovnetworkv1.SriovOperatorConfig, obj *uns.Unstructured, applyFn applyManifestFunc) error {
 	logger := log.Log.WithName("syncDsObject")
 	kind := obj.GetKind()
@@ -222,6 +448,16 @@ func syncDsObject(ctx context.Context, client k8sclient.Client, scheme *runtime.
 			return err
 		}
 		if err := applyFn(ctx, client, obj); err != nil {
+			logger.Error(err, "Fail to sync", "Kind", kind)
+			return err
+		}
+	case clusterRoleResourceName, clusterRoleBindingResourceName, deviceClassResourceName:
+		// Cluster-scoped objects cannot have a controller reference to namespaced dc.
+		mergeOperatorManagedLabels(obj)
+		if err := applyFn(ctx, client, obj); err != nil {
+			if kind == deviceClassResourceName && apimeta.IsNoMatchError(err) {
+				return fmt.Errorf("DeviceClass API is unavailable: %w", err)
+			}
 			logger.Error(err, "Fail to sync", "Kind", kind)
 			return err
 		}
@@ -408,10 +644,9 @@ func findNodePoolConfig(ctx context.Context, node *corev1.Node, c k8sclient.Clie
 }
 
 // managedNodes lists managed nodes in name order using the configured daemon selector.
-func managedNodes(ctx context.Context, c k8sclient.Client) ([]corev1.Node, error) {
-	config := &sriovnetworkv1.SriovOperatorConfig{}
-	if err := c.Get(ctx, types.NamespacedName{Name: constants.DefaultConfigName, Namespace: vars.Namespace}, config); err != nil {
-		return nil, err
+func managedNodes(ctx context.Context, c k8sclient.Client, config *sriovnetworkv1.SriovOperatorConfig) ([]corev1.Node, error) {
+	if config == nil {
+		return nil, errors.NewNotFound(sriovnetworkv1.Resource("sriovoperatorconfigs"), constants.DefaultConfigName)
 	}
 	selector := GetDefaultNodeSelector()
 	if len(config.Spec.ConfigDaemonNodeSelector) > 0 {

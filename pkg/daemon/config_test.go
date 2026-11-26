@@ -13,6 +13,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
+
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/daemon"
@@ -137,6 +139,7 @@ var _ = Describe("Daemon OperatorConfig Controller", Ordered, func() {
 
 			err := k8sClient.Create(ctx, soc)
 			Expect(err).ToNot(HaveOccurred())
+
 			EventuallyWithOffset(1, func(g Gomega) {
 				g.Expect(vars.FeatureGate.IsEnabled("test")).To(BeTrue())
 			}, "15s", "3s").Should(Succeed())
@@ -168,3 +171,41 @@ func validateExpectedDrain(disableDrain bool) {
 		g.Expect(vars.DisableDrain).To(Equal(disableDrain))
 	}, "15s", "3s").Should(Succeed())
 }
+
+var _ = Describe("Daemon resource provider feature gate", func() {
+	It("uses the feature gate on config changes and daemon restarts", func(ctx SpecContext) {
+		savedGate := vars.FeatureGate
+		savedDrain := vars.DisableDrain
+		savedLogLevel := snolog.GetLogLevel()
+		DeferCleanup(func() {
+			vars.FeatureGate = savedGate
+			vars.DisableDrain = savedDrain
+			snolog.SetLogLevel(savedLogLevel)
+		})
+		vars.FeatureGate = featuregate.New()
+
+		soc := &sriovnetworkv1.SriovOperatorConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: consts.DefaultConfigName, Namespace: testNamespace},
+			Spec: sriovnetworkv1.SriovOperatorConfigSpec{
+				FeatureGates: map[string]bool{consts.DynamicResourceAllocationFeatureGate: true},
+			},
+		}
+		Expect(k8sClient.Create(ctx, soc)).To(Succeed())
+		DeferCleanup(func(ctx SpecContext) {
+			Expect(k8sClient.Delete(ctx, soc)).To(Succeed())
+		})
+		watcher := daemon.NewOperatorConfigNodeReconcile(k8sClient)
+		_, err := watcher.Reconcile(ctx, ctrl.Request{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(vars.FeatureGate.IsEnabled(consts.DynamicResourceAllocationFeatureGate)).To(BeTrue())
+
+		By("restoring device-plugin mode after the gate is removed and the daemon restarts")
+		soc.Spec.FeatureGates = nil
+		Expect(k8sClient.Update(ctx, soc)).To(Succeed())
+		vars.FeatureGate = featuregate.New()
+		watcher = daemon.NewOperatorConfigNodeReconcile(k8sClient)
+		_, err = watcher.Reconcile(ctx, ctrl.Request{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(vars.FeatureGate.IsEnabled(consts.DynamicResourceAllocationFeatureGate)).To(BeFalse())
+	})
+})

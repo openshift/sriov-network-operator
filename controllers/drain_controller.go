@@ -72,6 +72,7 @@ func NewDrainReconcileController(client client.Client, Scheme *runtime.Scheme, r
 		sync.Mutex{}}, nil
 }
 
+//+kubebuilder:rbac:groups=resource.k8s.io,resources=resourceclaims,verbs=get
 //+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=sriovnetwork.openshift.io,resources=sriovnodestates,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch

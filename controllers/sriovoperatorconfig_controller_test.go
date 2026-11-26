@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 	"sync"
@@ -11,20 +12,25 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/go-logr/logr"
 	"go.uber.org/mock/gomock"
 	admv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	resourceapi "k8s.io/api/resource/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -36,6 +42,331 @@ import (
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/test/util"
 )
 
+type countingFeatureGate struct {
+	featuregate.FeatureGate
+	initCalls int
+}
+
+func (g *countingFeatureGate) Set(features map[string]bool) bool {
+	if !g.FeatureGate.Set(features) {
+		return false
+	}
+	g.initCalls++
+	return true
+}
+
+var _ = Describe("SriovOperatorConfig controller with a fake client", func() {
+	BeforeEach(func() {
+		savedGate := vars.FeatureGate
+		DeferCleanup(func() { vars.FeatureGate = savedGate })
+		vars.FeatureGate = featuregate.New()
+	})
+
+	It("should initialize feature gates only when the effective configuration changes", func() {
+		ctx := context.Background()
+		scheme := runtime.NewScheme()
+		Expect(sriovnetworkv1.AddToScheme(scheme)).To(Succeed())
+		config := &sriovnetworkv1.SriovOperatorConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: consts.DefaultConfigName, Namespace: vars.Namespace},
+		}
+		policy := &sriovnetworkv1.SriovNetworkNodePolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: "existing", Namespace: vars.Namespace},
+		}
+		cl := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(config).WithObjects(config, policy).Build()
+		gate := &countingFeatureGate{FeatureGate: vars.FeatureGate}
+		vars.FeatureGate = gate
+		orch := orchestratorMock.NewMockInterface(gomock.NewController(GinkgoT()))
+		orch.EXPECT().ClusterType().Return(consts.ClusterTypeKubernetes).AnyTimes()
+		orch.EXPECT().GetTLSConfig(gomock.Any()).Return(nil, nil).AnyTimes()
+		renderErr := fmt.Errorf("render failed after feature gates were applied")
+		r := &SriovOperatorConfigReconciler{
+			Client: cl, Scheme: scheme,
+			Orchestrator: orch, StatusPatcher: &fakeStatusPatcher{},
+			renderManifestFn: func(string, *render.RenderData) ([]*unstructured.Unstructured, error) {
+				return nil, renderErr
+			},
+		}
+
+		steps := []struct {
+			name      string
+			change    func()
+			initCalls int
+			dra       bool
+			parallel  bool
+			block     bool
+		}{
+			{name: "initial defaults", initCalls: 1, block: true},
+			{name: "retry after downstream failure", initCalls: 1, block: true},
+			{name: "unrelated spec and status changes", initCalls: 1, block: true, change: func() {
+				config.Spec.DisableDrain = true
+				config.Status.Conditions = []metav1.Condition{{Type: "Ready", Status: metav1.ConditionFalse, Reason: "Retrying"}}
+			}},
+			{name: "changed overrides", initCalls: 2, parallel: true, change: func() {
+				config.Spec.FeatureGates = map[string]bool{
+					consts.ParallelNicConfigFeatureGate:                true,
+					consts.BlockDevicePluginUntilConfiguredFeatureGate: false,
+				}
+			}},
+			{name: "enable DRA", initCalls: 3, dra: true, parallel: true, change: func() {
+				config.Spec.FeatureGates[consts.DynamicResourceAllocationFeatureGate] = true
+			}},
+			{name: "unchanged DRA", initCalls: 3, dra: true, parallel: true},
+			{name: "removed overrides restore defaults", initCalls: 4, block: true, change: func() {
+				config.Spec.FeatureGates = nil
+			}},
+			{name: "unchanged defaults", initCalls: 4, block: true},
+		}
+		for _, step := range steps {
+			By(step.name, func() {
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(config), config)).To(Succeed())
+				if step.change != nil {
+					step.change()
+					updatedStatus := config.Status
+					Expect(cl.Update(ctx, config)).To(Succeed())
+					config.Status = updatedStatus
+					Expect(cl.Status().Update(ctx, config)).To(Succeed())
+				}
+				_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(config)})
+				Expect(err).To(MatchError(renderErr))
+				Expect(gate.initCalls).To(Equal(step.initCalls))
+				Expect(gate.IsEnabled(consts.DynamicResourceAllocationFeatureGate)).To(Equal(step.dra))
+				Expect(gate.IsEnabled(consts.ParallelNicConfigFeatureGate)).To(Equal(step.parallel))
+				Expect(gate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate)).To(Equal(step.block))
+			})
+		}
+	})
+
+	DescribeTable("should clean generated device classes before finalizing operator config deletion", func(failure string) {
+		ctx := context.Background()
+		scheme := runtime.NewScheme()
+		for _, add := range []func(*runtime.Scheme) error{
+			sriovnetworkv1.AddToScheme, admv1.AddToScheme, resourceapi.AddToScheme,
+		} {
+			Expect(add(scheme)).To(Succeed())
+		}
+		config := &sriovnetworkv1.SriovOperatorConfig{ObjectMeta: metav1.ObjectMeta{
+			Name: consts.DefaultConfigName, Namespace: testNamespace,
+			Finalizers:        []string{sriovnetworkv1.OPERATORCONFIGFINALIZERNAME},
+			DeletionTimestamp: &metav1.Time{Time: metav1.Now().Time},
+		}}
+		generated := &resourceapi.DeviceClass{ObjectMeta: metav1.ObjectMeta{
+			Name: "intel-nic", Labels: maps.Clone(consts.DRAOperatorLabels),
+		}}
+		base := &resourceapi.DeviceClass{ObjectMeta: metav1.ObjectMeta{
+			Name: consts.DRADriverBaseDeviceClassName, Labels: maps.Clone(consts.DRAOperatorLabels),
+		}}
+		foreign := &resourceapi.DeviceClass{ObjectMeta: metav1.ObjectMeta{Name: "user-managed"}}
+		cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(config, generated, base, foreign).
+			WithInterceptorFuncs(interceptor.Funcs{
+				List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+					if _, ok := list.(*resourceapi.DeviceClassList); ok && failure == "list" {
+						return fmt.Errorf("DeviceClass list failed")
+					}
+					return c.List(ctx, list, opts...)
+				},
+				Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					if obj.GetName() == generated.Name && failure == "delete" {
+						return fmt.Errorf("DeviceClass delete failed")
+					}
+					return c.Delete(ctx, obj, opts...)
+				},
+			}).Build()
+		r := &SriovOperatorConfigReconciler{Client: cl, Scheme: scheme,
+			renderManifestFn: func(_ string, _ *render.RenderData) ([]*unstructured.Unstructured, error) {
+				// The driver inventory contains the base class, not generated classes.
+				return []*unstructured.Unstructured{{Object: map[string]interface{}{
+					"apiVersion": "resource.k8s.io/v1", "kind": "DeviceClass",
+					"metadata": map[string]interface{}{"name": base.Name},
+				}}}, nil
+			},
+		}
+		_, err := r.handleSriovOperatorConfigDeletion(ctx, config.DeepCopy(), logr.Discard())
+		if failure != "" {
+			Expect(err).To(HaveOccurred(), "expected cleanup failure to block finalization")
+			found := &sriovnetworkv1.SriovOperatorConfig{}
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(config), found)).To(Succeed())
+			Expect(sriovnetworkv1.StringInArray(sriovnetworkv1.OPERATORCONFIGFINALIZERNAME, found.Finalizers)).To(BeTrue(), "cleanup failure removed config finalizer")
+			// A retry must finish cleanup once the API recovers.
+			failure = ""
+			_, err = r.handleSriovOperatorConfigDeletion(ctx, found, logr.Discard())
+		}
+		Expect(err).NotTo(HaveOccurred())
+		for _, obj := range []client.Object{config, generated, base} {
+			err := cl.Get(ctx, client.ObjectKeyFromObject(obj), obj)
+			Expect(errors.IsNotFound(err)).To(BeTrue(), "expected %T %s deleted, got %v", obj, obj.GetName(), err)
+		}
+		Expect(cl.Get(ctx, client.ObjectKeyFromObject(foreign), foreign)).To(Succeed(), "unrelated DeviceClass must be retained")
+	},
+		Entry("when cleanup succeeds", ""),
+		Entry("after retrying a list failure", "list"),
+		Entry("after retrying a delete failure", "delete"),
+	)
+
+	Context("when retaining the device plugin ConfigMap", func() {
+		DescribeTable("should reconcile the ConfigMap with the provider transition", func(draEnabled, pluginExists, configMapExists bool, failure string) {
+			ctx := context.Background()
+			scheme := runtime.NewScheme()
+			for _, add := range []func(*runtime.Scheme) error{
+				sriovnetworkv1.AddToScheme, corev1.AddToScheme, appsv1.AddToScheme,
+				rbacv1.AddToScheme, resourceapi.AddToScheme,
+			} {
+				Expect(add(scheme)).To(Succeed())
+			}
+			config := makeDefaultSriovOpConfig()
+			config.Spec.FeatureGates = map[string]bool{consts.DynamicResourceAllocationFeatureGate: draEnabled}
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: consts.ConfigMapName, Namespace: testNamespace},
+				Data:       map[string]string{"worker-0": `{"resourceList":[]}`},
+			}
+			objects := []client.Object{config}
+			if configMapExists {
+				objects = append(objects, cm)
+			}
+			if pluginExists {
+				objects = append(objects, &appsv1.DaemonSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: devicePluginDaemonSetName, Namespace: testNamespace,
+						OwnerReferences: providerOwnerReferences("SriovOperatorConfig"),
+					},
+				})
+			}
+			configMapDeleteAttempts := 0
+			cl := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(config).WithObjects(objects...).WithInterceptorFuncs(interceptor.Funcs{
+				Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+					if failure == "plugin cleanup" && obj.GetName() == devicePluginDaemonSetName {
+						return fmt.Errorf("plugin cleanup failed")
+					}
+					if obj.GetName() == consts.ConfigMapName {
+						configMapDeleteAttempts++
+						if failure == "ConfigMap cleanup" {
+							return fmt.Errorf("ConfigMap cleanup failed")
+						}
+					}
+					return c.Delete(ctx, obj, opts...)
+				},
+			}).Build()
+			orchestrator := orchestratorMock.NewMockInterface(gomock.NewController(GinkgoT()))
+			orchestrator.EXPECT().ClusterType().Return(consts.ClusterTypeKubernetes).AnyTimes()
+			orchestrator.EXPECT().GetTLSConfig(gomock.Any()).Return(nil, nil).AnyTimes()
+			r := &SriovOperatorConfigReconciler{
+				Client: cl, Scheme: scheme,
+				Orchestrator: orchestrator, StatusPatcher: &fakeStatusPatcher{},
+				renderManifestFn: func(path string, data *render.RenderData) ([]*unstructured.Unstructured, error) {
+					// Exercise the real provider manifests; unrelated components need no objects here.
+					if path == consts.PluginPath || path == consts.DRADriverPath {
+						return testRenderManifests(path, data)
+					}
+					return nil, nil
+				},
+				applyManifestFn: func(ctx context.Context, c client.Client, obj *unstructured.Unstructured) error {
+					if failure == "DRA deployment" {
+						return fmt.Errorf("DRA deployment failed")
+					}
+					return testApplyManifest(ctx, c, obj)
+				},
+			}
+			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(config)})
+			Expect(configMapDeleteAttempts).To(BeZero(), "reconciliation must not attempt to delete the device-plugin ConfigMap")
+			if failure != "" && failure != "ConfigMap cleanup" {
+				Expect(err).To(MatchError(ContainSubstring(failure + " failed")))
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
+			found := &corev1.ConfigMap{}
+			err = cl.Get(ctx, client.ObjectKeyFromObject(cm), found)
+			if configMapExists {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(found.Data).To(Equal(cm.Data))
+			} else {
+				Expect(errors.IsNotFound(err)).To(BeTrue())
+			}
+			if failure == "" {
+				if draEnabled {
+					Expect(errors.IsNotFound(cl.Get(ctx, client.ObjectKey{Namespace: testNamespace, Name: devicePluginDaemonSetName}, &appsv1.DaemonSet{}))).To(BeTrue())
+				}
+				_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(config)})
+				Expect(err).NotTo(HaveOccurred())
+				err = cl.Get(ctx, client.ObjectKeyFromObject(cm), found)
+				if configMapExists {
+					Expect(err).NotTo(HaveOccurred())
+					Expect(found.Data).To(Equal(cm.Data))
+				} else {
+					Expect(errors.IsNotFound(err)).To(BeTrue())
+				}
+			}
+		},
+			Entry("retains configuration after a successful switch", true, true, true, ""),
+			Entry("retains configuration when deployment fails", true, true, true, "DRA deployment"),
+			Entry("retains configuration when plugin cleanup fails", true, true, true, "plugin cleanup"),
+			Entry("never attempts ConfigMap deletion", true, true, true, "ConfigMap cleanup"),
+			Entry("retains configuration after the plugin is gone", true, false, true, ""),
+			Entry("succeeds when configuration is already absent", true, false, false, ""),
+			Entry("retains configuration in device-plugin mode", false, true, true, ""),
+		)
+	})
+
+	Context("when deploying a resource provider", func() {
+		DescribeTable("should deploy the selected provider before removing the previous one without waiting for readiness", func(draEnabled, failInstall bool) {
+			ctx := context.Background()
+			savedNamespace := vars.Namespace
+			vars.Namespace = testNamespace
+			DeferCleanup(func() { vars.Namespace = savedNamespace })
+			scheme := runtime.NewScheme()
+			for _, add := range []func(*runtime.Scheme) error{sriovnetworkv1.AddToScheme, appsv1.AddToScheme, corev1.AddToScheme, rbacv1.AddToScheme, resourceapi.AddToScheme} {
+				Expect(add(scheme)).To(Succeed())
+			}
+			config := makeDefaultSriovOpConfig()
+			config.Spec.FeatureGates = map[string]bool{consts.DynamicResourceAllocationFeatureGate: draEnabled}
+			replacement, previous := devicePluginDaemonSetName, consts.DRADriverDaemonSetName
+			if draEnabled {
+				replacement, previous = previous, replacement
+			}
+			old := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: previous, Namespace: vars.Namespace, OwnerReferences: providerOwnerReferences("SriovOperatorConfig")}}
+			cl := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&appsv1.DaemonSet{}).WithObjects(old).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+						ds, ok := obj.(*appsv1.DaemonSet)
+						if !ok || ds.Name != replacement {
+							return c.Create(ctx, obj, opts...)
+						}
+						Expect(c.Get(ctx, client.ObjectKeyFromObject(old), &appsv1.DaemonSet{})).To(Succeed(), "old provider must remain until deployment succeeds")
+						if failInstall {
+							return fmt.Errorf("deployment failed")
+						}
+						if err := c.Create(ctx, ds, opts...); err != nil {
+							return err
+						}
+						ds.Status.DesiredNumberScheduled = 1
+						return c.Status().Update(ctx, ds)
+					},
+				}).Build()
+			r := &SriovOperatorConfigReconciler{
+				Client: cl, Scheme: scheme,
+				renderManifestFn: testRenderManifests, applyManifestFn: testApplyManifest,
+			}
+			vars.FeatureGate.Set(config.Spec.FeatureGates)
+			err := r.syncResourceProvider(ctx, config)
+			if failInstall {
+				Expect(err).To(MatchError(ContainSubstring("deployment failed")))
+				Expect(cl.Get(ctx, client.ObjectKeyFromObject(old), old)).To(Succeed())
+				return
+			}
+			Expect(err).NotTo(HaveOccurred())
+			ds := &appsv1.DaemonSet{}
+			Expect(cl.Get(ctx, client.ObjectKey{Namespace: vars.Namespace, Name: replacement}, ds)).To(Succeed())
+			Expect(ds.Status.DesiredNumberScheduled).To(Equal(int32(1)))
+			Expect(ds.Status.NumberReady).To(BeZero(), "the fake client has no DaemonSet controller")
+			Expect(errors.IsNotFound(cl.Get(ctx, client.ObjectKeyFromObject(old), old))).To(BeTrue())
+			Expect(r.syncResourceProvider(ctx, config)).To(Succeed(), "repeated reconciliation should converge")
+		},
+			Entry("device plugin to DRA", true, false),
+			Entry("DRA to device plugin", false, false),
+			Entry("failed DRA deployment retains device plugin", true, true),
+			Entry("failed device-plugin deployment retains DRA", false, true),
+		)
+	})
+})
+
 var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 	var cancel context.CancelFunc
 	var ctx context.Context
@@ -43,6 +374,11 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 	var mockedTLSError error
 
 	BeforeAll(func() {
+		savedGate := vars.FeatureGate
+		// Registered before manager cleanup so the manager stops before restoration.
+		DeferCleanup(func() { vars.FeatureGate = savedGate })
+		vars.FeatureGate = featuregate.New()
+
 		By("Create SriovOperatorConfig controller k8s objs")
 		config := makeDefaultSriovOpConfig()
 		Expect(k8sClient.Create(context.Background(), config)).Should(Succeed())
@@ -51,6 +387,7 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 		somePolicy.SetNamespace(testNamespace)
 		somePolicy.SetName("some-policy")
 		somePolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+			ResourceName: "sriov",
 			NumVfs:       5,
 			NodeSelector: map[string]string{"foo": "bar"},
 			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
@@ -88,7 +425,6 @@ var _ = Describe("SriovOperatorConfig controller", Ordered, func() {
 			Client:            k8sManager.GetClient(),
 			Scheme:            k8sManager.GetScheme(),
 			Orchestrator:      orchestrator,
-			FeatureGate:       featuregate.New(),
 			StatusPatcher:     statusPatcher,
 			UncachedAPIReader: k8sManager.GetAPIReader(),
 		}).SetupWithManager(k8sManager)
@@ -1168,7 +1504,6 @@ func newDirectSriovOperatorConfigReconciler(orchestrator *orchestratorMock.MockI
 		Client:            k8sClient,
 		Scheme:            vars.Scheme,
 		Orchestrator:      orchestrator,
-		FeatureGate:       featuregate.New(),
 		StatusPatcher:     status.NewPatcher(k8sClient, nil, vars.Scheme, "direct-test"),
 		UncachedAPIReader: k8sClient,
 	}

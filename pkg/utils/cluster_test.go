@@ -29,6 +29,13 @@ import (
 )
 
 var _ = Describe("Cluster Utils", func() {
+	It("reports adding an empty-valued label and preserves unrelated labels", func() {
+		obj := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"unrelated": "keep"}}}
+		desired := map[string]string{"managed": ""}
+		Expect(ApplyDesiredLabels(obj, desired)).To(BeTrue())
+		Expect(obj.Labels).To(Equal(map[string]string{"unrelated": "keep", "managed": ""}))
+		Expect(ApplyDesiredLabels(obj, desired)).To(BeFalse())
+	})
 	Context("ObjectHasAnnotationKey", func() {
 		DescribeTable("should check if annotation key exists",
 			func(annotations map[string]string, key string, expected bool) {

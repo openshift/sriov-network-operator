@@ -64,8 +64,9 @@ const (
 	ReasonDrainFailed    = "DrainFailed"
 
 	// Reasons for policy
-	ReasonPolicyReady   = "PolicyReady"
-	ReasonPolicyIgnored = "PolicyIgnored"
+	ReasonPolicyReady          = "PolicyReady"
+	ReasonPolicyIgnored        = "PolicyIgnored"
+	ReasonConfigurationBlocked = "ConfigurationBlocked"
 
 	// Reasons for pool
 	ReasonPoolConfigReady           = "PoolConfigReady"

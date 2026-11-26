@@ -15,6 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
@@ -69,14 +72,14 @@ func aggregateNodeState(node *corev1.Node) *sriovnetworkv1.SriovNetworkNodeState
 
 // policyStatus computes policy readiness from the current test cluster objects.
 func policyStatus(ctx context.Context, c client.Client, policy *sriovnetworkv1.SriovNetworkNodePolicy) aggregateResult {
-	nodes, nodesErr := managedNodes(ctx, c)
+	nodes, nodesErr := testManagedNodes(ctx, c)
 	states, statesErr := nodeStatesByName(ctx, c)
 	return policyStatusFrom(policy, nodes, nodesErr, states, statesErr)
 }
 
 // regularPoolStatus computes pool readiness from the current test cluster objects.
 func regularPoolStatus(ctx context.Context, c client.Client, pool *sriovnetworkv1.SriovNetworkPoolConfig) aggregateResult {
-	nodes, nodesErr := managedNodes(ctx, c)
+	nodes, nodesErr := testManagedNodes(ctx, c)
 	states, statesErr := nodeStatesByName(ctx, c)
 	pools := &sriovnetworkv1.SriovNetworkPoolConfigList{}
 	if err := c.List(ctx, pools); err != nil {
@@ -84,6 +87,74 @@ func regularPoolStatus(ctx context.Context, c client.Client, pool *sriovnetworkv
 	}
 	return regularPoolStatusFrom(pool, nodesErr, states, statesErr, selectPoolNodes(pools.Items, nodes))
 }
+
+func testManagedNodes(ctx context.Context, c client.Client) ([]corev1.Node, error) {
+	config, _, err := sriovnetworkv1.GetOperatorConfig(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	return managedNodes(ctx, c, config)
+}
+
+type aggregateStatusPatcher struct {
+	conditions map[client.ObjectKey]metav1.Condition
+}
+
+func (p *aggregateStatusPatcher) ApplyCondition(_ context.Context, obj client.Object, conditions ...metav1.Condition) error {
+	p.record(obj, conditions)
+	return nil
+}
+
+func (p *aggregateStatusPatcher) ApplyStatus(_ context.Context, obj client.Object, _ map[string]interface{}, conditions []metav1.Condition) error {
+	p.record(obj, conditions)
+	return nil
+}
+
+func (p *aggregateStatusPatcher) record(obj client.Object, conditions []metav1.Condition) {
+	if len(conditions) == 0 {
+		return
+	}
+	if p.conditions == nil {
+		p.conditions = map[client.ObjectKey]metav1.Condition{}
+	}
+	p.conditions[client.ObjectKeyFromObject(obj)] = conditions[0]
+}
+
+var _ = Describe("Operator config update predicate", func() {
+	var old *sriovnetworkv1.SriovOperatorConfig
+	BeforeEach(func() {
+		old = testOperatorConfig()
+		old.Generation = 1
+	})
+	for _, tc := range []struct {
+		name   string
+		change func(*sriovnetworkv1.SriovOperatorConfig)
+		want   bool
+	}{
+		{"unchanged", func(*sriovnetworkv1.SriovOperatorConfig) {}, false},
+		{"generation", func(c *sriovnetworkv1.SriovOperatorConfig) { c.Generation++ }, true},
+		{"deletion starts", func(c *sriovnetworkv1.SriovOperatorConfig) {
+			c.DeletionTimestamp = new(metav1.Now())
+		}, true},
+		{"unrelated status", func(c *sriovnetworkv1.SriovOperatorConfig) {
+			c.Status.Conditions = []metav1.Condition{{Type: sriovnetworkv1.ConditionReady, Status: metav1.ConditionTrue}}
+		}, false},
+	} {
+		It(tc.name, func() {
+			updated := old.DeepCopy()
+			tc.change(updated)
+			Expect(aggregateOperatorConfigChanged(event.UpdateEvent{ObjectOld: old, ObjectNew: updated})).To(Equal(tc.want))
+		})
+	}
+	It("ignores unrelated status while deleting", func() {
+		deleting := old.DeepCopy()
+		deleting.DeletionTimestamp = new(metav1.Now())
+		updated := deleting.DeepCopy()
+		Expect(aggregateOperatorConfigChanged(event.UpdateEvent{ObjectOld: deleting, ObjectNew: updated})).To(BeFalse(), "unchanged deletion timestamp should not enqueue")
+		updated.Status.Conditions = []metav1.Condition{{Type: sriovnetworkv1.ConditionReady, Status: metav1.ConditionTrue}}
+		Expect(aggregateOperatorConfigChanged(event.UpdateEvent{ObjectOld: deleting, ObjectNew: updated})).To(BeFalse(), "Ready-only update while deleting should not enqueue")
+	})
+})
 
 // expectAggregate checks counts, generation, reason, and Ready status.
 func expectAggregate(result aggregateResult, generation int64, matched, ready int32, reason string) {
@@ -109,8 +180,229 @@ var _ = Describe("Aggregate status", func() {
 		DeferCleanup(func() { vars.Namespace = previousNamespace; vars.ClusterType = previousClusterType })
 	})
 
+	It("reports an operator-config read error as unknown while keeping the default policy ignored", func(ctx context.Context) {
+		scheme := runtime.NewScheme()
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+		Expect(sriovnetworkv1.AddToScheme(scheme)).To(Succeed())
+		policy := &sriovnetworkv1.SriovNetworkNodePolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: vars.Namespace},
+		}
+		defaultPolicy := &sriovnetworkv1.SriovNetworkNodePolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: constants.DefaultPolicyName, Namespace: vars.Namespace},
+		}
+		configErr := errors.New("operator config unavailable")
+		cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(policy, defaultPolicy).
+			WithInterceptorFuncs(interceptor.Funcs{Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*sriovnetworkv1.SriovOperatorConfig); ok {
+					return configErr
+				}
+				return c.Get(ctx, key, obj, opts...)
+			}}).Build()
+		patcher := &aggregateStatusPatcher{}
+		r := &AggregateStatusReconciler{Client: cl, StatusPatcher: patcher}
+
+		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKey{Name: aggregateStatusSyncEventName}})
+
+		Expect(err).NotTo(HaveOccurred())
+		activeCondition := patcher.conditions[client.ObjectKeyFromObject(policy)]
+		Expect(activeCondition.Status).To(Equal(metav1.ConditionUnknown))
+		Expect(activeCondition.Reason).To(Equal(sriovnetworkv1.ReasonStatusUnknown))
+		Expect(activeCondition.Message).To(ContainSubstring(configErr.Error()))
+		defaultCondition := patcher.conditions[client.ObjectKeyFromObject(defaultPolicy)]
+		Expect(defaultCondition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(defaultCondition.Reason).To(Equal(sriovnetworkv1.ReasonPolicyIgnored))
+	})
+
+	It("globally blocks invalid resource names only when DRA is enabled", func(ctx context.Context) {
+		config := testOperatorConfig()
+		bad := &sriovnetworkv1.SriovNetworkNodePolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: "bad", Namespace: vars.Namespace},
+			Spec:       sriovnetworkv1.SriovNetworkNodePolicySpec{ResourceName: "invalid/name"},
+		}
+		good := bad.DeepCopy()
+		good.Name, good.Spec.ResourceName = "good", "valid"
+		cl := fake.NewClientBuilder().WithScheme(k8sClient.Scheme()).WithObjects(config, bad, good).Build()
+		patcher := &aggregateStatusPatcher{}
+		r := &AggregateStatusReconciler{Client: cl, StatusPatcher: patcher}
+		for _, draEnabled := range []bool{false, true, false} {
+			config.Spec.FeatureGates = map[string]bool{constants.DynamicResourceAllocationFeatureGate: draEnabled}
+			Expect(cl.Update(ctx, config)).To(Succeed())
+			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKey{Name: aggregateStatusSyncEventName}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(patcher.conditions[client.ObjectKeyFromObject(bad)].Reason).To(Equal(sriovnetworkv1.ReasonUnsupportedConfiguration))
+			wantReason := sriovnetworkv1.ReasonNoMatchingNodes
+			if draEnabled {
+				wantReason = sriovnetworkv1.ReasonConfigurationBlocked
+			}
+			Expect(patcher.conditions[client.ObjectKeyFromObject(good)].Reason).To(Equal(wantReason))
+		}
+	})
+
+	It("keeps the deprecated default policy ignored when DRA resource names collide", func(ctx context.Context) {
+		config := testOperatorConfig()
+		config.Spec.FeatureGates = map[string]bool{constants.DynamicResourceAllocationFeatureGate: true}
+		createAggregateObjects(config)
+
+		policies := []*sriovnetworkv1.SriovNetworkNodePolicy{}
+		for _, item := range []struct{ name, resource string }{
+			// Keep the ignored policy schema-valid while sharing an active resource name.
+			{constants.DefaultPolicyName, "sriov"},
+			{"lowercase", "sriov"},
+			{"uppercase", "SRIOV"},
+		} {
+			policy := &sriovnetworkv1.SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: item.name, Namespace: vars.Namespace},
+				Spec:       sriovnetworkv1.SriovNetworkNodePolicySpec{ResourceName: item.resource, NodeSelector: map[string]string{}},
+			}
+			createAggregateObjects(policy)
+			policies = append(policies, policy)
+		}
+		r := &AggregateStatusReconciler{Client: k8sClient,
+			StatusPatcher: status.NewPatcher(k8sClient, nil, k8sClient.Scheme(), "aggregate-default-policy-test")}
+		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKey{Name: aggregateStatusSyncEventName}})
+		Expect(err).NotTo(HaveOccurred())
+		for _, policy := range policies {
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(policy), policy)).To(Succeed())
+			Expect(policy.Status.Conditions).To(HaveLen(1))
+			reason := sriovnetworkv1.ReasonUnsupportedConfiguration
+			if policy.Name == constants.DefaultPolicyName {
+				reason = sriovnetworkv1.ReasonPolicyIgnored
+			}
+			Expect(policy.Status.Conditions[0].Reason).To(Equal(reason))
+		}
+	})
+
+	DescribeTable("reports DRA resource conflicts and blocks unrelated policies until correction",
+		func(ctx context.Context, resource, deviceType, message string) {
+			config := testOperatorConfig()
+			foreignNamespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{GenerateName: "aggregate-foreign-"}}
+			createAggregateObjects(config, foreignNamespace, testManagedNode("worker"))
+			policies := []*sriovnetworkv1.SriovNetworkNodePolicy{}
+			for _, name := range []string{"net", "net-two", "conflict", "healthy"} {
+				policy := &sriovnetworkv1.SriovNetworkNodePolicy{
+					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: vars.Namespace},
+					Spec:       sriovnetworkv1.SriovNetworkNodePolicySpec{ResourceName: "shared_resource", DeviceType: "netdevice", NodeSelector: map[string]string{}},
+				}
+				policies = append(policies, policy)
+			}
+			policies[2].Spec.ResourceName, policies[2].Spec.DeviceType = resource, deviceType
+			policies[3].Spec.ResourceName = "other"
+			foreign := policies[0].DeepCopy()
+			foreign.Namespace = foreignNamespace.Name
+			foreign.Spec.ResourceName, foreign.Spec.DeviceType = "other", "vfio-pci"
+			for _, policy := range append(policies, foreign) {
+				createAggregateObjects(policy)
+			}
+			r := &AggregateStatusReconciler{Client: k8sClient,
+				StatusPatcher: status.NewPatcher(k8sClient, nil, k8sClient.Scheme(), "aggregate-conflict-test")}
+			reconcile := func() {
+				_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKey{Name: aggregateStatusSyncEventName}})
+				Expect(err).NotTo(HaveOccurred())
+				for _, policy := range append(policies, foreign) {
+					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(policy), policy)).To(Succeed())
+					Expect(policy.Status.Conditions).To(HaveLen(1))
+				}
+			}
+			// Normalized name collisions and allocation driver conflicts are
+			// DRA-only constraints that follow the configured feature gate.
+			config.Spec.FeatureGates = nil
+			Expect(k8sClient.Update(ctx, config)).To(Succeed())
+			reconcile()
+			for _, policy := range policies {
+				Expect(policy.Status.Conditions[0].Reason).To(Equal(sriovnetworkv1.ReasonApplyingConfiguration))
+				Expect(policy.Status.MatchedNodeCount).To(Equal(new(int32(1))))
+			}
+			config.Spec.FeatureGates = map[string]bool{constants.DynamicResourceAllocationFeatureGate: true}
+			Expect(k8sClient.Update(ctx, config)).To(Succeed())
+			reconcile()
+			for _, policy := range policies[:3] {
+				condition := policy.Status.Conditions[0]
+				Expect(condition.Reason).To(Equal(sriovnetworkv1.ReasonUnsupportedConfiguration))
+				Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+				Expect(condition.Message).To(ContainSubstring(message))
+				Expect(condition.ObservedGeneration).To(Equal(policy.Generation))
+				Expect(policy.Status.MatchedNodeCount).To(BeNil())
+				Expect(policy.Status.ReadyNodeCount).To(BeNil())
+			}
+			healthy := policies[3].Status.Conditions[0]
+			Expect(healthy.Reason).To(Equal(sriovnetworkv1.ReasonConfigurationBlocked))
+			Expect(healthy.Status).To(Equal(metav1.ConditionFalse))
+			Expect(healthy.ObservedGeneration).To(Equal(policies[3].Generation))
+			Expect(healthy.Message).To(ContainSubstring("blocked by a conflict between other policies"))
+			Expect(healthy.Message).To(ContainSubstring(message))
+			Expect(policies[3].Status.MatchedNodeCount).To(BeNil())
+			Expect(policies[3].Status.ReadyNodeCount).To(BeNil())
+			Expect(foreign.Status.Conditions[0].Reason).To(Equal(sriovnetworkv1.ReasonApplyingConfiguration))
+			policies[2].Spec.ResourceName = "separate"
+			Expect(k8sClient.Update(ctx, policies[2])).To(Succeed())
+			reconcile()
+			for _, policy := range policies {
+				Expect(policy.Status.Conditions[0].Reason).To(Equal(sriovnetworkv1.ReasonApplyingConfiguration))
+				Expect(policy.Status.Conditions[0].ObservedGeneration).To(Equal(policy.Generation))
+				Expect(policy.Status.MatchedNodeCount).To(Equal(new(int32(1))))
+			}
+		},
+		Entry("incompatible allocation drivers", "shared_resource", "vfio-pci", "incompatible deviceType"),
+		Entry("normalized class name collision", "SHARED_resource", "netdevice", "same DRA device class name"),
+	)
+
+	DescribeTable("reports unsupported DRA selectors and blocks unrelated policies until correction", func(ctx context.Context, selector sriovnetworkv1.SriovNetworkNicSelector, wantMessage string) {
+		config := testOperatorConfig()
+		config.Spec.FeatureGates = map[string]bool{constants.DynamicResourceAllocationFeatureGate: true}
+		bad := &sriovnetworkv1.SriovNetworkNodePolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: "unsupported", Namespace: vars.Namespace},
+			Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{
+				ResourceName: "shared", NodeSelector: map[string]string{}, NumVfs: 8,
+				NicSelector: selector,
+			},
+		}
+		good := bad.DeepCopy()
+		good.Name = "whole-pf"
+		good.Spec.NicSelector = sriovnetworkv1.SriovNetworkNicSelector{PfNames: []string{"ens1f1"}}
+		createAggregateObjects(config, testManagedNode("selector-worker"), bad, good)
+		r := &AggregateStatusReconciler{Client: k8sClient,
+			StatusPatcher: status.NewPatcher(k8sClient, nil, k8sClient.Scheme(), "aggregate-selector-test")}
+		check := func(wantReason, wantGoodReason string) {
+			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKey{Name: aggregateStatusSyncEventName}})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(bad), bad)).To(Succeed())
+			Expect(bad.Status.Conditions).To(HaveLen(1))
+			Expect(bad.Status.Conditions[0].Reason).To(Equal(wantReason))
+			Expect(bad.Status.Conditions[0].ObservedGeneration).To(Equal(bad.Generation))
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(good), good)).To(Succeed())
+			Expect(good.Status.Conditions).To(HaveLen(1))
+			Expect(good.Status.Conditions[0].Reason).To(Equal(wantGoodReason))
+		}
+		config.Spec.FeatureGates = nil
+		Expect(k8sClient.Update(ctx, config)).To(Succeed())
+		check(sriovnetworkv1.ReasonApplyingConfiguration, sriovnetworkv1.ReasonApplyingConfiguration)
+		config.Spec.FeatureGates = map[string]bool{constants.DynamicResourceAllocationFeatureGate: true}
+		Expect(k8sClient.Update(ctx, config)).To(Succeed())
+		for range 2 {
+			check(sriovnetworkv1.ReasonUnsupportedConfiguration, sriovnetworkv1.ReasonConfigurationBlocked)
+			Expect(bad.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+			Expect(bad.Status.Conditions[0].Message).To(ContainSubstring(wantMessage))
+		}
+		// Disabling DRA immediately clears DRA-only validation errors.
+		config.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] = false
+		Expect(k8sClient.Update(ctx, config)).To(Succeed())
+		check(sriovnetworkv1.ReasonApplyingConfiguration, sriovnetworkv1.ReasonApplyingConfiguration)
+		config.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] = true
+		Expect(k8sClient.Update(ctx, config)).To(Succeed())
+		check(sriovnetworkv1.ReasonUnsupportedConfiguration, sriovnetworkv1.ReasonConfigurationBlocked)
+		bad.Spec.NicSelector = sriovnetworkv1.SriovNetworkNicSelector{PfNames: []string{"ens1f0"}}
+		Expect(k8sClient.Update(ctx, bad)).To(Succeed())
+		check(sriovnetworkv1.ReasonApplyingConfiguration, sriovnetworkv1.ReasonApplyingConfiguration)
+	},
+		Entry("VF range", sriovnetworkv1.SriovNetworkNicSelector{PfNames: []string{"ens1f0#2-5"}}, "ens1f0#2-5"),
+		Entry("netFilter", sriovnetworkv1.SriovNetworkNicSelector{NetFilter: "aws/NetworkID:net-1"}, "netFilter"),
+	)
+
 	It("clears counts when observation fails and reports zero targets when observation succeeds", func(ctx context.Context) {
-		policy := &sriovnetworkv1.SriovNetworkNodePolicy{ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: vars.Namespace}, Spec: sriovnetworkv1.SriovNetworkNodePolicySpec{NodeSelector: map[string]string{}}}
+		policy := &sriovnetworkv1.SriovNetworkNodePolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: "policy", Namespace: vars.Namespace},
+			Spec:       sriovnetworkv1.SriovNetworkNodePolicySpec{ResourceName: "sriov", NodeSelector: map[string]string{}},
+		}
 		createAggregateObjects(policy)
 		unknown := policyStatus(ctx, k8sClient, policy)
 		Expect(unknown.condition.Status).To(Equal(metav1.ConditionUnknown))
@@ -130,7 +422,7 @@ var _ = Describe("Aggregate status", func() {
 		createAggregateObjects(policy, node, testOperatorConfig())
 		state := aggregateNodeState(node)
 		expectAggregate(policyStatus(ctx, k8sClient, policy), policy.Generation, 1, 0, sriovnetworkv1.ReasonApplyingConfiguration)
-		Expect(renderNodePolicies(state, &sriovnetworkv1.SriovNetworkNodePolicyList{Items: []sriovnetworkv1.SriovNetworkNodePolicy{*policy}}, node, nil)).To(Succeed())
+		Expect(renderNodePolicies(state, &sriovnetworkv1.SriovNetworkNodePolicyList{Items: []sriovnetworkv1.SriovNetworkNodePolicy{*policy}}, node, false)).To(Succeed())
 		Expect(k8sClient.Update(ctx, state)).To(Succeed())
 		state.SetNodeStateConfigurationConditions(constants.SyncStatusSucceeded, "", false)
 		Expect(k8sClient.Status().Update(ctx, state)).To(Succeed())
@@ -139,7 +431,7 @@ var _ = Describe("Aggregate status", func() {
 		policy.Spec.NumVfs++
 		Expect(k8sClient.Update(ctx, policy)).To(Succeed())
 		expectAggregate(policyStatus(ctx, k8sClient, policy), policy.Generation, 1, 0, sriovnetworkv1.ReasonApplyingConfiguration)
-		Expect(renderNodePolicies(state, &sriovnetworkv1.SriovNetworkNodePolicyList{Items: []sriovnetworkv1.SriovNetworkNodePolicy{*policy}}, node, nil)).To(Succeed())
+		Expect(renderNodePolicies(state, &sriovnetworkv1.SriovNetworkNodePolicyList{Items: []sriovnetworkv1.SriovNetworkNodePolicy{*policy}}, node, false)).To(Succeed())
 		Expect(k8sClient.Update(ctx, state)).To(Succeed())
 		expectAggregate(policyStatus(ctx, k8sClient, policy), policy.Generation, 1, 0, sriovnetworkv1.ReasonApplyingConfiguration)
 		state.SetNodeStateConfigurationConditions(constants.SyncStatusSucceeded, "", false)
@@ -172,7 +464,7 @@ var _ = Describe("Aggregate status", func() {
 			}
 			createAggregateObjects(node)
 			states[i] = aggregateNodeState(node)
-			Expect(renderNodePolicies(states[i], policies, node, nil)).To(Succeed())
+			Expect(renderNodePolicies(states[i], policies, node, false)).To(Succeed())
 			Expect(k8sClient.Update(ctx, states[i])).To(Succeed())
 			states[i].SetNodeStateConfigurationConditions(constants.SyncStatusSucceeded, "", false)
 			Expect(k8sClient.Status().Update(ctx, states[i])).To(Succeed())
@@ -191,7 +483,7 @@ var _ = Describe("Aggregate status", func() {
 		assertPolicy(second, 2, 1, sriovnetworkv1.ReasonApplyingConfiguration)
 		state := states[1]
 		state.Spec = sriovnetworkv1.SriovNetworkNodeStateSpec{}
-		Expect(renderNodePolicies(state, policies, nodes[1], nil)).To(Succeed())
+		Expect(renderNodePolicies(state, policies, nodes[1], false)).To(Succeed())
 		Expect(k8sClient.Update(ctx, state)).To(Succeed())
 		state.SetNodeStateConfigurationConditions(constants.SyncStatusInProgress, "", false)
 		Expect(k8sClient.Status().Update(ctx, state)).To(Succeed())

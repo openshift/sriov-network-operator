@@ -49,8 +49,17 @@ const (
 
 const invalidVfIndex = -1
 
+// ResourceNameMaxLen is the maximum length of a resource name, matching the
+// Kubernetes DNS label limit (https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names).
+const ResourceNameMaxLen = 63
+
 var ManifestsPath = "./bindata/manifests/cni-config"
 var log = logf.Log.WithName("sriovnetwork")
+
+// resourceNameRegexp allows alphanumeric characters in any position, plus
+// hyphens and underscores in non-boundary positions (no leading/trailing hyphens or underscores).
+// Underscores are included for backward-compatibility with existing resource names.
+var resourceNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9_-]*[a-zA-Z0-9])?$`)
 
 // NicIDMap contains supported mapping of IDs with each in the format of:
 // Vendor ID, Physical Function Device ID, Virtual Function Device ID
@@ -88,6 +97,22 @@ func InitNicIDMapFromConfigMap(client kubernetes.Interface, namespace string) er
 
 func InitNicIDMapFromList(idList []string) {
 	NicIDMap = append(NicIDMap, idList...)
+}
+
+// ValidateResourceName validates the resource name accepted by policies.
+func ValidateResourceName(name string) error {
+	if name == "" {
+		return fmt.Errorf("resource name must not be empty")
+	}
+	if len(name) > ResourceNameMaxLen {
+		return fmt.Errorf("resource name %q must be no more than %d characters", name, ResourceNameMaxLen)
+	}
+	if !resourceNameRegexp.MatchString(name) {
+		return fmt.Errorf("resource name %q is invalid: must consist of alphanumeric characters or hyphens, "+
+			"and must start and end with an alphanumeric character "+
+			"(e.g. 'myresource', 'net-device-1'), see https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names", name)
+	}
+	return nil
 }
 
 func IsSupportedVendor(vendorID string) bool {
@@ -917,6 +942,16 @@ func (cr *OVSNetwork) NetworkNamespace() string {
 // GetConditions returns the conditions from the status
 func (cr *OVSNetwork) GetConditions() []metav1.Condition {
 	return cr.Status.Conditions
+}
+
+// GetOperatorConfig reads the default config in the operator namespace. A missing
+// config returns (nil, false, nil); other read failures return (nil, false, err).
+func GetOperatorConfig(ctx context.Context, reader client.Reader) (*SriovOperatorConfig, bool, error) {
+	config := &SriovOperatorConfig{}
+	if err := reader.Get(ctx, client.ObjectKey{Namespace: vars.Namespace, Name: consts.DefaultConfigName}, config); err != nil {
+		return nil, false, client.IgnoreNotFound(err)
+	}
+	return config, true, nil
 }
 
 // GetConditions returns the conditions from the status.

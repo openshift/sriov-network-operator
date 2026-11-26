@@ -3,8 +3,6 @@ package daemon
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/api/equality"
-	"k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -16,27 +14,25 @@ import (
 
 // OperatorConfigNodeReconcile represents the reconcile struct for the OperatorConfig.
 type OperatorConfigNodeReconcile struct {
-	client             client.Client
-	latestFeatureGates map[string]bool
+	client client.Client
 }
 
 // NewOperatorConfigNodeReconcile creates a new instance of OperatorConfigNodeReconcile with the given client.
 func NewOperatorConfigNodeReconcile(client client.Client) *OperatorConfigNodeReconcile {
-	return &OperatorConfigNodeReconcile{client: client, latestFeatureGates: make(map[string]bool)}
+	return &OperatorConfigNodeReconcile{client: client}
 }
 
 // Reconcile reconciles the OperatorConfig resource. It updates log level and feature gates as necessary.
 func (oc *OperatorConfigNodeReconcile) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reqLogger := log.FromContext(ctx).WithName("Reconcile")
-	operatorConfig := &sriovnetworkv1.SriovOperatorConfig{}
-	err := oc.client.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Name}, operatorConfig)
+	operatorConfig, found, err := sriovnetworkv1.GetOperatorConfig(ctx, oc.client)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			reqLogger.Info("OperatorConfig doesn't exist", "name", req.Name, "namespace", req.Namespace)
-			return ctrl.Result{}, nil
-		}
 		reqLogger.Error(err, "Failed to get OperatorConfig", "name", req.Name, "namespace", req.Namespace)
 		return ctrl.Result{}, err
+	}
+	if !found {
+		reqLogger.Info("OperatorConfig doesn't exist", "name", req.Name, "namespace", req.Namespace)
+		return ctrl.Result{}, nil
 	}
 
 	// update log level
@@ -48,9 +44,7 @@ func (oc *OperatorConfigNodeReconcile) Reconcile(ctx context.Context, req ctrl.R
 		log.Log.Info("Set Disable Drain", "value", vars.DisableDrain)
 	}
 
-	if !equality.Semantic.DeepEqual(oc.latestFeatureGates, operatorConfig.Spec.FeatureGates) {
-		vars.FeatureGate.Init(operatorConfig.Spec.FeatureGates)
-		oc.latestFeatureGates = operatorConfig.Spec.FeatureGates
+	if vars.FeatureGate.Set(operatorConfig.Spec.FeatureGates) {
 		log.Log.Info("Updated featureGates", "featureGates", vars.FeatureGate.String())
 	}
 

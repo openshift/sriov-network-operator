@@ -27,6 +27,8 @@ import (
 // SriovNetworkNodePolicySpec defines the desired state of SriovNetworkNodePolicy
 type SriovNetworkNodePolicySpec struct {
 	// SRIOV Network device plugin endpoint resource name
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9]([a-zA-Z0-9_-]*[a-zA-Z0-9])?$`
 	ResourceName string `json:"resourceName"`
 	// NodeSelector selects the nodes to be configured
 	NodeSelector map[string]string `json:"nodeSelector"`

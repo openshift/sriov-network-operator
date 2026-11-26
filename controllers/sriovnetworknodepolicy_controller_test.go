@@ -26,7 +26,6 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
@@ -213,9 +212,7 @@ func TestRenderDevicePluginConfigData(t *testing.T) {
 		},
 	}
 
-	reconciler := SriovNetworkNodePolicyReconciler{
-		FeatureGate: featuregate.New(),
-	}
+	reconciler := SriovNetworkNodePolicyReconciler{}
 
 	node := corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}}
 	nodeState := sriovnetworkv1.SriovNetworkNodeState{ObjectMeta: metav1.ObjectMeta{Name: node.Name, Namespace: vars.Namespace}}
@@ -254,6 +251,7 @@ var _ = Describe("SriovnetworkNodePolicy controller", Ordered, func() {
 		By("Create SriovOperatorConfig controller k8s objs")
 		config := makeDefaultSriovOpConfig()
 		Expect(k8sClient.Create(context.Background(), config)).Should(Succeed())
+
 		DeferCleanup(func() {
 			err := k8sClient.Delete(context.Background(), config)
 			Expect(err).ToNot(HaveOccurred())
@@ -265,9 +263,8 @@ var _ = Describe("SriovnetworkNodePolicy controller", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		err = (&SriovNetworkNodePolicyReconciler{
-			Client:      k8sManager.GetClient(),
-			Scheme:      k8sManager.GetScheme(),
-			FeatureGate: featuregate.New(),
+			Client: k8sManager.GetClient(),
+			Scheme: k8sManager.GetScheme(),
 		}).SetupWithManager(k8sManager)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -382,6 +379,7 @@ var _ = Describe("SriovnetworkNodePolicy controller", Ordered, func() {
 			somePolicy.SetNamespace(testNamespace)
 			somePolicy.SetName("some-policy")
 			somePolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+				ResourceName: "sriov",
 				NumVfs:       5,
 				NodeSelector: map[string]string{"node-role.kubernetes.io/worker": ""},
 				NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{Vendor: "8086"},
@@ -410,8 +408,8 @@ var _ = Describe("SriovnetworkNodePolicy controller", Ordered, func() {
 
 			Eventually(func(g Gomega) {
 				err := k8sClient.Get(context.Background(), k8sclient.ObjectKey{Name: node.Name, Namespace: testNamespace}, nodeState)
-				Expect(err).To(HaveOccurred())
-				Expect(errors.IsNotFound(err)).To(BeTrue())
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(errors.IsNotFound(err)).To(BeTrue())
 			}, time.Minute, time.Second).Should(Succeed())
 		})
 
@@ -474,6 +472,7 @@ var _ = Describe("SriovnetworkNodePolicy controller", Ordered, func() {
 			somePolicy.SetNamespace(testNamespace)
 			somePolicy.SetName("some-policy")
 			somePolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+				ResourceName: "sriov",
 				NumVfs:       5,
 				NodeSelector: map[string]string{"node-role.kubernetes.io/worker": ""},
 				NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{Vendor: "8086"},
@@ -555,6 +554,7 @@ var _ = Describe("SriovnetworkNodePolicy controller", Ordered, func() {
 			somePolicy.SetNamespace(testNamespace)
 			somePolicy.SetName("some-policy")
 			somePolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+				ResourceName: "sriov",
 				NumVfs:       5,
 				NodeSelector: map[string]string{"node-role.kubernetes.io/worker": ""},
 				NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{Vendor: "8086"},
@@ -1012,4 +1012,5 @@ var _ = Describe("SriovNetworkNodePolicyReconciler", Ordered, func() {
 		})
 
 	})
+
 })

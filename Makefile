@@ -17,6 +17,11 @@ DOCKERFILE_CONFIG_DAEMON?=Dockerfile.sriov-network-config-daemon
 DOCKERFILE_WEBHOOK?=Dockerfile.webhook
 
 CRD_BASES=./config/crd/bases
+# External DRA CRDs are copied from the module version selected by go.mod.
+DRA_MODULE=github.com/k8snetworkplumbingwg/dra-driver-sriov
+DRA_CRDS=./deployment/sriov-network-operator-chart/crds/sriovnetwork.k8snetworkplumbingwg.io_deviceattributes.yaml \
+	./deployment/sriov-network-operator-chart/crds/sriovnetwork.k8snetworkplumbingwg.io_sriovresourcepolicies.yaml
+DRA_TEST_CRDS=$(addprefix ./test/util/crds/,$(notdir $(DRA_CRDS)))
 
 export APP_NAME?=sriov-network-operator
 TARGET=$(TARGET_DIR)/bin/$(APP_NAME)
@@ -86,22 +91,31 @@ run: skopeo install
 
 # Install CRDs into a cluster
 install: manifests
-	kubectl apply -f $(CRD_BASES)
+	kubectl apply -f $(CRD_BASES) $(addprefix -f ,$(DRA_CRDS))
 
 # Uninstall CRDs from a cluster
 uninstall: manifests
-	kubectl delete --ignore-not-found -f $(CRD_BASES)
+	kubectl delete --ignore-not-found -f $(CRD_BASES) $(addprefix -f ,$(DRA_CRDS))
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: controller-gen
+manifests: controller-gen sync-dra-crds
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) webhook paths="./..." output:crd:artifacts:config=$(CRD_BASES)
 	cp ./config/crd/bases/* ./deployment/sriov-network-operator-chart/crds/
 
+.PHONY: sync-dra-crds
+sync-dra-crds:
+	go mod download $(DRA_MODULE)
+	dra_module_dir=$$(go list -m -f '{{.Dir}}' $(DRA_MODULE)); \
+	for crd in $(notdir $(DRA_CRDS)); do \
+		cp "$$dra_module_dir/deployments/helm/dra-driver-sriov/templates/$$crd" "./deployment/sriov-network-operator-chart/crds/$$crd"; \
+		cp "$$dra_module_dir/deployments/helm/dra-driver-sriov/templates/$$crd" "./test/util/crds/$$crd"; \
+	done
+
 check-manifests: manifests
-	@set +e; git diff --quiet config; \
-	if [ $$? -eq 1 ]; \
-	then echo -e "'config' folder is out of date. Please run 'make manifests' and commit your changes"; \
-	exit 1; fi
+	@git diff --exit-code -- config deployment/sriov-network-operator-chart/crds $(DRA_TEST_CRDS) || { \
+		echo "Manifests are out of date. Please run 'make manifests' and commit your changes"; \
+		exit 1; \
+	}
 
 sync-manifests-%: manifests
 	@mkdir -p manifests/$*
