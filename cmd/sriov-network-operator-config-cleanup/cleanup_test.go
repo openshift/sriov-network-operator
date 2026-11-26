@@ -44,6 +44,10 @@ var (
 
 var _ = Describe("cleanup", Ordered, func() {
 	BeforeAll(func() {
+		savedGate := vars.FeatureGate
+		DeferCleanup(func() { vars.FeatureGate = savedGate })
+		vars.FeatureGate = featuregate.New()
+
 		By("Create SriovOperatorConfig controller k8s objs")
 		config := getDefaultSriovOperatorConfig()
 		Expect(k8sClient.Create(context.Background(), config)).Should(Succeed())
@@ -52,6 +56,7 @@ var _ = Describe("cleanup", Ordered, func() {
 		somePolicy.SetNamespace(testNamespace)
 		somePolicy.SetName("some-policy")
 		somePolicy.Spec = sriovnetworkv1.SriovNetworkNodePolicySpec{
+			ResourceName: "some_resource",
 			NumVfs:       5,
 			NodeSelector: map[string]string{"foo": "bar"},
 			NicSelector:  sriovnetworkv1.SriovNetworkNicSelector{},
@@ -156,7 +161,6 @@ func newConfigController() *configController {
 		Client:            k8sManager.GetClient(),
 		Scheme:            k8sManager.GetScheme(),
 		Orchestrator:      orchestrator,
-		FeatureGate:       featuregate.New(),
 		UncachedAPIReader: k8sManager.GetAPIReader(),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())

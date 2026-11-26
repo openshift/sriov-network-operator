@@ -67,6 +67,9 @@ jobs:
     - name: test bindata/scripts
       run: make test-bindata-scripts
 
+    - name: test conformance utilities
+      run: go test ./test/util/...
+
   modules:
     name: check go modules
     runs-on: ubuntu-24.04

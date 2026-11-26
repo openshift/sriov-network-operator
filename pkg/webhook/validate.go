@@ -4,13 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
 	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,8 +51,41 @@ func validateSriovOperatorConfig(cr *sriovnetworkv1.SriovOperatorConfig, operati
 	if err != nil {
 		return false, warnings, err
 	}
+	if err := validateDRAModeChange(cr, operation); err != nil {
+		return false, warnings, err
+	}
 
 	return true, warnings, nil
+}
+
+// validateDRAModeChange requires removing existing policies before switching providers.
+// This does not verify that workloads have stopped or node reconfiguration has completed.
+func validateDRAModeChange(cr *sriovnetworkv1.SriovOperatorConfig, operation v1.Operation) error {
+	enabled := cr.Spec.FeatureGates[consts.DynamicResourceAllocationFeatureGate]
+	previouslyEnabled := false
+	if operation == v1.Update {
+		previousConfig, found, err := sriovnetworkv1.GetOperatorConfig(context.Background(), client)
+		if err != nil {
+			return fmt.Errorf("can't validate DRA mode change against the previous config: %w", err)
+		}
+		if found {
+			previouslyEnabled = previousConfig.Spec.FeatureGates[consts.DynamicResourceAllocationFeatureGate]
+		}
+	}
+	if enabled == previouslyEnabled {
+		// Allow unrelated config updates in either mode.
+		return nil
+	}
+	policies := &sriovnetworkv1.SriovNetworkNodePolicyList{}
+	if err := client.List(context.Background(), policies, runtimeclient.InNamespace(vars.Namespace)); err != nil {
+		return fmt.Errorf("can't validate DRA mode change: %w", err)
+	}
+	if len(policies.Items) > 0 {
+		policy := policies.Items[0]
+		return fmt.Errorf("can't change %s from %t to %t while SriovNetworkNodePolicy %s/%s exists; remove all policies before switching providers",
+			consts.DynamicResourceAllocationFeatureGate, previouslyEnabled, enabled, policy.Namespace, policy.Name)
+	}
+	return nil
 }
 
 // validateSriovOperatorConfigDisableDrain checks if the user is setting `.Spec.DisableDrain` from false to true while
@@ -64,13 +95,12 @@ func validateSriovOperatorConfigDisableDrain(cr *sriovnetworkv1.SriovOperatorCon
 	if !cr.Spec.DisableDrain {
 		return nil
 	}
-	previousConfig := &sriovnetworkv1.SriovOperatorConfig{}
-	err := client.Get(context.Background(), runtimeclient.ObjectKey{Name: cr.Name, Namespace: namespace}, previousConfig)
+	previousConfig, found, err := sriovnetworkv1.GetOperatorConfig(context.Background(), client)
 	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return nil
-		}
 		return fmt.Errorf("can't validate SriovOperatorConfig[%s] DisableDrain against its previous value: %q", cr.Name, err)
+	}
+	if !found {
+		return nil
 	}
 
 	if previousConfig.Spec.DisableDrain == cr.Spec.DisableDrain {
@@ -128,13 +158,11 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 		return true, warnings, nil
 	}
 
-	if cr.GetNamespace() != vars.Namespace {
-		warnings = append(warnings, cr.GetName()+
-			fmt.Sprintf(" is created or updated but not used. Only policy in %s namespace is respected.", vars.Namespace))
-	}
-
 	if operation == v1.Delete {
 		return true, warnings, nil
+	}
+	if cr.GetNamespace() != vars.Namespace {
+		return false, warnings, fmt.Errorf("SriovNetworkNodePolicy must be in the operator namespace %s", vars.Namespace)
 	}
 
 	admit, err := staticValidateSriovNetworkNodePolicy(cr)
@@ -150,32 +178,8 @@ func validateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy, o
 	return admit, warnings, nil
 }
 
-// resourceNameMaxLen is the maximum length of a resource name, matching the
-// Kubernetes DNS label limit (https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names).
-const resourceNameMaxLen = 63
-
-// resourceNameRegexp allows alphanumeric characters in any position, plus
-// hyphens and underscores in non-boundary positions (no leading/trailing hyphens or underscores).
-// Underscores are included for backward-compatibility with existing resource names.
-var resourceNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9_-]*[a-zA-Z0-9])?$`)
-
-func validateResourceName(name string) error {
-	if name == "" {
-		return fmt.Errorf("resource name must not be empty")
-	}
-	if len(name) > resourceNameMaxLen {
-		return fmt.Errorf("resource name %q must be no more than %d characters", name, resourceNameMaxLen)
-	}
-	if !resourceNameRegexp.MatchString(name) {
-		return fmt.Errorf("resource name %q is invalid: must consist of alphanumeric characters or hyphens, "+
-			"and must start and end with an alphanumeric character "+
-			"(e.g. 'myresource', 'net-device-1'), see https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names", name)
-	}
-	return nil
-}
-
 func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
-	if err := validateResourceName(cr.Spec.ResourceName); err != nil {
+	if err := sriovnetworkv1.ValidateResourceName(cr.Spec.ResourceName); err != nil {
 		return false, err
 	}
 
@@ -288,10 +292,49 @@ func staticValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePol
 	return true, nil
 }
 
+// validateDRAResourcePolicies checks resource names and, in DRA mode, normalized
+// name collisions and shared DeviceClass driver compatibility in one pass over existing policies.
+// DeviceClasses are cluster-scoped, so disjoint node selectors can still conflict.
+func validateDRAResourcePolicies(cr *sriovnetworkv1.SriovNetworkNodePolicy, npList *sriovnetworkv1.SriovNetworkNodePolicyList) error {
+	if cr.Namespace != vars.Namespace {
+		return nil
+	}
+	config, found, err := sriovnetworkv1.GetOperatorConfig(context.Background(), client)
+	if err != nil {
+		return fmt.Errorf("failed to validate DRA resource configuration: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("SriovOperatorConfig %s/%s not found; wait for the operator config before creating or updating policies", vars.Namespace, consts.DefaultConfigName)
+	}
+	validator := config.NewPolicyResourceValidator()
+	if err := validator.Add(cr); err != nil {
+		return err
+	}
+	for i := range npList.Items {
+		other := &npList.Items[i]
+		if other.Namespace != vars.Namespace || other.Name == cr.Name {
+			continue
+		}
+		// Add records shared conflicts against all affected policies.
+		// A peer's own validation error must not block this candidate.
+		_ = validator.Add(other)
+	}
+	return validator.Issue(cr.Name)
+}
+
 func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePolicy) (bool, error) {
 	nodesSelected = false
 	interfaceSelected = false
 	nodeInterfaceErrorList := make(map[string][]string)
+
+	npList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
+	err := client.List(context.Background(), npList, &runtimeclient.ListOptions{Namespace: namespace})
+	if err != nil {
+		return false, err
+	}
+	if err := validateDRAResourcePolicies(cr, npList); err != nil {
+		return false, err
+	}
 
 	nodeList, err := kubeclient.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{
 		LabelSelector: labels.Set(cr.Spec.NodeSelector).String(),
@@ -304,11 +347,7 @@ func dynamicValidateSriovNetworkNodePolicy(cr *sriovnetworkv1.SriovNetworkNodePo
 	if err != nil {
 		return false, err
 	}
-	npList := &sriovnetworkv1.SriovNetworkNodePolicyList{}
-	err = client.List(context.Background(), npList, &runtimeclient.ListOptions{Namespace: namespace})
-	if err != nil {
-		return false, err
-	}
+
 	for _, node := range nodeList.Items {
 		if cr.Selected(&node) {
 			nodesSelected = true

@@ -1,0 +1,142 @@
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: sriov-dra-driver
+  namespace: {{.Namespace}}
+  annotations:
+    kubernetes.io/description: |
+      This DaemonSet launches the SR-IOV DRA (Dynamic Resource Allocation) driver on each node.
+    release.openshift.io/version: "{{.ReleaseVersion}}"
+spec:
+  selector:
+    matchLabels:
+      app: sriov-dra-driver
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 33%
+  template:
+    metadata:
+      labels:
+        app: sriov-dra-driver
+        component: network
+        type: infra
+        openshift.io/component: network
+      annotations:
+        openshift.io/required-scc: privileged
+    spec:
+      hostNetwork: true
+      nodeSelector:
+        {{- range $key, $value := .NodeSelectorField }}
+          {{ $key }}: "{{ $value }}"
+        {{- end }}
+      tolerations:
+      - operator: Exists
+      serviceAccountName: sriov-dra-driver
+      priorityClassName: "system-node-critical"
+      {{- if .ImagePullSecrets }}
+      imagePullSecrets:
+      {{- range .ImagePullSecrets }}
+        - name: {{ . }}
+      {{- end }}
+      {{- end }}
+      # Same wait-for-config pattern as sriov-device-plugin: init sets annotation on this pod,
+      # config daemon removes it after SR-IOV config is applied (no kubectl or node annotation).
+      # DRA always uses this init container, regardless of blockDevicePluginUntilConfigured.
+      initContainers:
+      - name: sriov-dra-driver-init
+        image: {{.SRIOVNetworkConfigDaemonImage}}
+        command:
+        - sriov-network-config-daemon
+        - wait-for-config
+        - --pod-name=$(POD_NAME)
+        - --pod-namespace=$(POD_NAMESPACE)
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+      containers:
+      - name: sriov-dra-driver
+        image: {{.SRIOVDRADriverImage}}
+        command:
+        - dra-driver-sriov
+        securityContext:
+          privileged: true
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: CDI_ROOT
+          value: /var/run/cdi
+        - name: KUBELET_REGISTRAR_DIRECTORY_PATH
+          value: /var/lib/kubelet/plugins_registry
+        - name: KUBELET_PLUGINS_DIRECTORY_PATH
+          value: /var/lib/kubelet/plugins
+        - name: V
+          value: "5"
+        # gRPC health (HEALTHCHECK_PORT > 0) is disabled: the pod uses hostNetwork, so the
+        # listen port is on the node network namespace. A fixed port can collide with other
+        # hostNetwork SR-IOV pods or host services on the same node; we do not assign
+        # per-node ports or run admission to prevent conflicts. No HTTP/gRPC probes are
+        # defined for the same reason (device-plugin DaemonSet follows the same pattern).
+        - name: HEALTHCHECK_PORT
+          value: "-1"
+        - name: CONFIGURATION_MODE
+          value: "MULTUS"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: kubelet-plugins-registry
+          mountPath: /var/lib/kubelet/plugins_registry
+        - name: kubelet-plugins
+          mountPath: /var/lib/kubelet/plugins
+        - name: cdi-root
+          mountPath: /var/run/cdi
+        - name: host-sys
+          mountPath: /sys
+        - name: host-dev
+          mountPath: /dev
+      volumes:
+      - name: kubelet-plugins-registry
+        hostPath:
+          path: /var/lib/kubelet/plugins_registry
+          type: Directory
+      - name: kubelet-plugins
+        hostPath:
+          path: /var/lib/kubelet/plugins
+          type: Directory
+      - name: cdi-root
+        hostPath:
+          path: {{.DRADriverCDIRoot}}
+          type: DirectoryOrCreate
+      - name: host-sys
+        hostPath:
+          path: /sys
+          type: Directory
+      - name: host-dev
+        hostPath:
+          path: /dev
+          type: Directory

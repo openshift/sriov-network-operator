@@ -1,0 +1,32 @@
+---
+# Role for wait-for-config init: DRA driver pod must get/patch itself (annotation) in the namespace.
+# Same pattern as sriov-device-plugin-pod-access in bindata/manifests/plugins/002-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sriov-dra-driver-pod-access
+  namespace: {{.Namespace}}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sriov-dra-driver-pod-access
+  namespace: {{.Namespace}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sriov-dra-driver-pod-access
+subjects:
+- kind: ServiceAccount
+  name: sriov-dra-driver
+  namespace: {{.Namespace}}

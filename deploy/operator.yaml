@@ -71,6 +71,10 @@ spec:
               value: $RDMA_CNI_IMAGE
             - name: SRIOV_DEVICE_PLUGIN_IMAGE
               value: $SRIOV_DEVICE_PLUGIN_IMAGE
+            - name: SRIOV_DRA_DRIVER_IMAGE
+              value: $SRIOV_DRA_DRIVER_IMAGE
+            - name: DRA_DRIVER_CDI_ROOT
+              value: /var/run/cdi
             - name: NETWORK_RESOURCES_INJECTOR_IMAGE
               value: $NETWORK_RESOURCES_INJECTOR_IMAGE
             - name: OPERATOR_NAME

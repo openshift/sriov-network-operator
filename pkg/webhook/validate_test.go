@@ -6,12 +6,16 @@ import (
 	"os"
 	"testing"
 
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	. "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
@@ -42,6 +46,11 @@ func TestMain(m *testing.M) {
 		"14e4 1750 1806", // BCM75508 2x100G
 	}
 	os.Exit(m.Run())
+}
+
+func TestWebhook(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Webhook Suite")
 }
 
 func newNodeState() *SriovNetworkNodeState {
@@ -742,6 +751,54 @@ func TestValidatePoliciesWithDifferentNumVfForTheSameResourceAndTheSameRootDevic
 	g.Expect(err).To(MatchError("root device 0000:86:00.1 is overlapped with existing policy previousPolicy"))
 }
 
+func TestValidateDRAResourceNameCollision(t *testing.T) {
+	for _, draEnabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("DRA enabled=%t", draEnabled), func(t *testing.T) {
+			config, _ := setupDRANetFilterValidation(t)
+			config.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] = draEnabled
+			client = fake.NewClientBuilder().WithScheme(vars.Scheme).WithObjects(config).Build()
+			g := NewGomegaWithT(t)
+
+			existing := &SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "policy-a", Namespace: vars.Namespace},
+				Spec:       SriovNetworkNodePolicySpec{ResourceName: "intel_nic"},
+			}
+			npList := &SriovNetworkNodePolicyList{Items: []SriovNetworkNodePolicy{*existing}}
+
+			colliding := &SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "policy-b", Namespace: vars.Namespace},
+				Spec:       SriovNetworkNodePolicySpec{ResourceName: "INTEL_NIC"},
+			}
+			err := validateDRAResourcePolicies(colliding, npList)
+			if draEnabled {
+				g.Expect(err).To(MatchError(ContainSubstring("normalizes to the same DRA device class name")))
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+
+			unique := &SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "policy-c", Namespace: vars.Namespace},
+				Spec:       SriovNetworkNodePolicySpec{ResourceName: "mlx_nic"},
+			}
+			err = validateDRAResourcePolicies(unique, npList)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			invalidPeer := &SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "policy-invalid", Namespace: vars.Namespace},
+			}
+			err = validateDRAResourcePolicies(unique, &SriovNetworkNodePolicyList{Items: []SriovNetworkNodePolicy{*existing, *invalidPeer}})
+			g.Expect(err).NotTo(HaveOccurred())
+
+			outOfNamespace := &SriovNetworkNodePolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "policy-other-ns", Namespace: "other-namespace"},
+				Spec:       SriovNetworkNodePolicySpec{ResourceName: "INTEL_NIC"},
+			}
+			err = validateDRAResourcePolicies(outOfNamespace, npList)
+			g.Expect(err).NotTo(HaveOccurred())
+		})
+	}
+}
+
 func TestValidateResourceName(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -769,7 +826,7 @@ func TestValidateResourceName(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewGomegaWithT(t)
-			err := validateResourceName(tc.input)
+			err := ValidateResourceName(tc.input)
 			if tc.expectErr {
 				g.Expect(err).To(HaveOccurred())
 				g.Expect(err.Error()).To(ContainSubstring(tc.errSubstr))
@@ -1790,3 +1847,349 @@ func TestValidatePolicyForNodePolicyWithAltNameConflict(t *testing.T) {
 	err = validatePolicyForNodePolicy(current, previous, nil)
 	g.Expect(err).NotTo(HaveOccurred())
 }
+
+var _ = Describe("policy admission during provider deployment", func() {
+	DescribeTable("uses the feature gate without requiring provider status or deployed DaemonSets", func(draEnabled, noConfig bool) {
+		config, policy := setupDRANetFilterValidation()
+		config.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] = draEnabled
+		config.Status.Conditions = []metav1.Condition{{Type: ConditionReady, Status: metav1.ConditionFalse, Reason: "OperatorConfigSyncFailed"}}
+		policy.Spec.NicSelector = SriovNetworkNicSelector{PfNames: []string{"ens803f1"}}
+		builder := fake.NewClientBuilder().WithScheme(vars.Scheme)
+		if !noConfig {
+			builder.WithObjects(config)
+		}
+		client = builder.Build()
+		err := validateDRAResourcePolicies(policy, &SriovNetworkNodePolicyList{})
+		if noConfig {
+			Expect(err).To(MatchError(ContainSubstring("not found")))
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+	},
+		Entry("DRA", true, false),
+		Entry("device plugin", false, false),
+		Entry("missing operator config", false, true),
+	)
+})
+
+var _ = Describe("policy deletion during a provider switch", func() {
+	It("validates the expected behavior", func() {
+		for _, name := range []string{"pending switch", "missing config"} {
+			By(name)
+			config, policy := setupDRANetFilterValidation()
+			builder := fake.NewClientBuilder().WithScheme(vars.Scheme)
+			if name == "pending switch" {
+				builder.WithObjects(config)
+			}
+			client = builder.Build()
+			allowed, _, err := validateSriovNetworkNodePolicy(policy, admissionv1.Delete)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(allowed).To(BeTrue())
+		}
+	})
+})
+
+var _ = Describe("DRA resource drivers", func() {
+	DescribeTable("validates allocation driver compatibility", func(prepare func(*SriovOperatorConfig, *SriovNetworkNodePolicy, *SriovNetworkNodePolicy), wantError bool) {
+		config, policy := setupDRANetFilterValidation()
+		policy.Spec.DeviceType = constants.DeviceTypeVfioPci
+		policy.Spec.ResourceName = "shared"
+		policy.Spec.NicSelector = SriovNetworkNicSelector{PfNames: []string{"ens803f1"}}
+		policy.Spec.NodeSelector = map[string]string{"kubernetes.io/hostname": "worker-a"}
+		other := &SriovNetworkNodePolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: "other-policy", Namespace: vars.Namespace},
+			Spec: SriovNetworkNodePolicySpec{ResourceName: "shared", DeviceType: constants.DeviceTypeNetDevice,
+				NodeSelector: map[string]string{"kubernetes.io/hostname": "worker-b"}},
+		}
+		if prepare != nil {
+			prepare(config, policy, other)
+		}
+		client = fake.NewClientBuilder().WithScheme(vars.Scheme).WithObjects(config).Build()
+		err := validateDRAResourcePolicies(policy, &SriovNetworkNodePolicyList{Items: []SriovNetworkNodePolicy{*other}})
+		if wantError {
+			Expect(err).To(MatchError(ContainSubstring("incompatible deviceType")))
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+	},
+		Entry("reject mixed drivers across nodes", nil, true),
+		Entry("allow shared VFIO", func(_ *SriovOperatorConfig, _, other *SriovNetworkNodePolicy) {
+			other.Spec.DeviceType = constants.DeviceTypeVfioPci
+		}, false),
+		Entry("allow updating own device type", func(_ *SriovOperatorConfig, p, other *SriovNetworkNodePolicy) {
+			other.Name = p.Name
+		}, false),
+		Entry("ignore other resources", func(_ *SriovOperatorConfig, _, other *SriovNetworkNodePolicy) {
+			other.Spec.ResourceName = "other"
+		}, false),
+		Entry("ignore other namespace", func(_ *SriovOperatorConfig, _, other *SriovNetworkNodePolicy) {
+			other.Namespace = "other"
+		}, false),
+		Entry("ignore deprecated default with incompatible driver", func(_ *SriovOperatorConfig, _, other *SriovNetworkNodePolicy) {
+			other.Name = constants.DefaultPolicyName
+		}, false),
+		Entry("ignore deprecated default with empty resource", func(_ *SriovOperatorConfig, _, other *SriovNetworkNodePolicy) {
+			other.Name = constants.DefaultPolicyName
+			other.Spec.ResourceName = ""
+		}, false),
+		Entry("ignore deprecated default in device plugin mode", func(c *SriovOperatorConfig, _, other *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates = nil
+			other.Name = constants.DefaultPolicyName
+			other.Spec.ResourceName = ""
+		}, false),
+		Entry("ignore unused candidate", func(_ *SriovOperatorConfig, p, _ *SriovNetworkNodePolicy) {
+			p.Namespace = "other"
+		}, false),
+		Entry("allow device plugin mode", func(c *SriovOperatorConfig, _, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates = nil
+		}, false),
+	)
+})
+
+func setupDRANetFilterValidation(test ...*testing.T) (*SriovOperatorConfig, *SriovNetworkNodePolicy) {
+	previousClient, previousNamespace := client, vars.Namespace
+	cleanup := func() {
+		client, vars.Namespace = previousClient, previousNamespace
+	}
+	if len(test) > 0 {
+		test[0].Helper()
+		test[0].Cleanup(cleanup)
+	} else {
+		DeferCleanup(cleanup)
+	}
+	vars.Namespace = "sriov-network-operator"
+	config := newDefaultOperatorConfig()
+	config.Spec.DisableDrain = false
+	config.Spec.FeatureGates = map[string]bool{constants.DynamicResourceAllocationFeatureGate: true}
+	policy := newNodePolicy()
+	policy.Namespace = vars.Namespace
+	policy.Spec.NicSelector = SriovNetworkNicSelector{
+		NetFilter: "openstack/NetworkID:ada9ec67-2c97-467c-b674-c47200e2f5da",
+	}
+	return config, policy
+}
+
+var _ = Describe("DRA mode changes", func() {
+	DescribeTable("validates provider changes against existing policies", func(operation admissionv1.Operation, prepare func(*SriovOperatorConfig, *SriovNetworkNodePolicy), noPolicy bool, alreadyEnabled bool, noConfig bool, wantError bool) {
+		config, policy := setupDRANetFilterValidation()
+		if prepare != nil {
+			prepare(config, policy)
+		}
+		builder := fake.NewClientBuilder().WithScheme(vars.Scheme)
+		if operation == admissionv1.Update && !noConfig {
+			previousConfig := config.DeepCopy()
+			previousConfig.Spec.FeatureGates = map[string]bool{constants.DynamicResourceAllocationFeatureGate: alreadyEnabled}
+			builder.WithObjects(previousConfig)
+		}
+		if !noPolicy {
+			builder.WithObjects(policy)
+		}
+		client = builder.Build()
+		allowed, _, err := validateSriovOperatorConfig(config, operation)
+		Expect(allowed).To(Equal(!wantError))
+		if wantError {
+			Expect(err).To(MatchError(ContainSubstring("SriovNetworkNodePolicy " + policy.Namespace + "/" + policy.Name + " exists")))
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+	},
+		Entry("reject enabling DRA", admissionv1.Update, nil, false, false, false, true),
+		Entry("reject enabling with missing config", admissionv1.Update, nil, false, false, true, true),
+		Entry("reject creating enabled config", admissionv1.Create, nil, false, false, false, true),
+		Entry("allow updates with DRA already enabled", admissionv1.Update, nil, false, true, false, false),
+		Entry("allow deleting config", admissionv1.Delete, nil, false, false, false, false),
+		Entry("reject disabling DRA", admissionv1.Update, func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] = false
+		}, false, true, false, true),
+		Entry("reject removing DRA gate", admissionv1.Update, func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			delete(c.Spec.FeatureGates, constants.DynamicResourceAllocationFeatureGate)
+		}, false, true, false, true),
+		Entry("reject removing feature gates map", admissionv1.Update, func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates = nil
+		}, false, true, false, true),
+		Entry("allow disabling without policies", admissionv1.Update, func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] = false
+		}, true, true, false, false),
+		Entry("allow removing gate without policies", admissionv1.Update, func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates = nil
+		}, true, true, false, false),
+		Entry("allow updates with DRA already disabled", admissionv1.Update, func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] = false
+		}, false, false, false, false),
+		Entry("allow creating disabled config", admissionv1.Create, func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates = nil
+		}, false, false, false, false),
+		Entry("allow omitted gate", admissionv1.Update, func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates = nil
+		}, false, false, false, false),
+		Entry("allow no policies", admissionv1.Update, nil, true, false, false, false),
+		Entry("allow creating enabled config without policies", admissionv1.Create, nil, true, false, false, false),
+		Entry("reject enabling even with supported policy", admissionv1.Update, func(_ *SriovOperatorConfig, p *SriovNetworkNodePolicy) {
+			p.Spec.NicSelector = SriovNetworkNicSelector{PfNames: []string{"ens803f1"}}
+		}, false, false, false, true),
+		Entry("allow updates with existing supported DRA policy", admissionv1.Update, func(_ *SriovOperatorConfig, p *SriovNetworkNodePolicy) {
+			p.Spec.NicSelector = SriovNetworkNicSelector{PfNames: []string{"ens803f1"}}
+		}, false, true, false, false),
+		Entry("ignore other namespace", admissionv1.Update, func(_ *SriovOperatorConfig, p *SriovNetworkNodePolicy) {
+			p.Namespace = "other-namespace"
+		}, false, false, false, false),
+		Entry("ignore other namespace when disabling", admissionv1.Update, func(c *SriovOperatorConfig, p *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates = nil
+			p.Namespace = "other-namespace"
+		}, false, true, false, false),
+	)
+})
+
+var _ = Describe("DRA disablement read errors", func() {
+	It("validates the expected behavior", func() {
+		for _, failGet := range []bool{true, false} {
+			By(fmt.Sprintf("config lookup fails=%t", failGet))
+			config, _ := setupDRANetFilterValidation()
+			previousConfig := config.DeepCopy()
+			config.Spec.FeatureGates = nil
+			readError := fmt.Errorf("API unavailable")
+			listError := fmt.Errorf("policy list unavailable")
+			client = fake.NewClientBuilder().WithScheme(vars.Scheme).WithObjects(previousConfig).WithInterceptorFuncs(interceptor.Funcs{
+				Get: func(ctx context.Context, c runtimeclient.WithWatch, key runtimeclient.ObjectKey, obj runtimeclient.Object, opts ...runtimeclient.GetOption) error {
+					if failGet {
+						return readError
+					}
+					return c.Get(ctx, key, obj, opts...)
+				},
+				List: func(context.Context, runtimeclient.WithWatch, runtimeclient.ObjectList, ...runtimeclient.ListOption) error {
+					if failGet {
+						Fail("List must not be called after Get fails")
+					}
+					return listError
+				},
+			}).Build()
+			allowed, _, err := validateSriovOperatorConfig(config, admissionv1.Update)
+			Expect(allowed).To(BeFalse())
+			if failGet {
+				Expect(err).To(MatchError(readError))
+			} else {
+				Expect(err).To(MatchError(listError))
+			}
+		}
+	})
+})
+
+var _ = Describe("DRA policy net filters", func() {
+	DescribeTable("validates net filters for the selected provider", func(prepare func(*SriovOperatorConfig, *SriovNetworkNodePolicy), noConfig bool) {
+		config, policy := setupDRANetFilterValidation()
+		if prepare != nil {
+			prepare(config, policy)
+		}
+		builder := fake.NewClientBuilder().WithScheme(vars.Scheme)
+		if !noConfig {
+			builder.WithObjects(config)
+		}
+		client = builder.Build()
+		err := validateDRAResourcePolicies(policy, &SriovNetworkNodePolicyList{})
+		if noConfig {
+			Expect(err).To(MatchError(ContainSubstring("not found")))
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+	},
+		Entry("DRA disabled", func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] = false
+		}, false),
+		Entry("gate omitted", func(c *SriovOperatorConfig, _ *SriovNetworkNodePolicy) {
+			c.Spec.FeatureGates = nil
+		}, false),
+		Entry("config missing", nil, true),
+		Entry("netFilter removed", func(_ *SriovOperatorConfig, p *SriovNetworkNodePolicy) {
+			p.Spec.NicSelector = SriovNetworkNicSelector{PfNames: []string{"ens803f1"}}
+		}, false),
+		Entry("other namespace", func(_ *SriovOperatorConfig, p *SriovNetworkNodePolicy) {
+			p.Namespace = "other-namespace"
+		}, false),
+	)
+})
+
+var _ = Describe("DRA policy admission", func() {
+	It("validates the expected behavior", func() {
+		for _, operation := range []admissionv1.Operation{admissionv1.Create, admissionv1.Update, admissionv1.Delete} {
+			By(string(operation))
+			config, policy := setupDRANetFilterValidation()
+			client = fake.NewClientBuilder().WithScheme(vars.Scheme).WithObjects(config).Build()
+			allowed, _, err := validateSriovNetworkNodePolicy(policy, operation)
+			if operation == admissionv1.Delete {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(allowed).To(BeTrue())
+			} else {
+				Expect(allowed).To(BeFalse())
+				Expect(err).To(MatchError(ContainSubstring("netFilter selector is not supported in DRA mode")))
+			}
+		}
+	})
+})
+
+var _ = Describe("DRA net-filter read errors", func() {
+	It("validates the expected behavior", func() {
+		config, policy := setupDRANetFilterValidation()
+		readError := fmt.Errorf("API unavailable")
+		client = fake.NewClientBuilder().WithScheme(vars.Scheme).WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(context.Context, runtimeclient.WithWatch, runtimeclient.ObjectKey, runtimeclient.Object, ...runtimeclient.GetOption) error {
+				return readError
+			},
+			List: func(context.Context, runtimeclient.WithWatch, runtimeclient.ObjectList, ...runtimeclient.ListOption) error {
+				return readError
+			},
+		}).Build()
+		allowed, _, err := validateSriovOperatorConfig(config, admissionv1.Update)
+		Expect(allowed).To(BeFalse())
+		Expect(err).To(MatchError(ContainSubstring(readError.Error())))
+		// CREATE skips the previous-config lookup, so this exercises a failed policy list.
+		allowed, _, err = validateSriovOperatorConfig(config, admissionv1.Create)
+		Expect(allowed).To(BeFalse())
+		Expect(err).To(MatchError(ContainSubstring(readError.Error())))
+		allowed, _, err = validateSriovNetworkNodePolicy(policy, admissionv1.Create)
+		Expect(allowed).To(BeFalse())
+		Expect(err).To(MatchError(ContainSubstring(readError.Error())))
+	})
+})
+
+var _ = Describe("policy namespace admission", func() {
+	It("validates the expected behavior", func() {
+		previousNamespace := vars.Namespace
+		vars.Namespace = "operator"
+		DeferCleanup(func() { vars.Namespace = previousNamespace })
+		for _, operation := range []admissionv1.Operation{admissionv1.Create, admissionv1.Update, admissionv1.Delete} {
+			By(string(operation))
+			policy := &SriovNetworkNodePolicy{ObjectMeta: metav1.ObjectMeta{Name: "misplaced", Namespace: "other"}}
+			admitted, _, err := validateSriovNetworkNodePolicy(policy, operation)
+			if operation == admissionv1.Delete {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(admitted).To(BeTrue())
+				continue
+			}
+			Expect(admitted).To(BeFalse())
+			Expect(err).To(MatchError(ContainSubstring("operator namespace")))
+		}
+	})
+})
+
+var _ = Describe("DRA policy VF ranges", func() {
+	DescribeTable("validates VF ranges for the selected provider", func(pfNames []string, draEnabled bool, wantError bool) {
+		config, policy := setupDRANetFilterValidation()
+		config.Spec.FeatureGates[constants.DynamicResourceAllocationFeatureGate] = draEnabled
+		policy.Spec.NicSelector = SriovNetworkNicSelector{PfNames: pfNames}
+		policy.Spec.NumVfs = 8
+		client = fake.NewClientBuilder().WithScheme(vars.Scheme).WithObjects(config).Build()
+		err := validateDRAResourcePolicies(policy, &SriovNetworkNodePolicyList{})
+		if wantError {
+			Expect(err).To(MatchError(ContainSubstring("VF range")))
+			Expect(err.Error()).To(ContainSubstring(policy.Name))
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+	},
+		Entry("DRA whole PF", []string{"ens1f0"}, true, false),
+		Entry("DRA VF range", []string{"ens1f0#2-5"}, true, true),
+		Entry("DRA single VF", []string{"ens1f0#2-2"}, true, true),
+		Entry("DRA mixed selectors", []string{"ens1f0", "enp3s0np0#0-3"}, true, true),
+		Entry("device plugin VF range", []string{"ens1f0#2-5"}, false, false),
+	)
+})

@@ -8,8 +8,11 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubectl/pkg/drain"
+
+	draconsts "github.com/k8snetworkplumbingwg/dra-driver-sriov/pkg/consts"
 
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/orchestrator"
@@ -143,7 +146,7 @@ func (d *Drainer) CompleteDrainNode(ctx context.Context, node *corev1.Node) (boo
 }
 
 // createDrainHelper function to create a drain helper
-// if fullDrain is false we only remove pods that have the resourcePrefix
+// if fullDrain is false we only remove pods with SR-IOV DRA allocations (by driver) or the resourcePrefix
 // if not we remove all the pods in the node
 // onError callback is called immediately when pod eviction/deletion errors occur
 func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, fullDrain bool, onError DrainErrorCallback) *drain.Helper {
@@ -191,9 +194,29 @@ func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, ful
 		}},
 	}
 
-	// when we just want to drain and not reboot we can only remove the pods using sriov devices
+	// Without a reboot, drain device consumers while preserving ordinary workloads.
 	if !fullDrain {
 		deleteFunction := func(p corev1.Pod) drain.PodDeleteStatus {
+			// Keep this check independent of the DRA feature gate: disabling it
+			// switches the deployed provider (DP vs DRA) but it does not ensure existing SR-IOV
+			// DRA consumers have terminated. E.g.:
+			// An admin deletes the SR-IOV policy.
+			// 		The operator starts reconciling the change, which requires draining Pods with SR-IOV VFs.
+			// The admin disables DRA before that drain finishes.
+			// 		The mode-change validation permits this once the policies are removed;
+			// 		it does not verify that their SR-IOV VF consumers have terminated.
+			usesSRIOV, err := podUsesSRIOVDRA(ctx, kubeClient, &p)
+			if err != nil {
+				onError(err)
+				return drain.MakePodDeleteStatusWithError(err.Error())
+			}
+			if usesSRIOV {
+				return drain.PodDeleteStatus{
+					Delete:  true,
+					Reason:  "pod uses SR-IOV DRA resources",
+					Message: "SR-IOV network operator draining the node",
+				}
+			}
 			for _, c := range p.Spec.Containers {
 				if c.Resources.Requests != nil {
 					for r := range c.Resources.Requests {
@@ -214,6 +237,43 @@ func createDrainHelper(kubeClient kubernetes.Interface, ctx context.Context, ful
 	}
 
 	return drainer
+}
+
+// podUsesSRIOVDRA checks allocated drivers for sriovnetwork.k8snetworkplumbingwg.io.
+func podUsesSRIOVDRA(ctx context.Context, kubeClient kubernetes.Interface, pod *corev1.Pod) (bool, error) {
+	claimNames := make(map[string]struct{})
+	for _, claim := range pod.Spec.ResourceClaims {
+		if claim.ResourceClaimName != nil {
+			claimNames[*claim.ResourceClaimName] = struct{}{}
+		} else if claim.ResourceClaimTemplateName != nil {
+			for _, status := range pod.Status.ResourceClaimStatuses {
+				if status.Name == claim.Name && status.ResourceClaimName != nil {
+					claimNames[*status.ResourceClaimName] = struct{}{}
+					break
+				}
+			}
+		}
+	}
+	if status := pod.Status.ExtendedResourceClaimStatus; status != nil && status.ResourceClaimName != "" {
+		claimNames[status.ResourceClaimName] = struct{}{}
+	}
+
+	for name := range claimNames {
+		claim, err := kubeClient.ResourceV1().ResourceClaims(pod.Namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("resolve ResourceClaim %s/%s for pod %s/%s: %w", pod.Namespace, name, pod.Namespace, pod.Name, err)
+		}
+		// Without an allocation, the pod cannot have prepared any DRA devices.
+		if claim.Status.Allocation == nil {
+			continue
+		}
+		for _, device := range claim.Status.Allocation.Devices.Results {
+			if device.Driver == draconsts.DriverName {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // isIgnoredDrainErrOutMessage reports ErrOut lines that should not be recorded as

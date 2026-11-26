@@ -6,11 +6,42 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	constants "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
 )
+
+// EnsureControllerOwner sets owner as the controller owner of obj when it is not already.
+// Returns true when OwnerReferences were mutated and an Update is required.
+func EnsureControllerOwner(owner, obj metav1.Object, scheme *runtime.Scheme) (bool, error) {
+	if metav1.IsControlledBy(obj, owner) {
+		return false, nil
+	}
+	if err := controllerutil.SetControllerReference(owner, obj, scheme); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ApplyDesiredLabels merges desired labels onto obj and reports whether any value changed.
+func ApplyDesiredLabels(obj metav1.Object, desired map[string]string) bool {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	changed := false
+	for k, v := range desired {
+		if current, exists := labels[k]; !exists || current != v {
+			changed = true
+		}
+		labels[k] = v
+	}
+	obj.SetLabels(labels)
+	return changed
+}
 
 // ObjectHasAnnotationKey checks if a kubernetes object already contains annotation
 func ObjectHasAnnotationKey(obj metav1.Object, annoKey string) bool {
