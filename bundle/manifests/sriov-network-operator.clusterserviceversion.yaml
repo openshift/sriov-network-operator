@@ -100,7 +100,7 @@ metadata:
     categories: Networking
     certified: "false"
     containerImage: quay.io/openshift/origin-sriov-network-operator:5.1
-    createdAt: "2026-11-24T23:49:27Z"
+    createdAt: "2026-11-26T19:44:24Z"
     description: An operator for configuring SR-IOV components and initializing SRIOV
       network devices in Openshift cluster.
     features.operators.openshift.io/cnf: "false"
@@ -146,7 +146,7 @@ metadata:
         }
       }
     operators.operatorframework.io/builder: operator-sdk-v1.40.0
-    operators.operatorframework.io/internal-objects: '["sriovnetworknodestates.sriovnetwork.openshift.io"]'
+    operators.operatorframework.io/internal-objects: '["sriovnetworknodestates.sriovnetwork.openshift.io","sriovresourcepolicies.sriovnetwork.k8snetworkplumbingwg.io","deviceattributes.sriovnetwork.k8snetworkplumbingwg.io"]'
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
@@ -162,6 +162,9 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - kind: DeviceAttributes
+      name: deviceattributes.sriovnetwork.k8snetworkplumbingwg.io
+      version: v1alpha1
     - description: OVSNetwork is the Schema for the ovsnetworks API
       displayName: OVSNetwork
       kind: OVSNetwork
@@ -198,6 +201,9 @@ spec:
       kind: SriovOperatorConfig
       name: sriovoperatorconfigs.sriovnetwork.openshift.io
       version: v1
+    - kind: SriovResourcePolicy
+      name: sriovresourcepolicies.sriovnetwork.k8snetworkplumbingwg.io
+      version: v1alpha1
   description: |
     # SR-IOV Network Operator for Openshift
 
@@ -349,6 +355,37 @@ spec:
           - get
           - list
           - watch
+        - apiGroups:
+          - resource.k8s.io
+          resources:
+          - resourceclaims
+          verbs:
+          - get
+        - apiGroups:
+          - resource.k8s.io
+          resources:
+          - deviceclasses
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - sriovnetwork.k8snetworkplumbingwg.io
+          resources:
+          - sriovresourcepolicies
+          - deviceattributes
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
         serviceAccountName: sriov-network-operator
       deployments:
       - label:

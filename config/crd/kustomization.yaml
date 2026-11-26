@@ -9,6 +9,8 @@ resources:
 - bases/sriovnetwork.openshift.io_sriovoperatorconfigs.yaml
 - bases/sriovnetwork.openshift.io_sriovnetworkpoolconfigs.yaml
 - bases/sriovnetwork.openshift.io_ovsnetworks.yaml
+- dra/sriovnetwork.k8snetworkplumbingwg.io_deviceattributes.yaml
+- dra/sriovnetwork.k8snetworkplumbingwg.io_sriovresourcepolicies.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

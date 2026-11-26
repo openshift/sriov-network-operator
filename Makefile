@@ -105,10 +105,12 @@ manifests: controller-gen sync-dra-crds
 .PHONY: sync-dra-crds
 sync-dra-crds:
 	go mod download $(DRA_MODULE)
-	dra_module_dir=$$(go list -m -f '{{.Dir}}' $(DRA_MODULE)); \
+	mkdir -p ./config/crd/dra
+	dra_module_dir=$$(go list -mod=mod -m -f '{{.Dir}}' $(DRA_MODULE)); \
 	for crd in $(notdir $(DRA_CRDS)); do \
-		cp "$$dra_module_dir/deployments/helm/dra-driver-sriov/templates/$$crd" "./deployment/sriov-network-operator-chart/crds/$$crd"; \
-		cp "$$dra_module_dir/deployments/helm/dra-driver-sriov/templates/$$crd" "./test/util/crds/$$crd"; \
+		install -m 0644 "$$dra_module_dir/deployments/helm/dra-driver-sriov/templates/$$crd" "./config/crd/dra/$$crd"; \
+		install -m 0644 "$$dra_module_dir/deployments/helm/dra-driver-sriov/templates/$$crd" "./deployment/sriov-network-operator-chart/crds/$$crd"; \
+		install -m 0644 "$$dra_module_dir/deployments/helm/dra-driver-sriov/templates/$$crd" "./test/util/crds/$$crd"; \
 	done
 
 check-manifests: manifests

@@ -52,7 +52,7 @@ metadata:
           }
         }
       }
-    operators.operatorframework.io/internal-objects: '["sriovnetworknodestates.sriovnetwork.openshift.io"]'
+    operators.operatorframework.io/internal-objects: '["sriovnetworknodestates.sriovnetwork.openshift.io","sriovresourcepolicies.sriovnetwork.k8snetworkplumbingwg.io","deviceattributes.sriovnetwork.k8snetworkplumbingwg.io"]'
     repository: https://github.com/k8snetworkplumbingwg/sriov-network-operator
     support: Red Hat
     target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
