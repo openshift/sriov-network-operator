@@ -136,6 +136,7 @@ const (
     ReasonPolicyReady                  = "PolicyReady"
     ReasonPoolConfigReady              = "PoolConfigReady"
     ReasonPolicyIgnored                = "PolicyIgnored"
+    ReasonConfigurationBlocked         = "ConfigurationBlocked"
     ReasonNoMatchingNodes             = "NoMatchingNodes"
     ReasonNoMatchingInterfaces        = "NoMatchingInterfaces"
     ReasonNodeSyncFailed              = "NodeSyncFailed"
@@ -255,9 +256,11 @@ type SriovNetworkNodePolicyStatus struct {
 **Conditions:**
 - `Ready=True` only when `matchedNodeCount > 0`, `readyNodeCount == matchedNodeCount`, and every matched node has a current NodeState `Ready=True` condition for the NodeState spec generation associated with this policy revision.
 - `Ready=False` while configuration is being applied or a target node has failed, with the most useful current reason and a concise message. A policy with no managed nodes has reason `NoMatchingNodes`; a selected node with no NIC matched by `nicSelector` is not counted as ready and uses `NoMatchingInterfaces` when that is the blocker.
+- `Ready=False` with reason `ConfigurationBlocked` when another policy fails DRA resource validation and freezes policy reconciliation for every policy: the blocked policy's own spec is valid but cannot be applied until the validation error is resolved. Node counts are absent while blocked.
 - `Ready=Unknown` when the controller lacks enough information to decide. `Progressing` and `Degraded` are not policy conditions.
 
 `matchedNodeCount` counts nodes selected by `nodeSelector` within the operator's config-daemon node selection. It does not count unmanaged cluster nodes. The deprecated default policy is ignored by policy reconciliation and reports `Ready=False` with reason `PolicyIgnored`. When the policy controller renders a NodeState, it records the UID and generation of selected policies with matching NICs in a NodeState annotation, together with the rendered spec update. The status controller counts a target node only when this stamp matches the current policy and the NodeState `Ready=True` condition observes its current generation. Policy status does not inspect device plugin ConfigMap contents.
+When DRA is enabled and any active policy in the operator namespace fails resource validation, reconciliation skips NodeState syncing for all policies: invalid policies report `UnsupportedConfiguration` and other active policies in that namespace report `ConfigurationBlocked`. The deprecated default policy remains `PolicyIgnored`.
 
 **kubectl output columns:** Matched (`matchedNodeCount`), Ready Nodes (`readyNodeCount`), Ready, Age. Separate count fields are exposed through [CRD printer-column JSONPaths](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns).
 

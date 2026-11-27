@@ -36,6 +36,7 @@ if [ -z $SKIP_VAR_SET ]; then
         EMPTY_IS_VALID=1 _url_detect "OVS_CNI_IMAGE" "quay.io/kubevirt/ovs-cni-plugin"
         EMPTY_IS_VALID=1 _url_detect "RDMA_CNI_IMAGE" "quay.io/openshift/origin-rdma-cni"
         _url_detect "SRIOV_DEVICE_PLUGIN_IMAGE" "quay.io/openshift/origin-sriov-network-device-plugin"
+        _url_detect "SRIOV_DRA_DRIVER_IMAGE" "quay.io/openshift/origin-dra-driver-sriov"
         _url_detect "NETWORK_RESOURCES_INJECTOR_IMAGE" "quay.io/openshift/origin-sriov-dp-admission-controller"
         _url_detect "SRIOV_NETWORK_CONFIG_DAEMON_IMAGE" "quay.io/openshift/origin-sriov-network-config-daemon"
         _url_detect "SRIOV_NETWORK_WEBHOOK_IMAGE" "quay.io/openshift/origin-sriov-network-webhook"
@@ -55,6 +56,7 @@ METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE=${METRICS_EXPORTER_KUBE_RBAC_PROXY_IMAGE:
 [ -z $SRIOV_CNI_IMAGE ] && echo "SRIOV_CNI_IMAGE $fail_msg_detect" && exit 1
 [ -z $SRIOV_INFINIBAND_CNI_IMAGE ] && echo "SRIOV_INFINIBAND_CNI_IMAGE $fail_msg_detect" && exit 1
 [ -z $SRIOV_DEVICE_PLUGIN_IMAGE ] && echo "SRIOV_DEVICE_PLUGIN_IMAGE $fail_msg_detect" && exit 1
+[ -z $SRIOV_DRA_DRIVER_IMAGE ] && echo "SRIOV_DRA_DRIVER_IMAGE $fail_msg_detect" && exit 1
 [ -z $NETWORK_RESOURCES_INJECTOR_IMAGE ] && echo "NETWORK_RESOURCES_INJECTOR_IMAGE $fail_msg_detect" && exit 1
 [ -z $SRIOV_NETWORK_CONFIG_DAEMON_IMAGE ] && echo "SRIOV_NETWORK_CONFIG_DAEMON_IMAGE $fail_msg_detect" && exit 1
 [ -z $SRIOV_NETWORK_WEBHOOK_IMAGE ] && echo "SRIOV_NETWORK_WEBHOOK_IMAGE $fail_msg_detect" && exit 1

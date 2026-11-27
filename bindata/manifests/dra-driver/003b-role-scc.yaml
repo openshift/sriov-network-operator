@@ -1,0 +1,33 @@
+---
+# OpenShift: allow the DRA driver SA to use the privileged SCC (hostNetwork,
+# hostPath, privileged). Same pattern as sriov-plugin in
+# bindata/manifests/plugins/002-rbac.yaml. Without this, OCP rejects DRA pods
+# with FailedCreate / unable to validate against any security context constraint.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sriov-dra-driver-scc
+  namespace: {{.Namespace}}
+rules:
+  - apiGroups:
+      - security.openshift.io
+    resourceNames:
+      - privileged
+    resources:
+      - securitycontextconstraints
+    verbs:
+      - use
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sriov-dra-driver-scc
+  namespace: {{.Namespace}}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sriov-dra-driver-scc
+subjects:
+  - kind: ServiceAccount
+    name: sriov-dra-driver
+    namespace: {{.Namespace}}

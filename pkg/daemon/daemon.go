@@ -18,7 +18,6 @@ import (
 
 	sriovnetworkv1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
-	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/featuregate"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/helper"
 	hosttypes "github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/host/types"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/platform"
@@ -39,7 +38,6 @@ type NodeReconciler struct {
 
 	eventRecorder *EventRecorder
 
-	featureGate   featuregate.FeatureGate
 	statusPatcher status.Interface
 
 	additionalPlugins []plugin.VendorPlugin
@@ -54,7 +52,6 @@ func New(
 	hostHelpers helper.HostHelpersInterface,
 	platformInterface platform.Interface,
 	er *EventRecorder,
-	featureGates featuregate.FeatureGate,
 	statusPatcher status.Interface,
 ) *NodeReconciler {
 	return &NodeReconciler{
@@ -64,7 +61,6 @@ func New(
 
 		lastAppliedGeneration: 0,
 		eventRecorder:         er,
-		featureGate:           featureGates,
 		statusPatcher:         statusPatcher,
 	}
 }
@@ -217,17 +213,20 @@ func (dn *NodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 					return ctrl.Result{}, err
 				}
 			}
-			// periodically ensure device plugin is unblocked,
-			// this is required to ensure that device plugin can start in case if it is restarted for some reason
-			if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) &&
-				len(desiredNodeState.Spec.Interfaces) > 0 {
-				devicePluginPods, err := dn.getDevicePluginPodsForNode(ctx)
+			// Periodically unblock the selected provider when configuration is in sync.
+			// DRA always has a wait-for-config init container, independently of
+			// BlockDevicePluginUntilConfiguredFeatureGate, which controls only the device plugin.
+			draEnabled := vars.FeatureGate.IsEnabled(consts.DynamicResourceAllocationFeatureGate)
+			if draEnabled || (vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) &&
+				len(desiredNodeState.Spec.Interfaces) > 0) {
+				providerPods, err := dn.getProviderPodsForNode(ctx, draEnabled)
 				if err != nil {
-					reqLogger.Error(err, "failed to get device plugin pods")
+					reqLogger.Error(err, "failed to get provider pods")
 					return ctrl.Result{}, err
 				}
-				if err := dn.tryUnblockDevicePlugin(ctx, desiredNodeState, devicePluginPods); err != nil {
-					reqLogger.Error(err, "failed to unblock device plugin")
+				// DRA also unblocks without interfaces so nodes with no policy can complete rollout.
+				if err := dn.unblockProviderPods(ctx, providerPods); err != nil {
+					reqLogger.Error(err, "failed to unblock provider pods")
 					return ctrl.Result{}, err
 				}
 			}
@@ -394,15 +393,15 @@ func (dn *NodeReconciler) CheckSystemdStatus() (*hosttypes.SriovResult, bool, er
 func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, reqReboot bool, sriovResult *hosttypes.SriovResult, appliedGeneration int64) (ctrl.Result, error) {
 	reqLogger := log.FromContext(ctx).WithName("Apply")
 
-	// Restart the device plugin *before* applying configuration if the
-	// BlockDevicePluginUntilConfiguredFeatureGate feature is enabled.
-	// With this gate enabled, the device plugin will remain blocked until it is
-	// explicitly unblocked after configuration (see waitForDevicePluginPodAndTryUnblock).
-	// If the feature gate is not enabled, preserve legacy behavior by
-	// restarting the device plugin *after* configuration is applied.
-	if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) {
-		if err := dn.restartDevicePluginPod(ctx); err != nil {
-			reqLogger.Error(err, "failed to restart device plugin on the node")
+	// DRA always restarts before configuration; its unconditional wait-for-config
+	// init container blocks startup until the daemon unblocks it after configuration.
+	// BlockDevicePluginUntilConfiguredFeatureGate controls only the device plugin:
+	// when enabled it follows the same sequence, otherwise it restarts after configuration.
+	draEnabled := vars.FeatureGate.IsEnabled(consts.DynamicResourceAllocationFeatureGate)
+	blockDevicePlugin := vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate)
+	if draEnabled || blockDevicePlugin {
+		if err := dn.restartProviderPods(ctx, draEnabled); err != nil {
+			reqLogger.Error(err, "failed to restart provider pods on the node")
 			return ctrl.Result{}, err
 		}
 	}
@@ -453,20 +452,22 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 		return ctrl.Result{}, dn.rebootNode()
 	}
 
-	if vars.FeatureGate.IsEnabled(consts.BlockDevicePluginUntilConfiguredFeatureGate) {
-		if len(desiredNodeState.Spec.Interfaces) == 0 {
-			reqLogger.Info("no interfaces in desired state, skipping device plugin wait as device plugin won't be deployed")
-		} else {
-			if err := dn.waitForDevicePluginPodAndTryUnblock(ctx, desiredNodeState); err != nil {
-				reqLogger.Error(err, "failed to wait for device plugin pod to start and try to unblock it")
+	// DRA always waits, including without interfaces. Device-plugin waiting depends
+	// on its blocking gate and configured interfaces; otherwise it restarts after configuration.
+	if draEnabled || blockDevicePlugin {
+		if draEnabled || len(desiredNodeState.Spec.Interfaces) > 0 {
+			if err := dn.waitForProviderPodAndTryUnblock(ctx, draEnabled); err != nil {
+				reqLogger.Error(err, "failed to wait for provider pod and try unblock")
 				return ctrl.Result{}, err
 			}
+		} else {
+			reqLogger.Info("no interfaces in desired state, skipping device plugin wait as device plugin won't be deployed")
 		}
 	} else {
-		// if the feature gate is not enabled we preserver the old behavior
-		// and restart device plugin after configuration is applied
-		if err := dn.restartDevicePluginPod(ctx); err != nil {
-			reqLogger.Error(err, "failed to restart device plugin on the node")
+		// With device-plugin blocking disabled, preserve the legacy behavior of
+		// restarting the device plugin after configuration is applied.
+		if err := dn.restartProviderPods(ctx, draEnabled); err != nil {
+			reqLogger.Error(err, "failed to restart provider pods on the node")
 			return ctrl.Result{}, err
 		}
 	}
@@ -511,20 +512,16 @@ func (dn *NodeReconciler) apply(ctx context.Context, desiredNodeState *sriovnetw
 	return ctrl.Result{RequeueAfter: consts.DaemonRequeueTime}, nil
 }
 
-// tryUnblockDevicePlugin checks if the device plugin can be unblocked
-func (dn *NodeReconciler) tryUnblockDevicePlugin(ctx context.Context,
-	desiredNodeState *sriovnetworkv1.SriovNetworkNodeState, devicePluginPods []corev1.Pod) error {
-	funcLog := log.Log.WithName("tryUnblockDevicePlugin")
-	funcLog.Info("check if we need to remove the wait-for-config annotation")
-	// we want to unblock the device plugin only if the desired state contains configuration for the interfaces
-	if len(desiredNodeState.Spec.Interfaces) == 0 {
-		funcLog.Info("desired node state has no interfaces, keep the wait-for-config annotation")
-		return nil
-	}
-	for _, pod := range devicePluginPods {
+// unblockProviderPods removes the shared wait-for-config annotation from provider pods.
+// Callers decide whether their provider can be unblocked for the desired node state.
+func (dn *NodeReconciler) unblockProviderPods(ctx context.Context, pods []corev1.Pod) error {
+	funcLog := log.FromContext(ctx).WithName("unblockProviderPods")
+	funcLog.Info("removing the wait-for-config annotation from provider pods")
+	for _, pod := range pods {
 		if err := utils.RemoveAnnotationFromObject(ctx, &pod,
 			consts.DevicePluginWaitConfigAnnotation, dn.client); err != nil {
-			return fmt.Errorf("failed to remove %s annotation from pod: %w", consts.DevicePluginWaitConfigAnnotation, err)
+			return fmt.Errorf("failed to remove %s annotation from pod %s/%s: %w",
+				consts.DevicePluginWaitConfigAnnotation, pod.Namespace, pod.Name, err)
 		}
 	}
 	return nil
@@ -667,131 +664,129 @@ func (dn *NodeReconciler) handleDrain(ctx context.Context, desiredNodeState *sri
 	return true, dn.annotate(ctx, desiredNodeState, annotation)
 }
 
-// getDevicePluginPods returns the device plugin pods running on this node
-func (dn *NodeReconciler) getDevicePluginPodsForNode(ctx context.Context) ([]corev1.Pod, error) {
-	funcLog := log.Log.WithName("getDevicePluginPodsForNode")
+// getProviderPodsForNode returns the selected provider's pods running on this node.
+func (dn *NodeReconciler) getProviderPodsForNode(ctx context.Context, draEnabled bool) ([]corev1.Pod, error) {
+	app := "sriov-device-plugin"
+	if draEnabled {
+		app = "sriov-dra-driver"
+	}
 	pods := &corev1.PodList{}
 	err := dn.client.List(ctx, pods, &client.ListOptions{
 		Namespace: vars.Namespace, Raw: &metav1.ListOptions{
-			LabelSelector: "app=sriov-device-plugin",
+			LabelSelector: "app=" + app,
 			FieldSelector: "spec.nodeName=" + vars.NodeName,
 		}})
 	if err != nil {
-		funcLog.Error(err, "failed to list device plugin pods")
-		return []corev1.Pod{}, err
-	}
-	if len(pods.Items) == 0 {
-		return []corev1.Pod{}, nil
+		return nil, fmt.Errorf("list %s pods in namespace %s on node %s: %w",
+			app, vars.Namespace, vars.NodeName, err)
 	}
 	return pods.Items, nil
 }
 
-// restartDevicePluginPod restarts the device plugin pod on the specified node.
-//
-// The function checks if the pod exists, deletes it if found, and waits for it to be deleted successfully.
-func (dn *NodeReconciler) restartDevicePluginPod(ctx context.Context) error {
-	funcLog := log.Log.WithName("restartDevicePluginPod")
-	funcLog.V(2).Info("try to restart device plugin pod")
-	devicePluginPods, err := dn.getDevicePluginPodsForNode(ctx)
-	if err != nil {
-		return err
-	}
-	if len(devicePluginPods) == 0 {
-		funcLog.V(2).Info("no device plugin pods found during restart attempt")
+// restartPods deletes the given pods and waits until each is gone or recreated by its DaemonSet.
+func (dn *NodeReconciler) restartPods(ctx context.Context, component string, pods []corev1.Pod) error {
+	funcLog := log.FromContext(ctx).WithName("restartPods")
+	funcLog.V(2).Info("try to restart pods", "component", component)
+	if len(pods) == 0 {
+		funcLog.V(2).Info("no pods found during restart attempt", "component", component)
 		return nil
 	}
-	for _, pod := range devicePluginPods {
+	for _, pod := range pods {
 		podUID := pod.UID
-		funcLog.V(2).Info("Found device plugin pod, deleting it",
-			"pod-name", pod.Name, "pod-uid", podUID)
-		err = dn.client.Delete(ctx, &pod)
+		funcLog.V(2).Info("Found pod, deleting it",
+			"component", component, "pod-name", pod.Name, "pod-uid", podUID)
+		err := dn.client.Delete(ctx, &pod)
 		if errors.IsNotFound(err) {
-			funcLog.Info("pod to delete not found")
+			funcLog.Info("pod to delete not found", "component", component)
 			continue
 		}
 		if err != nil {
-			funcLog.Error(err, "Failed to delete device plugin pod")
-			return err
+			funcLog.Error(err, "Failed to delete pod", "component", component)
+			return fmt.Errorf("delete %s pod %s/%s: %w", component, pod.Namespace, pod.Name, err)
 		}
 		newPod := &corev1.Pod{}
 		if err := wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 			err := dn.client.Get(ctx, client.ObjectKeyFromObject(&pod), newPod)
 			if errors.IsNotFound(err) {
-				funcLog.Info("device plugin pod exited")
+				funcLog.Info("pod exited", "component", component)
 				return true, nil
 			}
 			if err != nil {
-				return false, fmt.Errorf("failed to get device plugin pod: %w", err)
+				return false, fmt.Errorf("failed to get %s pod: %w", component, err)
 			}
 			// Check if the pod was recreated (different UID means it's a new pod)
 			if newPod.UID != podUID {
-				funcLog.Info("device plugin pod was recreated",
-					"old-uid", podUID, "new-uid", newPod.UID)
+				funcLog.Info("pod was recreated",
+					"component", component, "old-uid", podUID, "new-uid", newPod.UID)
 				return true, nil
 			}
-			funcLog.Info("waiting for device plugin pod to exit",
-				"pod-name", pod.Name, "pod-uid", newPod.UID)
+			funcLog.Info("waiting for pod to exit",
+				"component", component, "pod-name", pod.Name, "pod-uid", newPod.UID)
 			return false, nil
 		}); err != nil {
 			if stdErrors.Is(err, context.DeadlineExceeded) {
-				err = fmt.Errorf("timed out waiting for device plugin pod to restart: pod=%s uid=%s: %w", pod.Name, podUID, err)
+				err = fmt.Errorf("timed out waiting for %s pod to restart: pod=%s uid=%s: %w",
+					component, pod.Name, podUID, err)
 			}
-			funcLog.Error(err, "failed to wait device plugin pod to exit")
+			funcLog.Error(err, "failed to wait for pod to exit", "component", component)
 			return err
 		}
 	}
 	return nil
 }
 
-// waitForDevicePluginPodAndTryUnblock waits for the new device plugin pod to start and set the wait-for-config annotation. This allows us to unblock
-// the new device plugin instance within the same reconciliation loop without needing to wait
-// for the periodic check. We expect to have at least one device plugin pod for the node.
-func (dn *NodeReconciler) waitForDevicePluginPodAndTryUnblock(ctx context.Context, desiredNodeState *sriovnetworkv1.SriovNetworkNodeState) error {
-	funcLog := log.Log.WithName("waitForDevicePluginPodAndTryUnblock")
-	funcLog.Info("waiting for device plugin to set wait-for-config annotation", "annotation", consts.DevicePluginWaitConfigAnnotation)
-	var devicePluginPods []corev1.Pod
+// restartProviderPods restarts the selected provider's pods on this node.
+func (dn *NodeReconciler) restartProviderPods(ctx context.Context, draEnabled bool) error {
+	pods, err := dn.getProviderPodsForNode(ctx, draEnabled)
+	if err != nil {
+		return err
+	}
+	component := "SR-IOV device plugin"
+	if draEnabled {
+		component = "DRA driver SR-IOV"
+	}
+	return dn.restartPods(ctx, component, pods)
+}
+
+// waitForProviderPodAndTryUnblock waits for a selected provider pod to set the
+// wait-for-config annotation, then unblocks the pods in the same reconciliation.
+// Callers decide whether the provider should wait based on its mode and configured interfaces.
+func (dn *NodeReconciler) waitForProviderPodAndTryUnblock(ctx context.Context, draEnabled bool) error {
+	funcLog := log.FromContext(ctx).WithName("waitForProviderPodAndTryUnblock")
+	funcLog.Info("waiting for provider pod to set wait-for-config annotation", "annotation", consts.DevicePluginWaitConfigAnnotation)
+	var providerPods []corev1.Pod
 	err := wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true,
 		func(ctx context.Context) (bool, error) {
 			var err error
-			devicePluginPods, err = dn.getDevicePluginPodsForNode(ctx)
+			providerPods, err = dn.getProviderPodsForNode(ctx, draEnabled)
 			if err != nil {
-				funcLog.Error(err, "failed to get device plugin pod while waiting for a new pod to start")
+				funcLog.Error(err, "failed to get provider pods while waiting")
 				return false, err
 			}
-			if len(devicePluginPods) == 0 {
-				funcLog.V(2).Info("no device plugin pods found while waiting for a new pod to start")
+			if len(providerPods) == 0 {
+				funcLog.V(2).Info("no provider pods found while waiting")
 				return false, nil
 			}
-			for _, pod := range devicePluginPods {
-				// Wait for at least one device plugin pod to have the wait-for-config annotation.
-				// Usually there's only one device plugin pod per node, but unmanaged (by the operator) pods
-				// may also match our selector. Since unmanaged pods won't have this annotation,
-				// we only require one pod (the managed one) to have it.
+			for _, pod := range providerPods {
+				// At least one pod must be waiting. Unmanaged provider pods can
+				// also match the selector but do not carry this annotation.
 				if utils.ObjectHasAnnotationKey(&pod, consts.DevicePluginWaitConfigAnnotation) {
-					funcLog.Info("wait-for-config annotation found on pod",
-						"pod", pod.Name)
+					funcLog.Info("wait-for-config annotation found on pod", "pod", pod.Name)
 					return true, nil
 				}
 			}
-			funcLog.V(2).Info("waiting for new device plugin pod to have wait-for-config annotation")
+			funcLog.V(2).Info("waiting for provider pod to have wait-for-config annotation")
 			return false, nil
 		})
 	if err != nil {
 		if !stdErrors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
-		// If annotation is not found within the timeout, log a warning and proceed.
-		// The device plugin pod will be unblocked by the periodic check logic in tryUnblockDevicePlugin.
-		funcLog.Info("WARNING: device plugin pod with wait-for-config annotation not found within timeout")
+		// The periodic check in Reconcile will unblock pods that appear after the timeout.
+		funcLog.Info("WARNING: provider pod with wait-for-config annotation not found within timeout")
 		return nil
 	}
-	if len(devicePluginPods) > 0 {
-		// try to unblock all device plugin pods we retrieved with the latest loop iteration
-		if err := dn.tryUnblockDevicePlugin(ctx, desiredNodeState, devicePluginPods); err != nil {
-			return err
-		}
-	}
-	return nil
+	return dn.unblockProviderPods(ctx, providerPods)
 }
 
 // rebootNode Reboots the node by executing a systemd-run command

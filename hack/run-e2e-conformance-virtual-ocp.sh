@@ -237,6 +237,7 @@ export OPERATOR_NAMESPACE=$NAMESPACE
 export MULTUS_NAMESPACE="openshift-multus"
 export OPERATOR_EXEC=kubectl
 export CLUSTER_TYPE=openshift
+export CNI_BIN_PATH=${CNI_BIN_PATH:-/var/lib/cni/bin}
 export DEV_MODE=TRUE
 export CLUSTER_HAS_EMULATED_PF=TRUE
 export METRICS_EXPORTER_PROMETHEUS_OPERATOR_ENABLED=true
@@ -375,6 +376,16 @@ done
 
 if [ $retries -eq $MAX_RETRIES ]; then
   echo "Max retries reached waiting for TechPreview MachineConfig rollout. Exiting..."
+  # The EXIT trap deletes the cluster. Preserve the reason for a degraded pool
+  # before teardown, including failures that happen before conformance starts.
+  setup_report_dir="${TEST_REPORT_PATH:-ocp-artifacts}/cluster-setup"
+  mkdir -p "$setup_report_dir"
+  kubectl --request-timeout=10s get nodes -o yaml > "$setup_report_dir/nodes.yaml" 2>&1 || true
+  kubectl --request-timeout=10s get mcp -o yaml > "$setup_report_dir/machineconfigpools.yaml" 2>&1 || true
+  kubectl --request-timeout=10s get clusteroperators -o yaml > "$setup_report_dir/clusteroperators.yaml" 2>&1 || true
+  timeout 60 kubectl --request-timeout=10s logs -n openshift-machine-config-operator \
+    -l k8s-app=machine-config-daemon --all-containers=true --prefix --tail=200 \
+    > "$setup_report_dir/machine-config-daemon.log" 2>&1 || true
   exit 1
 fi
 
@@ -862,11 +873,12 @@ podman rmi -fi ${SRIOV_NETWORK_CONFIG_DAEMON_IMAGE}
 retry_push "${SRIOV_NETWORK_WEBHOOK_IMAGE}"
 podman rmi -fi ${SRIOV_NETWORK_WEBHOOK_IMAGE}
 
-podman logout $registry
-
 echo "## apply CRDs"
-kubectl apply -f $root/config/crd/bases
-
+# Vendored CRDs (DRA DeviceAttributes/SriovResourcePolicy, Multus NAD) live in the
+# Helm chart. The k8s virtual lane installs them via helm; the OCP lane uses
+# deploy-setup and must apply them explicitly or the DRA driver crash-loops
+# watching missing DeviceAttributes/SriovResourcePolicy APIs.
+kubectl apply -f "$root/deployment/sriov-network-operator-chart/crds/"
 
 cat <<EOF | kubectl apply -f -
 apiVersion: sriovnetwork.openshift.io/v1
@@ -900,6 +912,11 @@ if [[ -v LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE ]]; then
   export SRIOV_DEVICE_PLUGIN_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-device-plugin:latest"
 fi
 
+if [[ -v LOCAL_SRIOV_DRA_DRIVER_IMAGE ]]; then
+  podman_tag_and_push "${LOCAL_SRIOV_DRA_DRIVER_IMAGE}" "$registry/$NAMESPACE/dra-driver-sriov:latest"
+  export SRIOV_DRA_DRIVER_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/dra-driver-sriov:latest"
+fi
+
 if [[ -v LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE ]]; then
   podman_tag_and_push ${LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE} "$registry/$NAMESPACE/network-resources-injector:latest"
   export NETWORK_RESOURCES_INJECTOR_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/network-resources-injector:latest"
@@ -909,6 +926,8 @@ if [[ -v LOCAL_SRIOV_NETWORK_METRICS_EXPORTER_IMAGE ]]; then
   podman_tag_and_push ${LOCAL_SRIOV_NETWORK_METRICS_EXPORTER_IMAGE} "$registry/$NAMESPACE/sriov-network-metrics-exporter:latest"
   export METRICS_EXPORTER_IMAGE="image-registry.openshift-image-registry.svc:5000/$NAMESPACE/sriov-network-metrics-exporter:latest"
 fi
+
+podman logout "$registry"
 
 echo "## deploying SRIOV Network Operator"
 hack/deploy-setup.sh $NAMESPACE

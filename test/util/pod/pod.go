@@ -22,6 +22,16 @@ import (
 
 const hostnameLabel = "kubernetes.io/hostname"
 
+// IsReady reports whether the pod has a Ready condition with status True.
+func IsReady(p *corev1.Pod) bool {
+	for _, c := range p.Status.Conditions {
+		if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
 // AssertContainerReady checks that the pod and its named container are ready.
 // The returned error includes pod and readiness details for polling callbacks.
 func AssertContainerReady(p corev1.Pod, containerName string) error {
@@ -163,6 +173,11 @@ func RedefineWithHugepages(pod *corev1.Pod, hugepagesName string, hugepagesAmoun
 
 // ExecCommand runs command in the pod and returns buffer output
 func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (string, string, error) {
+	return ExecCommandWithContext(context.Background(), cs, pod, command...)
+}
+
+// ExecCommandWithContext runs command in the pod and returns buffer output.
+func ExecCommandWithContext(ctx context.Context, cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (string, string, error) {
 	var buf, errbuf bytes.Buffer
 	req := cs.CoreV1Interface.RESTClient().
 		Post().
@@ -182,7 +197,7 @@ func ExecCommand(cs *testclient.ClientSet, pod *corev1.Pod, command ...string) (
 		return buf.String(), errbuf.String(), err
 	}
 
-	err = exec.StreamWithContext(context.Background(), remotecommand.StreamOptions{
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdout: &buf,
 		Stderr: &errbuf,
 	})

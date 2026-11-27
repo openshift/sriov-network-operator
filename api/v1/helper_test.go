@@ -3,22 +3,31 @@ package v1_test
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	intstrutil "k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	v1 "github.com/k8snetworkplumbingwg/sriov-network-operator/api/v1"
 	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/consts"
+	"github.com/k8snetworkplumbingwg/sriov-network-operator/pkg/vars"
 )
 
 var update = flag.Bool("updategolden", false, "update .golden files")
@@ -1079,6 +1088,25 @@ func TestSriovNetworkPoolConfig_MaxUnavailable(t *testing.T) {
 	}
 }
 
+func vfAdminMacSpec() *v1.Interface {
+	return &v1.Interface{
+		NumVfs: 1,
+		VfGroups: []v1.VfGroup{
+			{VfRange: "0-0", DeviceType: consts.DeviceTypeNetDevice},
+		},
+	}
+}
+
+func vfAdminMacStatus(linkType, driver, mac, adminMac string) *v1.InterfaceExt {
+	return &v1.InterfaceExt{
+		NumVfs:   1,
+		LinkType: linkType,
+		VFs: []v1.VirtualFunction{
+			{VfID: 0, Driver: driver, Mac: mac, AdminMac: adminMac},
+		},
+	}
+}
+
 func TestNeedToUpdateSriov(t *testing.T) {
 	type args struct {
 		ifaceSpec   *v1.Interface
@@ -1160,6 +1188,67 @@ func TestNeedToUpdateSriov(t *testing.T) {
 				},
 			},
 			want: true,
+		},
+		{
+			name: "VF admin MAC is not set (zero) while the VF has a MAC",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "4e:fd:3d:08:59:b1", "00:00:00:00:00:00"),
+			},
+			want: true,
+		},
+		{
+			name: "VF admin MAC differs from the VF MAC",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "4e:fd:3d:08:59:b1", "4e:fd:3d:08:59:b2"),
+			},
+			want: true,
+		},
+		{
+			name: "VF admin MAC equals the VF MAC",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "4e:fd:3d:08:59:b1", "4E:FD:3D:08:59:B1"),
+			},
+			want: false,
+		},
+		{
+			name: "VF admin MAC unknown",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "4e:fd:3d:08:59:b1", ""),
+			},
+			want: false,
+		},
+		{
+			name: "VF MAC unknown (VF allocated to a workload)",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "iavf", "", "00:00:00:00:00:00"),
+			},
+			want: false,
+		},
+		{
+			name: "VF admin MAC mismatch is ignored for infiniband",
+			args: args{
+				ifaceSpec:   vfAdminMacSpec(),
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeIB, "iavf", "4e:fd:3d:08:59:b1", "00:00:00:00:00:00"),
+			},
+			want: false,
+		},
+		{
+			name: "VF admin MAC mismatch is ignored for dpdk driver",
+			args: args{
+				ifaceSpec: &v1.Interface{
+					NumVfs: 1,
+					VfGroups: []v1.VfGroup{
+						{VfRange: "0-0", DeviceType: consts.DeviceTypeVfioPci},
+					},
+				},
+				ifaceStatus: vfAdminMacStatus(consts.LinkTypeETH, "vfio-pci", "4e:fd:3d:08:59:b1", "00:00:00:00:00:00"),
+			},
+			want: false,
 		},
 	}
 	for _, tt := range tests {
@@ -1864,3 +1953,86 @@ func TestPoolHasHostConfigurations(t *testing.T) {
 		})
 	}
 }
+
+var _ = Describe("GetOperatorConfig", func() {
+	var scheme *runtime.Scheme
+
+	BeforeEach(func() {
+		scheme = runtime.NewScheme()
+		Expect(v1.AddToScheme(scheme)).To(Succeed())
+		savedNamespace := vars.Namespace
+		DeferCleanup(func() { vars.Namespace = savedNamespace })
+		vars.Namespace = "test-operator"
+	})
+
+	It("returns the default config in the operator namespace with found true", func() {
+		config := &v1.SriovOperatorConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: consts.DefaultConfigName, Namespace: vars.Namespace},
+			Spec:       v1.SriovOperatorConfigSpec{LogLevel: 2},
+		}
+		cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(config).Build()
+		actual, found, err := v1.GetOperatorConfig(context.Background(), cl)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(actual).NotTo(BeNil())
+		Expect(client.ObjectKeyFromObject(actual)).To(Equal(client.ObjectKeyFromObject(config)))
+		Expect(actual.Spec).To(Equal(config.Spec))
+	})
+
+	It("reports absence without returning a config or an error", func() {
+		otherConfig := &v1.SriovOperatorConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: consts.DefaultConfigName, Namespace: "other-operator"},
+		}
+		cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(otherConfig).Build()
+		config, found, err := v1.GetOperatorConfig(context.Background(), cl)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeFalse())
+		Expect(config).To(BeNil())
+	})
+
+	DescribeTable("distinguishes missing objects from read failures", func(readErr error, wantError bool) {
+		cl := fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+				return readErr
+			},
+		}).Build()
+		config, found, err := v1.GetOperatorConfig(context.Background(), cl)
+		Expect(config).To(BeNil())
+		Expect(found).To(BeFalse())
+		if wantError {
+			Expect(err).To(MatchError(readErr))
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+	},
+		Entry("wrapped NotFound", fmt.Errorf("read failed: %w", apierrors.NewNotFound(v1.Resource("sriovoperatorconfigs"), consts.DefaultConfigName)), false),
+		Entry("API unavailable", apierrors.NewServiceUnavailable("API unavailable"), true),
+		Entry("access forbidden", apierrors.NewForbidden(v1.Resource("sriovoperatorconfigs"), consts.DefaultConfigName, fmt.Errorf("access denied")), true),
+		Entry("request canceled", context.Canceled, true),
+		Entry("request timed out", context.DeadlineExceeded, true),
+	)
+
+	DescribeTable("honors the parent context", func(expired bool) {
+		ctx, cancel := context.WithCancel(context.Background())
+		if expired {
+			cancel()
+			ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		}
+		defer cancel()
+		kClient := fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(requestCtx context.Context, _ client.WithWatch, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+				cancel()
+				return requestCtx.Err()
+			},
+		}).Build()
+		_, _, err := v1.GetOperatorConfig(ctx, kClient)
+		if expired {
+			Expect(err).To(MatchError(context.DeadlineExceeded))
+		} else {
+			Expect(err).To(MatchError(context.Canceled))
+		}
+	},
+		Entry("cancellation during the request", false),
+		Entry("an earlier deadline", true),
+	)
+})

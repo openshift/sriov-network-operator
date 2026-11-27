@@ -474,6 +474,11 @@ if [[ -v LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE ]]; then
   podman_tag_and_push ${LOCAL_SRIOV_DEVICE_PLUGIN_IMAGE} ${SRIOV_DEVICE_PLUGIN_IMAGE}
 fi
 
+if [[ -v LOCAL_SRIOV_DRA_DRIVER_IMAGE ]]; then
+  export SRIOV_DRA_DRIVER_IMAGE="$controller_ip:5000/dra-driver-sriov:latest"
+  podman_tag_and_push "${LOCAL_SRIOV_DRA_DRIVER_IMAGE}" "${SRIOV_DRA_DRIVER_IMAGE}"
+fi
+
 if [[ -v LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE ]]; then
   export NETWORK_RESOURCES_INJECTOR_IMAGE="$controller_ip:5000/network-resources-injector:latest"
   podman_tag_and_push ${LOCAL_NETWORK_RESOURCES_INJECTOR_IMAGE} ${NETWORK_RESOURCES_INJECTOR_IMAGE}

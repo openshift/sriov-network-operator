@@ -339,7 +339,7 @@ var _ = Describe("SRIOV", Ordered, func() {
 		})
 
 		It("should call mlx config fw without fwreset if feature flag is disabled", func() {
-			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: false})
+			vars.FeatureGate.Set(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: false})
 			h.EXPECT().IsKernelLockdownMode().Return(false)
 			h.EXPECT().MlxConfigFW(gomock.Any()).Return(nil)
 			err := m.Apply()
@@ -347,7 +347,7 @@ var _ = Describe("SRIOV", Ordered, func() {
 		})
 
 		It("should call mlx config fw with fwreset if feature flag is enabled", func() {
-			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
+			vars.FeatureGate.Set(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
 			h.EXPECT().IsKernelLockdownMode().Return(false)
 			h.EXPECT().MlxConfigFW(gomock.Any()).Return(nil)
 			h.EXPECT().MlxResetFW(gomock.Any(), gomock.Any()).Return(nil)
@@ -356,7 +356,7 @@ var _ = Describe("SRIOV", Ordered, func() {
 		})
 
 		It("should reset VFs on both ports for dual-port NIC when firmware reset is required", func() {
-			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
+			vars.FeatureGate.Set(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
 
 			// Setup dual-port NIC status
 			mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{
@@ -385,7 +385,7 @@ var _ = Describe("SRIOV", Ordered, func() {
 		})
 
 		It("should reset VFs on single port NIC when firmware reset is required", func() {
-			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
+			vars.FeatureGate.Set(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
 
 			// Setup single-port NIC status
 			mellanoxNicsStatus = map[string]map[string]sriovnetworkv1.InterfaceExt{
@@ -411,7 +411,7 @@ var _ = Describe("SRIOV", Ordered, func() {
 		})
 
 		It("should call MlxResetFW with correct parameters for multiple NICs", func() {
-			vars.FeatureGate.Init(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
+			vars.FeatureGate.Set(map[string]bool{consts.MellanoxFirmwareResetFeatureGate: true})
 
 			pciAddressesToReset = []string{"0000:d8:00.0", "0000:d9:00.0"}
 

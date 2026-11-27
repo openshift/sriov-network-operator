@@ -48,6 +48,8 @@ type interfaceToConfigure struct {
 type vfInfoResult struct {
 	index int
 	vf    sriovnetworkv1.VirtualFunction
+	// valid is false when the VF could not be identified and must not be reported
+	valid bool
 }
 
 type sriov struct {
@@ -149,21 +151,26 @@ func (s *sriov) ResetSriovDevice(ifaceStatus sriovnetworkv1.InterfaceExt) error 
 	return nil
 }
 
-func (s *sriov) getVfInfos(ctx context.Context, vfAddrs []string, pfName string, eswitchMode string, devices []*ghw.PCIDevice) []sriovnetworkv1.VirtualFunction {
+func (s *sriov) getVfInfos(ctx context.Context, vfAddrs []string, pfName string, eswitchMode string, devices []*ghw.PCIDevice, pfVfsByID map[int]netlink.VfInfo) []sriovnetworkv1.VirtualFunction {
 	results := make(chan vfInfoResult, len(vfAddrs))
 	for index, vfAddr := range vfAddrs {
 		go func(index int, vfAddr string) {
-			results <- vfInfoResult{
-				index: index,
-				vf:    s.getVfInfo(ctx, vfAddr, pfName, eswitchMode, devices),
-			}
+			vf, valid := s.getVfInfo(ctx, vfAddr, pfName, eswitchMode, devices, pfVfsByID)
+			results <- vfInfoResult{index: index, vf: vf, valid: valid}
 		}(index, vfAddr)
 	}
 
-	vfs := make([]sriovnetworkv1.VirtualFunction, len(vfAddrs))
+	// keep the VFs ordered as returned by GetVFList, skipping the ones that could not be identified
+	collected := make([]vfInfoResult, len(vfAddrs))
 	for range vfAddrs {
 		result := <-results
-		vfs[result.index] = result.vf
+		collected[result.index] = result
+	}
+	vfs := make([]sriovnetworkv1.VirtualFunction, 0, len(vfAddrs))
+	for _, result := range collected {
+		if result.valid {
+			vfs = append(vfs, result.vf)
+		}
 	}
 	return vfs
 }
@@ -201,14 +208,17 @@ func (s *sriov) getVfDriverNameWithRetry(ctx context.Context, vfAddr string, att
 	return driver, nil
 }
 
-func (s *sriov) getVfInfo(ctx context.Context, vfAddr string, pfName string, eswitchMode string, devices []*ghw.PCIDevice) sriovnetworkv1.VirtualFunction {
+func (s *sriov) getVfInfo(ctx context.Context, vfAddr string, pfName string, eswitchMode string, devices []*ghw.PCIDevice, pfVfsByID map[int]netlink.VfInfo) (sriovnetworkv1.VirtualFunction, bool) {
 	driver, err := s.getVfDriverName(ctx, vfAddr)
 	if err != nil {
 		log.Log.Error(err, "getVfInfo(): unable to get VF driver", "device", vfAddr)
 	}
+	// GetVFID returns -1 when the index can't be determined. A VF without a valid index
+	// can't be configured or matched to the PF records, so it is not reported.
 	id, err := s.dputilsLib.GetVFID(vfAddr)
-	if err != nil {
-		log.Log.Error(err, "getVfInfo(): unable to get VF index", "device", vfAddr)
+	if err != nil || id < 0 {
+		log.Log.Error(err, "getVfInfo(): unable to get VF index, skipping VF", "device", vfAddr, "vfID", id)
+		return sriovnetworkv1.VirtualFunction{}, false
 	}
 	vf := sriovnetworkv1.VirtualFunction{
 		PciAddress: vfAddr,
@@ -238,6 +248,12 @@ func (s *sriov) getVfInfo(ctx context.Context, vfAddr string, pfName string, esw
 	}
 	vf.GUID = s.networkHelper.GetNetDevNodeGUID(vfAddr)
 
+	// the admin mac is the mac address the PF enforces for this VF. It is left empty when
+	// the PF doesn't report it, which is treated as "unknown" by NeedToUpdateSriov
+	if pfVf, found := pfVfsByID[id]; found && len(pfVf.Mac) > 0 {
+		vf.AdminMac = pfVf.Mac.String()
+	}
+
 	for _, device := range devices {
 		if vfAddr == device.Address {
 			vf.Vendor = device.Vendor.ID
@@ -245,7 +261,7 @@ func (s *sriov) getVfInfo(ctx context.Context, vfAddr string, pfName string, esw
 			break
 		}
 	}
-	return vf
+	return vf, true
 }
 
 func (s *sriov) VFIsReady(pciAddr string) (netlink.Link, error) {
@@ -395,7 +411,12 @@ func (s *sriov) DiscoverSriovDevices(storeManager store.ManagerInterface) ([]sri
 						"device", device)
 					continue
 				}
-				iface.VFs = append(iface.VFs, s.getVfInfos(context.Background(), vfs, pfNetName, iface.EswitchMode, devices)...)
+				// index the PF VF records by VF ID once
+				pfVfsByID := make(map[int]netlink.VfInfo, len(link.Attrs().Vfs))
+				for _, pfVf := range link.Attrs().Vfs {
+					pfVfsByID[pfVf.ID] = pfVf
+				}
+				iface.VFs = append(iface.VFs, s.getVfInfos(context.Background(), vfs, pfNetName, iface.EswitchMode, devices, pfVfsByID)...)
 			}
 		}
 		pfList = append(pfList, iface)
